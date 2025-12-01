@@ -1,0 +1,55 @@
+@echo off
+echo ================================
+echo Golomb's Game PWA Setup
+echo ================================
+echo.
+
+REM Check if Node.js is installed
+node --version >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: Node.js is not installed!
+    echo Please install Node.js from: https://nodejs.org/
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Node.js found!
+node --version
+npm --version
+echo.
+
+REM Check if we're in the right directory
+if not exist "package.json" (
+    echo ERROR: package.json not found!
+    echo Please run this script from the golomb-game-pwa folder
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Installing dependencies...
+echo This may take 2-3 minutes...
+echo.
+call npm install
+
+if errorlevel 1 (
+    echo.
+    echo ERROR: npm install failed!
+    echo Please check the error messages above.
+    pause
+    exit /b 1
+)
+
+echo.
+echo ================================
+echo Setup Complete! ✓
+echo ================================
+echo.
+echo You can now:
+echo   1. Run 'npm run dev' to test locally
+echo   2. Run 'npm run build' to build for production
+echo.
+echo The 'dist' folder will contain your deployable PWA
+echo.
+pause
