@@ -1,4 +1,5 @@
 import { RotateCw, FlipHorizontal, Undo, Plus, Check, X } from 'lucide-react';
+import { soundManager } from '../utils/soundManager';
 
 const ControlButtons = ({
   selectedPiece,
@@ -17,6 +18,16 @@ const ControlButtons = ({
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
+
+  const handleUndo = () => {
+    soundManager.playButtonClick();
+    onUndo();
+  };
+
+  const handleReset = () => {
+    soundManager.playButtonClick();
+    onReset();
+  };
 
   return (
     <div className="flex gap-1 justify-between mt-2 flex-wrap">
@@ -70,14 +81,14 @@ const ControlButtons = ({
           {!pendingMove && (
             <>
               <button
-                onClick={onUndo}
+                onClick={handleUndo}
                 className="flex-1 px-1.5 py-1.5 bg-orange-600/70 hover:bg-orange-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-orange-400/30 shadow-[0_0_10px_rgba(251,146,60,0.4)]"
                 disabled={moveHistoryLength === 0 || gameOver || !isPlayerTurn}
               >
                 <Undo size={12} />
               </button>
               <button
-                onClick={onReset}
+                onClick={handleReset}
                 className="flex-1 px-1.5 py-1.5 bg-slate-700/70 hover:bg-slate-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/30 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
               >
                 <Plus size={12} />

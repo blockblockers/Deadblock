@@ -1,12 +1,18 @@
 import { X } from 'lucide-react';
+import { soundManager } from '../utils/soundManager';
 
 const HowToPlayModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
+  const handleClose = () => {
+    soundManager.playButtonClick();
+    onClose();
+  };
+
   return (
     <div 
       className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div 
         className="bg-slate-900/95 rounded-2xl p-6 max-w-lg w-full border border-amber-500/30 shadow-[0_0_40px_rgba(251,191,36,0.3)] max-h-[90vh] overflow-y-auto"
@@ -16,7 +22,7 @@ const HowToPlayModal = ({ isOpen, onClose }) => {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold text-amber-300 tracking-wide">HOW TO PLAY</h2>
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-white transition-colors"
           >
             <X size={24} />
@@ -69,7 +75,7 @@ const HowToPlayModal = ({ isOpen, onClose }) => {
         
         {/* Close Button */}
         <button 
-          onClick={onClose}
+          onClick={handleClose}
           className="w-full mt-6 p-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-bold tracking-wide hover:from-amber-500 hover:to-orange-500 transition-all shadow-[0_0_20px_rgba(251,191,36,0.4)]"
         >
           GOT IT!

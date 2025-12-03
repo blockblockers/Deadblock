@@ -6,6 +6,8 @@ import DPad from './DPad';
 import PlayerIndicator from './PlayerIndicator';
 import GameStatus from './GameStatus';
 import { getPieceCoords, canPlacePiece } from '../utils/gameLogic';
+import { soundManager } from '../utils/soundManager';
+import { AI_DIFFICULTY } from '../utils/aiLogic';
 
 const GameScreen = ({
   board,
@@ -22,6 +24,7 @@ const GameScreen = ({
   isAIThinking,
   pendingMove,
   currentPuzzle,
+  aiDifficulty,
   isMobile,
   onCellClick,
   onSelectPiece,
@@ -42,6 +45,11 @@ const GameScreen = ({
     getPieceCoords(pendingMove.piece, rotation, flipped)
   );
 
+  const handleMenuClick = () => {
+    soundManager.playButtonClick();
+    onMenu();
+  };
+
   return (
     <div className="min-h-screen relative p-2 sm:p-4 overflow-hidden bg-slate-950">
       {/* Grid background */}
@@ -55,12 +63,29 @@ const GameScreen = ({
         <div className="flex items-center justify-between mb-2 sm:mb-4">
           <NeonTitle className="text-xl sm:text-3xl md:text-4xl">DEADBLOCK</NeonTitle>
           <button 
-            onClick={onMenu}
+            onClick={handleMenuClick}
             className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs sm:text-sm border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
           >
             MENU
           </button>
         </div>
+
+        {/* AI Difficulty Badge */}
+        {gameMode === 'ai' && aiDifficulty && (
+          <div className={`text-center mb-2 ${
+            aiDifficulty === AI_DIFFICULTY.RANDOM 
+              ? 'text-green-400' 
+              : aiDifficulty === AI_DIFFICULTY.AVERAGE 
+                ? 'text-amber-400' 
+                : 'text-purple-400'
+          }`}>
+            <span className="text-xs tracking-widest opacity-70">
+              {aiDifficulty === AI_DIFFICULTY.RANDOM && '🎲 BEGINNER MODE'}
+              {aiDifficulty === AI_DIFFICULTY.AVERAGE && '🧠 INTERMEDIATE MODE'}
+              {aiDifficulty === AI_DIFFICULTY.PROFESSIONAL && '✨ EXPERT MODE (Claude AI)'}
+            </span>
+          </div>
+        )}
 
         {/* Puzzle Info */}
         {gameMode === 'puzzle' && currentPuzzle && (
@@ -81,6 +106,7 @@ const GameScreen = ({
             gameOver={gameOver}
             winner={winner}
             gameMode={gameMode}
+            aiDifficulty={aiDifficulty}
           />
 
           {/* Game Board */}

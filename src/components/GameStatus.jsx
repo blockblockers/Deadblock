@@ -1,11 +1,27 @@
-import { Trophy } from 'lucide-react';
+import { Trophy, Sparkles } from 'lucide-react';
+import { AI_DIFFICULTY } from '../utils/aiLogic';
 
-const GameStatus = ({ isAIThinking, gameOver, winner, gameMode }) => {
+const GameStatus = ({ isAIThinking, gameOver, winner, gameMode, aiDifficulty }) => {
   if (isAIThinking) {
+    const isProfessional = aiDifficulty === AI_DIFFICULTY.PROFESSIONAL;
+    
     return (
-      <div className="mb-2 p-2 bg-purple-900/50 border border-purple-500/50 rounded-lg text-center shadow-[0_0_15px_rgba(168,85,247,0.4)]">
-        <span className="font-semibold text-purple-300 text-xs tracking-widest">
-          AI PROCESSING...
+      <div className={`mb-2 p-2 ${
+        isProfessional 
+          ? 'bg-purple-900/50 border-purple-500/50' 
+          : 'bg-purple-900/50 border-purple-500/50'
+      } border rounded-lg text-center shadow-[0_0_15px_rgba(168,85,247,0.4)]`}>
+        <span className={`font-semibold text-xs tracking-widest ${
+          isProfessional ? 'text-purple-300' : 'text-purple-300'
+        }`}>
+          {isProfessional ? (
+            <>
+              <Sparkles size={12} className="inline mr-1 animate-pulse" />
+              CLAUDE AI ANALYZING...
+            </>
+          ) : (
+            'AI PROCESSING...'
+          )}
         </span>
       </div>
     );

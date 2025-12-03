@@ -1,15 +1,22 @@
-import { Bot, User, Trophy } from 'lucide-react';
+import { Bot, User, Trophy, Settings } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
+import SettingsModal from './SettingsModal';
 import { menuButtonShapes } from '../utils/pieces';
+import { soundManager } from '../utils/soundManager';
 
 // Polyomino-shaped button component
-const PolyominoButton = ({ onClick, shape, color, glowColor, children }) => {
+const PolyominoButton = ({ onClick, shape, color, glowColor, icon: Icon, iconSvg, title, subtitle }) => {
   const cells = menuButtonShapes[shape] || menuButtonShapes.T;
+  
+  const handleClick = () => {
+    soundManager.playButtonClick();
+    onClick();
+  };
   
   return (
     <button 
-      onClick={onClick}
+      onClick={handleClick}
       className={`relative w-full p-4 ${color} rounded-xl hover:scale-105 transition-all duration-300 border border-white/20`}
       style={{ boxShadow: `0 0 25px ${glowColor}, inset 0 0 20px rgba(255,255,255,0.1)` }}
     >
@@ -26,7 +33,16 @@ const PolyominoButton = ({ onClick, shape, color, glowColor, children }) => {
           )))}
         </div>
       </div>
-      {children}
+      
+      {/* Button content - fixed alignment */}
+      <div className="flex items-center gap-3 ml-8">
+        {Icon && <Icon size={26} className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] flex-shrink-0" />}
+        {iconSvg}
+        <div className="text-left text-white">
+          <div className="text-lg font-bold tracking-wide">{title}</div>
+          <div className="text-xs opacity-70">{subtitle}</div>
+        </div>
+      </div>
     </button>
   );
 };
@@ -35,7 +51,9 @@ const MenuScreen = ({
   onStartGame, 
   onPuzzleSelect, 
   showHowToPlay, 
-  onToggleHowToPlay 
+  onToggleHowToPlay,
+  showSettings,
+  onToggleSettings
 }) => {
   return (
     <div className="min-h-screen relative p-4 flex items-center justify-center overflow-hidden bg-slate-950">
@@ -60,15 +78,10 @@ const MenuScreen = ({
             shape="T"
             color="bg-gradient-to-r from-purple-600/90 to-pink-600/90"
             glowColor="rgba(168,85,247,0.5)"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <Bot size={26} className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
-              <div className="text-left text-white">
-                <div className="text-lg font-bold tracking-wide">PLAY vs AI</div>
-                <div className="text-xs opacity-70">Challenge the machine</div>
-              </div>
-            </div>
-          </PolyominoButton>
+            icon={Bot}
+            title="PLAY vs AI"
+            subtitle="Challenge the machine"
+          />
           
           {/* 2 Player */}
           <PolyominoButton
@@ -76,15 +89,10 @@ const MenuScreen = ({
             shape="L"
             color="bg-gradient-to-r from-cyan-600/90 to-blue-600/90"
             glowColor="rgba(34,211,238,0.5)"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <User size={26} className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
-              <div className="text-left text-white">
-                <div className="text-lg font-bold tracking-wide">2 PLAYER</div>
-                <div className="text-xs opacity-70">Local multiplayer</div>
-              </div>
-            </div>
-          </PolyominoButton>
+            icon={User}
+            title="2 PLAYER"
+            subtitle="Local multiplayer"
+          />
 
           {/* Puzzle Mode */}
           <PolyominoButton
@@ -92,15 +100,10 @@ const MenuScreen = ({
             shape="Z"
             color="bg-gradient-to-r from-green-600/90 to-emerald-600/90"
             glowColor="rgba(74,222,128,0.5)"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <Trophy size={26} className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]" />
-              <div className="text-left text-white">
-                <div className="text-lg font-bold tracking-wide">PUZZLE MODE</div>
-                <div className="text-xs opacity-70">Tactical challenges</div>
-              </div>
-            </div>
-          </PolyominoButton>
+            icon={Trophy}
+            title="PUZZLE MODE"
+            subtitle="Tactical challenges"
+          />
 
           {/* How to Play */}
           <PolyominoButton
@@ -108,19 +111,27 @@ const MenuScreen = ({
             shape="P"
             color="bg-gradient-to-r from-amber-600/90 to-orange-600/90"
             glowColor="rgba(251,191,36,0.5)"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)]">
+            iconSvg={
+              <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] flex-shrink-0">
                 <circle cx="12" cy="12" r="10"/>
                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
                 <path d="M12 17h.01"/>
               </svg>
-              <div className="text-left text-white">
-                <div className="text-lg font-bold tracking-wide">HOW TO PLAY</div>
-                <div className="text-xs opacity-70">Learn the rules</div>
-              </div>
-            </div>
-          </PolyominoButton>
+            }
+            title="HOW TO PLAY"
+            subtitle="Learn the rules"
+          />
+
+          {/* Settings */}
+          <PolyominoButton
+            onClick={() => onToggleSettings(true)}
+            shape="T"
+            color="bg-gradient-to-r from-slate-600/90 to-slate-700/90"
+            glowColor="rgba(148,163,184,0.4)"
+            icon={Settings}
+            title="SETTINGS"
+            subtitle="Sound & vibration"
+          />
         </div>
       </div>
 
@@ -128,6 +139,12 @@ const MenuScreen = ({
       <HowToPlayModal 
         isOpen={showHowToPlay}
         onClose={() => onToggleHowToPlay(false)}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => onToggleSettings(false)}
       />
     </div>
   );

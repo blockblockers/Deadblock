@@ -2,37 +2,7 @@ import { useState } from 'react';
 import { Trophy, Zap, Brain, Sparkles, Loader } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
-
-// Puzzle difficulty levels
-const PUZZLE_DIFFICULTY = {
-  EASY: 'easy',
-  MEDIUM: 'medium', 
-  HARD: 'hard'
-};
-
-// Simple puzzle generator (generates valid puzzle boards)
-const generatePuzzle = (difficulty) => {
-  // Create a board with 9 pieces placed (3 remaining)
-  const pieces = ['F', 'I', 'L', 'N', 'P', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-  const shuffled = [...pieces].sort(() => Math.random() - 0.5);
-  const usedPieces = shuffled.slice(0, 9);
-  
-  // Generate a simple board state (this is simplified - real implementation would validate)
-  let boardState = 'G'.repeat(64);
-  
-  return {
-    id: `${difficulty}-${Date.now()}`,
-    name: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Puzzle`,
-    difficulty: difficulty,
-    description: difficulty === 'easy' 
-      ? "Find the obvious winning move!" 
-      : difficulty === 'medium'
-        ? "Think carefully to outmaneuver the AI!"
-        : "Expert-level positioning required!",
-    boardState: boardState,
-    usedPieces: usedPieces
-  };
-};
+import { PUZZLE_DIFFICULTY, getRandomPuzzle } from '../utils/puzzleGenerator';
 
 const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -88,12 +58,11 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     setIsLoading(true);
     
     try {
-      // Generate a puzzle for the selected difficulty
-      const puzzle = generatePuzzle(selectedDifficulty);
+      // Try to get a Claude-generated puzzle for hard mode, otherwise use local
+      const useClaudeAI = selectedDifficulty === PUZZLE_DIFFICULTY.HARD;
+      const puzzle = await getRandomPuzzle(selectedDifficulty, useClaudeAI);
       
       if (puzzle) {
-        // Small delay for UX
-        await new Promise(resolve => setTimeout(resolve, 500));
         onSelectPuzzle(puzzle);
       }
     } catch (error) {

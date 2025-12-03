@@ -8,8 +8,8 @@ import {
   placePiece,
   BOARD_SIZE 
 } from '../utils/gameLogic';
-import { selectAIMove, getAllPossibleMoves } from '../utils/aiLogic';
-import { parsePuzzleBoard } from '../data/puzzles';
+import { selectAIMove, getAllPossibleMoves, AI_DIFFICULTY } from '../utils/aiLogic';
+import { soundManager } from '../utils/soundManager';
 
 export const useGameState = () => {
   const [board, setBoard] = useState(createEmptyBoard());
@@ -27,6 +27,8 @@ export const useGameState = () => {
   const [pendingMove, setPendingMove] = useState(null);
   const [currentPuzzle, setCurrentPuzzle] = useState(null);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTY.AVERAGE);
 
   // Commit a move to the board
   const commitMove = useCallback((row, col, piece, rot, flip) => {
@@ -63,6 +65,7 @@ export const useGameState = () => {
     if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
       setGameOver(true);
       setWinner(currentPlayer);
+      soundManager.playWin();
     } else {
       setCurrentPlayer(nextPlayer);
     }
@@ -81,13 +84,17 @@ export const useGameState = () => {
       setRotation(fit.rotation);
       setFlipped(fit.flipped);
       setPendingMove({ row, col, piece, rotation: fit.rotation, flipped: fit.flipped });
+      soundManager.playPieceMove();
     }
   }, [gameOver, gameMode, currentPlayer, pendingMove, selectedPiece, rotation, flipped]);
 
   // Confirm pending move
   const confirmMove = useCallback(() => {
     if (pendingMove) {
-      commitMove(pendingMove.row, pendingMove.col, pendingMove.piece, rotation, flipped);
+      const success = commitMove(pendingMove.row, pendingMove.col, pendingMove.piece, rotation, flipped);
+      if (success) {
+        soundManager.playConfirm();
+      }
     }
   }, [pendingMove, rotation, flipped, commitMove]);
 
@@ -97,6 +104,7 @@ export const useGameState = () => {
     setSelectedPiece(null);
     setRotation(0);
     setFlipped(false);
+    soundManager.playCancel();
   }, []);
 
   // Move pending piece with d-pad
@@ -115,6 +123,7 @@ export const useGameState = () => {
     const fit = findFittingOrientation(newRow, newCol, pendingMove.piece, rotation, flipped);
     if (fit) {
       setPendingMove({ ...pendingMove, row: newRow, col: newCol });
+      soundManager.playPieceMove();
     }
   }, [pendingMove, rotation, flipped]);
 
@@ -135,7 +144,7 @@ export const useGameState = () => {
   }, [moveHistory, gameOver]);
 
   // Make AI move
-  const makeAIMove = useCallback(() => {
+  const makeAIMove = useCallback(async () => {
     const possibleMoves = getAllPossibleMoves(board, usedPieces);
     
     if (possibleMoves.length === 0) {
@@ -146,14 +155,17 @@ export const useGameState = () => {
 
     setIsAIThinking(true);
     
-    setTimeout(() => {
-      const move = selectAIMove(board, usedPieces);
-      if (move) {
-        commitMove(move.row, move.col, move.pieceType, move.rot, move.flip);
-      }
-      setIsAIThinking(false);
-    }, 800);
-  }, [board, usedPieces, commitMove]);
+    // Use async for Claude AI (professional difficulty)
+    const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
+    
+    // Add small delay for UX
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    if (move) {
+      commitMove(move.row, move.col, move.pieceType, move.rot, move.flip);
+    }
+    setIsAIThinking(false);
+  }, [board, boardPieces, usedPieces, aiDifficulty, commitMove]);
 
   // AI move effect
   useEffect(() => {
@@ -184,11 +196,25 @@ export const useGameState = () => {
   // Load a puzzle
   const loadPuzzle = useCallback((puzzle) => {
     try {
-      const { board: newBoard, boardPieces: newBoardPieces } = parsePuzzleBoard(puzzle);
+      const newBoard = createEmptyBoard();
+      const newBoardPieces = createEmptyBoard();
+
+      // Parse board state if provided
+      if (puzzle.boardState && puzzle.boardState.length === 64) {
+        for (let i = 0; i < puzzle.boardState.length; i++) {
+          const char = puzzle.boardState[i];
+          if (char !== 'G') {
+            const row = Math.floor(i / BOARD_SIZE);
+            const col = i % BOARD_SIZE;
+            newBoard[row][col] = 1;
+            newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
+          }
+        }
+      }
       
       setBoard(newBoard);
       setBoardPieces(newBoardPieces);
-      setUsedPieces([...puzzle.usedPieces]);
+      setUsedPieces(puzzle.usedPieces ? [...puzzle.usedPieces] : []);
       setCurrentPuzzle(puzzle);
       setGameMode('puzzle');
       setCurrentPlayer(1);
@@ -200,7 +226,7 @@ export const useGameState = () => {
       setGameOver(false);
       setWinner(null);
     } catch (error) {
-      console.error(error);
+      console.error('Error loading puzzle:', error);
     }
   }, []);
 
@@ -226,16 +252,19 @@ export const useGameState = () => {
     setSelectedPiece(pieceName);
     setRotation(0);
     setFlipped(false);
+    soundManager.playPieceSelect();
   }, []);
 
   // Rotate piece
   const rotatePiece = useCallback(() => {
     setRotation(prev => (prev + 1) % 4);
+    soundManager.playPieceRotate();
   }, []);
 
   // Flip piece
   const flipPieceHandler = useCallback(() => {
     setFlipped(prev => !prev);
+    soundManager.playPieceFlip();
   }, []);
 
   return {
@@ -255,10 +284,14 @@ export const useGameState = () => {
     pendingMove,
     currentPuzzle,
     showHowToPlay,
+    showSettings,
+    aiDifficulty,
     
     // Actions
     setGameMode,
     setShowHowToPlay,
+    setShowSettings,
+    setAiDifficulty,
     handleCellClick,
     confirmMove,
     cancelMove,
