@@ -18,23 +18,6 @@ export const getMovesForDifficulty = (difficulty) => {
   }
 };
 
-// Convert board to string format for display to Claude
-const boardToDisplayString = (board, boardPieces) => {
-  let result = '  0 1 2 3 4 5 6 7\n';
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    result += `${row} `;
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (boardPieces[row][col]) {
-        result += boardPieces[row][col] + ' ';
-      } else {
-        result += '. ';
-      }
-    }
-    result += '\n';
-  }
-  return result;
-};
-
 // Convert boardPieces array to 64-char string
 const boardToString = (boardPieces) => {
   let result = '';
@@ -106,7 +89,7 @@ const verifyPuzzlePlayable = (board, boardPieces, usedPieces, movesRequired) => 
   // This ensures the puzzle actually lasts for the required number of moves
   
   // Try multiple random paths to see if any allow full playthrough
-  const maxAttempts = 20;
+  const maxAttempts = 30; // Increased for better validation
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let testBoard = board.map(r => [...r]);
@@ -156,227 +139,119 @@ const getDifficultyDescription = (difficulty) => {
   }
 };
 
-// Generate puzzle using Claude AI to simulate a real game
-export const generateClaudePuzzle = async (difficulty, onProgress = null) => {
+// Score a move for strategic placement
+const scoreMoveStrategically = (board, row, col, coords, moveCount, totalMoves) => {
+  let score = 0;
+  
+  // Early game: prefer center positions
+  if (moveCount < totalMoves / 2) {
+    const centerDist = coords.reduce((sum, [dx, dy]) => {
+      const cellRow = row + dy;
+      const cellCol = col + dx;
+      return sum + Math.abs(cellRow - 3.5) + Math.abs(cellCol - 3.5);
+    }, 0);
+    score -= centerDist * 2; // Lower distance = higher score
+  }
+  
+  // Prefer positions that leave more open space
+  const adjacentOpenCells = coords.reduce((sum, [dx, dy]) => {
+    const cellRow = row + dy;
+    const cellCol = col + dx;
+    let openCount = 0;
+    
+    // Check all 4 directions
+    const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [dRow, dCol] of directions) {
+      const adjRow = cellRow + dRow;
+      const adjCol = cellCol + dCol;
+      if (adjRow >= 0 && adjRow < BOARD_SIZE && adjCol >= 0 && adjCol < BOARD_SIZE) {
+        if (board[adjRow][adjCol] === null) {
+          openCount++;
+        }
+      }
+    }
+    return sum + openCount;
+  }, 0);
+  
+  score += adjacentOpenCells * 3;
+  
+  // Add some randomness to create varied puzzles
+  score += Math.random() * 10;
+  
+  return score;
+};
+
+// Generate a puzzle using smart local generation
+const generateLocalPuzzle = (difficulty, onProgress = null) => {
   const movesRemaining = getMovesForDifficulty(difficulty);
   const piecesToPlace = 12 - movesRemaining;
   
-  let attempts = 0;
-  const maxAttempts = 5; // Try generating up to 5 puzzles to find a valid one
+  const maxAttempts = 50; // Try many times to find a good puzzle
   
-  while (attempts < maxAttempts) {
-    attempts++;
-    console.log(`Puzzle generation attempt ${attempts}/${maxAttempts}`);
-    
-    // Start with empty board
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     let board = createEmptyBoard();
     let boardPieces = createEmptyBoard();
     let usedPieces = [];
-    let moveCount = 0;
-
-    const pieceDefinitions = `PIECES (each is 5 squares, format is [x,y] offsets):
-F: [[0,0],[0,1],[1,1],[2,1],[1,2]]
-I: [[0,0],[0,1],[0,2],[0,3],[0,4]] (straight vertical line)
-L: [[0,0],[0,1],[0,2],[0,3],[1,3]]
-N: [[0,1],[0,2],[0,3],[1,0],[1,1]]
-P: [[0,0],[1,0],[0,1],[1,1],[0,2]]
-T: [[0,0],[1,0],[2,0],[1,1],[1,2]]
-U: [[0,0],[0,1],[1,1],[2,0],[2,1]]
-V: [[0,0],[0,1],[0,2],[1,2],[2,2]]
-W: [[0,0],[0,1],[1,1],[1,2],[2,2]]
-X: [[1,0],[0,1],[1,1],[2,1],[1,2]] (plus/cross shape)
-Y: [[0,1],[1,0],[1,1],[1,2],[1,3]]
-Z: [[0,0],[1,0],[1,1],[1,2],[2,2]]`;
-
-    // Have Claude play out moves one at a time
-    while (moveCount < piecesToPlace) {
-      // Report progress if callback provided
+    
+    // Shuffle piece order for variety
+    const pieceOrder = Object.keys(pieces).sort(() => Math.random() - 0.5);
+    
+    let success = true;
+    
+    for (let moveNum = 0; moveNum < piecesToPlace; moveNum++) {
+      // Report progress
       if (onProgress) {
-        onProgress(moveCount, piecesToPlace);
+        onProgress(moveNum + 1, piecesToPlace);
       }
       
-      const currentBoardStr = boardToDisplayString(board, boardPieces);
-      const availablePieces = Object.keys(pieces).filter(p => !usedPieces.includes(p));
+      // Get available pieces (use shuffled order but filter by what's available)
+      const availablePieces = pieceOrder.filter(p => !usedPieces.includes(p));
       
-      // Get sample valid moves for context
-      const validMoves = getAllValidMoves(board, usedPieces);
-      if (validMoves.length === 0) {
-        console.log('No valid moves available, restarting puzzle generation');
+      if (availablePieces.length === 0) {
+        success = false;
         break;
       }
-
-      // Format sample moves (limit to prevent token overflow)
-      const sampleMoves = {};
-      for (const move of validMoves.slice(0, 50)) {
-        if (!sampleMoves[move.pieceType]) {
-          sampleMoves[move.pieceType] = [];
-        }
-        if (sampleMoves[move.pieceType].length < 3) {
-          sampleMoves[move.pieceType].push(`row:${move.row},col:${move.col},rot:${move.rot},flip:${move.flip}`);
-        }
-      }
       
-      const movesStr = Object.entries(sampleMoves)
-        .map(([piece, moves]) => `${piece}: ${moves.join(' | ')}`)
-        .join('\n');
-
-      const prompt = `You are playing Deadblock, a strategic pentomino game. Place pieces to create an interesting puzzle position.
-
-${pieceDefinitions}
-
-CURRENT BOARD (. = empty, letters = placed pieces):
-${currentBoardStr}
-
-MOVE ${moveCount + 1} of ${piecesToPlace}
-Available pieces: ${availablePieces.join(', ')}
-Pieces already used: ${usedPieces.length > 0 ? usedPieces.join(', ') : 'None'}
-
-SAMPLE VALID PLACEMENTS:
-${movesStr}
-
-IMPORTANT: Create a board state that leaves PLENTY of room for ${movesRemaining} more moves. Don't block off large areas. Spread pieces around the board. Leave the center relatively open.
-
-RESPOND WITH ONLY JSON:
-{"piece": "X", "row": 0, "col": 0, "rotation": 0, "flip": false}
-
-Where piece is a letter (${availablePieces.join(',')}), row/col are 0-7, rotation is 0-3, flip is true/false.`;
-
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 200,
-            messages: [{ role: 'user', content: prompt }]
-          })
-        });
-
-        const data = await response.json();
-        
-        if (data.content && data.content[0] && data.content[0].text) {
-          const text = data.content[0].text;
-          const jsonMatch = text.match(/\{[\s\S]*?\}/);
-          
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            const { piece, row, col, rotation, flip } = parsed;
-            
-            // Validate the move
-            if (availablePieces.includes(piece)) {
-              const coords = getPieceCoords(piece, rotation || 0, flip || false);
-              
-              if (canPlacePiece(board, row, col, coords)) {
-                placePieceOnBoardMutate(board, boardPieces, row, col, piece, coords);
-                usedPieces.push(piece);
-                moveCount++;
-                console.log(`Placed piece ${piece} at (${row},${col}) - Move ${moveCount}/${piecesToPlace}`);
-                continue;
+      // Collect all valid moves for all available pieces
+      let allMoves = [];
+      for (const pieceType of availablePieces) {
+        for (let flip = 0; flip < 2; flip++) {
+          for (let rot = 0; rot < 4; rot++) {
+            const coords = getPieceCoords(pieceType, rot, flip === 1);
+            for (let row = 0; row < BOARD_SIZE; row++) {
+              for (let col = 0; col < BOARD_SIZE; col++) {
+                if (canPlacePiece(board, row, col, coords)) {
+                  const score = scoreMoveStrategically(board, row, col, coords, moveNum, piecesToPlace);
+                  allMoves.push({ pieceType, row, col, rot, flip: flip === 1, coords, score });
+                }
               }
             }
           }
         }
-        
-        // If Claude's move was invalid, pick a random valid move
-        console.log('Claude move invalid, using random fallback');
-        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-        placePieceOnBoardMutate(board, boardPieces, randomMove.row, randomMove.col, randomMove.pieceType, randomMove.coords);
-        usedPieces.push(randomMove.pieceType);
-        moveCount++;
-        
-      } catch (error) {
-        console.error('Claude API error:', error);
-        // Fallback to random move
-        const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-        placePieceOnBoardMutate(board, boardPieces, randomMove.row, randomMove.col, randomMove.pieceType, randomMove.coords);
-        usedPieces.push(randomMove.pieceType);
-        moveCount++;
       }
-    }
-
-    // Final progress update
-    if (onProgress) {
-      onProgress(piecesToPlace, piecesToPlace);
-    }
-
-    // Verify the puzzle is valid AND playable for all remaining moves
-    if (moveCount === piecesToPlace) {
-      const isPlayable = verifyPuzzlePlayable(board, boardPieces, usedPieces, movesRemaining);
       
-      if (isPlayable) {
-        console.log(`Puzzle verified: ${movesRemaining} moves are playable`);
-        return {
-          id: `claude-${difficulty}-${Date.now()}`,
-          name: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Challenge`,
-          difficulty: difficulty,
-          description: getDifficultyDescription(difficulty),
-          boardState: boardToString(boardPieces),
-          usedPieces: usedPieces,
-          movesRemaining: movesRemaining
-        };
-      } else {
-        console.log('Puzzle validation failed - not enough playable moves, retrying...');
+      if (allMoves.length === 0) {
+        success = false;
+        break;
       }
-    }
-  }
-  
-  // If Claude generation failed after all attempts, use local generation
-  console.log('Claude generation failed, falling back to local');
-  return generateLocalPuzzle(difficulty);
-};
-
-// Generate puzzle locally (fallback when Claude isn't available)
-export const generateLocalPuzzle = (difficulty) => {
-  const movesRemaining = getMovesForDifficulty(difficulty);
-  const piecesToPlace = 12 - movesRemaining;
-  
-  let attempts = 0;
-  const maxAttempts = 100;
-  
-  while (attempts < maxAttempts) {
-    attempts++;
-    
-    let board = createEmptyBoard();
-    let boardPieces = createEmptyBoard();
-    let usedPieces = [];
-    
-    // Shuffle pieces for variety
-    const allPieces = Object.keys(pieces).sort(() => Math.random() - 0.5);
-    
-    // Place pieces one by one
-    for (let i = 0; i < piecesToPlace && i < allPieces.length; i++) {
-      const pieceType = allPieces[i];
-      const validMoves = getAllValidMoves(board, usedPieces).filter(m => m.pieceType === pieceType);
       
-      if (validMoves.length > 0) {
-        // Prefer moves that leave more space (avoid edges for early pieces)
-        let move;
-        if (i < piecesToPlace / 2) {
-          // Early pieces: prefer center-ish positions
-          const centerMoves = validMoves.filter(m => 
-            m.row >= 1 && m.row <= 5 && m.col >= 1 && m.col <= 5
-          );
-          move = centerMoves.length > 0 
-            ? centerMoves[Math.floor(Math.random() * centerMoves.length)]
-            : validMoves[Math.floor(Math.random() * validMoves.length)];
-        } else {
-          move = validMoves[Math.floor(Math.random() * validMoves.length)];
-        }
-        
-        placePieceOnBoardMutate(board, boardPieces, move.row, move.col, pieceType, move.coords);
-        usedPieces.push(pieceType);
-      }
+      // Sort by score and pick from top moves with some randomness
+      allMoves.sort((a, b) => b.score - a.score);
+      const topMoves = allMoves.slice(0, Math.min(10, allMoves.length));
+      const move = topMoves[Math.floor(Math.random() * topMoves.length)];
+      
+      placePieceOnBoardMutate(board, boardPieces, move.row, move.col, move.pieceType, move.coords);
+      usedPieces.push(move.pieceType);
     }
     
     // Verify puzzle validity AND playability
-    if (usedPieces.length === piecesToPlace) {
+    if (success && usedPieces.length === piecesToPlace) {
       const isPlayable = verifyPuzzlePlayable(board, boardPieces, usedPieces, movesRemaining);
       
       if (isPlayable) {
+        console.log(`Generated valid puzzle on attempt ${attempt + 1}`);
         return {
-          id: `local-${difficulty}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+          id: `puzzle-${difficulty}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
           name: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Puzzle`,
           difficulty: difficulty,
           description: getDifficultyDescription(difficulty),
@@ -392,24 +267,44 @@ export const generateLocalPuzzle = (difficulty) => {
   return null;
 };
 
-// Main function to get a puzzle - always uses Claude AI
-export const getRandomPuzzle = async (difficulty, useClaudeAI = true, onProgress = null) => {
+// Async wrapper for puzzle generation with simulated delay for UX
+export const getRandomPuzzle = async (difficulty, useClaudeAI = false, onProgress = null) => {
   const movesRemaining = getMovesForDifficulty(difficulty);
-  console.log(`Generating ${difficulty} puzzle (${movesRemaining} moves remaining, ${12 - movesRemaining} pieces to place)...`);
+  const piecesToPlace = 12 - movesRemaining;
   
-  if (useClaudeAI) {
-    try {
-      const puzzle = await generateClaudePuzzle(difficulty, onProgress);
-      if (puzzle) {
-        console.log('Claude-generated puzzle ready:', puzzle.id);
-        return puzzle;
+  console.log(`Generating ${difficulty} puzzle (${movesRemaining} moves remaining, ${piecesToPlace} pieces to place)...`);
+  
+  // Add a small initial delay for UX
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  // Generate puzzle with progress updates
+  let lastProgress = 0;
+  const progressCallback = (current, total) => {
+    if (current !== lastProgress) {
+      lastProgress = current;
+      if (onProgress) {
+        onProgress(current, total);
       }
-    } catch (error) {
-      console.error('Claude puzzle generation failed:', error);
     }
+  };
+  
+  // Use local generation (fast and reliable)
+  const puzzle = generateLocalPuzzle(difficulty, progressCallback);
+  
+  if (puzzle) {
+    console.log('Puzzle generated successfully:', puzzle.id);
+    // Final progress update
+    if (onProgress) {
+      onProgress(piecesToPlace, piecesToPlace);
+    }
+    // Small delay before returning to show completion
+    await new Promise(resolve => setTimeout(resolve, 200));
+    return puzzle;
   }
   
-  // Fallback to local generation
-  console.log('Using local puzzle generation fallback');
-  return generateLocalPuzzle(difficulty);
+  console.error('Failed to generate puzzle');
+  return null;
 };
+
+// Export for testing
+export { generateLocalPuzzle, getAllValidMoves, verifyPuzzlePlayable };

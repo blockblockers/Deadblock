@@ -20,7 +20,8 @@ class SoundManager {
     this.bgMusic = null;
     this.bgMusicVolume = 0.3;
     this.sfxVolume = 0.5;
-    this.isInitialized = true;
+    this.isInitialized = false;
+    this.hasUserInteracted = false;
     this.musicEnabled = true;
     this.sfxEnabled = true;
     this.vibrationEnabled = true;
@@ -56,30 +57,72 @@ class SoundManager {
     try {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       this.isInitialized = true;
+      console.log('Audio context initialized');
     } catch (e) {
       console.warn('Web Audio API not supported:', e);
     }
   }
 
-  // Start background music
+  // Called on first user interaction - initializes everything and starts music
+  onFirstInteraction() {
+    if (this.hasUserInteracted) return;
+    
+    this.hasUserInteracted = true;
+    this.init();
+    
+    // Start background music if enabled
+    if (this.musicEnabled) {
+      this.startBackgroundMusic();
+    }
+    
+    console.log('First user interaction - audio initialized');
+  }
+
+  // Start background music - call this after user interaction
   startBackgroundMusic(musicPath = '/sounds/background-music.mp3') {
     if (!this.musicEnabled) return;
     
+    // Ensure audio context is initialized
+    if (!this.isInitialized) {
+      this.init();
+    }
+    
+    // If music already exists and is just paused, resume it
     if (this.bgMusic) {
-      this.bgMusic.play().catch(() => {});
+      this.bgMusic.volume = this.bgMusicVolume;
+      const playPromise = this.bgMusic.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.log('Background music play prevented:', error);
+        });
+      }
       return;
     }
 
+    // Create new audio element
     this.bgMusic = new Audio(musicPath);
     this.bgMusic.loop = true;
     this.bgMusic.volume = this.bgMusicVolume;
     
+    // Add event listeners for debugging
+    this.bgMusic.addEventListener('canplaythrough', () => {
+      console.log('Background music loaded and ready');
+    });
+    
+    this.bgMusic.addEventListener('error', (e) => {
+      console.error('Background music error:', e);
+    });
+    
     // Play with user interaction handling
     const playPromise = this.bgMusic.play();
     if (playPromise !== undefined) {
-      playPromise.catch((error) => {
-        console.log('Background music autoplay prevented:', error);
-      });
+      playPromise
+        .then(() => {
+          console.log('Background music started playing');
+        })
+        .catch((error) => {
+          console.log('Background music autoplay prevented:', error);
+        });
     }
   }
 
@@ -101,7 +144,10 @@ class SoundManager {
   // Resume background music
   resumeBackgroundMusic() {
     if (this.bgMusic && this.musicEnabled) {
-      this.bgMusic.play().catch(() => {});
+      const playPromise = this.bgMusic.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {});
+      }
     }
   }
 
@@ -140,9 +186,15 @@ class SoundManager {
   playClickSound(type = 'default') {
     if (!this.sfxEnabled) return;
     
+    // Initialize on first sound if needed
     if (!this.audioContext) {
       this.init();
       if (!this.audioContext) return;
+    }
+
+    // Resume audio context if suspended
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
     }
 
     const ctx = this.audioContext;
@@ -237,40 +289,39 @@ class SoundManager {
     osc.stop(now + 0.3);
   }
 
-  // Special win sound with multiple tones
+  // Play a win celebration sound
   playWinSound() {
     if (!this.sfxEnabled || !this.audioContext) return;
-
+    
     const ctx = this.audioContext;
     const now = ctx.currentTime;
     
-    const notes = [523, 659, 784, 1047];
-    const duration = 0.15;
-
+    // Arpeggio victory sound
+    const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
+    
     notes.forEach((freq, i) => {
       const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const gainNode = ctx.createGain();
       
-      osc.frequency.setValueAtTime(freq, now + i * duration);
+      osc.frequency.setValueAtTime(freq, now + i * 0.15);
       osc.type = 'sine';
       
-      gain.gain.setValueAtTime(0, now + i * duration);
-      gain.gain.linearRampToValueAtTime(this.sfxVolume * 0.3, now + i * duration + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + i * duration + duration);
+      gainNode.gain.setValueAtTime(0, now + i * 0.15);
+      gainNode.gain.linearRampToValueAtTime(this.sfxVolume * 0.3, now + i * 0.15 + 0.05);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.3);
       
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + i * duration);
-      osc.stop(now + i * duration + duration + 0.1);
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.start(now + i * 0.15);
+      osc.stop(now + i * 0.15 + 0.4);
     });
   }
 
-  // Trigger haptic feedback (vibration)
-  // Uses Capacitor native haptics on iOS/Android, falls back to web vibration API
+  // Vibration/Haptic feedback
   async vibrate(pattern = 'short') {
     if (!this.vibrationEnabled) return;
 
-    // Try Capacitor native haptics first (better on iOS/Android)
+    // Try native Capacitor haptics first
     if (CapacitorHaptics) {
       try {
         switch (pattern) {
@@ -290,15 +341,14 @@ class SoundManager {
             await CapacitorHaptics.notification({ type: 'error' });
             break;
           case 'win':
-            await CapacitorHaptics.notification({ type: 'success' });
-            // Add extra vibration for win
+            await CapacitorHaptics.impact({ style: 'heavy' });
             setTimeout(() => CapacitorHaptics.impact({ style: 'heavy' }), 200);
             setTimeout(() => CapacitorHaptics.impact({ style: 'heavy' }), 400);
             break;
           default:
             await CapacitorHaptics.impact({ style: 'light' });
         }
-        return; // Successfully used native haptics
+        return;
       } catch (e) {
         // Fall through to web API
       }
@@ -373,7 +423,11 @@ class SoundManager {
     this.vibrate('error');
   }
 
+  // Button click with first interaction trigger
   playButtonClick() {
+    // Trigger first interaction setup (initializes audio + starts music)
+    this.onFirstInteraction();
+    
     this.playClickSound('default');
     this.vibrate('short');
   }
