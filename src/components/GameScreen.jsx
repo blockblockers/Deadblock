@@ -26,6 +26,7 @@ const GameScreen = ({
   currentPuzzle,
   aiDifficulty,
   isMobile,
+  isGeneratingPuzzle,
   onCellClick,
   onSelectPiece,
   onRotate,
@@ -88,10 +89,21 @@ const GameScreen = ({
         )}
 
         {/* Puzzle Info */}
-        {gameMode === 'puzzle' && currentPuzzle && (
+        {gameMode === 'puzzle' && currentPuzzle && !isGeneratingPuzzle && (
           <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-2 mb-2 text-center shadow-[0_0_15px_rgba(74,222,128,0.3)]">
             <span className="font-bold text-green-300 text-sm">{currentPuzzle.name}</span>
             <span className="text-green-400/70 text-xs ml-2">- {currentPuzzle.description}</span>
+          </div>
+        )}
+
+        {/* Generating Puzzle Message */}
+        {isGeneratingPuzzle && (
+          <div className="bg-cyan-900/30 border border-cyan-500/50 rounded-lg p-3 mb-2 text-center shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+              <span className="font-bold text-cyan-300 text-sm">Generating New Puzzle...</span>
+            </div>
+            <span className="text-cyan-400/70 text-xs">Claude AI is creating a challenge for you</span>
           </div>
         )}
 
@@ -109,21 +121,23 @@ const GameScreen = ({
             aiDifficulty={aiDifficulty}
           />
 
-          {/* Game Board */}
-          <GameBoard
-            board={board}
-            boardPieces={boardPieces}
-            pendingMove={pendingMove}
-            rotation={rotation}
-            flipped={flipped}
-            gameOver={gameOver}
-            gameMode={gameMode}
-            currentPlayer={currentPlayer}
-            onCellClick={onCellClick}
-          />
+          {/* Game Board - extra padding for out-of-bounds warning */}
+          <div className="pb-6">
+            <GameBoard
+              board={board}
+              boardPieces={boardPieces}
+              pendingMove={pendingMove}
+              rotation={rotation}
+              flipped={flipped}
+              gameOver={gameOver}
+              gameMode={gameMode}
+              currentPlayer={currentPlayer}
+              onCellClick={onCellClick}
+            />
+          </div>
 
           {/* D-Pad for moving pieces */}
-          {pendingMove && <DPad onMove={onMovePiece} />}
+          {pendingMove && !isGeneratingPuzzle && <DPad onMove={onMovePiece} />}
 
           {/* Control Buttons */}
           <ControlButtons
@@ -134,6 +148,7 @@ const GameScreen = ({
             gameMode={gameMode}
             currentPlayer={currentPlayer}
             moveHistoryLength={moveHistory.length}
+            isGeneratingPuzzle={isGeneratingPuzzle}
             onRotate={onRotate}
             onFlip={onFlip}
             onConfirm={onConfirm}
@@ -152,6 +167,7 @@ const GameScreen = ({
           gameMode={gameMode}
           currentPlayer={currentPlayer}
           isMobile={isMobile}
+          isGeneratingPuzzle={isGeneratingPuzzle}
           onSelectPiece={onSelectPiece}
         />
       </div>

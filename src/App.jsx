@@ -18,9 +18,6 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Sound is now auto-initialized by soundManager on first user interaction
-  // No need for manual initialization here
-
   // Get all game state and actions from custom hook
   const {
     // State
@@ -41,6 +38,8 @@ function App() {
     showHowToPlay,
     showSettings,
     aiDifficulty,
+    isGeneratingPuzzle,
+    puzzleDifficulty,
     
     // Actions
     setGameMode,
@@ -134,6 +133,7 @@ function App() {
       currentPuzzle={currentPuzzle}
       aiDifficulty={aiDifficulty}
       isMobile={isMobile}
+      isGeneratingPuzzle={isGeneratingPuzzle}
       onCellClick={handleCellClick}
       onSelectPiece={selectPiece}
       onRotate={rotatePiece}

@@ -37,16 +37,18 @@ const PieceTray = ({
   gameMode,
   currentPlayer,
   isMobile,
+  isGeneratingPuzzle,
   onSelectPiece 
 }) => {
   const isDisabled = (pieceName) => 
     gameOver || 
     usedPieces.includes(pieceName) || 
     ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) ||
-    (!!pendingMove && isMobile);
+    (!!pendingMove && isMobile) ||
+    isGeneratingPuzzle;
 
   return (
-    <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.2)] mt-2">
+    <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.2)] mt-2 ${isGeneratingPuzzle ? 'opacity-50' : ''}`}>
       <div className="text-xs font-semibold text-cyan-300/70 text-center mb-2 tracking-widest">
         PIECES: {usedPieces.length}/12 USED
       </div>
@@ -58,7 +60,7 @@ const PieceTray = ({
           return (
             <button
               key={name}
-              onClick={() => !isUsed && !pendingMove && onSelectPiece(name)}
+              onClick={() => !isUsed && !pendingMove && !isGeneratingPuzzle && onSelectPiece(name)}
               className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden ${
                 isUsed
                   ? 'bg-slate-800/50 opacity-30 cursor-not-allowed'

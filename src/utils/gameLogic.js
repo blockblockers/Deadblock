@@ -61,24 +61,19 @@ export const canAnyPieceBePlaced = (board, usedPieces) => {
   return false;
 };
 
-// Find a rotation/flip that fits the piece on the board at the given position
-export const findFittingOrientation = (row, col, piece, startRot, startFlip) => {
-  // First try current orientation
-  let coords = getPieceCoords(piece, startRot, startFlip);
+// Check if the current orientation fits - NO AUTO-ROTATION
+// Returns the same rotation/flip if valid, null if not valid
+export const checkOrientationFits = (row, col, piece, rotation, flipped) => {
+  const coords = getPieceCoords(piece, rotation, flipped);
   if (isWithinBounds(row, col, coords)) {
-    return { rotation: startRot, flipped: startFlip };
+    return { rotation, flipped };
   }
-  
-  // Try all orientations to find one that fits
-  for (let flip = 0; flip < 2; flip++) {
-    for (let rot = 0; rot < 4; rot++) {
-      coords = getPieceCoords(piece, rot, flip === 1);
-      if (isWithinBounds(row, col, coords)) {
-        return { rotation: rot, flipped: flip === 1 };
-      }
-    }
-  }
-  return null;
+  return null; // Don't auto-rotate, just return null if it doesn't fit
+};
+
+// Legacy function name for compatibility - now just checks current orientation
+export const findFittingOrientation = (row, col, piece, startRot, startFlip) => {
+  return checkOrientationFits(row, col, piece, startRot, startFlip);
 };
 
 // Create an empty board

@@ -1,4 +1,4 @@
-import { RotateCw, FlipHorizontal, Undo, Plus, Check, X } from 'lucide-react';
+import { RotateCw, FlipHorizontal, Undo, RefreshCw, Check, X, Loader } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 const ControlButtons = ({
@@ -9,6 +9,7 @@ const ControlButtons = ({
   gameMode,
   currentPlayer,
   moveHistoryLength,
+  isGeneratingPuzzle,
   onRotate,
   onFlip,
   onConfirm,
@@ -18,6 +19,7 @@ const ControlButtons = ({
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
+  const isPuzzleMode = gameMode === 'puzzle';
 
   const handleUndo = () => {
     soundManager.playButtonClick();
@@ -35,7 +37,7 @@ const ControlButtons = ({
       <button
         onClick={onRotate}
         className="flex-1 px-1.5 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
-        disabled={!hasSelection || gameOver || !isPlayerTurn}
+        disabled={!hasSelection || gameOver || !isPlayerTurn || isGeneratingPuzzle}
       >
         <RotateCw size={12} />ROTATE
       </button>
@@ -44,13 +46,13 @@ const ControlButtons = ({
       <button
         onClick={onFlip}
         className="flex-1 px-1.5 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
-        disabled={!hasSelection || gameOver || !isPlayerTurn}
+        disabled={!hasSelection || gameOver || !isPlayerTurn || isGeneratingPuzzle}
       >
         <FlipHorizontal size={12} />FLIP
       </button>
 
       {/* Confirm/Cancel when pending move is valid */}
-      {pendingMove && canConfirm && (
+      {pendingMove && canConfirm && !isGeneratingPuzzle && (
         <>
           <button
             onClick={onConfirm}
@@ -68,7 +70,7 @@ const ControlButtons = ({
       )}
 
       {/* Cancel only when pending move is invalid, or Undo/Reset when no pending */}
-      {(!pendingMove || !canConfirm) && (
+      {(!pendingMove || !canConfirm) && !isGeneratingPuzzle && (
         <>
           {pendingMove && (
             <button
@@ -90,12 +92,22 @@ const ControlButtons = ({
               <button
                 onClick={handleReset}
                 className="flex-1 px-1.5 py-1.5 bg-slate-700/70 hover:bg-slate-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/30 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
+                title={isPuzzleMode ? "Generate new puzzle" : "Reset game"}
               >
-                <Plus size={12} />
+                <RefreshCw size={12} />
+                {isPuzzleMode && <span className="hidden sm:inline">NEW</span>}
               </button>
             </>
           )}
         </>
+      )}
+
+      {/* Loading state when generating puzzle */}
+      {isGeneratingPuzzle && (
+        <div className="flex-1 px-1.5 py-1.5 bg-cyan-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-cyan-400/30 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
+          <Loader size={12} className="animate-spin" />
+          <span>GENERATING...</span>
+        </div>
       )}
     </div>
   );
