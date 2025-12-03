@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary brand colors matching Deadblock cyberpunk theme -->
+    <color name="colorPrimary">#020617</color>
+    <color name="colorPrimaryDark">#020617</color>
+    <color name="colorAccent">#22d3ee</color>
+    
+    <!-- Splash screen background -->
+    <color name="splash_background">#020617</color>
+    
+    <!-- Status bar color -->
+    <color name="status_bar_color">#020617</color>
+    
+    <!-- Navigation bar color -->
+    <color name="navigation_bar_color">#020617</color>
+    
+    <!-- Neon accent colors (for reference) -->
+    <color name="neon_pink">#ec4899</color>
+    <color name="neon_cyan">#22d3ee</color>
+    <color name="neon_green">#4ade80</color>
+    <color name="neon_yellow">#fde047</color>
+    <color name="neon_purple">#a855f7</color>
+    <color name="neon_orange">#fb923c</color>
+    
+    <!-- Background colors -->
+    <color name="dark_bg">#0f172a</color>
+    <color name="darker_bg">#020617</color>
+</resources>

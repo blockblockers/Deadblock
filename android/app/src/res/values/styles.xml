@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme -->
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <!-- Primary colors -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@color/status_bar_color</item>
+        <item name="android:windowLightStatusBar">false</item>
+        
+        <!-- Navigation bar -->
+        <item name="android:navigationBarColor">@color/navigation_bar_color</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        
+        <!-- Window background -->
+        <item name="android:windowBackground">@color/darker_bg</item>
+    </style>
+
+    <!-- Splash screen theme -->
+    <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
+        <item name="android:background">@color/splash_background</item>
+        <item name="android:statusBarColor">@color/splash_background</item>
+        <item name="android:navigationBarColor">@color/splash_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+
+    <!-- Fullscreen theme for immersive experience -->
+    <style name="AppTheme.Fullscreen" parent="AppTheme">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+</resources>

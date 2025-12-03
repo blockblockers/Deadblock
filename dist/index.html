@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#020617">
+  <meta name="apple-mobile-web-app-title" content="DEADBLOCK">
+  <meta name="application-name" content="DEADBLOCK">
+  <meta name="msapplication-TileColor" content="#020617">
+  <meta name="msapplication-config" content="/browserconfig.xml">
+  
+  <!-- Description & Keywords -->
+  <meta name="description" content="DEADBLOCK - Strategic pentomino placement puzzle game. Play against AI, with friends, or solve puzzles!">
+  <meta name="keywords" content="puzzle game, pentomino, strategy game, board game, deadblock, mobile game">
+  <meta name="author" content="Kevin Casselbury">
+  
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="DEADBLOCK - Strategic Puzzle Game">
+  <meta property="og:description" content="Block your opponent in this strategic pentomino placement game!">
+  <meta property="og:image" content="/icons/icon-512.png">
+  
+  <!-- Manifest - FIXED: was misspelled as "mainfest.json" -->
+  <link rel="manifest" href="/manifest.json">
+  
+  <!-- Standard Favicon -->
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  
+  <!-- Apple Touch Icons (iOS) -->
+  <link rel="apple-touch-icon" href="/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-120.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="/icons/icon-76.png">
+  
+  <!-- iOS Splash Screens -->
+  <link rel="apple-touch-startup-image" href="/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1668x2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
+  
+  <!-- Google Fonts - Orbitron for cyberpunk feel -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <title>DEADBLOCK</title>
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --neon-pink: #ec4899;
+      --neon-cyan: #22d3ee;
+      --neon-green: #4ade80;
+      --neon-yellow: #fde047;
+      --neon-purple: #a855f7;
+      --neon-orange: #fb923c;
+      --dark-bg: #0f172a;
+      --darker-bg: #020617;
+      
+      /* Safe area insets for notched devices */
+      --sat: env(safe-area-inset-top);
+      --sar: env(safe-area-inset-right);
+      --sab: env(safe-area-inset-bottom);
+      --sal: env(safe-area-inset-left);
+    }
+
+    body {
+      font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-color: var(--darker-bg);
+      color: #e2e8f0;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      overflow-x: hidden;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+           user-select: none;
+      
+      /* Account for safe areas */
+      padding-top: var(--sat);
+      padding-right: var(--sar);
+      padding-bottom: var(--sab);
+      padding-left: var(--sal);
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-image: 
+        linear-gradient(rgba(34, 211, 238, 0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 211, 238, 0.1) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: -2;
+    }
+
+    /* Floating glow orbs */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(ellipse at 20% 20%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(34, 211, 238, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(74, 222, 128, 0.1) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: -1;
+      animation: pulseGlow 8s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulseGlow {
+      0% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    #root {
+      width: 100%;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+    }
+
+    /* Loading screen */
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: var(--darker-bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      gap: 30px;
+    }
+
+    /* Neon title styling */
+    .neon-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 3.5rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      background: linear-gradient(90deg, var(--neon-pink), var(--neon-yellow), var(--neon-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: neonFlicker 3s ease-in-out infinite alternate;
+      text-align: center;
+      padding: 0 1rem;
+    }
+
+    @keyframes neonFlicker {
+      0%, 100% {
+        filter: brightness(1) drop-shadow(0 0 10px rgba(236, 72, 153, 0.8));
+      }
+      50% {
+        filter: brightness(1.2) drop-shadow(0 0 20px rgba(34, 211, 238, 0.8));
+      }
+    }
+
+    .subtitle {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 1rem;
+      letter-spacing: 0.5em;
+      color: rgba(34, 211, 238, 0.7);
+      text-transform: uppercase;
+    }
+
+    .loading-bar-container {
+      width: 280px;
+      height: 4px;
+      background: rgba(34, 211, 238, 0.2);
+      border-radius: 2px;
+      overflow: hidden;
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
+    }
+
+    .loading-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+      border-radius: 2px;
+      animation: loadingProgress 2s ease-out forwards;
+      box-shadow: 0 0 10px var(--neon-cyan);
+    }
+
+    @keyframes loadingProgress {
+      0% { width: 0%; }
+      100% { width: 100%; }
+    }
+
+    .loading-text {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      color: var(--neon-cyan);
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* Scanline effect overlay */
+    .scanlines {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      z-index: 1000;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.1) 0px,
+        rgba(0, 0, 0, 0.1) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      opacity: 0.3;
+    }
+
+    /* Install prompt - Neon styled */
+    #install-prompt {
+      position: fixed;
+      bottom: calc(20px + var(--sab));
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--dark-bg);
+      padding: 1.25rem 1.5rem;
+      border-radius: 16px;
+      border: 1px solid rgba(34, 211, 238, 0.4);
+      box-shadow: 
+        0 0 30px rgba(34, 211, 238, 0.3),
+        0 10px 40px rgba(0, 0, 0, 0.5);
+      display: none;
+      z-index: 1001;
+      max-width: 90%;
+      width: 320px;
+    }
+
+    #install-prompt.show {
+      display: block;
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        transform: translateX(-50%) translateY(100px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+      }
+    }
+
+    #install-prompt .prompt-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--neon-cyan);
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.1em;
+    }
+
+    #install-prompt .prompt-text {
+      font-size: 0.875rem;
+      color: rgba(226, 232, 240, 0.7);
+      margin-bottom: 1rem;
+    }
+
+    #install-prompt .btn-container {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    #install-prompt button {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      border: none;
+    }
+
+    #install-btn {
+      background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+      color: white;
+      box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+    }
+
+    #install-btn:hover {
+      box-shadow: 0 0 30px rgba(168, 85, 247, 0.6);
+      transform: scale(1.02);
+    }
+
+    #dismiss-btn {
+      background: rgba(100, 116, 139, 0.3);
+      color: rgba(226, 232, 240, 0.7);
+      border: 1px solid rgba(100, 116, 139, 0.5);
+    }
+
+    #dismiss-btn:hover {
+      background: rgba(100, 116, 139, 0.5);
+      color: white;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .neon-title {
+        font-size: 2.5rem;
+      }
+      
+      .subtitle {
+        font-size: 0.75rem;
+        letter-spacing: 0.3em;
+      }
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-B-Fe1Xw1.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-D9iHMgPX.css">
+</head>
+<body>
+  <!-- Scanline overlay for retro CRT effect -->
+  <div class="scanlines"></div>
+  
+  <!-- Loading Screen -->
+  <div id="loading">
+    <h1 class="neon-title">DEADBLOCK</h1>
+    <p class="subtitle">Block Puzzle Strategy</p>
+    <div class="loading-bar-container">
+      <div class="loading-bar"></div>
+    </div>
+    <p class="loading-text">INITIALIZING...</p>
+  </div>
+  
+  <!-- App Root -->
+  <div id="root"></div>
+  
+  <!-- Install Prompt (only shown on web, hidden in native apps) -->
+  <div id="install-prompt">
+    <p class="prompt-title">INSTALL DEADBLOCK</p>
+    <p class="prompt-text">Add to your home screen for the full experience!</p>
+    <div class="btn-container">
+      <button id="install-btn">INSTALL</button>
+      <button id="dismiss-btn">LATER</button>
+    </div>
+  </div>
+  
+  <!-- Service Worker Registration & PWA Logic -->
+  <script>
+    // Detect if running in Capacitor native app
+    const isNativeApp = window.Capacitor !== undefined;
+    
+    // Service Worker Registration (only for web)
+    if ('serviceWorker' in navigator && !isNativeApp) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+          .then((registration) => {
+            console.log('ServiceWorker registered:', registration);
+          })
+          .catch((error) => {
+            console.log('ServiceWorker registration failed:', error);
+          });
+      });
+    }
+    
+    // Install Prompt (only for web)
+    if (!isNativeApp) {
+      let deferredPrompt;
+      const installPrompt = document.getElementById('install-prompt');
+      const installBtn = document.getElementById('install-btn');
+      const dismissBtn = document.getElementById('dismiss-btn');
+      
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Show install prompt after 5 seconds if not dismissed before
+        setTimeout(() => {
+          if (deferredPrompt && !localStorage.getItem('installDismissed')) {
+            installPrompt.classList.add('show');
+          }
+        }, 5000);
+      });
+      
+      installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        console.log(`User response: ${outcome}`);
+        deferredPrompt = null;
+        installPrompt.classList.remove('show');
+      });
+      
+      dismissBtn.addEventListener('click', () => {
+        installPrompt.classList.remove('show');
+        localStorage.setItem('installDismissed', 'true');
+      });
+      
+      // Check if app is installed
+      window.addEventListener('appinstalled', () => {
+        console.log('App installed');
+        installPrompt.classList.remove('show');
+        deferredPrompt = null;
+      });
+    }
+    
+    // Hide loading screen when app loads
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        const loading = document.getElementById('loading');
+        loading.style.opacity = '0';
+        loading.style.transition = 'opacity 0.5s ease';
+        setTimeout(() => {
+          loading.style.display = 'none';
+        }, 500);
+      }, 1500);
+    });
+    
+    // Prevent pull-to-refresh on mobile
+    let lastTouchY = 0;
+    document.addEventListener('touchstart', (e) => {
+      lastTouchY = e.touches[0].clientY;
+    }, { passive: true });
+    
+    document.addEventListener('touchmove', (e) => {
+      const touchY = e.touches[0].clientY;
+      const touchYDelta = touchY - lastTouchY;
+      lastTouchY = touchY;
+      
+      if (window.scrollY === 0 && touchYDelta > 0 && e.cancelable) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  </script>
+  
+</body>
+</html>

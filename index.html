@@ -10,61 +10,56 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#020617">
   <meta name="apple-mobile-web-app-title" content="DEADBLOCK">
+  <meta name="application-name" content="DEADBLOCK">
+  <meta name="msapplication-TileColor" content="#020617">
+  <meta name="msapplication-config" content="/browserconfig.xml">
   
   <!-- Description & Keywords -->
   <meta name="description" content="DEADBLOCK - Strategic pentomino placement puzzle game. Play against AI, with friends, or solve puzzles!">
-  <meta name="keywords" content="puzzle game, pentomino, strategy game, board game, deadblock">
+  <meta name="keywords" content="puzzle game, pentomino, strategy game, board game, deadblock, mobile game">
+  <meta name="author" content="Kevin Casselbury">
   
-  <!-- Manifest -->
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="DEADBLOCK - Strategic Puzzle Game">
+  <meta property="og:description" content="Block your opponent in this strategic pentomino placement game!">
+  <meta property="og:image" content="/icons/icon-512.png">
+  
+  <!-- Manifest - FIXED: was misspelled as "mainfest.json" -->
   <link rel="manifest" href="/manifest.json">
   
   <!-- Standard Favicon -->
-  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-  <link rel="icon" type="image/png" sizes="96x96" href="/icon-96.png">
-  <link rel="icon" type="image/png" sizes="48x48" href="/icon-48.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   
-  <!-- Android Chrome Icons -->
-  <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
-  <link rel="icon" type="image/png" sizes="144x144" href="/android-chrome-144x144.png">
-  <link rel="icon" type="image/png" sizes="96x96" href="/android-chrome-96x96.png">
-  <link rel="icon" type="image/png" sizes="72x72" href="/android-chrome-72x72.png">
-  <link rel="icon" type="image/png" sizes="48x48" href="/android-chrome-48x48.png">
-  <link rel="icon" type="image/png" sizes="36x36" href="/android-chrome-36x36.png">
-  
   <!-- Apple Touch Icons (iOS) -->
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png">
-  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
-  <link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon-144x144.png">
-  <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon-120x120.png">
-  <link rel="apple-touch-icon" sizes="114x114" href="/apple-touch-icon-114x114.png">
-  <link rel="apple-touch-icon" sizes="76x76" href="/apple-touch-icon-76x76.png">
-  <link rel="apple-touch-icon" sizes="72x72" href="/apple-touch-icon-72x72.png">
-  <link rel="apple-touch-icon" sizes="60x60" href="/apple-touch-icon-60x60.png">
-  <link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon-57x57.png">
+  <link rel="apple-touch-icon" href="/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
+  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
+  <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png">
+  <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-120.png">
+  <link rel="apple-touch-icon" sizes="76x76" href="/icons/icon-76.png">
   
   <!-- iOS Splash Screens -->
-  <link rel="apple-touch-startup-image" href="/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash-1668x2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)">
-  <link rel="apple-touch-startup-image" href="/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
-  <link rel="apple-touch-startup-image" href="/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1668x2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
+  <link rel="apple-touch-startup-image" href="/splash/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
   
   <!-- Google Fonts - Orbitron for cyberpunk feel -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
-  <title></title>
+  <title>DEADBLOCK</title>
   
   <style>
     * {
@@ -82,6 +77,12 @@
       --neon-orange: #fb923c;
       --dark-bg: #0f172a;
       --darker-bg: #020617;
+      
+      /* Safe area insets for notched devices */
+      --sat: env(safe-area-inset-top);
+      --sar: env(safe-area-inset-right);
+      --sab: env(safe-area-inset-bottom);
+      --sal: env(safe-area-inset-left);
     }
 
     body {
@@ -91,12 +92,19 @@
       background-color: var(--darker-bg);
       color: #e2e8f0;
       min-height: 100vh;
+      min-height: -webkit-fill-available;
       overflow-x: hidden;
       overscroll-behavior: none;
       -webkit-tap-highlight-color: transparent;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
+      
+      /* Account for safe areas */
+      padding-top: var(--sat);
+      padding-right: var(--sar);
+      padding-bottom: var(--sab);
+      padding-left: var(--sal);
     }
 
     /* Animated grid background */
@@ -251,7 +259,7 @@
     /* Install prompt - Neon styled */
     #install-prompt {
       position: fixed;
-      bottom: 20px;
+      bottom: calc(20px + var(--sab));
       left: 50%;
       transform: translateX(-50%);
       background: var(--dark-bg);
@@ -368,7 +376,7 @@
   <!-- App Root -->
   <div id="root"></div>
   
-  <!-- Install Prompt -->
+  <!-- Install Prompt (only shown on web, hidden in native apps) -->
   <div id="install-prompt">
     <p class="prompt-title">INSTALL DEADBLOCK</p>
     <p class="prompt-text">Add to your home screen for the full experience!</p>
@@ -380,8 +388,11 @@
   
   <!-- Service Worker Registration & PWA Logic -->
   <script>
-    // Service Worker Registration
-    if ('serviceWorker' in navigator) {
+    // Detect if running in Capacitor native app
+    const isNativeApp = window.Capacitor !== undefined;
+    
+    // Service Worker Registration (only for web)
+    if ('serviceWorker' in navigator && !isNativeApp) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
           .then((registration) => {
@@ -393,46 +404,48 @@
       });
     }
     
-    // Install Prompt
-    let deferredPrompt;
-    const installPrompt = document.getElementById('install-prompt');
-    const installBtn = document.getElementById('install-btn');
-    const dismissBtn = document.getElementById('dismiss-btn');
-    
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
+    // Install Prompt (only for web)
+    if (!isNativeApp) {
+      let deferredPrompt;
+      const installPrompt = document.getElementById('install-prompt');
+      const installBtn = document.getElementById('install-btn');
+      const dismissBtn = document.getElementById('dismiss-btn');
       
-      // Show install prompt after 5 seconds if not dismissed before
-      setTimeout(() => {
-        if (deferredPrompt && !localStorage.getItem('installDismissed')) {
-          installPrompt.classList.add('show');
-        }
-      }, 5000);
-    });
-    
-    installBtn.addEventListener('click', async () => {
-      if (!deferredPrompt) return;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Show install prompt after 5 seconds if not dismissed before
+        setTimeout(() => {
+          if (deferredPrompt && !localStorage.getItem('installDismissed')) {
+            installPrompt.classList.add('show');
+          }
+        }, 5000);
+      });
       
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
+      installBtn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        
+        console.log(`User response: ${outcome}`);
+        deferredPrompt = null;
+        installPrompt.classList.remove('show');
+      });
       
-      console.log(`User response: ${outcome}`);
-      deferredPrompt = null;
-      installPrompt.classList.remove('show');
-    });
-    
-    dismissBtn.addEventListener('click', () => {
-      installPrompt.classList.remove('show');
-      localStorage.setItem('installDismissed', 'true');
-    });
-    
-    // Check if app is installed
-    window.addEventListener('appinstalled', () => {
-      console.log('App installed');
-      installPrompt.classList.remove('show');
-      deferredPrompt = null;
-    });
+      dismissBtn.addEventListener('click', () => {
+        installPrompt.classList.remove('show');
+        localStorage.setItem('installDismissed', 'true');
+      });
+      
+      // Check if app is installed
+      window.addEventListener('appinstalled', () => {
+        console.log('App installed');
+        installPrompt.classList.remove('show');
+        deferredPrompt = null;
+      });
+    }
     
     // Hide loading screen when app loads
     window.addEventListener('DOMContentLoaded', () => {
@@ -450,14 +463,14 @@
     let lastTouchY = 0;
     document.addEventListener('touchstart', (e) => {
       lastTouchY = e.touches[0].clientY;
-    }, { passive: false });
+    }, { passive: true });
     
     document.addEventListener('touchmove', (e) => {
       const touchY = e.touches[0].clientY;
       const touchYDelta = touchY - lastTouchY;
       lastTouchY = touchY;
       
-      if (window.scrollY === 0 && touchYDelta > 0) {
+      if (window.scrollY === 0 && touchYDelta > 0 && e.cancelable) {
         e.preventDefault();
       }
     }, { passive: false });

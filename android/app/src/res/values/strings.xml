@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App Name -->
+    <string name="app_name">DEADBLOCK</string>
+    
+    <!-- Title shown in app launcher -->
+    <string name="title_activity_main">DEADBLOCK</string>
+    
+    <!-- Package name for Capacitor -->
+    <string name="package_name">com.deadblock.game</string>
+    
+    <!-- Custom URL scheme for deep linking -->
+    <string name="custom_url_scheme">deadblock</string>
+</resources>
