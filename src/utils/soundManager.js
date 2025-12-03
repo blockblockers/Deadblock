@@ -1,5 +1,6 @@
 // Sound Manager for Deadblock
 // Handles background music, sound effects, and haptic feedback
+// Updated: Auto-plays sound on game initialization
 
 class SoundManager {
   constructor() {
@@ -10,12 +11,37 @@ class SoundManager {
     this.musicEnabled = true;
     this.sfxEnabled = true;
     this.vibrationEnabled = true;
+    this.hasUserInteracted = false;
     
     // Audio context for generating synth sounds
     this.audioContext = null;
     
     // Load saved settings
     this.loadSettings();
+    
+    // Set up auto-initialization on first user interaction
+    this.setupAutoInit();
+  }
+
+  // Set up listeners for first user interaction to enable audio
+  setupAutoInit() {
+    const initOnInteraction = () => {
+      if (!this.hasUserInteracted) {
+        this.hasUserInteracted = true;
+        this.init();
+        
+        // Auto-start background music if enabled
+        if (this.musicEnabled) {
+          this.startBackgroundMusic();
+        }
+      }
+    };
+
+    // Listen for various user interaction events
+    const events = ['touchstart', 'mousedown', 'keydown', 'click'];
+    events.forEach(event => {
+      document.addEventListener(event, initOnInteraction, { once: false, passive: true });
+    });
   }
 
   // Load settings from localStorage
@@ -35,13 +61,36 @@ class SoundManager {
     }
   }
 
+  // Save current settings to localStorage
+  saveSettings() {
+    try {
+      const settings = {
+        musicVolume: Math.round(this.bgMusicVolume * 100),
+        sfxVolume: Math.round(this.sfxVolume * 100),
+        musicEnabled: this.musicEnabled,
+        sfxEnabled: this.sfxEnabled,
+        vibrationEnabled: this.vibrationEnabled
+      };
+      localStorage.setItem('deadblock-settings', JSON.stringify(settings));
+    } catch (e) {
+      console.warn('Could not save sound settings:', e);
+    }
+  }
+
   // Initialize audio context (must be called after user interaction)
   init() {
     if (this.isInitialized) return;
     
     try {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Resume audio context if it's suspended (browser policy)
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume();
+      }
+      
       this.isInitialized = true;
+      console.log('Sound Manager initialized');
     } catch (e) {
       console.warn('Web Audio API not supported:', e);
     }
@@ -51,20 +100,32 @@ class SoundManager {
   startBackgroundMusic(musicPath = '/sounds/background-music.mp3') {
     if (!this.musicEnabled) return;
     
+    // If music already exists and is playing, just ensure volume is correct
     if (this.bgMusic) {
-      this.bgMusic.play().catch(() => {});
+      this.bgMusic.volume = this.bgMusicVolume;
+      if (this.bgMusic.paused) {
+        this.bgMusic.play().catch(() => {});
+      }
       return;
     }
 
+    // Create new audio element
     this.bgMusic = new Audio(musicPath);
     this.bgMusic.loop = true;
     this.bgMusic.volume = this.bgMusicVolume;
+    
+    // Handle load errors gracefully (file might not exist)
+    this.bgMusic.onerror = () => {
+      console.log('Background music file not found, continuing without music');
+      this.bgMusic = null;
+    };
     
     // Play with user interaction handling
     const playPromise = this.bgMusic.play();
     if (playPromise !== undefined) {
       playPromise.catch((error) => {
-        console.log('Background music autoplay prevented:', error);
+        // This is normal if user hasn't interacted yet
+        console.log('Background music waiting for user interaction');
       });
     }
   }
@@ -97,11 +158,13 @@ class SoundManager {
     if (this.bgMusic) {
       this.bgMusic.volume = this.bgMusicVolume;
     }
+    this.saveSettings();
   }
 
   // Set SFX volume (0-1)
   setSfxVolume(volume) {
     this.sfxVolume = Math.max(0, Math.min(1, volume));
+    this.saveSettings();
   }
 
   // Enable/disable music
@@ -109,26 +172,37 @@ class SoundManager {
     this.musicEnabled = enabled;
     if (!enabled) {
       this.pauseBackgroundMusic();
+    } else if (this.hasUserInteracted) {
+      this.startBackgroundMusic();
     }
+    this.saveSettings();
   }
 
   // Enable/disable sound effects
   setSfxEnabled(enabled) {
     this.sfxEnabled = enabled;
+    this.saveSettings();
   }
 
   // Enable/disable vibration
   setVibrationEnabled(enabled) {
     this.vibrationEnabled = enabled;
+    this.saveSettings();
   }
 
   // Generate a cyberpunk-style click/blip sound
   playClickSound(type = 'default') {
     if (!this.sfxEnabled) return;
     
+    // Auto-init if needed
     if (!this.audioContext) {
       this.init();
       if (!this.audioContext) return;
+    }
+
+    // Resume context if suspended
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
     }
 
     const ctx = this.audioContext;

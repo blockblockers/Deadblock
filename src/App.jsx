@@ -4,11 +4,9 @@ import MenuScreen from './components/MenuScreen';
 import PuzzleSelect from './components/PuzzleSelect';
 import GameScreen from './components/GameScreen';
 import DifficultySelector from './components/DifficultySelector';
-import { soundManager } from './utils/soundManager';
 
 function App() {
   const [isMobile, setIsMobile] = useState(false);
-  const [musicStarted, setMusicStarted] = useState(false);
   
   // Detect mobile device
   useEffect(() => {
@@ -20,28 +18,8 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Initialize sound on first user interaction
-  useEffect(() => {
-    const initSound = () => {
-      if (!musicStarted) {
-        soundManager.init();
-        soundManager.startBackgroundMusic('/sounds/background-music.mp3');
-        setMusicStarted(true);
-      }
-    };
-
-    // Listen for first interaction to start audio (browser autoplay policy)
-    const events = ['touchstart', 'mousedown', 'keydown'];
-    events.forEach(event => {
-      document.addEventListener(event, initSound, { once: true });
-    });
-
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, initSound);
-      });
-    };
-  }, [musicStarted]);
+  // Sound is now auto-initialized by soundManager on first user interaction
+  // No need for manual initialization here
 
   // Get all game state and actions from custom hook
   const {
@@ -138,8 +116,6 @@ function App() {
   }
 
   // Render Game Screen (for ai, 2player, and puzzle modes)
-
-  // Render Game Screen
   return (
     <GameScreen
       board={board}

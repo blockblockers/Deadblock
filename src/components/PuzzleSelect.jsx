@@ -2,76 +2,50 @@ import { useState } from 'react';
 import { Trophy, Zap, Brain, Sparkles, Loader } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
-
-// Puzzle difficulty levels
-const PUZZLE_DIFFICULTY = {
-  EASY: 'easy',
-  MEDIUM: 'medium', 
-  HARD: 'hard'
-};
-
-// Simple puzzle generator (generates valid puzzle boards)
-const generatePuzzle = (difficulty) => {
-  // Create a board with 9 pieces placed (3 remaining)
-  const pieces = ['F', 'I', 'L', 'N', 'P', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-  const shuffled = [...pieces].sort(() => Math.random() - 0.5);
-  const usedPieces = shuffled.slice(0, 9);
-  
-  // Generate a simple board state (this is simplified - real implementation would validate)
-  let boardState = 'G'.repeat(64);
-  
-  return {
-    id: `${difficulty}-${Date.now()}`,
-    name: `${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)} Puzzle`,
-    difficulty: difficulty,
-    description: difficulty === 'easy' 
-      ? "Find the obvious winning move!" 
-      : difficulty === 'medium'
-        ? "Think carefully to outmaneuver the AI!"
-        : "Expert-level positioning required!",
-    boardState: boardState,
-    usedPieces: usedPieces
-  };
-};
+import { PUZZLE_DIFFICULTY, getMovesForDifficulty, getRandomPuzzle } from '../utils/puzzleGenerator';
 
 const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState(null);
+  const [loadingProgress, setLoadingProgress] = useState('');
 
   const difficulties = [
     {
       id: PUZZLE_DIFFICULTY.EASY,
       name: 'EASY',
-      subtitle: 'Beginner Friendly',
+      subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.EASY)} Moves Left`,
       description: 'Clear winning moves. Perfect for learning puzzle strategies.',
       icon: Zap,
       color: 'from-green-500 to-emerald-600',
       glowColor: 'rgba(74,222,128,0.5)',
       borderColor: 'border-green-500/30',
-      textColor: 'text-green-300'
+      textColor: 'text-green-300',
+      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.EASY)
     },
     {
       id: PUZZLE_DIFFICULTY.MEDIUM,
       name: 'MEDIUM',
-      subtitle: 'Think Ahead',
-      description: 'Requires careful analysis. The winning move isn\'t obvious.',
+      subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.MEDIUM)} Moves Left`,
+      description: 'Requires careful analysis. Think several moves ahead.',
       icon: Brain,
       color: 'from-amber-500 to-orange-600',
       glowColor: 'rgba(251,191,36,0.5)',
       borderColor: 'border-amber-500/30',
-      textColor: 'text-amber-300'
+      textColor: 'text-amber-300',
+      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.MEDIUM)
     },
     {
       id: PUZZLE_DIFFICULTY.HARD,
       name: 'HARD',
-      subtitle: 'Expert Level',
-      description: 'Subtle positioning required. Only for experienced players.',
+      subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.HARD)} Moves Left`,
+      description: 'Maximum complexity. Only for experienced players.',
       icon: Sparkles,
       color: 'from-red-500 to-pink-600',
       glowColor: 'rgba(239,68,68,0.5)',
       borderColor: 'border-red-500/30',
       textColor: 'text-red-300',
-      badge: 'PRO'
+      badge: 'PRO',
+      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.HARD)
     }
   ];
 
@@ -86,20 +60,32 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     
     soundManager.playButtonClick();
     setIsLoading(true);
+    setLoadingProgress('Initializing...');
     
     try {
-      // Generate a puzzle for the selected difficulty
-      const puzzle = generatePuzzle(selectedDifficulty);
+      const movesRemaining = getMovesForDifficulty(selectedDifficulty);
+      const piecesToPlace = 12 - movesRemaining;
+      
+      setLoadingProgress(`Claude AI placing ${piecesToPlace} pieces...`);
+      
+      // Always use Claude AI to generate puzzles
+      const puzzle = await getRandomPuzzle(selectedDifficulty, true);
       
       if (puzzle) {
-        // Small delay for UX
-        await new Promise(resolve => setTimeout(resolve, 500));
+        setLoadingProgress('Puzzle ready!');
+        await new Promise(resolve => setTimeout(resolve, 300));
         onSelectPuzzle(puzzle);
+      } else {
+        setLoadingProgress('Failed to generate puzzle');
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     } catch (error) {
       console.error('Error loading puzzle:', error);
+      setLoadingProgress('Error occurred');
+      await new Promise(resolve => setTimeout(resolve, 1000));
     } finally {
       setIsLoading(false);
+      setLoadingProgress('');
     }
   };
 
@@ -107,6 +93,8 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     soundManager.playButtonClick();
     onBack();
   };
+
+  const selectedDifficultyData = difficulties.find(d => d.id === selectedDifficulty);
 
   return (
     <div className="min-h-screen relative p-4 flex items-center justify-center overflow-hidden bg-slate-950">
@@ -134,7 +122,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
             BACK
           </button>
         </div>
-        <p className="text-slate-400 text-sm mb-6">Choose puzzle difficulty • 50 puzzles each</p>
+        <p className="text-slate-400 text-sm mb-6">Choose difficulty • AI generates unique puzzles</p>
         
         {/* Difficulty Options */}
         <div className="space-y-3">
@@ -146,11 +134,12 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
               <button
                 key={diff.id}
                 onClick={() => handleSelectDifficulty(diff.id)}
+                disabled={isLoading}
                 className={`w-full p-4 rounded-xl border transition-all duration-300 text-left relative overflow-hidden ${
                   isSelected 
                     ? `bg-gradient-to-r ${diff.color} border-white/30`
                     : `bg-slate-800/80 ${diff.borderColor} hover:bg-slate-700/80`
-                }`}
+                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                 style={isSelected ? { boxShadow: `0 0 30px ${diff.glowColor}` } : {}}
               >
                 {/* Badge */}
@@ -169,12 +158,19 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                       <h3 className={`font-bold tracking-wide ${isSelected ? 'text-white' : diff.textColor}`}>
                         {diff.name}
                       </h3>
-                      <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-slate-500'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        isSelected 
+                          ? 'bg-white/20 text-white' 
+                          : 'bg-slate-700 text-slate-400'
+                      }`}>
                         {diff.subtitle}
                       </span>
                     </div>
                     <p className={`text-sm mt-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
                       {diff.description}
+                    </p>
+                    <p className={`text-xs mt-1 ${isSelected ? 'text-white/60' : 'text-slate-500'}`}>
+                      {diff.piecesPlaced} pieces placed • {12 - diff.piecesPlaced} remaining
                     </p>
                   </div>
                   
@@ -200,8 +196,13 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
         {/* Puzzle info */}
         <div className="mt-4 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
           <p className="text-xs text-slate-400">
-            <span className="text-cyan-400 font-semibold">3 moves remaining:</span> You make 2 moves, AI makes 1. Find the winning sequence!
+            <span className="text-cyan-400 font-semibold">How it works:</span> Claude AI plays a game, placing pieces until the target number of moves remain. You then solve from that position!
           </p>
+          {selectedDifficultyData && (
+            <p className="text-xs text-slate-500 mt-2">
+              <span className="text-purple-400">Selected:</span> {selectedDifficultyData.piecesPlaced} pieces will be placed, leaving {12 - selectedDifficultyData.piecesPlaced} moves for you to find the winning sequence.
+            </p>
+          )}
         </div>
         
         {/* Start Button */}
@@ -217,12 +218,17 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
           {isLoading ? (
             <>
               <Loader size={20} className="animate-spin" />
-              GENERATING PUZZLE...
+              <span className="flex flex-col items-start">
+                <span>GENERATING...</span>
+                {loadingProgress && (
+                  <span className="text-xs font-normal opacity-70">{loadingProgress}</span>
+                )}
+              </span>
             </>
           ) : (
             <>
               <Trophy size={20} />
-              {selectedDifficulty ? 'START PUZZLE' : 'SELECT DIFFICULTY'}
+              {selectedDifficulty ? 'GENERATE PUZZLE' : 'SELECT DIFFICULTY'}
             </>
           )}
         </button>
