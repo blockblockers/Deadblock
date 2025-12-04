@@ -1,98 +1,45 @@
 import { useState } from 'react';
-import { Trophy, Zap, Brain, Sparkles, Loader, AlertCircle } from 'lucide-react';
+import { Trophy, Loader, AlertCircle, Play } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
-import { getRandomPuzzle, PUZZLE_DIFFICULTY, getMovesForDifficulty } from '../utils/puzzleGenerator';
+import { getRandomPuzzle } from '../utils/puzzleGenerator';
 
 const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedDifficulty, setSelectedDifficulty] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState(null);
-
-  const difficulties = [
-    {
-      id: PUZZLE_DIFFICULTY.EASY,
-      name: 'EASY',
-      subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.EASY)} Moves Left`,
-      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.EASY),
-      description: 'Clear winning moves. Perfect for learning puzzle strategies.',
-      icon: Zap,
-      color: 'from-green-500 to-emerald-600',
-      glowColor: 'rgba(74,222,128,0.5)',
-      borderColor: 'border-green-500/30',
-      textColor: 'text-green-300'
-    },
-    {
-      id: PUZZLE_DIFFICULTY.MEDIUM,
-      name: 'MEDIUM',
-      subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.MEDIUM)} Moves Left`,
-      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.MEDIUM),
-      description: 'Requires careful analysis. The winning move isn\'t obvious.',
-      icon: Brain,
-      color: 'from-amber-500 to-orange-600',
-      glowColor: 'rgba(251,191,36,0.5)',
-      borderColor: 'border-amber-500/30',
-      textColor: 'text-amber-300'
-    },
-    {
-      id: PUZZLE_DIFFICULTY.HARD,
-      name: 'HARD',
-      subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.HARD)} Moves Left`,
-      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.HARD),
-      description: 'Subtle positioning required. Only for experienced players.',
-      icon: Sparkles,
-      color: 'from-red-500 to-pink-600',
-      glowColor: 'rgba(239,68,68,0.5)',
-      borderColor: 'border-red-500/30',
-      textColor: 'text-red-300',
-      badge: 'PRO'
-    }
-  ];
-
-  const handleSelectDifficulty = (difficultyId) => {
-    soundManager.playClickSound('select');
-    soundManager.vibrate('short');
-    setSelectedDifficulty(difficultyId);
-    setError(null);
-  };
 
   const handleProgress = (current, total) => {
     setProgress({ current, total });
   };
 
-  const handleStartPuzzle = async () => {
-    if (!selectedDifficulty) return;
-    
+  const handleGeneratePuzzle = async () => {
     soundManager.playButtonClick();
     setIsLoading(true);
-    setProgress({ current: 0, total: 12 });
     setError(null);
+    setProgress({ current: 0, total: 12 });
     
     try {
-      console.log('Starting puzzle generation for difficulty:', selectedDifficulty);
+      console.log('Starting puzzle generation from PuzzleSelect...');
       
       // Generate puzzle using AI vs AI approach
-      const puzzle = await getRandomPuzzle(selectedDifficulty, false, handleProgress);
+      const puzzle = await getRandomPuzzle('easy', false, handleProgress);
       
       if (puzzle) {
-        console.log('Puzzle generated, loading into game:', puzzle);
-        // Ensure difficulty is stored in the puzzle
-        puzzle.difficulty = selectedDifficulty;
+        console.log('Puzzle generated, passing to game:', puzzle);
         
         // Small delay for visual feedback
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Call the parent handler to load the puzzle
+        // Pass puzzle to parent
         onSelectPuzzle(puzzle);
       } else {
-        console.error('Puzzle generation returned null');
         setError('Failed to generate puzzle. Please try again.');
+        setIsLoading(false);
       }
     } catch (err) {
       console.error('Error generating puzzle:', err);
       setError('An error occurred. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -101,9 +48,6 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     soundManager.playButtonClick();
     onBack();
   };
-
-  // Get the selected difficulty info for the progress display
-  const selectedDiffInfo = difficulties.find(d => d.id === selectedDifficulty);
 
   return (
     <div className="min-h-screen relative p-4 flex items-center justify-center overflow-hidden bg-slate-950">
@@ -119,7 +63,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       
       <div className="relative bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 max-w-lg w-full border border-green-500/30 shadow-[0_0_30px_rgba(74,222,128,0.3)]">
         {/* Header */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Trophy size={28} className="text-green-400" />
             <NeonTitle className="text-2xl sm:text-3xl">PUZZLE MODE</NeonTitle>
@@ -132,113 +76,82 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
             BACK
           </button>
         </div>
-        <p className="text-slate-400 text-sm mb-6">Choose puzzle difficulty</p>
-        
-        {/* Difficulty Options */}
-        <div className="space-y-3">
-          {difficulties.map((diff) => {
-            const Icon = diff.icon;
-            const isSelected = selectedDifficulty === diff.id;
-            
-            return (
-              <button
-                key={diff.id}
-                onClick={() => handleSelectDifficulty(diff.id)}
-                disabled={isLoading}
-                className={`w-full p-4 rounded-xl border transition-all duration-300 text-left relative overflow-hidden ${
-                  isSelected 
-                    ? `bg-gradient-to-r ${diff.color} border-white/30`
-                    : `bg-slate-800/80 ${diff.borderColor} hover:bg-slate-700/80`
-                } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                style={isSelected ? { boxShadow: `0 0 30px ${diff.glowColor}` } : {}}
-              >
-                {/* Badge */}
-                {diff.badge && (
-                  <span className="absolute top-2 right-2 px-2 py-0.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs font-bold rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)]">
-                    {diff.badge}
-                  </span>
-                )}
-                
-                <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/20' : 'bg-slate-700'}`}>
-                    <Icon size={24} className={isSelected ? 'text-white' : diff.textColor} />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className={`font-bold tracking-wide ${isSelected ? 'text-white' : diff.textColor}`}>
-                        {diff.name}
-                      </h3>
-                      <span className={`text-xs ${isSelected ? 'text-white/70' : 'text-slate-500'}`}>
-                        {diff.subtitle}
-                      </span>
-                    </div>
-                    <p className={`text-sm mt-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
-                      {diff.description}
-                    </p>
-                    <p className={`text-xs mt-1 ${isSelected ? 'text-white/60' : 'text-slate-500'}`}>
-                      {diff.piecesPlaced} pieces on board
-                    </p>
-                  </div>
-                  
-                  {/* Selection indicator */}
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    isSelected 
-                      ? 'border-white bg-white' 
-                      : 'border-slate-600'
-                  }`}>
-                    {isSelected && (
-                      <div className={`w-2 h-2 rounded-full ${
-                        diff.id === PUZZLE_DIFFICULTY.EASY ? 'bg-green-600' :
-                        diff.id === PUZZLE_DIFFICULTY.MEDIUM ? 'bg-amber-600' : 'bg-red-600'
-                      }`} />
-                    )}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+
+        {/* Description */}
+        <div className="mb-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
+          <h3 className="text-green-400 font-bold mb-2 tracking-wide">HOW IT WORKS</h3>
+          <ul className="text-slate-300 text-sm space-y-2">
+            <li className="flex items-start gap-2">
+              <span className="text-cyan-400">1.</span>
+              <span>AI plays a complete game against itself</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-cyan-400">2.</span>
+              <span>The last 3 moves are removed from the board</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-cyan-400">3.</span>
+              <span>You take over and play the final 3 moves!</span>
+            </li>
+          </ul>
         </div>
 
         {/* Puzzle info */}
-        <div className="mt-4 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
-          <p className="text-xs text-slate-400">
-            <span className="text-cyan-400 font-semibold">How it works:</span> AI plays a complete game, then removes pieces to create your puzzle. Find the winning moves!
-          </p>
+        <div className="mb-6 p-4 bg-green-900/30 border border-green-500/30 rounded-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(74,222,128,0.5)]">
+              <span className="text-white font-bold text-lg">3</span>
+            </div>
+            <div>
+              <h4 className="text-green-300 font-bold tracking-wide">MOVES REMAINING</h4>
+              <p className="text-slate-400 text-xs">You play → AI plays → You play to win!</p>
+            </div>
+          </div>
         </div>
 
         {/* Error message */}
         {error && (
-          <div className="mt-4 p-3 bg-red-900/50 border border-red-500/50 rounded-lg flex items-center gap-2">
-            <AlertCircle size={16} className="text-red-400" />
+          <div className="mb-4 p-3 bg-red-900/50 border border-red-500/50 rounded-lg flex items-center gap-2">
+            <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
             <p className="text-xs text-red-300">{error}</p>
           </div>
         )}
         
-        {/* Start Button */}
+        {/* Generate Button */}
         <button 
-          onClick={handleStartPuzzle}
-          disabled={!selectedDifficulty || isLoading}
-          className={`w-full mt-6 p-4 rounded-xl font-bold tracking-wide transition-all flex items-center justify-center gap-2 ${
-            selectedDifficulty && !isLoading
-              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-400 hover:to-emerald-500 shadow-[0_0_25px_rgba(74,222,128,0.5)]'
-              : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+          onClick={handleGeneratePuzzle}
+          disabled={isLoading}
+          className={`w-full p-4 rounded-xl font-bold tracking-wide transition-all flex items-center justify-center gap-3 ${
+            isLoading
+              ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+              : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-400 hover:to-emerald-500 shadow-[0_0_25px_rgba(74,222,128,0.5)]'
           }`}
         >
           {isLoading ? (
             <>
-              <Loader size={20} className="animate-spin" />
-              {progress.total > 0 
-                ? `AI PLAYING... MOVE ${progress.current}/${progress.total}`
-                : 'GENERATING PUZZLE...'
-              }
+              <Loader size={24} className="animate-spin" />
+              <div className="text-left">
+                <div className="text-sm">GENERATING PUZZLE...</div>
+                <div className="text-xs opacity-70">
+                  {progress.total > 0 
+                    ? `AI playing move ${progress.current}/${progress.total}`
+                    : 'Starting AI game...'
+                  }
+                </div>
+              </div>
             </>
           ) : (
             <>
-              <Trophy size={20} />
-              {selectedDifficulty ? 'START PUZZLE' : 'SELECT DIFFICULTY'}
+              <Play size={24} />
+              <span>GENERATE PUZZLE</span>
             </>
           )}
         </button>
+
+        {/* Footer note */}
+        <p className="text-center text-slate-500 text-xs mt-4">
+          Each puzzle is randomly generated - every game is unique!
+        </p>
       </div>
     </div>
   );

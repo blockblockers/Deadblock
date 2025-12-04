@@ -40,7 +40,6 @@ function App() {
     showSettings,
     aiDifficulty,
     isGeneratingPuzzle,
-    puzzleDifficulty,
     
     // Actions
     setGameMode,
@@ -74,8 +73,9 @@ function App() {
     startNewGame('ai');
   };
 
-  // Handle puzzle selection
+  // Handle puzzle selection - puzzle is passed directly from PuzzleSelect
   const handlePuzzleSelect = (puzzle) => {
+    console.log('App received puzzle:', puzzle);
     loadPuzzle(puzzle);
   };
 
@@ -91,7 +91,7 @@ function App() {
           showSettings={showSettings}
           onToggleSettings={setShowSettings}
         />
-        {/* iOS Install Prompt - only shows on iOS Safari when not installed */}
+        {/* iOS Install Prompt */}
         <IOSInstallPrompt />
       </>
     );
@@ -109,7 +109,7 @@ function App() {
     );
   }
 
-  // Render Puzzle Difficulty Select Screen
+  // Render Puzzle Select Screen
   if (gameMode === 'puzzle-select') {
     return (
       <PuzzleSelect

@@ -65,6 +65,7 @@ export const useGameState = () => {
     const newUsedPieces = [...usedPieces, piece];
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
     
+    // Check if game is over
     if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
       setGameOver(true);
       setWinner(currentPlayer);
@@ -75,16 +76,17 @@ export const useGameState = () => {
     return true;
   }, [board, boardPieces, currentPlayer, usedPieces]);
 
-  // Handle cell click - NO AUTO-ROTATION, but show preview even if out of bounds
+  // Handle cell click
   const handleCellClick = useCallback((row, col) => {
-    if (gameOver || ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2)) return;
+    if (gameOver) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
     const piece = pendingMove ? (selectedPiece || pendingMove.piece) : selectedPiece;
     if (!piece) return;
 
     const pieceCoords = getPieceCoords(piece, rotation, flipped);
     
-    // Always set pending move so user can see where piece would go
+    // Set pending move so user can see preview
     setPendingMove({ row, col, piece, rotation, flipped });
     
     if (isWithinBounds(row, col, pieceCoords)) {
@@ -127,7 +129,7 @@ export const useGameState = () => {
 
     const pieceCoords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
-    // Check if at least one cell would still be on the board
+    // Check if at least one cell would be on board
     const hasAnyCellOnBoard = pieceCoords.some(([dx, dy]) => {
       const cellRow = newRow + dy;
       const cellCol = newCol + dx;
@@ -142,8 +144,6 @@ export const useGameState = () => {
       } else {
         soundManager.playError();
       }
-    } else {
-      soundManager.playError();
     }
   }, [pendingMove, rotation, flipped]);
 
@@ -169,7 +169,7 @@ export const useGameState = () => {
     
     if (possibleMoves.length === 0) {
       setGameOver(true);
-      setWinner(1);
+      setWinner(1); // Player wins if AI can't move
       return;
     }
 
@@ -177,7 +177,8 @@ export const useGameState = () => {
     
     const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
     
-    await new Promise(resolve => setTimeout(resolve, 600));
+    // Small delay for UX
+    await new Promise(resolve => setTimeout(resolve, 500));
     
     if (move) {
       commitMove(move.row, move.col, move.pieceType, move.rot, move.flip);
@@ -192,67 +193,26 @@ export const useGameState = () => {
     }
   }, [currentPlayer, gameMode, gameOver, isAIThinking, makeAIMove]);
 
-  // Generate a new puzzle (used by reset button in puzzle mode)
-  const generateNewPuzzle = useCallback(async () => {
-    if (!puzzleDifficulty) return;
-    
-    setIsGeneratingPuzzle(true);
-    
-    try {
-      const puzzle = await getRandomPuzzle(puzzleDifficulty, false);
-      if (puzzle) {
-        loadPuzzleInternal(puzzle);
-      }
-    } catch (error) {
-      console.error('Error generating new puzzle:', error);
-    } finally {
-      setIsGeneratingPuzzle(false);
-    }
-  }, [puzzleDifficulty]);
-
-  // Reset game - in puzzle mode, generate a NEW puzzle
-  const resetGame = useCallback(() => {
-    if (gameMode === 'puzzle' && puzzleDifficulty) {
-      generateNewPuzzle();
-    } else if (gameMode === 'puzzle' && currentPuzzle) {
-      loadPuzzleInternal(currentPuzzle);
-    } else {
-      setBoard(createEmptyBoard());
-      setBoardPieces(createEmptyBoard());
-      setCurrentPlayer(1);
-      setSelectedPiece(null);
-      setRotation(0);
-      setFlipped(false);
-      setGameOver(false);
-      setWinner(null);
-      setUsedPieces([]);
-      setMoveHistory([]);
-      setPendingMove(null);
-    }
-  }, [gameMode, currentPuzzle, puzzleDifficulty, generateNewPuzzle]);
-
-  // Internal function to load a puzzle
+  // Load puzzle into game state
   const loadPuzzleInternal = useCallback((puzzle) => {
-    console.log('Loading puzzle internally:', puzzle);
+    console.log('Loading puzzle:', puzzle);
     
     try {
       const newBoard = createEmptyBoard();
       const newBoardPieces = createEmptyBoard();
 
-      // Parse board state if provided (64-character string)
+      // Parse board state (64-character string)
       if (puzzle.boardState && puzzle.boardState.length === 64) {
         for (let i = 0; i < puzzle.boardState.length; i++) {
           const char = puzzle.boardState[i];
-          if (char !== 'G') { // 'G' means empty (gap)
+          if (char !== 'G') {
             const row = Math.floor(i / BOARD_SIZE);
             const col = i % BOARD_SIZE;
             newBoard[row][col] = 1;
-            newBoardPieces[row][col] = char;
+            newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
           }
         }
       }
-      
-      console.log('Setting puzzle state - usedPieces:', puzzle.usedPieces);
       
       setBoard(newBoard);
       setBoardPieces(newBoardPieces);
@@ -269,22 +229,66 @@ export const useGameState = () => {
       setWinner(null);
       setIsGeneratingPuzzle(false);
       
-      console.log('Puzzle loaded successfully, gameMode set to puzzle');
+      console.log('Puzzle loaded! Board pieces:', puzzle.usedPieces?.length || 0);
     } catch (error) {
       console.error('Error loading puzzle:', error);
+      setIsGeneratingPuzzle(false);
     }
   }, []);
 
-  // Load a puzzle (public API)
-  const loadPuzzle = useCallback((puzzle) => {
-    console.log('loadPuzzle called with:', puzzle);
+  // Generate and load a new puzzle
+  const generateAndLoadPuzzle = useCallback(async () => {
+    console.log('Generating new puzzle...');
+    setIsGeneratingPuzzle(true);
     
-    // Store the difficulty for regeneration
-    if (puzzle.difficulty) {
-      setPuzzleDifficulty(puzzle.difficulty);
+    try {
+      const puzzle = await getRandomPuzzle('easy', false, (current, total) => {
+        console.log(`Progress: ${current}/${total}`);
+      });
+      
+      if (puzzle) {
+        loadPuzzleInternal(puzzle);
+      } else {
+        console.error('Puzzle generation returned null');
+        setIsGeneratingPuzzle(false);
+      }
+    } catch (error) {
+      console.error('Error generating puzzle:', error);
+      setIsGeneratingPuzzle(false);
     }
-    loadPuzzleInternal(puzzle);
   }, [loadPuzzleInternal]);
+
+  // Public load puzzle function
+  const loadPuzzle = useCallback((puzzle) => {
+    if (puzzle && puzzle.boardState) {
+      // Puzzle already generated, just load it
+      loadPuzzleInternal(puzzle);
+    } else {
+      // Generate new puzzle
+      generateAndLoadPuzzle();
+    }
+  }, [loadPuzzleInternal, generateAndLoadPuzzle]);
+
+  // Reset game
+  const resetGame = useCallback(() => {
+    if (gameMode === 'puzzle') {
+      // Generate new puzzle
+      generateAndLoadPuzzle();
+    } else {
+      // Regular reset
+      setBoard(createEmptyBoard());
+      setBoardPieces(createEmptyBoard());
+      setCurrentPlayer(1);
+      setSelectedPiece(null);
+      setRotation(0);
+      setFlipped(false);
+      setGameOver(false);
+      setWinner(null);
+      setUsedPieces([]);
+      setMoveHistory([]);
+      setPendingMove(null);
+    }
+  }, [gameMode, generateAndLoadPuzzle]);
 
   // Start new game
   const startNewGame = useCallback((mode) => {
@@ -306,7 +310,8 @@ export const useGameState = () => {
 
   // Select a piece
   const selectPiece = useCallback((piece) => {
-    if (gameOver || ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2)) return;
+    if (gameOver) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     if (usedPieces.includes(piece)) return;
     
     setSelectedPiece(piece);
@@ -366,5 +371,6 @@ export const useGameState = () => {
     selectPiece,
     rotatePiece,
     flipPiece,
+    generateAndLoadPuzzle,
   };
 };
