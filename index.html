@@ -1,220 +1,127 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   
   <!-- PWA Meta Tags -->
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#020617">
-  <meta name="apple-mobile-web-app-title" content="DEADBLOCK">
-  <meta name="application-name" content="DEADBLOCK">
-  <meta name="msapplication-TileColor" content="#020617">
-  <meta name="msapplication-config" content="/browserconfig.xml">
+  <meta name="theme-color" content="#020617" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DEADBLOCK" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="DEADBLOCK" />
   
-  <!-- Description & Keywords -->
-  <meta name="description" content="DEADBLOCK - Strategic pentomino placement puzzle game. Play against AI, with friends, or solve puzzles!">
-  <meta name="keywords" content="puzzle game, pentomino, strategy game, board game, deadblock, mobile game">
-  <meta name="author" content="Kevin Casselbury">
+  <title>DEADBLOCK - Block Puzzle Strategy</title>
+  <meta name="description" content="DEADBLOCK - Strategic pentomino placement puzzle game. Challenge the AI or play with friends!" />
   
-  <!-- Open Graph / Social -->
-  <meta property="og:type" content="website">
-  <meta property="og:title" content="DEADBLOCK - Strategic Puzzle Game">
-  <meta property="og:description" content="Block your opponent in this strategic pentomino placement game!">
-  <meta property="og:image" content="/icons/icon-512.png">
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json" />
   
-  <!-- Manifest - FIXED: was misspelled as "mainfest.json" -->
-  <link rel="manifest" href="/manifest.json">
+  <!-- Favicon & Icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   
-  <!-- Standard Favicon -->
-  <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-  <link rel="icon" type="image/png" sizes="96x96" href="/icons/icon-96.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png">
-  <link rel="icon" type="image/x-icon" href="/favicon.ico">
-  
-  <!-- Apple Touch Icons (iOS) -->
-  <link rel="apple-touch-icon" href="/icons/icon-180.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
-  <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
-  <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png">
-  <link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-120.png">
-  <link rel="apple-touch-icon" sizes="76x76" href="/icons/icon-76.png">
-  
-  <!-- iOS Splash Screens -->
-  <link rel="apple-touch-startup-image" href="/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash/splash-1668x2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3)">
-  <link rel="apple-touch-startup-image" href="/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3)">
-  <link rel="apple-touch-startup-image" href="/splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2)">
-  <link rel="apple-touch-startup-image" href="/splash/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2)">
-  
-  <!-- Google Fonts - Orbitron for cyberpunk feel -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  
-  <title>DEADBLOCK</title>
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     :root {
-      --neon-pink: #ec4899;
       --neon-cyan: #22d3ee;
-      --neon-green: #4ade80;
-      --neon-yellow: #fde047;
       --neon-purple: #a855f7;
-      --neon-orange: #fb923c;
+      --neon-pink: #ec4899;
       --dark-bg: #0f172a;
       --darker-bg: #020617;
-      
-      /* Safe area insets for notched devices */
       --sat: env(safe-area-inset-top);
       --sar: env(safe-area-inset-right);
       --sab: env(safe-area-inset-bottom);
       --sal: env(safe-area-inset-left);
     }
 
-    body {
-      font-family: 'Rajdhani', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-      background-color: var(--darker-bg);
-      color: #e2e8f0;
-      min-height: 100vh;
-      min-height: -webkit-fill-available;
-      overflow-x: hidden;
-      overscroll-behavior: none;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-      
-      /* Account for safe areas */
-      padding-top: var(--sat);
-      padding-right: var(--sar);
-      padding-bottom: var(--sab);
-      padding-left: var(--sal);
     }
 
-    /* Animated grid background */
-    body::before {
-      content: '';
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-image: 
-        linear-gradient(rgba(34, 211, 238, 0.1) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(34, 211, 238, 0.1) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
-      z-index: -2;
+    html, body {
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: manipulation;
     }
 
-    /* Floating glow orbs */
-    body::after {
-      content: '';
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: 
-        radial-gradient(ellipse at 20% 20%, rgba(236, 72, 153, 0.15) 0%, transparent 50%),
-        radial-gradient(ellipse at 80% 80%, rgba(34, 211, 238, 0.15) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 50%, rgba(74, 222, 128, 0.1) 0%, transparent 50%);
-      pointer-events: none;
-      z-index: -1;
-      animation: pulseGlow 8s ease-in-out infinite alternate;
-    }
-
-    @keyframes pulseGlow {
-      0% { opacity: 0.5; }
-      100% { opacity: 1; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--darker-bg);
+      color: white;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: var(--sat) var(--sar) var(--sab) var(--sal);
     }
 
     #root {
-      width: 100%;
       min-height: 100vh;
-      min-height: -webkit-fill-available;
+      min-height: 100dvh;
     }
 
-    /* Loading screen */
+    /* Loading Screen */
     #loading {
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: var(--darker-bg);
+      right: 0;
+      bottom: 0;
+      background: var(--darker-bg);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       z-index: 9999;
-      gap: 30px;
     }
 
-    /* Neon title styling */
     .neon-title {
       font-family: 'Orbitron', sans-serif;
-      font-size: 3.5rem;
+      font-size: 3rem;
       font-weight: 900;
-      text-transform: uppercase;
       letter-spacing: 0.1em;
-      background: linear-gradient(90deg, var(--neon-pink), var(--neon-yellow), var(--neon-cyan));
+      background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple), var(--neon-pink));
       -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
       background-clip: text;
-      animation: neonFlicker 3s ease-in-out infinite alternate;
-      text-align: center;
-      padding: 0 1rem;
+      color: transparent;
+      text-shadow: 0 0 40px rgba(34, 211, 238, 0.5);
+      animation: glow 2s ease-in-out infinite alternate;
     }
 
-    @keyframes neonFlicker {
-      0%, 100% {
-        filter: brightness(1) drop-shadow(0 0 10px rgba(236, 72, 153, 0.8));
-      }
-      50% {
-        filter: brightness(1.2) drop-shadow(0 0 20px rgba(34, 211, 238, 0.8));
-      }
+    @keyframes glow {
+      from { filter: drop-shadow(0 0 20px rgba(34, 211, 238, 0.3)); }
+      to { filter: drop-shadow(0 0 30px rgba(168, 85, 247, 0.5)); }
     }
 
     .subtitle {
-      font-family: 'Rajdhani', sans-serif;
-      font-size: 1rem;
-      letter-spacing: 0.5em;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.875rem;
+      letter-spacing: 0.4em;
       color: rgba(34, 211, 238, 0.7);
-      text-transform: uppercase;
+      margin-top: 0.5rem;
     }
 
     .loading-bar-container {
-      width: 280px;
+      width: 200px;
       height: 4px;
-      background: rgba(34, 211, 238, 0.2);
+      background: rgba(255,255,255,0.1);
       border-radius: 2px;
+      margin-top: 2rem;
       overflow: hidden;
-      border: 1px solid rgba(34, 211, 238, 0.3);
-      box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
     }
 
     .loading-bar {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
-      border-radius: 2px;
+      background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
       animation: loadingProgress 2s ease-out forwards;
       box-shadow: 0 0 10px var(--neon-cyan);
     }
@@ -229,6 +136,7 @@
       font-size: 0.75rem;
       letter-spacing: 0.3em;
       color: var(--neon-cyan);
+      margin-top: 1rem;
       animation: blink 1s step-end infinite;
     }
 
@@ -261,7 +169,7 @@
       position: fixed;
       bottom: calc(20px + var(--sab));
       left: 50%;
-      transform: translateX(-50%);
+      transform: translateX(-50%) translateY(200px);
       background: var(--dark-bg);
       padding: 1.25rem 1.5rem;
       border-radius: 16px;
@@ -269,26 +177,18 @@
       box-shadow: 
         0 0 30px rgba(34, 211, 238, 0.3),
         0 10px 40px rgba(0, 0, 0, 0.5);
-      display: none;
       z-index: 1001;
       max-width: 90%;
       width: 320px;
+      opacity: 0;
+      visibility: hidden;
+      transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s;
     }
 
     #install-prompt.show {
-      display: block;
-      animation: slideUp 0.3s ease;
-    }
-
-    @keyframes slideUp {
-      from {
-        transform: translateX(-50%) translateY(100px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(-50%) translateY(0);
-        opacity: 1;
-      }
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+      visibility: visible;
     }
 
     #install-prompt .prompt-title {
@@ -330,7 +230,7 @@
       box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
     }
 
-    #install-btn:hover {
+    #install-btn:hover, #install-btn:active {
       box-shadow: 0 0 30px rgba(168, 85, 247, 0.6);
       transform: scale(1.02);
     }
@@ -341,7 +241,7 @@
       border: 1px solid rgba(100, 116, 139, 0.5);
     }
 
-    #dismiss-btn:hover {
+    #dismiss-btn:hover, #dismiss-btn:active {
       background: rgba(100, 116, 139, 0.5);
       color: white;
     }
@@ -388,88 +288,175 @@
   
   <!-- Service Worker Registration & PWA Logic -->
   <script>
+    // Debug logging function
+    function pwaLog(msg) {
+      console.log('[PWA]', msg);
+    }
+
     // Detect if running in Capacitor native app
     const isNativeApp = window.Capacitor !== undefined;
-    
+    pwaLog('Native app: ' + isNativeApp);
+
+    // Track the deferred prompt globally
+    let deferredPrompt = null;
+
+    // Get DOM elements
+    const installPrompt = document.getElementById('install-prompt');
+    const installBtn = document.getElementById('install-btn');
+    const dismissBtn = document.getElementById('dismiss-btn');
+
     // Service Worker Registration (only for web)
     if ('serviceWorker' in navigator && !isNativeApp) {
+      pwaLog('ServiceWorker supported');
+      
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
           .then((registration) => {
-            console.log('ServiceWorker registered:', registration);
+            pwaLog('ServiceWorker registered: ' + registration.scope);
           })
           .catch((error) => {
-            console.log('ServiceWorker registration failed:', error);
+            pwaLog('ServiceWorker registration failed: ' + error);
           });
       });
+    } else {
+      pwaLog('ServiceWorker not supported or native app');
     }
-    
-    // Install Prompt (only for web)
+
+    // PWA Install Prompt handling (only for web)
     if (!isNativeApp) {
-      let deferredPrompt;
-      const installPrompt = document.getElementById('install-prompt');
-      const installBtn = document.getElementById('install-btn');
-      const dismissBtn = document.getElementById('dismiss-btn');
-      
+      pwaLog('Setting up install prompt listeners');
+
+      // Listen for beforeinstallprompt IMMEDIATELY
       window.addEventListener('beforeinstallprompt', (e) => {
+        pwaLog('beforeinstallprompt event fired!');
+        
+        // Prevent the mini-infobar from appearing on mobile
         e.preventDefault();
+        
+        // Store the event for later use
         deferredPrompt = e;
         
-        // Show install prompt after 5 seconds if not dismissed before
-        setTimeout(() => {
-          if (deferredPrompt && !localStorage.getItem('installDismissed')) {
-            installPrompt.classList.add('show');
+        pwaLog('Deferred prompt stored');
+
+        // Check if user previously dismissed
+        const wasDismissed = localStorage.getItem('installDismissed');
+        pwaLog('Was dismissed before: ' + wasDismissed);
+
+        if (!wasDismissed) {
+          // Show install prompt after 3 seconds
+          setTimeout(() => {
+            if (deferredPrompt) {
+              pwaLog('Showing install prompt');
+              installPrompt.classList.add('show');
+            }
+          }, 3000);
+        }
+      });
+
+      // Handle install button click
+      if (installBtn) {
+        installBtn.addEventListener('click', async () => {
+          pwaLog('Install button clicked');
+          
+          if (!deferredPrompt) {
+            pwaLog('No deferred prompt available');
+            return;
           }
-        }, 5000);
-      });
-      
-      installBtn.addEventListener('click', async () => {
-        if (!deferredPrompt) return;
-        
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        
-        console.log(`User response: ${outcome}`);
-        deferredPrompt = null;
-        installPrompt.classList.remove('show');
-      });
-      
-      dismissBtn.addEventListener('click', () => {
-        installPrompt.classList.remove('show');
-        localStorage.setItem('installDismissed', 'true');
-      });
-      
-      // Check if app is installed
+
+          // Show the install prompt
+          deferredPrompt.prompt();
+          pwaLog('Prompt shown');
+
+          // Wait for the user's response
+          const { outcome } = await deferredPrompt.userChoice;
+          pwaLog('User choice: ' + outcome);
+
+          // Clear the deferred prompt
+          deferredPrompt = null;
+          
+          // Hide the install prompt
+          installPrompt.classList.remove('show');
+        });
+      }
+
+      // Handle dismiss button click
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+          pwaLog('Dismiss button clicked');
+          installPrompt.classList.remove('show');
+          localStorage.setItem('installDismissed', 'true');
+        });
+      }
+
+      // Check if app was installed
       window.addEventListener('appinstalled', () => {
-        console.log('App installed');
+        pwaLog('App installed successfully!');
         installPrompt.classList.remove('show');
         deferredPrompt = null;
       });
+
+      // Also check if already in standalone mode
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        pwaLog('Already running in standalone mode');
+      }
+
+      // For debugging: expose function to manually show prompt
+      window.showInstallPrompt = () => {
+        if (deferredPrompt) {
+          installPrompt.classList.add('show');
+          pwaLog('Manually showing prompt');
+        } else {
+          pwaLog('No deferred prompt available - PWA criteria may not be met');
+        }
+      };
+
+      // For debugging: check PWA criteria
+      window.checkPWA = () => {
+        pwaLog('Checking PWA criteria...');
+        pwaLog('- HTTPS: ' + (location.protocol === 'https:' || location.hostname === 'localhost'));
+        pwaLog('- ServiceWorker: ' + ('serviceWorker' in navigator));
+        pwaLog('- Manifest: checking...');
+        
+        fetch('/manifest.json')
+          .then(r => r.json())
+          .then(m => {
+            pwaLog('- Manifest found: ' + m.name);
+            pwaLog('- Icons: ' + (m.icons?.length || 0));
+            pwaLog('- Start URL: ' + m.start_url);
+          })
+          .catch(e => pwaLog('- Manifest error: ' + e));
+        
+        pwaLog('- Deferred prompt: ' + (deferredPrompt ? 'YES' : 'NO'));
+      };
+
+      pwaLog('Install prompt setup complete');
     }
-    
+
     // Hide loading screen when app loads
     window.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         const loading = document.getElementById('loading');
-        loading.style.opacity = '0';
-        loading.style.transition = 'opacity 0.5s ease';
-        setTimeout(() => {
-          loading.style.display = 'none';
-        }, 500);
+        if (loading) {
+          loading.style.opacity = '0';
+          loading.style.transition = 'opacity 0.5s ease';
+          setTimeout(() => {
+            loading.style.display = 'none';
+          }, 500);
+        }
       }, 1500);
     });
-    
+
     // Prevent pull-to-refresh on mobile
     let lastTouchY = 0;
     document.addEventListener('touchstart', (e) => {
       lastTouchY = e.touches[0].clientY;
     }, { passive: true });
-    
+
     document.addEventListener('touchmove', (e) => {
       const touchY = e.touches[0].clientY;
       const touchYDelta = touchY - lastTouchY;
       lastTouchY = touchY;
-      
+
       if (window.scrollY === 0 && touchYDelta > 0 && e.cancelable) {
         e.preventDefault();
       }
