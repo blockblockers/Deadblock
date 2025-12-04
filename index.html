@@ -288,178 +288,250 @@
   
   <!-- Service Worker Registration & PWA Logic -->
   <script>
-    // Debug logging function
+    // Debug logging
     function pwaLog(msg) {
       console.log('[PWA]', msg);
     }
 
-    // Detect if running in Capacitor native app
+    // Detect environments
     const isNativeApp = window.Capacitor !== undefined;
-    pwaLog('Native app: ' + isNativeApp);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const isChrome = /Chrome/i.test(navigator.userAgent) && !/Edge|Edg/i.test(navigator.userAgent);
+    const isFirefox = /Firefox/i.test(navigator.userAgent);
+    const isEdge = /Edge|Edg/i.test(navigator.userAgent);
+    const isSamsung = /SamsungBrowser/i.test(navigator.userAgent);
 
-    // Track the deferred prompt globally
+    pwaLog('Environment: native=' + isNativeApp + ', standalone=' + isStandalone + ', android=' + isAndroid + ', iOS=' + isIOS);
+    pwaLog('Browser: chrome=' + isChrome + ', firefox=' + isFirefox + ', edge=' + isEdge + ', samsung=' + isSamsung);
+
+    // Track the deferred prompt
     let deferredPrompt = null;
+    let promptShownViaEvent = false;
 
     // Get DOM elements
     const installPrompt = document.getElementById('install-prompt');
     const installBtn = document.getElementById('install-btn');
     const dismissBtn = document.getElementById('dismiss-btn');
+    const promptTitle = installPrompt?.querySelector('.prompt-title');
+    const promptText = installPrompt?.querySelector('.prompt-text');
 
-    // Service Worker Registration (only for web)
-    if ('serviceWorker' in navigator && !isNativeApp) {
-      pwaLog('ServiceWorker supported');
+    // Check if should show prompt
+    function shouldShowPrompt() {
+      if (isNativeApp) return false;
+      if (isStandalone) return false;
       
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
-          .then((registration) => {
-            pwaLog('ServiceWorker registered: ' + registration.scope);
-          })
-          .catch((error) => {
-            pwaLog('ServiceWorker registration failed: ' + error);
-          });
-      });
-    } else {
-      pwaLog('ServiceWorker not supported or native app');
+      const wasDismissed = localStorage.getItem('pwa-install-dismissed');
+      if (wasDismissed) {
+        const dismissedTime = parseInt(wasDismissed);
+        const daysSince = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
+        if (daysSince < 7) {
+          pwaLog('Dismissed ' + Math.round(daysSince) + ' days ago, not showing');
+          return false;
+        }
+      }
+      return true;
     }
 
-    // PWA Install Prompt handling (only for web)
-    if (!isNativeApp) {
-      pwaLog('Setting up install prompt listeners');
-
-      // Listen for beforeinstallprompt IMMEDIATELY
-      window.addEventListener('beforeinstallprompt', (e) => {
-        pwaLog('beforeinstallprompt event fired!');
-        
-        // Prevent the mini-infobar from appearing on mobile
-        e.preventDefault();
-        
-        // Store the event for later use
-        deferredPrompt = e;
-        
-        pwaLog('Deferred prompt stored');
-
-        // Check if user previously dismissed
-        const wasDismissed = localStorage.getItem('installDismissed');
-        pwaLog('Was dismissed before: ' + wasDismissed);
-
-        if (!wasDismissed) {
-          // Show install prompt after 3 seconds
-          setTimeout(() => {
-            if (deferredPrompt) {
-              pwaLog('Showing install prompt');
-              installPrompt.classList.add('show');
-            }
-          }, 3000);
+    // Show manual install instructions based on browser
+    function showManualInstructions() {
+      if (!installPrompt || !shouldShowPrompt()) return;
+      
+      pwaLog('Showing manual install instructions');
+      
+      if (isIOS) {
+        // iOS Safari instructions
+        if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
+        if (promptText) promptText.innerHTML = 'Tap <strong>Share</strong> (↑) then <strong>"Add to Home Screen"</strong>';
+        if (installBtn) {
+          installBtn.textContent = 'GOT IT';
+          installBtn.onclick = () => {
+            installPrompt.classList.remove('show');
+          };
         }
-      });
-
-      // Handle install button click
-      if (installBtn) {
-        installBtn.addEventListener('click', async () => {
-          pwaLog('Install button clicked');
-          
-          if (!deferredPrompt) {
-            pwaLog('No deferred prompt available');
-            return;
-          }
-
-          // Show the install prompt
-          deferredPrompt.prompt();
-          pwaLog('Prompt shown');
-
-          // Wait for the user's response
-          const { outcome } = await deferredPrompt.userChoice;
-          pwaLog('User choice: ' + outcome);
-
-          // Clear the deferred prompt
-          deferredPrompt = null;
-          
-          // Hide the install prompt
-          installPrompt.classList.remove('show');
-        });
-      }
-
-      // Handle dismiss button click
-      if (dismissBtn) {
-        dismissBtn.addEventListener('click', () => {
-          pwaLog('Dismiss button clicked');
-          installPrompt.classList.remove('show');
-          localStorage.setItem('installDismissed', 'true');
-        });
-      }
-
-      // Check if app was installed
-      window.addEventListener('appinstalled', () => {
-        pwaLog('App installed successfully!');
-        installPrompt.classList.remove('show');
-        deferredPrompt = null;
-      });
-
-      // Also check if already in standalone mode
-      if (window.matchMedia('(display-mode: standalone)').matches) {
-        pwaLog('Already running in standalone mode');
-      }
-
-      // For debugging: expose function to manually show prompt
-      window.showInstallPrompt = () => {
-        if (deferredPrompt) {
-          installPrompt.classList.add('show');
-          pwaLog('Manually showing prompt');
+      } else if (isAndroid) {
+        if (isChrome) {
+          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
+          if (promptText) promptText.innerHTML = 'Tap <strong>⋮</strong> menu → <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>';
+        } else if (isSamsung) {
+          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
+          if (promptText) promptText.innerHTML = 'Tap <strong>☰</strong> menu → <strong>"Add page to"</strong> → <strong>"Home screen"</strong>';
+        } else if (isFirefox) {
+          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
+          if (promptText) promptText.innerHTML = 'Tap <strong>⋮</strong> menu → <strong>"Install"</strong>';
         } else {
-          pwaLog('No deferred prompt available - PWA criteria may not be met');
+          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
+          if (promptText) promptText.innerHTML = 'Open menu → <strong>"Add to Home screen"</strong> or <strong>"Install"</strong>';
         }
-      };
-
-      // For debugging: check PWA criteria
-      window.checkPWA = () => {
-        pwaLog('Checking PWA criteria...');
-        pwaLog('- HTTPS: ' + (location.protocol === 'https:' || location.hostname === 'localhost'));
-        pwaLog('- ServiceWorker: ' + ('serviceWorker' in navigator));
-        pwaLog('- Manifest: checking...');
-        
-        fetch('/manifest.json')
-          .then(r => r.json())
-          .then(m => {
-            pwaLog('- Manifest found: ' + m.name);
-            pwaLog('- Icons: ' + (m.icons?.length || 0));
-            pwaLog('- Start URL: ' + m.start_url);
-          })
-          .catch(e => pwaLog('- Manifest error: ' + e));
-        
-        pwaLog('- Deferred prompt: ' + (deferredPrompt ? 'YES' : 'NO'));
-      };
-
-      pwaLog('Install prompt setup complete');
+        if (installBtn) {
+          installBtn.textContent = 'GOT IT';
+          installBtn.onclick = () => {
+            installPrompt.classList.remove('show');
+          };
+        }
+      } else {
+        // Desktop
+        if (isChrome || isEdge) {
+          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
+          if (promptText) promptText.innerHTML = 'Click the <strong>install icon</strong> (⊕) in the address bar, or menu → <strong>"Install Deadblock"</strong>';
+        } else if (isFirefox) {
+          if (promptTitle) promptTitle.textContent = 'ADD TO DESKTOP';
+          if (promptText) promptText.innerHTML = 'Firefox: Drag page icon from address bar to desktop';
+        } else {
+          if (promptTitle) promptTitle.textContent = 'ADD TO HOME';
+          if (promptText) promptText.textContent = 'Use your browser menu to add this app to your home screen';
+        }
+        if (installBtn) {
+          installBtn.textContent = 'GOT IT';
+          installBtn.onclick = () => {
+            installPrompt.classList.remove('show');
+          };
+        }
+      }
+      
+      installPrompt.classList.add('show');
     }
 
-    // Hide loading screen when app loads
+    // Service Worker Registration
+    if ('serviceWorker' in navigator && !isNativeApp) {
+      pwaLog('Registering ServiceWorker...');
+      
+      navigator.serviceWorker.register('/service-worker.js')
+        .then((registration) => {
+          pwaLog('ServiceWorker registered: ' + registration.scope);
+          
+          // Check for updates
+          registration.addEventListener('updatefound', () => {
+            pwaLog('ServiceWorker update found');
+          });
+        })
+        .catch((error) => {
+          pwaLog('ServiceWorker failed: ' + error);
+        });
+    }
+
+    // Listen for beforeinstallprompt (Chrome, Edge, Samsung)
+    window.addEventListener('beforeinstallprompt', (e) => {
+      pwaLog('beforeinstallprompt fired!');
+      e.preventDefault();
+      deferredPrompt = e;
+      promptShownViaEvent = true;
+      
+      if (shouldShowPrompt()) {
+        // Reset to native prompt UI
+        if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
+        if (promptText) promptText.textContent = 'Add to your home screen for the full experience!';
+        if (installBtn) {
+          installBtn.textContent = 'INSTALL';
+          installBtn.onclick = async () => {
+            pwaLog('Install clicked');
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+              const { outcome } = await deferredPrompt.userChoice;
+              pwaLog('User choice: ' + outcome);
+              deferredPrompt = null;
+            }
+            installPrompt.classList.remove('show');
+          };
+        }
+        
+        setTimeout(() => {
+          pwaLog('Showing native install prompt');
+          installPrompt.classList.add('show');
+        }, 3000);
+      }
+    });
+
+    // Fallback: If beforeinstallprompt doesn't fire after 5 seconds, show manual instructions
+    if (!isNativeApp && !isStandalone) {
+      setTimeout(() => {
+        if (!promptShownViaEvent && shouldShowPrompt()) {
+          pwaLog('beforeinstallprompt did not fire, showing manual instructions');
+          showManualInstructions();
+        }
+      }, 5000);
+    }
+
+    // Handle dismiss
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        pwaLog('Dismissed');
+        installPrompt.classList.remove('show');
+        localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+      });
+    }
+
+    // App installed
+    window.addEventListener('appinstalled', () => {
+      pwaLog('App installed!');
+      installPrompt.classList.remove('show');
+      deferredPrompt = null;
+    });
+
+    // Debug helpers
+    window.showInstallPrompt = () => {
+      localStorage.removeItem('pwa-install-dismissed');
+      if (deferredPrompt) {
+        installPrompt.classList.add('show');
+      } else {
+        showManualInstructions();
+      }
+    };
+
+    window.checkPWA = async () => {
+      pwaLog('=== PWA Debug ===');
+      pwaLog('Protocol: ' + location.protocol);
+      pwaLog('Hostname: ' + location.hostname);
+      pwaLog('Native app: ' + isNativeApp);
+      pwaLog('Standalone: ' + isStandalone);
+      pwaLog('Deferred prompt: ' + (deferredPrompt ? 'YES' : 'NO'));
+      
+      // Check manifest
+      try {
+        const resp = await fetch('/manifest.json');
+        const manifest = await resp.json();
+        pwaLog('Manifest: ' + manifest.name);
+        pwaLog('Icons: ' + manifest.icons?.length);
+      } catch (e) {
+        pwaLog('Manifest error: ' + e);
+      }
+      
+      // Check service worker
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        pwaLog('SW registered: ' + (reg ? 'YES at ' + reg.scope : 'NO'));
+      }
+    };
+
+    window.resetInstallPrompt = () => {
+      localStorage.removeItem('pwa-install-dismissed');
+      location.reload();
+    };
+
+    // Hide loading screen
     window.addEventListener('DOMContentLoaded', () => {
       setTimeout(() => {
         const loading = document.getElementById('loading');
         if (loading) {
           loading.style.opacity = '0';
           loading.style.transition = 'opacity 0.5s ease';
-          setTimeout(() => {
-            loading.style.display = 'none';
-          }, 500);
+          setTimeout(() => loading.style.display = 'none', 500);
         }
       }, 1500);
     });
 
-    // Prevent pull-to-refresh on mobile
+    // Prevent pull-to-refresh
     let lastTouchY = 0;
     document.addEventListener('touchstart', (e) => {
       lastTouchY = e.touches[0].clientY;
     }, { passive: true });
-
     document.addEventListener('touchmove', (e) => {
       const touchY = e.touches[0].clientY;
-      const touchYDelta = touchY - lastTouchY;
-      lastTouchY = touchY;
-
-      if (window.scrollY === 0 && touchYDelta > 0 && e.cancelable) {
+      if (window.scrollY === 0 && touchY > lastTouchY && e.cancelable) {
         e.preventDefault();
       }
+      lastTouchY = touchY;
     }, { passive: false });
   </script>
   
