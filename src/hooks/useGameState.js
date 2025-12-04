@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   createEmptyBoard, 
   getPieceCoords, 
@@ -9,7 +9,7 @@ import {
   BOARD_SIZE 
 } from '../utils/gameLogic';
 import { selectAIMove, getAllPossibleMoves, AI_DIFFICULTY } from '../utils/aiLogic';
-import { getRandomPuzzle } from '../utils/puzzleGenerator';
+import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 
 export const useGameState = () => {
@@ -34,7 +34,17 @@ export const useGameState = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTY.AVERAGE);
   const [isGeneratingPuzzle, setIsGeneratingPuzzle] = useState(false);
-  const [puzzleDifficulty, setPuzzleDifficulty] = useState(null);
+  
+  // Use ref to persist puzzle difficulty across resets
+  const puzzleDifficultyRef = useRef(PUZZLE_DIFFICULTY.EASY);
+  const [puzzleDifficulty, setPuzzleDifficultyState] = useState(PUZZLE_DIFFICULTY.EASY);
+  
+  // Wrapper to update both ref and state
+  const setPuzzleDifficulty = useCallback((diff) => {
+    puzzleDifficultyRef.current = diff;
+    setPuzzleDifficultyState(diff);
+    console.log('Puzzle difficulty set to:', diff);
+  }, []);
 
   // Commit a move to the board
   const commitMove = useCallback((row, col, piece, rot, flip) => {
@@ -200,7 +210,7 @@ export const useGameState = () => {
 
   // Load puzzle from data
   const loadPuzzleInternal = useCallback((puzzle) => {
-    console.log('Loading puzzle:', puzzle?.id);
+    console.log('Loading puzzle:', puzzle?.id, 'difficulty:', puzzle?.difficulty);
     
     if (!puzzle || !puzzle.boardState || puzzle.boardState.length !== 64) {
       console.error('Invalid puzzle data');
@@ -237,20 +247,28 @@ export const useGameState = () => {
       setWinner(null);
       setIsGeneratingPuzzle(false);
       
-      console.log('Puzzle loaded successfully');
+      // Store the difficulty for reset
+      if (puzzle.difficulty) {
+        setPuzzleDifficulty(puzzle.difficulty);
+      }
+      
+      console.log('Puzzle loaded successfully, difficulty:', puzzle.difficulty);
     } catch (error) {
       console.error('Error loading puzzle:', error);
       setIsGeneratingPuzzle(false);
     }
-  }, []);
+  }, [setPuzzleDifficulty]);
 
-  // Generate and load a new puzzle
-  const generateAndLoadPuzzle = useCallback(async () => {
-    console.log('Generating puzzle...');
+  // Generate and load a new puzzle with specific difficulty
+  const generateAndLoadPuzzle = useCallback(async (difficulty) => {
+    // Use provided difficulty, or fall back to stored difficulty
+    const diffToUse = difficulty || puzzleDifficultyRef.current;
+    console.log('Generating new puzzle with difficulty:', diffToUse);
+    
     setIsGeneratingPuzzle(true);
     
     try {
-      const puzzle = await getRandomPuzzle('easy', false, (current, total) => {
+      const puzzle = await getRandomPuzzle(diffToUse, false, (current, total) => {
         console.log(`Progress: ${current}/${total}`);
       });
       
@@ -266,20 +284,28 @@ export const useGameState = () => {
     }
   }, [loadPuzzleInternal]);
 
-  // Public loadPuzzle
+  // Public loadPuzzle - receives puzzle from PuzzleSelect
   const loadPuzzle = useCallback((puzzle) => {
     if (puzzle?.boardState) {
+      // Puzzle already generated, just load it
       loadPuzzleInternal(puzzle);
+    } else if (puzzle?.difficulty) {
+      // Generate with specified difficulty
+      generateAndLoadPuzzle(puzzle.difficulty);
     } else {
-      generateAndLoadPuzzle();
+      // Fallback: generate with current difficulty
+      generateAndLoadPuzzle(puzzleDifficultyRef.current);
     }
   }, [loadPuzzleInternal, generateAndLoadPuzzle]);
 
-  // Reset game
+  // Reset game - uses stored difficulty for puzzles
   const resetGame = useCallback(() => {
     if (gameMode === 'puzzle') {
-      generateAndLoadPuzzle();
+      // Generate new puzzle with SAME difficulty
+      console.log('Reset: generating new puzzle with difficulty:', puzzleDifficultyRef.current);
+      generateAndLoadPuzzle(puzzleDifficultyRef.current);
     } else {
+      // Regular reset
       setBoard(createEmptyBoard());
       setBoardPieces(createEmptyBoard());
       setCurrentPlayer(1);
@@ -309,7 +335,6 @@ export const useGameState = () => {
     setMoveHistory([]);
     setPendingMove(null);
     setCurrentPuzzle(null);
-    setPuzzleDifficulty(null);
   }, []);
 
   // Select piece

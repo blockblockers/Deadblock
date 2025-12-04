@@ -1,7 +1,5 @@
-// Puzzle Generator - Three Difficulty Levels
-// Easy: 3 moves remaining (9 pieces placed)
-// Medium: 5 moves remaining (7 pieces placed)  
-// Hard: 7 moves remaining (5 pieces placed)
+// Puzzle Generator - Play complete game, then back out N moves
+// This guarantees exactly N moves remain and they are playable
 
 import { pieces } from './pieces';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE, createEmptyBoard } from './gameLogic';
@@ -10,16 +8,6 @@ export const PUZZLE_DIFFICULTY = {
   EASY: 'easy',
   MEDIUM: 'medium',
   HARD: 'hard'
-};
-
-// Get pieces to place based on difficulty
-export const getPiecesToPlace = (difficulty) => {
-  switch (difficulty) {
-    case PUZZLE_DIFFICULTY.EASY: return 9;    // 3 remaining
-    case PUZZLE_DIFFICULTY.MEDIUM: return 7;  // 5 remaining
-    case PUZZLE_DIFFICULTY.HARD: return 5;    // 7 remaining
-    default: return 9;
-  }
 };
 
 export const getMovesForDifficulty = (difficulty) => {
@@ -64,79 +52,109 @@ const getAllValidMoves = (board, usedPieces) => {
   return moves;
 };
 
-// Generate a puzzle by placing pieces randomly
-export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress = null) => {
-  const piecesToPlace = getPiecesToPlace(difficulty);
-  const movesRemaining = getMovesForDifficulty(difficulty);
+// Play a complete AI vs AI game, recording all states
+const playCompleteGame = () => {
+  const board = createEmptyBoard();
+  const boardPieces = createEmptyBoard();
+  const usedPieces = [];
+  const history = []; // Each entry: { board, boardPieces, usedPieces } BEFORE the move
   
-  // Try multiple times to generate a valid puzzle
-  for (let attempt = 0; attempt < 30; attempt++) {
-    const board = createEmptyBoard();
-    const boardPieces = createEmptyBoard();
-    const usedPieces = [];
+  let moveCount = 0;
+  
+  while (true) {
+    const moves = getAllValidMoves(board, usedPieces);
     
-    // Place pieces one by one
-    for (let i = 0; i < piecesToPlace; i++) {
-      if (onProgress) onProgress(i + 1, piecesToPlace);
-      
-      const moves = getAllValidMoves(board, usedPieces);
-      
-      if (moves.length === 0) {
-        // No valid moves, restart
-        break;
-      }
-      
-      // Pick a random move, prefer center early
-      let move;
-      if (i < 3) {
-        // Early game: prefer center moves
-        const centerMoves = moves.filter(m => {
-          const dist = Math.abs(m.row - 3.5) + Math.abs(m.col - 3.5);
-          return dist < 4;
-        });
-        move = centerMoves.length > 0 
-          ? centerMoves[Math.floor(Math.random() * centerMoves.length)]
-          : moves[Math.floor(Math.random() * moves.length)];
-      } else {
-        move = moves[Math.floor(Math.random() * moves.length)];
-      }
-      
-      // Place the piece
-      for (const [dx, dy] of move.coords) {
-        board[move.row + dy][move.col + dx] = 1;
-        boardPieces[move.row + dy][move.col + dx] = move.pieceType;
-      }
-      usedPieces.push(move.pieceType);
+    if (moves.length === 0) {
+      // Game over
+      break;
     }
     
-    // Check if we placed all required pieces
-    if (usedPieces.length === piecesToPlace) {
-      // Verify there are still valid moves for remaining pieces
-      const remainingMoves = getAllValidMoves(board, usedPieces);
+    // Save state BEFORE this move
+    history.push({
+      board: board.map(r => [...r]),
+      boardPieces: boardPieces.map(r => [...r]),
+      usedPieces: [...usedPieces]
+    });
+    
+    // Pick a move (prefer center early, then random)
+    let move;
+    if (moveCount < 3) {
+      const centerMoves = moves.filter(m => {
+        const dist = Math.abs(m.row - 3.5) + Math.abs(m.col - 3.5);
+        return dist < 4;
+      });
+      move = centerMoves.length > 0 
+        ? centerMoves[Math.floor(Math.random() * centerMoves.length)]
+        : moves[Math.floor(Math.random() * moves.length)];
+    } else {
+      move = moves[Math.floor(Math.random() * moves.length)];
+    }
+    
+    // Place the piece
+    for (const [dx, dy] of move.coords) {
+      board[move.row + dy][move.col + dx] = moveCount % 2 + 1;
+      boardPieces[move.row + dy][move.col + dx] = move.pieceType;
+    }
+    usedPieces.push(move.pieceType);
+    moveCount++;
+  }
+  
+  return {
+    history,
+    totalMoves: moveCount
+  };
+};
+
+// Generate puzzle by playing game then backing out N moves
+export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress = null) => {
+  const movesToBackOut = getMovesForDifficulty(difficulty);
+  
+  // Try multiple games to find one with enough moves
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (onProgress) onProgress(attempt + 1, 20);
+    
+    const game = playCompleteGame();
+    
+    // Need at least N moves to back out
+    if (game.totalMoves < movesToBackOut) {
+      console.log(`Game ${attempt + 1}: Only ${game.totalMoves} moves, need ${movesToBackOut}`);
+      continue;
+    }
+    
+    // Get the state from N moves before the end
+    const puzzleStateIndex = game.totalMoves - movesToBackOut;
+    const puzzleState = game.history[puzzleStateIndex];
+    
+    if (!puzzleState) {
+      console.log(`Game ${attempt + 1}: No state at index ${puzzleStateIndex}`);
+      continue;
+    }
+    
+    // Verify moves are still possible from this state
+    const remainingMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
+    
+    if (remainingMoves.length > 0) {
+      console.log(`Puzzle generated (${difficulty}): ${puzzleState.usedPieces.length} pieces placed, exactly ${movesToBackOut} moves to play`);
       
-      if (remainingMoves.length >= movesRemaining) {
-        console.log(`Puzzle generated (${difficulty}): ${usedPieces.length} pieces, ${remainingMoves.length} moves available`);
-        
-        const difficultyNames = {
-          [PUZZLE_DIFFICULTY.EASY]: 'Easy',
-          [PUZZLE_DIFFICULTY.MEDIUM]: 'Medium',
-          [PUZZLE_DIFFICULTY.HARD]: 'Hard'
-        };
-        
-        return {
-          id: `puzzle-${difficulty}-${Date.now()}`,
-          name: `${difficultyNames[difficulty]} Puzzle`,
-          difficulty: difficulty,
-          description: `${movesRemaining} moves remaining`,
-          boardState: boardToString(boardPieces),
-          usedPieces: [...usedPieces],
-          movesRemaining: movesRemaining
-        };
-      }
+      const difficultyNames = {
+        [PUZZLE_DIFFICULTY.EASY]: 'Easy',
+        [PUZZLE_DIFFICULTY.MEDIUM]: 'Medium',
+        [PUZZLE_DIFFICULTY.HARD]: 'Hard'
+      };
+      
+      return {
+        id: `puzzle-${difficulty}-${Date.now()}`,
+        name: `${difficultyNames[difficulty]} Puzzle`,
+        difficulty: difficulty,
+        description: `${movesToBackOut} moves remaining`,
+        boardState: boardToString(puzzleState.boardPieces),
+        usedPieces: [...puzzleState.usedPieces],
+        movesRemaining: movesToBackOut
+      };
     }
   }
   
-  console.error(`Failed to generate ${difficulty} puzzle after 30 attempts`);
+  console.error(`Failed to generate ${difficulty} puzzle after 20 attempts`);
   return null;
 };
 
@@ -147,7 +165,7 @@ export const getRandomPuzzle = async (difficulty = PUZZLE_DIFFICULTY.EASY, useCl
   const puzzle = generatePuzzle(difficulty, onProgress);
   
   if (puzzle && onProgress) {
-    onProgress(getPiecesToPlace(difficulty), getPiecesToPlace(difficulty));
+    onProgress(20, 20);
   }
   
   await new Promise(resolve => setTimeout(resolve, 100));
