@@ -1,145 +1,206 @@
 import { useState, useEffect } from 'react';
-import { X, Share, PlusSquare, ChevronDown } from 'lucide-react';
+import { X, Share, Plus, ArrowUp } from 'lucide-react';
 
 const IOSInstallPrompt = () => {
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [isSafari, setIsSafari] = useState(false);
+  const [show, setShow] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
-    // Detect iOS
-    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    setIsIOS(iOS);
+    // Debug function
+    const debug = (msg) => {
+      console.log('[iOS Prompt]', msg);
+      setDebugInfo(prev => prev + '\n' + msg);
+    };
 
-    // Already installed as PWA?
-    const standalone = window.navigator.standalone === true || 
-                       window.matchMedia('(display-mode: standalone)').matches;
-    setIsStandalone(standalone);
+    // Check conditions
+    const ua = navigator.userAgent || '';
+    debug('UA: ' + ua.substring(0, 50));
 
-    // Is Safari? (PWA install only works in Safari on iOS)
-    const safari = /^((?!chrome|android|CriOS|FxiOS|EdgiOS).)*safari/i.test(navigator.userAgent);
-    setIsSafari(safari);
+    // Detect iOS (iPhone, iPad, iPod)
+    const isIOS = /iPhone|iPad|iPod/.test(ua);
+    debug('isIOS: ' + isIOS);
 
-    // Check dismissal
-    const dismissed = localStorage.getItem('ios-install-dismissed');
-    const dismissedTime = dismissed ? parseInt(dismissed) : 0;
-    const daysSince = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
+    // Detect if already installed (standalone mode)
+    const isStandalone = window.navigator.standalone === true || 
+                         window.matchMedia('(display-mode: standalone)').matches;
+    debug('isStandalone: ' + isStandalone);
 
-    if (iOS && !standalone && safari && daysSince > 7) {
-      const timer = setTimeout(() => setShowPrompt(true), 3000);
+    // Detect Safari - must be Safari for PWA install
+    // Chrome on iOS has "CriOS", Firefox has "FxiOS", etc.
+    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|EdgiOS|Chrome/.test(ua);
+    debug('isSafari: ' + isSafari);
+
+    // Check if dismissed recently
+    let wasDismissed = false;
+    try {
+      const dismissedAt = localStorage.getItem('ios-pwa-dismissed');
+      if (dismissedAt) {
+        const daysSince = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
+        wasDismissed = daysSince < 7;
+        debug('dismissed ' + Math.round(daysSince) + ' days ago');
+      }
+    } catch (e) {
+      debug('localStorage error: ' + e.message);
+    }
+
+    debug('wasDismissed: ' + wasDismissed);
+
+    // Show if: iOS + Not standalone + Safari + Not recently dismissed
+    const shouldShow = isIOS && !isStandalone && isSafari && !wasDismissed;
+    debug('shouldShow: ' + shouldShow);
+
+    if (shouldShow) {
+      // Delay showing for better UX
+      const timer = setTimeout(() => {
+        debug('Showing prompt now');
+        setShow(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+
+    // If iOS but not Safari, we could show a different message
+    if (isIOS && !isStandalone && !isSafari && !wasDismissed) {
+      debug('iOS but not Safari - showing Safari redirect');
+      const timer = setTimeout(() => {
+        setShow(true);
+      }, 2000);
       return () => clearTimeout(timer);
     }
   }, []);
 
   const dismiss = () => {
-    setShowPrompt(false);
-    localStorage.setItem('ios-install-dismissed', Date.now().toString());
+    setShow(false);
+    try {
+      localStorage.setItem('ios-pwa-dismissed', Date.now().toString());
+    } catch (e) {}
   };
 
-  const neverShow = () => {
-    setShowPrompt(false);
-    localStorage.setItem('ios-install-dismissed', (Date.now() + 365 * 24 * 60 * 60 * 1000 * 10).toString());
+  const dismissForever = () => {
+    setShow(false);
+    try {
+      // Set to 10 years from now
+      localStorage.setItem('ios-pwa-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
+    } catch (e) {}
   };
 
-  if (!showPrompt || !isIOS || isStandalone) return null;
+  if (!show) return null;
 
-  // Not Safari - show different message
-  if (!isSafari) {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end justify-center z-50 p-4">
-        <div className="bg-slate-900/95 rounded-2xl p-6 max-w-md w-full border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)] mb-4">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center">
-                <span className="text-2xl">🎮</span>
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-cyan-300">OPEN IN SAFARI</h3>
-                <p className="text-xs text-slate-400">To install DEADBLOCK</p>
-              </div>
-            </div>
-            <button onClick={dismiss} className="text-slate-400 hover:text-white p-1">
-              <X size={20} />
-            </button>
-          </div>
-          <p className="text-slate-300 text-sm mb-4">
-            Open this page in <span className="text-cyan-400 font-semibold">Safari</span> to install the app.
-          </p>
-          <button onClick={dismiss} className="w-full py-2 bg-slate-700 text-slate-300 rounded-lg text-sm font-semibold">
-            OK
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Check if Safari for message content
+  const ua = navigator.userAgent || '';
+  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|EdgiOS|Chrome/.test(ua);
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-end justify-center z-50 p-4">
-      <div className="bg-slate-900/95 rounded-2xl p-6 max-w-md w-full border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)] mb-4 animate-[slideUp_0.3s_ease-out]">
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-end justify-center z-[9999] p-4"
+      onClick={dismiss}
+    >
+      <div 
+        className="bg-slate-900 rounded-2xl p-5 max-w-sm w-full border border-cyan-500/40 shadow-[0_0_30px_rgba(34,211,238,0.4)] mb-4"
+        onClick={e => e.stopPropagation()}
+        style={{ animation: 'slideUp 0.3s ease-out' }}
+      >
         {/* Header */}
-        <div className="flex justify-between items-start mb-4">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(34,211,238,0.5)]">
-              <span className="text-2xl">🎮</span>
+            <div className="w-11 h-11 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-xl flex items-center justify-center">
+              <span className="text-xl">🎮</span>
             </div>
             <div>
-              <h3 className="text-lg font-bold text-cyan-300 tracking-wide">INSTALL DEADBLOCK</h3>
-              <p className="text-xs text-slate-400">Add to home screen</p>
+              <h3 className="text-base font-bold text-cyan-300">Install Deadblock</h3>
+              <p className="text-xs text-slate-400">Add to Home Screen</p>
             </div>
           </div>
-          <button onClick={dismiss} className="text-slate-400 hover:text-white p-1">
+          <button 
+            onClick={dismiss}
+            className="p-1 text-slate-500 hover:text-white"
+          >
             <X size={20} />
           </button>
         </div>
 
-        {/* Steps */}
-        <div className="space-y-3 mb-5">
-          <div className="flex items-center gap-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
-            <div className="w-8 h-8 bg-cyan-500/20 rounded-lg flex items-center justify-center">
-              <span className="text-cyan-400 font-bold text-sm">1</span>
-            </div>
-            <p className="text-slate-200 text-sm flex-1">Tap <span className="text-cyan-400 font-semibold">Share</span></p>
-            <Share size={20} className="text-cyan-400" />
+        {!isSafari ? (
+          // Not Safari - show redirect message
+          <div className="mb-4">
+            <p className="text-slate-300 text-sm">
+              To install this app, please open this page in <span className="text-cyan-400 font-bold">Safari</span>.
+            </p>
+            <p className="text-slate-500 text-xs mt-2">
+              PWA installation is only available in Safari on iOS.
+            </p>
           </div>
-
-          <div className="flex items-center gap-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
-            <div className="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
-              <span className="text-purple-400 font-bold text-sm">2</span>
+        ) : (
+          // Safari - show install steps
+          <>
+            {/* Step 1 */}
+            <div className="flex items-center gap-3 mb-3 p-3 bg-slate-800/60 rounded-lg">
+              <div className="w-7 h-7 bg-cyan-500/20 rounded-md flex items-center justify-center flex-shrink-0">
+                <span className="text-cyan-400 font-bold text-sm">1</span>
+              </div>
+              <p className="text-slate-200 text-sm flex-1">
+                Tap the <span className="text-cyan-400 font-semibold">Share</span> button
+              </p>
+              <div className="w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center">
+                <ArrowUp size={18} className="text-cyan-400" />
+              </div>
             </div>
-            <p className="text-slate-200 text-sm flex-1">Tap <span className="text-purple-400 font-semibold">"Add to Home Screen"</span></p>
-            <PlusSquare size={20} className="text-purple-400" />
-          </div>
 
-          <div className="flex items-center gap-3 bg-slate-800/50 p-3 rounded-xl border border-slate-700/50">
-            <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
-              <span className="text-green-400 font-bold text-sm">3</span>
+            {/* Step 2 */}
+            <div className="flex items-center gap-3 mb-3 p-3 bg-slate-800/60 rounded-lg">
+              <div className="w-7 h-7 bg-purple-500/20 rounded-md flex items-center justify-center flex-shrink-0">
+                <span className="text-purple-400 font-bold text-sm">2</span>
+              </div>
+              <p className="text-slate-200 text-sm flex-1">
+                Tap <span className="text-purple-400 font-semibold">"Add to Home Screen"</span>
+              </p>
+              <div className="w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center">
+                <Plus size={18} className="text-purple-400" />
+              </div>
             </div>
-            <p className="text-slate-200 text-sm flex-1">Tap <span className="text-green-400 font-semibold">"Add"</span></p>
-          </div>
-        </div>
 
-        <div className="flex justify-center mb-4 text-slate-400 text-xs">
-          <ChevronDown size={16} className="animate-bounce" />
-          <span className="mx-2">Share button is at bottom of Safari</span>
-          <ChevronDown size={16} className="animate-bounce" />
-        </div>
+            {/* Step 3 */}
+            <div className="flex items-center gap-3 mb-4 p-3 bg-slate-800/60 rounded-lg">
+              <div className="w-7 h-7 bg-green-500/20 rounded-md flex items-center justify-center flex-shrink-0">
+                <span className="text-green-400 font-bold text-sm">3</span>
+              </div>
+              <p className="text-slate-200 text-sm flex-1">
+                Tap <span className="text-green-400 font-semibold">"Add"</span> to install
+              </p>
+            </div>
+
+            {/* Arrow indicator */}
+            <div className="text-center text-slate-500 text-xs mb-4">
+              ↓ Share button is at the bottom of Safari ↓
+            </div>
+          </>
+        )}
 
         {/* Buttons */}
         <div className="flex gap-2">
-          <button onClick={neverShow} className="flex-1 py-2 bg-slate-700 text-slate-400 rounded-lg text-xs font-semibold hover:bg-slate-600">
-            DON'T SHOW AGAIN
+          <button
+            onClick={dismissForever}
+            className="flex-1 py-2.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold hover:bg-slate-700"
+          >
+            Don't show again
           </button>
-          <button onClick={dismiss} className="flex-1 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg text-sm font-semibold hover:from-cyan-400 hover:to-purple-500 shadow-[0_0_15px_rgba(34,211,238,0.4)]">
-            GOT IT!
+          <button
+            onClick={dismiss}
+            className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg text-sm font-semibold hover:opacity-90"
+          >
+            Got it!
           </button>
         </div>
       </div>
 
       <style>{`
         @keyframes slideUp {
-          from { opacity: 0; transform: translateY(100px); }
-          to { opacity: 1; transform: translateY(0); }
+          from { 
+            opacity: 0; 
+            transform: translateY(50px); 
+          }
+          to { 
+            opacity: 1; 
+            transform: translateY(0); 
+          }
         }
       `}</style>
     </div>
