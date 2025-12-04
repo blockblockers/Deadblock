@@ -1,6 +1,7 @@
 // Sound Manager for Deadblock
 // Handles background music, sound effects, and haptic feedback
 // With Capacitor native haptics integration for iOS/Android
+// Fixed for mobile browser audio autoplay restrictions
 
 // Check if we're running in a Capacitor native app
 const isNativeApp = typeof window !== 'undefined' && window.Capacitor !== undefined;
@@ -25,12 +26,16 @@ class SoundManager {
     this.musicEnabled = true;
     this.sfxEnabled = true;
     this.vibrationEnabled = true;
+    this.musicPath = '/sounds/background-music.mp3';
     
     // Audio context for generating synth sounds
     this.audioContext = null;
     
     // Load saved settings
     this.loadSettings();
+    
+    // Set up global interaction listeners for mobile
+    this.setupInteractionListeners();
   }
 
   // Load settings from localStorage
@@ -50,14 +55,42 @@ class SoundManager {
     }
   }
 
+  // Setup global interaction listeners for mobile audio unlock
+  setupInteractionListeners() {
+    if (typeof window === 'undefined') return;
+    
+    const unlockAudio = () => {
+      this.onFirstInteraction();
+    };
+    
+    // Listen for various user interactions - these are the events that unlock audio on mobile
+    const events = ['touchstart', 'touchend', 'click', 'keydown'];
+    events.forEach(event => {
+      document.addEventListener(event, unlockAudio, { once: false, passive: true });
+    });
+  }
+
   // Initialize audio context (must be called after user interaction)
   init() {
-    if (this.isInitialized) return;
+    if (this.isInitialized && this.audioContext) return;
     
     try {
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Create or resume audio context
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      // Resume if suspended (required for mobile)
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().then(() => {
+          console.log('Audio context resumed');
+        }).catch(e => {
+          console.warn('Could not resume audio context:', e);
+        });
+      }
+      
       this.isInitialized = true;
-      console.log('Audio context initialized');
+      console.log('Audio context initialized, state:', this.audioContext.state);
     } catch (e) {
       console.warn('Web Audio API not supported:', e);
     }
@@ -67,61 +100,97 @@ class SoundManager {
   onFirstInteraction() {
     if (this.hasUserInteracted) return;
     
+    console.log('First user interaction detected');
     this.hasUserInteracted = true;
+    
+    // Initialize audio context
     this.init();
     
-    // Start background music if enabled
-    if (this.musicEnabled) {
+    // Resume audio context if suspended (critical for mobile)
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().then(() => {
+        console.log('Audio context resumed on interaction');
+        // Start music after context is resumed
+        if (this.musicEnabled) {
+          this.startBackgroundMusic();
+        }
+      }).catch(e => {
+        console.warn('Could not resume audio context:', e);
+      });
+    } else if (this.musicEnabled) {
+      // Context already running, start music
       this.startBackgroundMusic();
     }
-    
-    console.log('First user interaction - audio initialized');
   }
 
-  // Start background music - call this after user interaction
-  startBackgroundMusic(musicPath = '/sounds/background-music.mp3') {
-    if (!this.musicEnabled) return;
-    
-    // Ensure audio context is initialized
-    if (!this.isInitialized) {
-      this.init();
+  // Start background music - handles mobile restrictions
+  startBackgroundMusic(musicPath = null) {
+    if (!this.musicEnabled) {
+      console.log('Music disabled, not starting');
+      return;
     }
     
-    // If music already exists and is just paused, resume it
+    const path = musicPath || this.musicPath;
+    
+    // If music already exists and is playing, just ensure volume is set
+    if (this.bgMusic && !this.bgMusic.paused) {
+      this.bgMusic.volume = this.bgMusicVolume;
+      return;
+    }
+    
+    // If music exists but is paused, try to resume
     if (this.bgMusic) {
       this.bgMusic.volume = this.bgMusicVolume;
-      const playPromise = this.bgMusic.play();
-      if (playPromise !== undefined) {
-        playPromise.catch((error) => {
-          console.log('Background music play prevented:', error);
-        });
-      }
+      this.tryPlayMusic();
       return;
     }
 
     // Create new audio element
-    this.bgMusic = new Audio(musicPath);
+    console.log('Creating new audio element for:', path);
+    this.bgMusic = new Audio(path);
     this.bgMusic.loop = true;
     this.bgMusic.volume = this.bgMusicVolume;
+    this.bgMusic.preload = 'auto';
     
     // Add event listeners for debugging
     this.bgMusic.addEventListener('canplaythrough', () => {
-      console.log('Background music loaded and ready');
+      console.log('Background music loaded and ready to play');
+      this.tryPlayMusic();
+    });
+    
+    this.bgMusic.addEventListener('play', () => {
+      console.log('Background music started playing');
+    });
+    
+    this.bgMusic.addEventListener('pause', () => {
+      console.log('Background music paused');
     });
     
     this.bgMusic.addEventListener('error', (e) => {
-      console.error('Background music error:', e);
+      console.error('Background music error:', e.target.error);
     });
     
-    // Play with user interaction handling
+    // Load the audio
+    this.bgMusic.load();
+    
+    // Also try to play immediately (will work if user has interacted)
+    this.tryPlayMusic();
+  }
+
+  // Try to play music with proper error handling
+  tryPlayMusic() {
+    if (!this.bgMusic || !this.musicEnabled) return;
+    
     const playPromise = this.bgMusic.play();
+    
     if (playPromise !== undefined) {
       playPromise
         .then(() => {
-          console.log('Background music started playing');
+          console.log('Music playback started successfully');
         })
         .catch((error) => {
-          console.log('Background music autoplay prevented:', error);
+          // This is expected on mobile before user interaction
+          console.log('Music play prevented (waiting for user interaction):', error.name);
         });
     }
   }
@@ -144,10 +213,7 @@ class SoundManager {
   // Resume background music
   resumeBackgroundMusic() {
     if (this.bgMusic && this.musicEnabled) {
-      const playPromise = this.bgMusic.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {});
-      }
+      this.tryPlayMusic();
     }
   }
 
@@ -169,6 +235,8 @@ class SoundManager {
     this.musicEnabled = enabled;
     if (!enabled) {
       this.pauseBackgroundMusic();
+    } else if (this.hasUserInteracted) {
+      this.startBackgroundMusic();
     }
   }
 
@@ -182,22 +250,26 @@ class SoundManager {
     this.vibrationEnabled = enabled;
   }
 
+  // Ensure audio context is ready for playback
+  ensureAudioContext() {
+    if (!this.audioContext) {
+      this.init();
+    }
+    
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+    
+    return this.audioContext;
+  }
+
   // Generate a cyberpunk-style click/blip sound
   playClickSound(type = 'default') {
     if (!this.sfxEnabled) return;
     
-    // Initialize on first sound if needed
-    if (!this.audioContext) {
-      this.init();
-      if (!this.audioContext) return;
-    }
+    const ctx = this.ensureAudioContext();
+    if (!ctx) return;
 
-    // Resume audio context if suspended
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-
-    const ctx = this.audioContext;
     const now = ctx.currentTime;
 
     // Create oscillator for the main tone
@@ -291,9 +363,9 @@ class SoundManager {
 
   // Play a win celebration sound
   playWinSound() {
-    if (!this.sfxEnabled || !this.audioContext) return;
+    const ctx = this.ensureAudioContext();
+    if (!ctx || !this.sfxEnabled) return;
     
-    const ctx = this.audioContext;
     const now = ctx.currentTime;
     
     // Arpeggio victory sound

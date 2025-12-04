@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trophy, Zap, Brain, Sparkles, Loader } from 'lucide-react';
+import { Trophy, Zap, Brain, Sparkles, Loader, AlertCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY, getMovesForDifficulty } from '../utils/puzzleGenerator';
@@ -8,12 +8,14 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedDifficulty, setSelectedDifficulty] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [error, setError] = useState(null);
 
   const difficulties = [
     {
       id: PUZZLE_DIFFICULTY.EASY,
       name: 'EASY',
       subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.EASY)} Moves Left`,
+      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.EASY),
       description: 'Clear winning moves. Perfect for learning puzzle strategies.',
       icon: Zap,
       color: 'from-green-500 to-emerald-600',
@@ -25,6 +27,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       id: PUZZLE_DIFFICULTY.MEDIUM,
       name: 'MEDIUM',
       subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.MEDIUM)} Moves Left`,
+      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.MEDIUM),
       description: 'Requires careful analysis. The winning move isn\'t obvious.',
       icon: Brain,
       color: 'from-amber-500 to-orange-600',
@@ -36,6 +39,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       id: PUZZLE_DIFFICULTY.HARD,
       name: 'HARD',
       subtitle: `${getMovesForDifficulty(PUZZLE_DIFFICULTY.HARD)} Moves Left`,
+      piecesPlaced: 12 - getMovesForDifficulty(PUZZLE_DIFFICULTY.HARD),
       description: 'Subtle positioning required. Only for experienced players.',
       icon: Sparkles,
       color: 'from-red-500 to-pink-600',
@@ -50,6 +54,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     soundManager.playClickSound('select');
     soundManager.vibrate('short');
     setSelectedDifficulty(difficultyId);
+    setError(null);
   };
 
   const handleProgress = (current, total) => {
@@ -61,19 +66,32 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     
     soundManager.playButtonClick();
     setIsLoading(true);
-    setProgress({ current: 0, total: 0 });
+    setProgress({ current: 0, total: 12 });
+    setError(null);
     
     try {
-      // Always use Claude AI for puzzle generation
-      const puzzle = await getRandomPuzzle(selectedDifficulty, true, handleProgress);
+      console.log('Starting puzzle generation for difficulty:', selectedDifficulty);
+      
+      // Generate puzzle using AI vs AI approach
+      const puzzle = await getRandomPuzzle(selectedDifficulty, false, handleProgress);
       
       if (puzzle) {
+        console.log('Puzzle generated, loading into game:', puzzle);
         // Ensure difficulty is stored in the puzzle
         puzzle.difficulty = selectedDifficulty;
+        
+        // Small delay for visual feedback
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // Call the parent handler to load the puzzle
         onSelectPuzzle(puzzle);
+      } else {
+        console.error('Puzzle generation returned null');
+        setError('Failed to generate puzzle. Please try again.');
       }
-    } catch (error) {
-      console.error('Error loading puzzle:', error);
+    } catch (err) {
+      console.error('Error generating puzzle:', err);
+      setError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -83,6 +101,9 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     soundManager.playButtonClick();
     onBack();
   };
+
+  // Get the selected difficulty info for the progress display
+  const selectedDiffInfo = difficulties.find(d => d.id === selectedDifficulty);
 
   return (
     <div className="min-h-screen relative p-4 flex items-center justify-center overflow-hidden bg-slate-950">
@@ -154,6 +175,9 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                     <p className={`text-sm mt-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
                       {diff.description}
                     </p>
+                    <p className={`text-xs mt-1 ${isSelected ? 'text-white/60' : 'text-slate-500'}`}>
+                      {diff.piecesPlaced} pieces on board
+                    </p>
                   </div>
                   
                   {/* Selection indicator */}
@@ -178,9 +202,17 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
         {/* Puzzle info */}
         <div className="mt-4 p-3 bg-slate-800/50 border border-slate-700/50 rounded-lg">
           <p className="text-xs text-slate-400">
-            <span className="text-cyan-400 font-semibold">Puzzle rules:</span> You and AI take turns. Find the winning sequence before the AI blocks you!
+            <span className="text-cyan-400 font-semibold">How it works:</span> AI plays a complete game, then removes pieces to create your puzzle. Find the winning moves!
           </p>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mt-4 p-3 bg-red-900/50 border border-red-500/50 rounded-lg flex items-center gap-2">
+            <AlertCircle size={16} className="text-red-400" />
+            <p className="text-xs text-red-300">{error}</p>
+          </div>
+        )}
         
         {/* Start Button */}
         <button 
@@ -196,7 +228,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
             <>
               <Loader size={20} className="animate-spin" />
               {progress.total > 0 
-                ? `PLACING PIECE ${progress.current}/${progress.total}...`
+                ? `AI PLAYING... MOVE ${progress.current}/${progress.total}`
                 : 'GENERATING PUZZLE...'
               }
             </>

@@ -27,7 +27,7 @@ export const useGameState = () => {
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [pendingMove, setPendingMove] = useState(null);
   const [currentPuzzle, setCurrentPuzzle] = useState(null);
-  const [puzzleDifficulty, setPuzzleDifficulty] = useState(null); // Track puzzle difficulty for regeneration
+  const [puzzleDifficulty, setPuzzleDifficulty] = useState(null);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTY.AVERAGE);
@@ -82,18 +82,14 @@ export const useGameState = () => {
     const piece = pendingMove ? (selectedPiece || pendingMove.piece) : selectedPiece;
     if (!piece) return;
 
-    // Get current piece coords with current rotation/flip
     const pieceCoords = getPieceCoords(piece, rotation, flipped);
     
     // Always set pending move so user can see where piece would go
-    // (including out-of-bounds ghost cells)
     setPendingMove({ row, col, piece, rotation, flipped });
     
-    // Check if piece fits at this position with current orientation
     if (isWithinBounds(row, col, pieceCoords)) {
       soundManager.playPieceMove();
     } else {
-      // Piece partially out of bounds - play warning sound
       soundManager.playError();
     }
   }, [gameOver, gameMode, currentPlayer, pendingMove, selectedPiece, rotation, flipped]);
@@ -117,7 +113,7 @@ export const useGameState = () => {
     soundManager.playCancel();
   }, []);
 
-  // Move pending piece with d-pad - allow moving to see out-of-bounds preview
+  // Move pending piece with d-pad
   const movePendingPiece = useCallback((direction) => {
     if (!pendingMove) return;
     
@@ -131,8 +127,7 @@ export const useGameState = () => {
 
     const pieceCoords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
-    // Check if at least one cell of the piece would still be on the board
-    // (don't allow moving completely off the board)
+    // Check if at least one cell would still be on the board
     const hasAnyCellOnBoard = pieceCoords.some(([dx, dy]) => {
       const cellRow = newRow + dy;
       const cellCol = newCol + dx;
@@ -142,14 +137,12 @@ export const useGameState = () => {
     if (hasAnyCellOnBoard) {
       setPendingMove({ ...pendingMove, row: newRow, col: newCol });
       
-      // Play appropriate sound based on whether fully in bounds
       if (isWithinBounds(newRow, newCol, pieceCoords)) {
         soundManager.playPieceMove();
       } else {
         soundManager.playError();
       }
     } else {
-      // Completely off board - don't allow
       soundManager.playError();
     }
   }, [pendingMove, rotation, flipped]);
@@ -182,10 +175,8 @@ export const useGameState = () => {
 
     setIsAIThinking(true);
     
-    // Use async for Claude AI (professional difficulty)
     const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
     
-    // Add small delay for UX
     await new Promise(resolve => setTimeout(resolve, 600));
     
     if (move) {
@@ -208,7 +199,7 @@ export const useGameState = () => {
     setIsGeneratingPuzzle(true);
     
     try {
-      const puzzle = await getRandomPuzzle(puzzleDifficulty, true);
+      const puzzle = await getRandomPuzzle(puzzleDifficulty, false);
       if (puzzle) {
         loadPuzzleInternal(puzzle);
       }
@@ -222,13 +213,10 @@ export const useGameState = () => {
   // Reset game - in puzzle mode, generate a NEW puzzle
   const resetGame = useCallback(() => {
     if (gameMode === 'puzzle' && puzzleDifficulty) {
-      // Generate a completely new puzzle
       generateNewPuzzle();
     } else if (gameMode === 'puzzle' && currentPuzzle) {
-      // Fallback: reload current puzzle if no difficulty stored
       loadPuzzleInternal(currentPuzzle);
     } else {
-      // Regular game reset
       setBoard(createEmptyBoard());
       setBoardPieces(createEmptyBoard());
       setCurrentPlayer(1);
@@ -243,24 +231,28 @@ export const useGameState = () => {
     }
   }, [gameMode, currentPuzzle, puzzleDifficulty, generateNewPuzzle]);
 
-  // Internal function to load a puzzle (without async)
+  // Internal function to load a puzzle
   const loadPuzzleInternal = useCallback((puzzle) => {
+    console.log('Loading puzzle internally:', puzzle);
+    
     try {
       const newBoard = createEmptyBoard();
       const newBoardPieces = createEmptyBoard();
 
-      // Parse board state if provided
+      // Parse board state if provided (64-character string)
       if (puzzle.boardState && puzzle.boardState.length === 64) {
         for (let i = 0; i < puzzle.boardState.length; i++) {
           const char = puzzle.boardState[i];
-          if (char !== 'G') {
+          if (char !== 'G') { // 'G' means empty (gap)
             const row = Math.floor(i / BOARD_SIZE);
             const col = i % BOARD_SIZE;
             newBoard[row][col] = 1;
-            newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
+            newBoardPieces[row][col] = char;
           }
         }
       }
+      
+      console.log('Setting puzzle state - usedPieces:', puzzle.usedPieces);
       
       setBoard(newBoard);
       setBoardPieces(newBoardPieces);
@@ -275,6 +267,9 @@ export const useGameState = () => {
       setPendingMove(null);
       setGameOver(false);
       setWinner(null);
+      setIsGeneratingPuzzle(false);
+      
+      console.log('Puzzle loaded successfully, gameMode set to puzzle');
     } catch (error) {
       console.error('Error loading puzzle:', error);
     }
@@ -282,6 +277,8 @@ export const useGameState = () => {
 
   // Load a puzzle (public API)
   const loadPuzzle = useCallback((puzzle) => {
+    console.log('loadPuzzle called with:', puzzle);
+    
     // Store the difficulty for regeneration
     if (puzzle.difficulty) {
       setPuzzleDifficulty(puzzle.difficulty);
@@ -308,49 +305,28 @@ export const useGameState = () => {
   }, []);
 
   // Select a piece
-  const selectPiece = useCallback((pieceName) => {
-    setSelectedPiece(pieceName);
+  const selectPiece = useCallback((piece) => {
+    if (gameOver || ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2)) return;
+    if (usedPieces.includes(piece)) return;
+    
+    setSelectedPiece(piece);
     setRotation(0);
     setFlipped(false);
-    setPendingMove(null); // Clear pending move when selecting new piece
+    setPendingMove(null);
     soundManager.playPieceSelect();
-  }, []);
+  }, [gameOver, gameMode, currentPlayer, usedPieces]);
 
   // Rotate piece
   const rotatePiece = useCallback(() => {
-    const newRotation = (rotation + 1) % 4;
-    setRotation(newRotation);
-    
-    // Update pending move if exists
-    if (pendingMove) {
-      const pieceCoords = getPieceCoords(pendingMove.piece, newRotation, flipped);
-      if (isWithinBounds(pendingMove.row, pendingMove.col, pieceCoords)) {
-        setPendingMove({ ...pendingMove, rotation: newRotation });
-      }
-      // If rotation causes out of bounds, still update rotation state
-      // but the visual will show invalid placement
-    }
-    
+    setRotation(prev => (prev + 1) % 4);
     soundManager.playPieceRotate();
-  }, [rotation, flipped, pendingMove]);
+  }, []);
 
   // Flip piece
-  const flipPieceHandler = useCallback(() => {
-    const newFlipped = !flipped;
-    setFlipped(newFlipped);
-    
-    // Update pending move if exists
-    if (pendingMove) {
-      const pieceCoords = getPieceCoords(pendingMove.piece, rotation, newFlipped);
-      if (isWithinBounds(pendingMove.row, pendingMove.col, pieceCoords)) {
-        setPendingMove({ ...pendingMove, flipped: newFlipped });
-      }
-      // If flip causes out of bounds, still update flip state
-      // but the visual will show invalid placement
-    }
-    
+  const flipPiece = useCallback(() => {
+    setFlipped(prev => !prev);
     soundManager.playPieceFlip();
-  }, [flipped, rotation, pendingMove]);
+  }, []);
 
   return {
     // State
@@ -389,11 +365,6 @@ export const useGameState = () => {
     startNewGame,
     selectPiece,
     rotatePiece,
-    flipPiece: flipPieceHandler,
-    generateNewPuzzle,
-    
-    // Utils
-    getPieceCoords,
-    canPlacePiece: (row, col, coords) => canPlacePiece(board, row, col, coords),
+    flipPiece,
   };
 };
