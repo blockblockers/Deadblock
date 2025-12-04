@@ -1,45 +1,40 @@
 import { useState } from 'react';
-import { Trophy, Loader, AlertCircle, Play } from 'lucide-react';
+import { Trophy, Loader, AlertCircle, Play, Puzzle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { getRandomPuzzle } from '../utils/puzzleGenerator';
 
 const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
-
-  const handleProgress = (current, total) => {
-    setProgress({ current, total });
-  };
 
   const handleGeneratePuzzle = async () => {
     soundManager.playButtonClick();
     setIsLoading(true);
     setError(null);
-    setProgress({ current: 0, total: 12 });
+    setProgress(0);
     
     try {
-      console.log('Starting puzzle generation from PuzzleSelect...');
-      
-      // Generate puzzle using AI vs AI approach
-      const puzzle = await getRandomPuzzle('easy', false, handleProgress);
+      const puzzle = await getRandomPuzzle('easy', false, (current, total) => {
+        setProgress(Math.round((current / total) * 100));
+      });
       
       if (puzzle) {
-        console.log('Puzzle generated, passing to game:', puzzle);
+        console.log('Puzzle generated:', puzzle.id);
+        setProgress(100);
         
-        // Small delay for visual feedback
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Brief pause to show 100%
+        await new Promise(r => setTimeout(r, 200));
         
-        // Pass puzzle to parent
         onSelectPuzzle(puzzle);
       } else {
-        setError('Failed to generate puzzle. Please try again.');
+        setError('Could not generate puzzle. Try again.');
         setIsLoading(false);
       }
     } catch (err) {
-      console.error('Error generating puzzle:', err);
-      setError('An error occurred. Please try again.');
+      console.error('Puzzle error:', err);
+      setError('Something went wrong. Try again.');
       setIsLoading(false);
     }
   };
@@ -61,97 +56,88 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-green-500/20 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl" />
       
-      <div className="relative bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 max-w-lg w-full border border-green-500/30 shadow-[0_0_30px_rgba(74,222,128,0.3)]">
+      <div className="relative bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 max-w-md w-full border border-green-500/30 shadow-[0_0_30px_rgba(74,222,128,0.3)]">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <Trophy size={28} className="text-green-400" />
-            <NeonTitle className="text-2xl sm:text-3xl">PUZZLE MODE</NeonTitle>
+            <NeonTitle className="text-2xl sm:text-3xl">PUZZLE</NeonTitle>
           </div>
           <button 
             onClick={handleBack}
             disabled={isLoading}
-            className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)] disabled:opacity-50"
+            className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs border border-cyan-500/30 hover:bg-slate-700 disabled:opacity-50"
           >
             BACK
           </button>
         </div>
 
         {/* Description */}
-        <div className="mb-6 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
-          <h3 className="text-green-400 font-bold mb-2 tracking-wide">HOW IT WORKS</h3>
-          <ul className="text-slate-300 text-sm space-y-2">
-            <li className="flex items-start gap-2">
-              <span className="text-cyan-400">1.</span>
-              <span>AI plays a complete game against itself</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-cyan-400">2.</span>
-              <span>The last 3 moves are removed from the board</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-cyan-400">3.</span>
-              <span>You take over and play the final 3 moves!</span>
-            </li>
-          </ul>
+        <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-2">
+            <Puzzle size={18} className="text-green-400" />
+            <span className="text-green-400 font-bold tracking-wide">HOW IT WORKS</span>
+          </div>
+          <p className="text-slate-300 text-sm leading-relaxed">
+            A random board is generated with <span className="text-cyan-400 font-semibold">9 pieces</span> already placed. 
+            You complete the puzzle by placing the final <span className="text-green-400 font-semibold">3 pieces</span>, 
+            taking turns with the AI!
+          </p>
         </div>
 
-        {/* Puzzle info */}
-        <div className="mb-6 p-4 bg-green-900/30 border border-green-500/30 rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(74,222,128,0.5)]">
-              <span className="text-white font-bold text-lg">3</span>
+        {/* Turn order explanation */}
+        <div className="mb-6 p-3 bg-green-900/20 rounded-xl border border-green-500/20">
+          <div className="flex items-center justify-around text-xs">
+            <div className="text-center">
+              <div className="text-cyan-400 font-bold">MOVE 1</div>
+              <div className="text-slate-400">You</div>
             </div>
-            <div>
-              <h4 className="text-green-300 font-bold tracking-wide">MOVES REMAINING</h4>
-              <p className="text-slate-400 text-xs">You play → AI plays → You play to win!</p>
+            <div className="text-slate-600">→</div>
+            <div className="text-center">
+              <div className="text-purple-400 font-bold">MOVE 2</div>
+              <div className="text-slate-400">AI</div>
+            </div>
+            <div className="text-slate-600">→</div>
+            <div className="text-center">
+              <div className="text-green-400 font-bold">MOVE 3</div>
+              <div className="text-slate-400">You Win!</div>
             </div>
           </div>
         </div>
 
-        {/* Error message */}
+        {/* Error */}
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-500/50 rounded-lg flex items-center gap-2">
-            <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
-            <p className="text-xs text-red-300">{error}</p>
+            <AlertCircle size={16} className="text-red-400" />
+            <span className="text-red-300 text-sm">{error}</span>
           </div>
         )}
-        
+
         {/* Generate Button */}
         <button 
           onClick={handleGeneratePuzzle}
           disabled={isLoading}
           className={`w-full p-4 rounded-xl font-bold tracking-wide transition-all flex items-center justify-center gap-3 ${
             isLoading
-              ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+              ? 'bg-slate-700 text-slate-400 cursor-wait'
               : 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-400 hover:to-emerald-500 shadow-[0_0_25px_rgba(74,222,128,0.5)]'
           }`}
         >
           {isLoading ? (
             <>
               <Loader size={24} className="animate-spin" />
-              <div className="text-left">
-                <div className="text-sm">GENERATING PUZZLE...</div>
-                <div className="text-xs opacity-70">
-                  {progress.total > 0 
-                    ? `AI playing move ${progress.current}/${progress.total}`
-                    : 'Starting AI game...'
-                  }
-                </div>
+              <div>
+                <div className="text-sm">GENERATING...</div>
+                <div className="text-xs opacity-70">{progress}% complete</div>
               </div>
             </>
           ) : (
             <>
               <Play size={24} />
-              <span>GENERATE PUZZLE</span>
+              <span>START PUZZLE</span>
             </>
           )}
         </button>
-
-        {/* Footer note */}
-        <p className="text-center text-slate-500 text-xs mt-4">
-          Each puzzle is randomly generated - every game is unique!
-        </p>
       </div>
     </div>
   );

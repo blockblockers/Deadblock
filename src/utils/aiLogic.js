@@ -1,228 +1,233 @@
+// AI Logic for Deadblock - Enhanced with Minimax Lookahead
 import { pieces } from './pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from './gameLogic';
 
-// AI Difficulty Levels
 export const AI_DIFFICULTY = {
-  RANDOM: 'random',      // Level 1: Random moves
-  AVERAGE: 'average',    // Level 2: Basic strategy
-  PROFESSIONAL: 'professional' // Level 3: Claude AI powered
+  RANDOM: 'random',
+  AVERAGE: 'average',
+  PROFESSIONAL: 'professional'
 };
 
-// Evaluate a potential AI move (used for Average difficulty)
-export const evaluateAIMove = (board, row, col, coords, pieceType, usedPieces) => {
-  const simulatedBoard = board.map(r => [...r]);
-  for (const [dx, dy] of coords) {
-    simulatedBoard[row + dy][col + dx] = 2;
-  }
-  
-  const simulatedUsedPieces = [...usedPieces, pieceType];
-  
-  if (!canAnyPieceBePlaced(simulatedBoard, simulatedUsedPieces)) {
-    return 10000;
-  }
-
-  let opponentMoveCount = 0;
-  const remainingPieces = Object.keys(pieces).filter(p => !simulatedUsedPieces.includes(p));
-  
-  for (const oppPiece of remainingPieces) {
-    for (let f = 0; f < 2; f++) {
-      for (let r = 0; r < 4; r++) {
-        const oppCoords = getPieceCoords(oppPiece, r, f === 1);
-        for (let r2 = 0; r2 < BOARD_SIZE; r2++) {
-          for (let c2 = 0; c2 < BOARD_SIZE; c2++) {
-            if (canPlacePiece(simulatedBoard, r2, c2, oppCoords)) {
-              opponentMoveCount++;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  let score = 1000 - opponentMoveCount;
-
-  for (const [dx, dy] of coords) {
-    const r = row + dy;
-    const c = col + dx;
-    score += (7 - Math.abs(r - 3.5) - Math.abs(c - 3.5)) * 2;
-    if (r === 0 || r === BOARD_SIZE - 1 || c === 0 || c === BOARD_SIZE - 1) {
-      score -= 3;
-    }
-  }
-  
-  return score + Math.random() * 5;
-};
-
-// Get all possible moves for AI
+// Get all possible moves for a board state
 export const getAllPossibleMoves = (board, usedPieces) => {
-  const availablePieces = Object.keys(pieces).filter(p => !usedPieces.includes(p));
-  const possibleMoves = [];
+  const available = Object.keys(pieces).filter(p => !usedPieces.includes(p));
+  const moves = [];
 
-  for (const pieceType of availablePieces) {
+  for (const pieceType of available) {
     for (let flip = 0; flip < 2; flip++) {
       for (let rot = 0; rot < 4; rot++) {
         const coords = getPieceCoords(pieceType, rot, flip === 1);
         for (let row = 0; row < BOARD_SIZE; row++) {
           for (let col = 0; col < BOARD_SIZE; col++) {
             if (canPlacePiece(board, row, col, coords)) {
-              possibleMoves.push({ pieceType, row, col, rot, flip: flip === 1 });
+              moves.push({ pieceType, row, col, rot, flip: flip === 1, coords });
             }
           }
         }
       }
     }
   }
-
-  return possibleMoves;
+  return moves;
 };
 
-// Convert board state to string representation for Claude
-const boardToString = (board, boardPieces) => {
-  let result = '  0 1 2 3 4 5 6 7\n';
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    result += `${row} `;
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      if (boardPieces[row][col]) {
-        result += boardPieces[row][col] + ' ';
-      } else {
-        result += '. ';
-      }
-    }
-    result += '\n';
-  }
-  return result;
-};
-
-// Format available pieces for Claude
-const formatAvailablePieces = (usedPieces) => {
+// Count valid moves for opponent
+const countOpponentMoves = (board, usedPieces) => {
   const available = Object.keys(pieces).filter(p => !usedPieces.includes(p));
-  return available.join(', ');
-};
+  let count = 0;
 
-// Format possible moves for Claude
-const formatPossibleMoves = (possibleMoves) => {
-  // Group by piece type and limit to avoid token overflow
-  const byPiece = {};
-  for (const move of possibleMoves) {
-    if (!byPiece[move.pieceType]) {
-      byPiece[move.pieceType] = [];
-    }
-    if (byPiece[move.pieceType].length < 5) { // Limit examples per piece
-      byPiece[move.pieceType].push(`(${move.row},${move.col} rot:${move.rot} flip:${move.flip})`);
-    }
-  }
-  
-  let result = '';
-  for (const [piece, moves] of Object.entries(byPiece)) {
-    result += `${piece}: ${moves.join(', ')}\n`;
-  }
-  return result;
-};
-
-// Call Claude AI for professional-level move
-export const getClaudeAIMove = async (board, boardPieces, usedPieces, possibleMoves) => {
-  const boardStr = boardToString(board, boardPieces);
-  const availablePieces = formatAvailablePieces(usedPieces);
-  const movesStr = formatPossibleMoves(possibleMoves);
-
-  const prompt = `You are an expert Deadblock (Golomb's Game) player. This is a two-player pentomino placement game on an 8x8 board. Players take turns placing one of 12 unique pentomino pieces. The last player able to make a valid move wins.
-
-CURRENT BOARD STATE:
-${boardStr}
-
-AVAILABLE PIECES: ${availablePieces}
-
-SAMPLE VALID MOVES BY PIECE:
-${movesStr}
-
-STRATEGIC CONSIDERATIONS:
-1. The goal is to be the LAST player able to place a piece
-2. Try to limit opponent's options while preserving your own
-3. Control the center early, but create awkward spaces opponent can't fill
-4. Consider which pieces are most flexible for later use
-5. Look for moves that could end the game (leave no valid moves for opponent)
-
-You are playing as Player 2 (AI). Choose the BEST move.
-
-RESPOND WITH ONLY A JSON OBJECT IN THIS EXACT FORMAT:
-{"piece": "X", "row": 0, "col": 0, "rotation": 0, "flip": false, "reasoning": "brief explanation"}
-
-Where piece is the letter (F,I,L,N,P,T,U,V,W,X,Y,Z), row/col are 0-7, rotation is 0-3, flip is true/false.`;
-
-  try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [
-          { role: 'user', content: prompt }
-        ]
-      })
-    });
-
-    const data = await response.json();
-    
-    if (data.content && data.content[0] && data.content[0].text) {
-      const text = data.content[0].text;
-      // Extract JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        // Validate the move
-        const coords = getPieceCoords(parsed.piece, parsed.rotation, parsed.flip);
-        if (canPlacePiece(board, parsed.row, parsed.col, coords) && 
-            !usedPieces.includes(parsed.piece)) {
-          console.log('Claude AI reasoning:', parsed.reasoning);
-          return {
-            pieceType: parsed.piece,
-            row: parsed.row,
-            col: parsed.col,
-            rot: parsed.rotation,
-            flip: parsed.flip
-          };
+  for (const pieceType of available) {
+    for (let flip = 0; flip < 2; flip++) {
+      for (let rot = 0; rot < 4; rot++) {
+        const coords = getPieceCoords(pieceType, rot, flip === 1);
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          for (let col = 0; col < BOARD_SIZE; col++) {
+            if (canPlacePiece(board, row, col, coords)) {
+              count++;
+            }
+          }
         }
       }
     }
-  } catch (error) {
-    console.error('Claude AI error:', error);
   }
-  
-  // Fallback to average difficulty if Claude fails
-  return null;
+  return count;
 };
 
-// Select move based on difficulty level
+// Apply a move to board (returns new board)
+const applyMove = (board, move) => {
+  const newBoard = board.map(r => [...r]);
+  for (const [dx, dy] of move.coords) {
+    newBoard[move.row + dy][move.col + dx] = 2; // AI player
+  }
+  return newBoard;
+};
+
+// Basic evaluation: minimize opponent options
+export const evaluateAIMove = (board, row, col, coords, pieceType, usedPieces) => {
+  const simBoard = board.map(r => [...r]);
+  for (const [dx, dy] of coords) {
+    simBoard[row + dy][col + dx] = 2;
+  }
+  
+  const simUsed = [...usedPieces, pieceType];
+  
+  // Instant win = best score
+  if (!canAnyPieceBePlaced(simBoard, simUsed)) {
+    return 100000;
+  }
+
+  // Count opponent's moves
+  const oppMoves = countOpponentMoves(simBoard, simUsed);
+  let score = 1000 - oppMoves;
+
+  // Center control bonus
+  for (const [dx, dy] of coords) {
+    const r = row + dy;
+    const c = col + dx;
+    score += (7 - Math.abs(r - 3.5) - Math.abs(c - 3.5)) * 2;
+    // Edge penalty
+    if (r === 0 || r === 7 || c === 0 || c === 7) {
+      score -= 3;
+    }
+  }
+  
+  return score;
+};
+
+// ====== MINIMAX FOR EXPERT MODE ======
+
+// Minimax with alpha-beta pruning, depth-limited
+const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
+  const moves = getAllPossibleMoves(board, usedPieces);
+  
+  // Terminal conditions
+  if (moves.length === 0) {
+    // Current player can't move = they lose
+    return isMaximizing ? -10000 + depth : 10000 - depth;
+  }
+  
+  if (depth === 0) {
+    // Evaluation: negative opponent moves is good for AI
+    const oppMoves = countOpponentMoves(board, usedPieces);
+    return -oppMoves;
+  }
+
+  if (isMaximizing) {
+    // AI's turn - maximize
+    let maxEval = -Infinity;
+    
+    // Only check top moves for speed
+    const scoredMoves = moves.map(m => ({
+      ...m,
+      quickScore: evaluateAIMove(board, m.row, m.col, m.coords, m.pieceType, usedPieces)
+    })).sort((a, b) => b.quickScore - a.quickScore);
+    
+    const topMoves = scoredMoves.slice(0, Math.min(8, scoredMoves.length));
+    
+    for (const move of topMoves) {
+      const newBoard = applyMove(board, move);
+      const newUsed = [...usedPieces, move.pieceType];
+      const evalScore = minimax(newBoard, newUsed, depth - 1, false, alpha, beta);
+      maxEval = Math.max(maxEval, evalScore);
+      alpha = Math.max(alpha, evalScore);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    // Opponent's turn - minimize
+    let minEval = Infinity;
+    
+    // Sample opponent moves for speed
+    const sampleMoves = moves.slice(0, Math.min(6, moves.length));
+    
+    for (const move of sampleMoves) {
+      const newBoard = board.map(r => [...r]);
+      for (const [dx, dy] of move.coords) {
+        newBoard[move.row + dy][move.col + dx] = 1; // Player
+      }
+      const newUsed = [...usedPieces, move.pieceType];
+      const evalScore = minimax(newBoard, newUsed, depth - 1, true, alpha, beta);
+      minEval = Math.min(minEval, evalScore);
+      beta = Math.min(beta, evalScore);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+};
+
+// Find best move using minimax
+const findBestMoveWithMinimax = (board, usedPieces, depth = 2) => {
+  const moves = getAllPossibleMoves(board, usedPieces);
+  if (moves.length === 0) return null;
+  
+  let bestMove = null;
+  let bestScore = -Infinity;
+  
+  // Pre-score moves for ordering
+  const scoredMoves = moves.map(m => ({
+    ...m,
+    quickScore: evaluateAIMove(board, m.row, m.col, m.coords, m.pieceType, usedPieces)
+  })).sort((a, b) => b.quickScore - a.quickScore);
+  
+  // Check top candidates with minimax
+  const candidates = scoredMoves.slice(0, Math.min(12, scoredMoves.length));
+  
+  for (const move of candidates) {
+    const newBoard = applyMove(board, move);
+    const newUsed = [...usedPieces, move.pieceType];
+    
+    // Check for instant win
+    if (!canAnyPieceBePlaced(newBoard, newUsed)) {
+      console.log('Expert AI found winning move!');
+      return move;
+    }
+    
+    const score = minimax(newBoard, newUsed, depth, false, -Infinity, Infinity);
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
+  }
+  
+  console.log(`Expert AI evaluated ${candidates.length} moves, best score: ${bestScore}`);
+  return bestMove;
+};
+
+// ====== MAIN SELECT FUNCTION ======
+
 export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = AI_DIFFICULTY.AVERAGE) => {
   const possibleMoves = getAllPossibleMoves(board, usedPieces);
   
-  if (possibleMoves.length === 0) {
-    return null;
-  }
+  if (possibleMoves.length === 0) return null;
 
   const isEarlyGame = usedPieces.length < 4;
 
   switch (difficulty) {
     case AI_DIFFICULTY.RANDOM:
-      // Level 1: Completely random moves
+      // Level 1: Random
       return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
 
     case AI_DIFFICULTY.PROFESSIONAL:
-      // Level 3: Try Claude AI first
-      const claudeMove = await getClaudeAIMove(board, boardPieces, usedPieces, possibleMoves);
-      if (claudeMove) {
-        return claudeMove;
+      // Level 3: Minimax lookahead (2-3 moves deep)
+      console.log('Expert AI thinking...');
+      
+      // Use deeper search in late game when fewer pieces remain
+      const depth = usedPieces.length >= 8 ? 3 : 2;
+      
+      // Small delay for UX
+      await new Promise(r => setTimeout(r, 100));
+      
+      const bestMove = findBestMoveWithMinimax(board, usedPieces, depth);
+      
+      if (bestMove) {
+        return bestMove;
       }
-      // Fall through to average if Claude fails
-      console.log('Falling back to average difficulty');
+      // Fall through to average if minimax fails
+      console.log('Minimax failed, falling back to average');
 
     case AI_DIFFICULTY.AVERAGE:
     default:
-      // Level 2: Basic strategic evaluation
+      // Level 2: Basic strategy
       for (const move of possibleMoves) {
         const coords = getPieceCoords(move.pieceType, move.rot, move.flip);
         let score = evaluateAIMove(board, move.row, move.col, coords, move.pieceType, usedPieces);

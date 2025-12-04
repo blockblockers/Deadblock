@@ -1,18 +1,17 @@
-// Sound Manager for Deadblock - Simplified Version
-// Handles background music, sound effects, and haptic feedback
+// Sound Manager - Simplified for Android compatibility
+// The key is to create and play audio ONLY after user interaction
 
 class SoundManager {
   constructor() {
     this.bgMusic = null;
-    this.bgMusicVolume = 0.3;
-    this.sfxVolume = 0.5;
     this.audioContext = null;
     this.musicEnabled = true;
     this.sfxEnabled = true;
     this.vibrationEnabled = true;
-    this.initialized = false;
+    this.bgMusicVolume = 0.3;
+    this.sfxVolume = 0.5;
+    this.hasInteracted = false;
     
-    // Load saved settings
     this.loadSettings();
   }
 
@@ -20,63 +19,72 @@ class SoundManager {
     try {
       const saved = localStorage.getItem('deadblock-settings');
       if (saved) {
-        const settings = JSON.parse(saved);
-        this.bgMusicVolume = (settings.musicVolume ?? 30) / 100;
-        this.sfxVolume = (settings.sfxVolume ?? 50) / 100;
-        this.musicEnabled = settings.musicEnabled ?? true;
-        this.sfxEnabled = settings.sfxEnabled ?? true;
-        this.vibrationEnabled = settings.vibrationEnabled ?? true;
+        const s = JSON.parse(saved);
+        this.bgMusicVolume = (s.musicVolume ?? 30) / 100;
+        this.sfxVolume = (s.sfxVolume ?? 50) / 100;
+        this.musicEnabled = s.musicEnabled ?? true;
+        this.sfxEnabled = s.sfxEnabled ?? true;
+        this.vibrationEnabled = s.vibrationEnabled ?? true;
       }
-    } catch (e) {
-      console.warn('Could not load sound settings');
+    } catch (e) {}
+  }
+
+  // Call this on EVERY user click/tap
+  onUserInteraction() {
+    // Create audio context on first interaction
+    if (!this.audioContext) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) {
+          this.audioContext = new AC();
+          console.log('Audio context created');
+        }
+      } catch (e) {
+        console.warn('No AudioContext support');
+      }
+    }
+
+    // Resume audio context if suspended (critical for Android)
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().then(() => {
+        console.log('Audio context resumed');
+      }).catch(() => {});
+    }
+
+    // Create and start background music on first interaction
+    if (!this.hasInteracted && this.musicEnabled) {
+      this.hasInteracted = true;
+      this.createAndPlayMusic();
     }
   }
 
-  // Initialize audio - call this on ANY user interaction
-  init() {
-    if (this.initialized) return true;
+  createAndPlayMusic() {
+    if (this.bgMusic) return; // Already created
     
     try {
-      // Create audio context
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) {
-        this.audioContext = new AudioContext();
-      }
-      
-      // Create and configure background music
       this.bgMusic = new Audio('/sounds/background-music.mp3');
       this.bgMusic.loop = true;
       this.bgMusic.volume = this.bgMusicVolume;
       
-      this.initialized = true;
-      console.log('Sound manager initialized');
-      return true;
-    } catch (e) {
-      console.warn('Could not initialize audio:', e);
-      return false;
-    }
-  }
+      // For Android: load then play
+      this.bgMusic.load();
+      
+      const playMusic = () => {
+        if (this.musicEnabled && this.bgMusic) {
+          this.bgMusic.play()
+            .then(() => console.log('Music playing'))
+            .catch(e => console.log('Music play failed:', e.message));
+        }
+      };
 
-  // Start background music - must be called from user interaction
-  startBackgroundMusic() {
-    if (!this.musicEnabled) return;
-    if (!this.initialized) this.init();
-    if (!this.bgMusic) return;
-    
-    // Resume audio context if suspended (required for mobile)
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-    
-    this.bgMusic.volume = this.bgMusicVolume;
-    
-    const playPromise = this.bgMusic.play();
-    if (playPromise) {
-      playPromise.then(() => {
-        console.log('Background music started');
-      }).catch(e => {
-        console.log('Music autoplay blocked:', e.message);
-      });
+      // Try to play immediately
+      playMusic();
+      
+      // Also try on canplaythrough event
+      this.bgMusic.addEventListener('canplaythrough', playMusic, { once: true });
+      
+    } catch (e) {
+      console.warn('Could not create music:', e);
     }
   }
 
@@ -88,9 +96,7 @@ class SoundManager {
   }
 
   pauseBackgroundMusic() {
-    if (this.bgMusic) {
-      this.bgMusic.pause();
-    }
+    if (this.bgMusic) this.bgMusic.pause();
   }
 
   resumeBackgroundMusic() {
@@ -99,22 +105,19 @@ class SoundManager {
     }
   }
 
-  setBgMusicVolume(volume) {
-    this.bgMusicVolume = Math.max(0, Math.min(1, volume));
-    if (this.bgMusic) {
-      this.bgMusic.volume = this.bgMusicVolume;
-    }
+  setBgMusicVolume(vol) {
+    this.bgMusicVolume = Math.max(0, Math.min(1, vol));
+    if (this.bgMusic) this.bgMusic.volume = this.bgMusicVolume;
   }
 
-  setSfxVolume(volume) {
-    this.sfxVolume = Math.max(0, Math.min(1, volume));
+  setSfxVolume(vol) {
+    this.sfxVolume = Math.max(0, Math.min(1, vol));
   }
 
   setMusicEnabled(enabled) {
     this.musicEnabled = enabled;
-    if (!enabled) {
-      this.pauseBackgroundMusic();
-    }
+    if (!enabled) this.pauseBackgroundMusic();
+    else if (this.hasInteracted) this.resumeBackgroundMusic();
   }
 
   setSfxEnabled(enabled) {
@@ -125,141 +128,106 @@ class SoundManager {
     this.vibrationEnabled = enabled;
   }
 
-  // Play a simple beep sound
-  playClickSound(type = 'default') {
-    if (!this.sfxEnabled) return;
-    if (!this.initialized) this.init();
-    if (!this.audioContext) return;
-
-    // Resume context if needed
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
+  // Simple beep using AudioContext
+  playBeep(freq = 440, duration = 0.1) {
+    if (!this.sfxEnabled || !this.audioContext) return;
+    if (this.audioContext.state === 'suspended') return;
 
     try {
-      const ctx = this.audioContext;
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const osc = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
       
-      // Different sounds for different actions
-      switch (type) {
-        case 'select':
-          osc.frequency.setValueAtTime(880, now);
-          osc.frequency.exponentialRampToValueAtTime(1320, now + 0.05);
-          break;
-        case 'rotate':
-          osc.frequency.setValueAtTime(440, now);
-          osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
-          break;
-        case 'flip':
-          osc.frequency.setValueAtTime(880, now);
-          osc.frequency.exponentialRampToValueAtTime(440, now + 0.08);
-          break;
-        case 'confirm':
-          osc.frequency.setValueAtTime(523, now);
-          osc.frequency.setValueAtTime(659, now + 0.1);
-          break;
-        case 'cancel':
-          osc.frequency.setValueAtTime(330, now);
-          osc.frequency.exponentialRampToValueAtTime(220, now + 0.1);
-          break;
-        case 'error':
-          osc.frequency.setValueAtTime(150, now);
-          break;
-        default:
-          osc.frequency.setValueAtTime(600, now);
-          osc.frequency.exponentialRampToValueAtTime(400, now + 0.05);
-      }
-
+      osc.frequency.value = freq;
       osc.type = 'sine';
-      gain.gain.setValueAtTime(this.sfxVolume * 0.3, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
-
+      gain.gain.setValueAtTime(this.sfxVolume * 0.2, this.audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
+      
       osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.2);
-    } catch (e) {
-      // Ignore audio errors
-    }
+      gain.connect(this.audioContext.destination);
+      osc.start();
+      osc.stop(this.audioContext.currentTime + duration);
+    } catch (e) {}
   }
 
-  // Vibration
   vibrate(pattern = 'short') {
-    if (!this.vibrationEnabled) return;
-    if (!navigator.vibrate) return;
-
-    switch (pattern) {
-      case 'short': navigator.vibrate(30); break;
-      case 'medium': navigator.vibrate(50); break;
-      case 'long': navigator.vibrate(100); break;
-      case 'confirm': navigator.vibrate([30, 50, 30]); break;
-      case 'error': navigator.vibrate([50, 30, 50]); break;
-      case 'win': navigator.vibrate([100, 50, 100, 50, 200]); break;
-      default: navigator.vibrate(30);
-    }
+    if (!this.vibrationEnabled || !navigator.vibrate) return;
+    
+    const patterns = {
+      short: 20,
+      medium: 40,
+      long: 80,
+      confirm: [20, 40, 20],
+      error: [40, 20, 40],
+      win: [80, 40, 80, 40, 160]
+    };
+    
+    navigator.vibrate(patterns[pattern] || 20);
   }
 
-  // Convenience methods
+  // === Convenience methods ===
+  
+  playButtonClick() {
+    this.onUserInteraction();
+    this.playBeep(600, 0.08);
+    this.vibrate('short');
+  }
+
   playPieceSelect() {
-    this.playClickSound('select');
+    this.onUserInteraction();
+    this.playBeep(880, 0.1);
     this.vibrate('short');
   }
 
   playPieceRotate() {
-    this.playClickSound('rotate');
+    this.playBeep(660, 0.08);
   }
 
   playPieceFlip() {
-    this.playClickSound('flip');
+    this.playBeep(550, 0.08);
   }
 
   playPieceMove() {
-    this.playClickSound('default');
+    this.playBeep(440, 0.05);
   }
 
   playPiecePlace() {
-    this.playClickSound('default');
+    this.playBeep(523, 0.12);
     this.vibrate('medium');
   }
 
   playConfirm() {
-    this.playClickSound('confirm');
+    this.playBeep(700, 0.15);
     this.vibrate('confirm');
   }
 
   playCancel() {
-    this.playClickSound('cancel');
+    this.playBeep(330, 0.1);
   }
 
   playWin() {
-    this.playClickSound('confirm');
+    this.playBeep(880, 0.2);
     this.vibrate('win');
   }
 
   playError() {
-    this.playClickSound('error');
+    this.playBeep(220, 0.15);
     this.vibrate('error');
   }
 
-  // Main button click - initializes audio and starts music
-  playButtonClick() {
-    // Initialize on first click
-    if (!this.initialized) {
-      this.init();
-    }
-    
-    // Try to start music
-    if (this.musicEnabled && this.bgMusic) {
-      this.startBackgroundMusic();
-    }
-    
-    this.playClickSound('default');
-    this.vibrate('short');
+  playClickSound(type) {
+    this.onUserInteraction();
+    const freqs = {
+      select: 880,
+      rotate: 660,
+      flip: 550,
+      confirm: 700,
+      cancel: 330,
+      error: 220,
+      default: 600
+    };
+    this.playBeep(freqs[type] || freqs.default, 0.08);
   }
 }
 
-// Export singleton
 export const soundManager = new SoundManager();
 export default soundManager;

@@ -13,8 +13,9 @@ import { getRandomPuzzle } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 
 export const useGameState = () => {
-  const [board, setBoard] = useState(createEmptyBoard());
-  const [boardPieces, setBoardPieces] = useState(createEmptyBoard());
+  // Core game state
+  const [board, setBoard] = useState(() => createEmptyBoard());
+  const [boardPieces, setBoardPieces] = useState(() => createEmptyBoard());
   const [currentPlayer, setCurrentPlayer] = useState(1);
   const [selectedPiece, setSelectedPiece] = useState(null);
   const [rotation, setRotation] = useState(0);
@@ -23,25 +24,31 @@ export const useGameState = () => {
   const [winner, setWinner] = useState(null);
   const [usedPieces, setUsedPieces] = useState([]);
   const [moveHistory, setMoveHistory] = useState([]);
+  
+  // Mode and UI state
   const [gameMode, setGameMode] = useState(null);
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [pendingMove, setPendingMove] = useState(null);
   const [currentPuzzle, setCurrentPuzzle] = useState(null);
-  const [puzzleDifficulty, setPuzzleDifficulty] = useState(null);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTY.AVERAGE);
   const [isGeneratingPuzzle, setIsGeneratingPuzzle] = useState(false);
+  const [puzzleDifficulty, setPuzzleDifficulty] = useState(null);
 
   // Commit a move to the board
   const commitMove = useCallback((row, col, piece, rot, flip) => {
     const pieceCoords = getPieceCoords(piece, rot, flip);
-    if (!canPlacePiece(board, row, col, pieceCoords)) return false;
+    if (!canPlacePiece(board, row, col, pieceCoords)) {
+      console.log('Cannot place piece at', row, col);
+      return false;
+    }
 
     const { newBoard, newBoardPieces } = placePiece(
       board, boardPieces, row, col, piece, pieceCoords, currentPlayer
     );
 
+    // Save state for undo
     const move = {
       player: currentPlayer,
       piece,
@@ -65,7 +72,7 @@ export const useGameState = () => {
     const newUsedPieces = [...usedPieces, piece];
     const nextPlayer = currentPlayer === 1 ? 2 : 1;
     
-    // Check if game is over
+    // Check game over
     if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
       setGameOver(true);
       setWinner(currentPlayer);
@@ -73,6 +80,7 @@ export const useGameState = () => {
     } else {
       setCurrentPlayer(nextPlayer);
     }
+    
     return true;
   }, [board, boardPieces, currentPlayer, usedPieces]);
 
@@ -85,8 +93,6 @@ export const useGameState = () => {
     if (!piece) return;
 
     const pieceCoords = getPieceCoords(piece, rotation, flipped);
-    
-    // Set pending move so user can see preview
     setPendingMove({ row, col, piece, rotation, flipped });
     
     if (isWithinBounds(row, col, pieceCoords)) {
@@ -98,11 +104,10 @@ export const useGameState = () => {
 
   // Confirm pending move
   const confirmMove = useCallback(() => {
-    if (pendingMove) {
-      const success = commitMove(pendingMove.row, pendingMove.col, pendingMove.piece, rotation, flipped);
-      if (success) {
-        soundManager.playConfirm();
-      }
+    if (!pendingMove) return;
+    const success = commitMove(pendingMove.row, pendingMove.col, pendingMove.piece, rotation, flipped);
+    if (success) {
+      soundManager.playConfirm();
     }
   }, [pendingMove, rotation, flipped, commitMove]);
 
@@ -115,30 +120,27 @@ export const useGameState = () => {
     soundManager.playCancel();
   }, []);
 
-  // Move pending piece with d-pad
+  // Move pending piece
   const movePendingPiece = useCallback((direction) => {
     if (!pendingMove) return;
     
     let newRow = pendingMove.row;
     let newCol = pendingMove.col;
     
-    if (direction === 'up') newRow -= 1;
-    else if (direction === 'down') newRow += 1;
-    else if (direction === 'left') newCol -= 1;
-    else if (direction === 'right') newCol += 1;
+    if (direction === 'up') newRow--;
+    else if (direction === 'down') newRow++;
+    else if (direction === 'left') newCol--;
+    else if (direction === 'right') newCol++;
 
     const pieceCoords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
-    // Check if at least one cell would be on board
     const hasAnyCellOnBoard = pieceCoords.some(([dx, dy]) => {
-      const cellRow = newRow + dy;
-      const cellCol = newCol + dx;
-      return cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE;
+      const r = newRow + dy, c = newCol + dx;
+      return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
     });
     
     if (hasAnyCellOnBoard) {
       setPendingMove({ ...pendingMove, row: newRow, col: newCol });
-      
       if (isWithinBounds(newRow, newCol, pieceCoords)) {
         soundManager.playPieceMove();
       } else {
@@ -163,54 +165,60 @@ export const useGameState = () => {
     setPendingMove(null);
   }, [moveHistory, gameOver]);
 
-  // Make AI move
+  // AI move
   const makeAIMove = useCallback(async () => {
     const possibleMoves = getAllPossibleMoves(board, usedPieces);
     
     if (possibleMoves.length === 0) {
       setGameOver(true);
-      setWinner(1); // Player wins if AI can't move
+      setWinner(1);
       return;
     }
 
     setIsAIThinking(true);
     
-    const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
-    
-    // Small delay for UX
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    if (move) {
-      commitMove(move.row, move.col, move.pieceType, move.rot, move.flip);
+    try {
+      const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
+      await new Promise(r => setTimeout(r, 500));
+      
+      if (move) {
+        commitMove(move.row, move.col, move.pieceType, move.rot, move.flip);
+      }
+    } catch (e) {
+      console.error('AI move error:', e);
     }
+    
     setIsAIThinking(false);
   }, [board, boardPieces, usedPieces, aiDifficulty, commitMove]);
 
-  // AI move effect
+  // Trigger AI move
   useEffect(() => {
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2 && !gameOver && !isAIThinking) {
       makeAIMove();
     }
   }, [currentPlayer, gameMode, gameOver, isAIThinking, makeAIMove]);
 
-  // Load puzzle into game state
+  // Load puzzle from data
   const loadPuzzleInternal = useCallback((puzzle) => {
-    console.log('Loading puzzle:', puzzle);
+    console.log('Loading puzzle:', puzzle?.id);
     
+    if (!puzzle || !puzzle.boardState || puzzle.boardState.length !== 64) {
+      console.error('Invalid puzzle data');
+      setIsGeneratingPuzzle(false);
+      return;
+    }
+
     try {
       const newBoard = createEmptyBoard();
       const newBoardPieces = createEmptyBoard();
 
-      // Parse board state (64-character string)
-      if (puzzle.boardState && puzzle.boardState.length === 64) {
-        for (let i = 0; i < puzzle.boardState.length; i++) {
-          const char = puzzle.boardState[i];
-          if (char !== 'G') {
-            const row = Math.floor(i / BOARD_SIZE);
-            const col = i % BOARD_SIZE;
-            newBoard[row][col] = 1;
-            newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
-          }
+      for (let i = 0; i < 64; i++) {
+        const char = puzzle.boardState[i];
+        if (char !== 'G') {
+          const row = Math.floor(i / BOARD_SIZE);
+          const col = i % BOARD_SIZE;
+          newBoard[row][col] = 1;
+          newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
         }
       }
       
@@ -229,7 +237,7 @@ export const useGameState = () => {
       setWinner(null);
       setIsGeneratingPuzzle(false);
       
-      console.log('Puzzle loaded! Board pieces:', puzzle.usedPieces?.length || 0);
+      console.log('Puzzle loaded successfully');
     } catch (error) {
       console.error('Error loading puzzle:', error);
       setIsGeneratingPuzzle(false);
@@ -238,7 +246,7 @@ export const useGameState = () => {
 
   // Generate and load a new puzzle
   const generateAndLoadPuzzle = useCallback(async () => {
-    console.log('Generating new puzzle...');
+    console.log('Generating puzzle...');
     setIsGeneratingPuzzle(true);
     
     try {
@@ -253,18 +261,16 @@ export const useGameState = () => {
         setIsGeneratingPuzzle(false);
       }
     } catch (error) {
-      console.error('Error generating puzzle:', error);
+      console.error('Puzzle generation error:', error);
       setIsGeneratingPuzzle(false);
     }
   }, [loadPuzzleInternal]);
 
-  // Public load puzzle function
+  // Public loadPuzzle
   const loadPuzzle = useCallback((puzzle) => {
-    if (puzzle && puzzle.boardState) {
-      // Puzzle already generated, just load it
+    if (puzzle?.boardState) {
       loadPuzzleInternal(puzzle);
     } else {
-      // Generate new puzzle
       generateAndLoadPuzzle();
     }
   }, [loadPuzzleInternal, generateAndLoadPuzzle]);
@@ -272,10 +278,8 @@ export const useGameState = () => {
   // Reset game
   const resetGame = useCallback(() => {
     if (gameMode === 'puzzle') {
-      // Generate new puzzle
       generateAndLoadPuzzle();
     } else {
-      // Regular reset
       setBoard(createEmptyBoard());
       setBoardPieces(createEmptyBoard());
       setCurrentPlayer(1);
@@ -308,7 +312,7 @@ export const useGameState = () => {
     setPuzzleDifficulty(null);
   }, []);
 
-  // Select a piece
+  // Select piece
   const selectPiece = useCallback((piece) => {
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;

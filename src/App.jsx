@@ -9,7 +9,6 @@ import IOSInstallPrompt from './components/IOSInstallPrompt';
 function App() {
   const [isMobile, setIsMobile] = useState(false);
   
-  // Detect mobile device
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -19,9 +18,7 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Get all game state and actions from custom hook
   const {
-    // State
     board,
     boardPieces,
     currentPlayer,
@@ -41,7 +38,6 @@ function App() {
     aiDifficulty,
     isGeneratingPuzzle,
     
-    // Actions
     setGameMode,
     setShowHowToPlay,
     setShowSettings,
@@ -59,7 +55,6 @@ function App() {
     flipPiece,
   } = useGameState();
 
-  // Handle starting a game (with difficulty selection for AI mode)
   const handleStartGame = (mode) => {
     if (mode === 'ai') {
       setGameMode('difficulty-select');
@@ -68,18 +63,16 @@ function App() {
     }
   };
 
-  // Start AI game after difficulty selection
   const handleStartAIGame = () => {
     startNewGame('ai');
   };
 
-  // Handle puzzle selection - puzzle is passed directly from PuzzleSelect
   const handlePuzzleSelect = (puzzle) => {
-    console.log('App received puzzle:', puzzle);
+    console.log('App received puzzle:', puzzle?.id);
     loadPuzzle(puzzle);
   };
 
-  // Render Menu Screen
+  // Menu Screen
   if (!gameMode) {
     return (
       <>
@@ -91,13 +84,12 @@ function App() {
           showSettings={showSettings}
           onToggleSettings={setShowSettings}
         />
-        {/* iOS Install Prompt */}
         <IOSInstallPrompt />
       </>
     );
   }
 
-  // Render Difficulty Selector for AI
+  // AI Difficulty Selector
   if (gameMode === 'difficulty-select') {
     return (
       <DifficultySelector
@@ -109,7 +101,7 @@ function App() {
     );
   }
 
-  // Render Puzzle Select Screen
+  // Puzzle Select
   if (gameMode === 'puzzle-select') {
     return (
       <PuzzleSelect
@@ -119,7 +111,7 @@ function App() {
     );
   }
 
-  // Render Game Screen (for ai, 2player, and puzzle modes)
+  // Game Screen
   return (
     <GameScreen
       board={board}
