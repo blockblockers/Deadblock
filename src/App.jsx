@@ -4,7 +4,6 @@ import MenuScreen from './components/MenuScreen';
 import PuzzleSelect from './components/PuzzleSelect';
 import GameScreen from './components/GameScreen';
 import DifficultySelector from './components/DifficultySelector';
-import IOSInstallPrompt from './components/IOSInstallPrompt';
 
 function App() {
   const [isMobile, setIsMobile] = useState(false);
@@ -83,17 +82,14 @@ function App() {
   // Render Menu Screen
   if (!gameMode) {
     return (
-      <>
-        <IOSInstallPrompt />
-        <MenuScreen
-          onStartGame={handleStartGame}
-          onPuzzleSelect={() => setGameMode('puzzle-select')}
-          showHowToPlay={showHowToPlay}
-          onToggleHowToPlay={setShowHowToPlay}
-          showSettings={showSettings}
-          onToggleSettings={setShowSettings}
-        />
-      </>
+      <MenuScreen
+        onStartGame={handleStartGame}
+        onPuzzleSelect={() => setGameMode('puzzle-select')}
+        showHowToPlay={showHowToPlay}
+        onToggleHowToPlay={setShowHowToPlay}
+        showSettings={showSettings}
+        onToggleSettings={setShowSettings}
+      />
     );
   }
 
