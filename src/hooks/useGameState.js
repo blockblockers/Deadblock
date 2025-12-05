@@ -39,6 +39,9 @@ export const useGameState = () => {
   const puzzleDifficultyRef = useRef(PUZZLE_DIFFICULTY.EASY);
   const [puzzleDifficulty, setPuzzleDifficultyState] = useState(PUZZLE_DIFFICULTY.EASY);
   
+  // Store original puzzle state for retry functionality
+  const [originalPuzzleState, setOriginalPuzzleState] = useState(null);
+  
   // Wrapper to update both ref and state
   const setPuzzleDifficulty = useCallback((diff) => {
     puzzleDifficultyRef.current = diff;
@@ -232,6 +235,14 @@ export const useGameState = () => {
         }
       }
       
+      // Store original state for retry functionality
+      setOriginalPuzzleState({
+        board: newBoard.map(r => [...r]),
+        boardPieces: newBoardPieces.map(r => [...r]),
+        usedPieces: puzzle.usedPieces ? [...puzzle.usedPieces] : [],
+        puzzle: { ...puzzle }
+      });
+      
       setBoard(newBoard);
       setBoardPieces(newBoardPieces);
       setUsedPieces(puzzle.usedPieces ? [...puzzle.usedPieces] : []);
@@ -297,6 +308,31 @@ export const useGameState = () => {
       generateAndLoadPuzzle(puzzleDifficultyRef.current);
     }
   }, [loadPuzzleInternal, generateAndLoadPuzzle]);
+
+  // Reset current puzzle to original state (retry)
+  const resetCurrentPuzzle = useCallback(() => {
+    if (!originalPuzzleState) {
+      console.log('No original puzzle state to reset to');
+      return;
+    }
+    
+    console.log('Resetting puzzle to original state');
+    
+    setBoard(originalPuzzleState.board.map(r => [...r]));
+    setBoardPieces(originalPuzzleState.boardPieces.map(r => [...r]));
+    setUsedPieces([...originalPuzzleState.usedPieces]);
+    setCurrentPuzzle(originalPuzzleState.puzzle);
+    setCurrentPlayer(1);
+    setSelectedPiece(null);
+    setRotation(0);
+    setFlipped(false);
+    setMoveHistory([]);
+    setPendingMove(null);
+    setGameOver(false);
+    setWinner(null);
+    
+    soundManager.playButtonClick();
+  }, [originalPuzzleState]);
 
   // Reset game - uses stored difficulty for puzzles
   const resetGame = useCallback(() => {
@@ -401,5 +437,6 @@ export const useGameState = () => {
     rotatePiece,
     flipPiece,
     generateAndLoadPuzzle,
+    resetCurrentPuzzle,
   };
 };

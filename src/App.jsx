@@ -9,6 +9,7 @@ import IOSInstallPrompt from './components/IOSInstallPrompt';
 function App() {
   const [isMobile, setIsMobile] = useState(false);
   
+  // Detect mobile device
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
@@ -18,7 +19,9 @@ function App() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Get all game state and actions from custom hook
   const {
+    // State
     board,
     boardPieces,
     currentPlayer,
@@ -37,7 +40,9 @@ function App() {
     showSettings,
     aiDifficulty,
     isGeneratingPuzzle,
+    puzzleDifficulty,
     
+    // Actions
     setGameMode,
     setShowHowToPlay,
     setShowSettings,
@@ -53,8 +58,10 @@ function App() {
     selectPiece,
     rotatePiece,
     flipPiece,
+    resetCurrentPuzzle,
   } = useGameState();
 
+  // Handle starting a game (with difficulty selection for AI mode)
   const handleStartGame = (mode) => {
     if (mode === 'ai') {
       setGameMode('difficulty-select');
@@ -63,19 +70,21 @@ function App() {
     }
   };
 
+  // Start AI game after difficulty selection
   const handleStartAIGame = () => {
     startNewGame('ai');
   };
 
+  // Handle puzzle selection
   const handlePuzzleSelect = (puzzle) => {
-    console.log('App received puzzle:', puzzle?.id);
     loadPuzzle(puzzle);
   };
 
-  // Menu Screen
+  // Render Menu Screen
   if (!gameMode) {
     return (
       <>
+        <IOSInstallPrompt />
         <MenuScreen
           onStartGame={handleStartGame}
           onPuzzleSelect={() => setGameMode('puzzle-select')}
@@ -84,12 +93,11 @@ function App() {
           showSettings={showSettings}
           onToggleSettings={setShowSettings}
         />
-        <IOSInstallPrompt />
       </>
     );
   }
 
-  // AI Difficulty Selector
+  // Render Difficulty Selector for AI
   if (gameMode === 'difficulty-select') {
     return (
       <DifficultySelector
@@ -101,7 +109,7 @@ function App() {
     );
   }
 
-  // Puzzle Select
+  // Render Puzzle Difficulty Select Screen
   if (gameMode === 'puzzle-select') {
     return (
       <PuzzleSelect
@@ -111,7 +119,7 @@ function App() {
     );
   }
 
-  // Game Screen
+  // Render Game Screen (for ai, 2player, and puzzle modes)
   return (
     <GameScreen
       board={board}
@@ -140,6 +148,7 @@ function App() {
       onMovePiece={movePendingPiece}
       onUndo={undoMove}
       onReset={resetGame}
+      onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}
     />
   );

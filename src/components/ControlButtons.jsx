@@ -1,4 +1,4 @@
-import { RotateCw, FlipHorizontal, Undo, RefreshCw, Check, X, Loader } from 'lucide-react';
+import { RotateCw, FlipHorizontal, Undo, RefreshCw, Check, X, Loader, RotateCcw } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 const ControlButtons = ({
@@ -15,7 +15,8 @@ const ControlButtons = ({
   onConfirm,
   onCancel,
   onUndo,
-  onReset
+  onReset,
+  onRetryPuzzle
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
@@ -29,6 +30,13 @@ const ControlButtons = ({
   const handleReset = () => {
     soundManager.playButtonClick();
     onReset();
+  };
+
+  const handleRetry = () => {
+    soundManager.playButtonClick();
+    if (onRetryPuzzle) {
+      onRetryPuzzle();
+    }
   };
 
   return (
@@ -89,14 +97,37 @@ const ControlButtons = ({
               >
                 <Undo size={12} />
               </button>
-              <button
-                onClick={handleReset}
-                className="flex-1 px-1.5 py-1.5 bg-slate-700/70 hover:bg-slate-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/30 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
-                title={isPuzzleMode ? "Generate new puzzle" : "Reset game"}
-              >
-                <RefreshCw size={12} />
-                {isPuzzleMode && <span className="hidden sm:inline">NEW</span>}
-              </button>
+              
+              {/* Puzzle mode: Show RETRY and NEW buttons */}
+              {isPuzzleMode ? (
+                <>
+                  <button
+                    onClick={handleRetry}
+                    className="flex-1 px-1.5 py-1.5 bg-cyan-600/70 hover:bg-cyan-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-cyan-400/30 shadow-[0_0_10px_rgba(34,211,238,0.4)]"
+                    title="Retry this puzzle from the beginning"
+                  >
+                    <RotateCcw size={12} />
+                    <span className="hidden sm:inline">RETRY</span>
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="flex-1 px-1.5 py-1.5 bg-slate-700/70 hover:bg-slate-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/30 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
+                    title="Generate a new puzzle"
+                  >
+                    <RefreshCw size={12} />
+                    <span className="hidden sm:inline">NEW</span>
+                  </button>
+                </>
+              ) : (
+                /* Non-puzzle mode: Just show reset */
+                <button
+                  onClick={handleReset}
+                  className="flex-1 px-1.5 py-1.5 bg-slate-700/70 hover:bg-slate-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/30 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
+                  title="Reset game"
+                >
+                  <RefreshCw size={12} />
+                </button>
+              )}
             </>
           )}
         </>
