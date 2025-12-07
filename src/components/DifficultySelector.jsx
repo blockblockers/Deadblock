@@ -57,20 +57,26 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
   };
 
   return (
-    <div className="min-h-screen relative overflow-y-auto overflow-x-hidden bg-slate-950">
-      {/* Grid background - fixed */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
-        backgroundSize: '40px 40px'
-      }} />
-      
-      {/* Glow effects - fixed */}
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
-      
-      {/* Scrollable content */}
-      <div className="relative min-h-screen flex items-center justify-center p-4 py-8">
-        <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 max-w-lg w-full border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.3)]">
+    <>
+      {/* Main scrollable container */}
+      <div 
+        className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
+        style={{ WebkitOverflowScrolling: 'touch' }}
+      >
+        {/* Grid background - fixed */}
+        <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        
+        {/* Glow effects - fixed */}
+        <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
+        
+        {/* Content wrapper */}
+        <div className="relative w-full min-h-full flex items-center justify-center p-4 py-8">
+          <div className="w-full max-w-lg">
+            <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 border border-purple-500/30 shadow-[0_0_30px_rgba(168,85,247,0.3)]">
           {/* Header */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -166,9 +172,14 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
             <Bot size={20} />
             START GAME
           </button>
+            </div>
+            
+            {/* Bottom safe area */}
+            <div className="h-8" />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 };
 
