@@ -1,4 +1,4 @@
-import { Bot, User, Trophy, Settings } from 'lucide-react';
+import { Bot, Users, Trophy, Settings, HelpCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
@@ -34,7 +34,7 @@ const PolyominoButton = ({ onClick, shape, color, glowColor, icon: Icon, iconSvg
         </div>
       </div>
       
-      {/* Button content - fixed alignment */}
+      {/* Button content */}
       <div className="flex items-center gap-3 ml-8">
         {Icon && <Icon size={26} className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] flex-shrink-0" />}
         {iconSvg}
@@ -56,96 +56,88 @@ const MenuScreen = ({
   onToggleSettings
 }) => {
   return (
-    <div className="min-h-screen relative p-4 flex items-center justify-center overflow-hidden bg-slate-950">
-      {/* Animated grid background */}
-      <div className="absolute inset-0 opacity-30" style={{
+    <div className="min-h-screen relative overflow-y-auto overflow-x-hidden bg-slate-950">
+      {/* Animated grid background - fixed */}
+      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
         backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Glow effects */}
-      <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl" />
+      {/* Glow effects - fixed */}
+      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
       
-      <div className="relative bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 max-w-md w-full border border-cyan-500/30 shadow-[0_0_30px_rgba(34,211,238,0.3)]">
-        <NeonTitle className="text-4xl sm:text-5xl text-center mb-2">DEADBLOCK</NeonTitle>
-        <p className="text-center text-cyan-300/70 mb-6 tracking-widest text-xs sm:text-sm">CHOOSE YOUR MODE</p>
-        
-        <div className="space-y-3">
-          {/* Play vs AI */}
-          <PolyominoButton 
-            onClick={() => onStartGame('ai')}
-            shape="T"
-            color="bg-gradient-to-r from-purple-600/90 to-pink-600/90"
-            glowColor="rgba(168,85,247,0.5)"
-            icon={Bot}
-            title="PLAY vs AI"
-            subtitle="Challenge the machine"
-          />
+      {/* Scrollable content */}
+      <div className="relative min-h-screen flex items-center justify-center p-4 py-8">
+        <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-md border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
+          {/* Title */}
+          <div className="text-center mb-6">
+            <NeonTitle className="text-4xl sm:text-5xl mb-2">DEADBLOCK</NeonTitle>
+            <p className="text-cyan-300/70 text-sm tracking-widest">BLOCK PUZZLE STRATEGY</p>
+          </div>
           
-          {/* 2 Player */}
-          <PolyominoButton
-            onClick={() => onStartGame('2player')}
-            shape="L"
-            color="bg-gradient-to-r from-cyan-600/90 to-blue-600/90"
-            glowColor="rgba(34,211,238,0.5)"
-            icon={User}
-            title="2 PLAYER"
-            subtitle="Local multiplayer"
-          />
-
-          {/* Puzzle Mode */}
-          <PolyominoButton
-            onClick={onPuzzleSelect}
-            shape="Z"
-            color="bg-gradient-to-r from-green-600/90 to-emerald-600/90"
-            glowColor="rgba(74,222,128,0.5)"
-            icon={Trophy}
-            title="PUZZLE MODE"
-            subtitle="Tactical challenges"
-          />
-
-          {/* How to Play */}
-          <PolyominoButton
-            onClick={() => onToggleHowToPlay(true)}
-            shape="P"
-            color="bg-gradient-to-r from-amber-600/90 to-orange-600/90"
-            glowColor="rgba(251,191,36,0.5)"
-            iconSvg={
-              <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] flex-shrink-0">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                <path d="M12 17h.01"/>
-              </svg>
-            }
-            title="HOW TO PLAY"
-            subtitle="Learn the rules"
-          />
-
-          {/* Settings */}
-          <PolyominoButton
-            onClick={() => onToggleSettings(true)}
-            shape="T"
-            color="bg-gradient-to-r from-slate-600/90 to-slate-700/90"
-            glowColor="rgba(148,163,184,0.4)"
-            icon={Settings}
-            title="SETTINGS"
-            subtitle="Sound & vibration"
-          />
+          {/* Game Mode Buttons */}
+          <div className="space-y-3 mb-6">
+            <PolyominoButton
+              onClick={() => onStartGame('ai')}
+              shape="T"
+              color="bg-gradient-to-r from-purple-600 to-pink-600"
+              glowColor="rgba(168,85,247,0.5)"
+              icon={Bot}
+              title="1 VS AI"
+              subtitle="Challenge the computer"
+            />
+            
+            <PolyominoButton
+              onClick={() => onStartGame('2player')}
+              shape="L"
+              color="bg-gradient-to-r from-cyan-600 to-blue-600"
+              glowColor="rgba(34,211,238,0.5)"
+              icon={Users}
+              title="2 PLAYER"
+              subtitle="Play with a friend"
+            />
+            
+            <PolyominoButton
+              onClick={onPuzzleSelect}
+              shape="Z"
+              color="bg-gradient-to-r from-green-600 to-emerald-600"
+              glowColor="rgba(74,222,128,0.5)"
+              icon={Trophy}
+              title="PUZZLE"
+              subtitle="Solve challenges"
+            />
+          </div>
+          
+          {/* Bottom Buttons */}
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                soundManager.playButtonClick();
+                onToggleHowToPlay(true);
+              }}
+              className="flex-1 py-3 bg-slate-800 text-cyan-300 rounded-xl text-sm font-semibold hover:bg-slate-700 transition-all border border-cyan-500/30 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+            >
+              <HelpCircle size={18} />
+              HOW TO PLAY
+            </button>
+            
+            <button
+              onClick={() => {
+                soundManager.playButtonClick();
+                onToggleSettings(true);
+              }}
+              className="py-3 px-4 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-all border border-slate-600/50 flex items-center justify-center"
+            >
+              <Settings size={20} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* How to Play Modal */}
-      <HowToPlayModal 
-        isOpen={showHowToPlay}
-        onClose={() => onToggleHowToPlay(false)}
-      />
-
-      {/* Settings Modal */}
-      <SettingsModal
-        isOpen={showSettings}
-        onClose={() => onToggleSettings(false)}
-      />
+      {/* Modals */}
+      <HowToPlayModal isOpen={showHowToPlay} onClose={() => onToggleHowToPlay(false)} />
+      <SettingsModal isOpen={showSettings} onClose={() => onToggleSettings(false)} />
     </div>
   );
 };

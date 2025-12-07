@@ -1,16 +1,21 @@
-// Sound Manager - Simplified for Android compatibility
-// The key is to create and play audio ONLY after user interaction
+// Sound Manager - With seamless audio looping using Web Audio API
+// Uses AudioBufferSourceNode for gapless background music loops
 
 class SoundManager {
   constructor() {
-    this.bgMusic = null;
     this.audioContext = null;
+    this.musicBuffer = null;
+    this.musicSource = null;
+    this.musicGainNode = null;
+    
     this.musicEnabled = true;
     this.sfxEnabled = true;
     this.vibrationEnabled = true;
     this.bgMusicVolume = 0.3;
     this.sfxVolume = 0.5;
     this.hasInteracted = false;
+    this.musicLoaded = false;
+    this.musicPlaying = false;
     
     this.loadSettings();
   }
@@ -29,85 +34,136 @@ class SoundManager {
     } catch (e) {}
   }
 
+  // Initialize audio context (call on user interaction)
+  initAudioContext() {
+    if (this.audioContext) return this.audioContext;
+    
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        this.audioContext = new AC();
+        
+        // Create a gain node for music volume control
+        this.musicGainNode = this.audioContext.createGain();
+        this.musicGainNode.gain.value = this.bgMusicVolume;
+        this.musicGainNode.connect(this.audioContext.destination);
+        
+        console.log('Audio context created');
+      }
+    } catch (e) {
+      console.warn('No AudioContext support:', e);
+    }
+    
+    return this.audioContext;
+  }
+
+  // Load music file into buffer (only needs to happen once)
+  async loadMusicBuffer() {
+    if (this.musicLoaded || this.musicBuffer) return;
+    if (!this.audioContext) return;
+    
+    try {
+      console.log('Loading music buffer...');
+      const response = await fetch('/sounds/background-music.mp3');
+      const arrayBuffer = await response.arrayBuffer();
+      this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      this.musicLoaded = true;
+      console.log('Music buffer loaded successfully');
+    } catch (e) {
+      console.warn('Could not load music buffer:', e);
+    }
+  }
+
+  // Start seamless looping music
+  startMusic() {
+    if (!this.musicEnabled || !this.musicBuffer || !this.audioContext) return;
+    if (this.musicPlaying) return;
+    
+    try {
+      // Create a new buffer source (they can only be played once)
+      this.musicSource = this.audioContext.createBufferSource();
+      this.musicSource.buffer = this.musicBuffer;
+      this.musicSource.loop = true;
+      
+      // Set loop points for seamless looping (entire buffer)
+      this.musicSource.loopStart = 0;
+      this.musicSource.loopEnd = this.musicBuffer.duration;
+      
+      // Connect to gain node for volume control
+      this.musicSource.connect(this.musicGainNode);
+      
+      // Start playback
+      this.musicSource.start(0);
+      this.musicPlaying = true;
+      
+      console.log('Music started (seamless loop)');
+    } catch (e) {
+      console.warn('Could not start music:', e);
+    }
+  }
+
+  // Stop music
+  stopMusic() {
+    if (this.musicSource && this.musicPlaying) {
+      try {
+        this.musicSource.stop();
+      } catch (e) {}
+      this.musicSource = null;
+      this.musicPlaying = false;
+    }
+  }
+
   // Call this on EVERY user click/tap
   onUserInteraction() {
     // Create audio context on first interaction
     if (!this.audioContext) {
-      try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (AC) {
-          this.audioContext = new AC();
-          console.log('Audio context created');
-        }
-      } catch (e) {
-        console.warn('No AudioContext support');
-      }
+      this.initAudioContext();
     }
 
-    // Resume audio context if suspended (critical for Android)
+    // Resume audio context if suspended (critical for mobile)
     if (this.audioContext && this.audioContext.state === 'suspended') {
       this.audioContext.resume().then(() => {
         console.log('Audio context resumed');
+        // Try to start music after resume
+        if (this.hasInteracted && this.musicEnabled && !this.musicPlaying && this.musicBuffer) {
+          this.startMusic();
+        }
       }).catch(() => {});
     }
 
-    // Create and start background music on first interaction
+    // Load and start background music on first interaction
     if (!this.hasInteracted && this.musicEnabled) {
       this.hasInteracted = true;
-      this.createAndPlayMusic();
+      this.loadMusicBuffer().then(() => {
+        this.startMusic();
+      });
     }
   }
 
+  // Legacy method names for compatibility
   createAndPlayMusic() {
-    if (this.bgMusic) return; // Already created
-    
-    try {
-      this.bgMusic = new Audio('/sounds/background-music.mp3');
-      this.bgMusic.loop = true;
-      this.bgMusic.volume = this.bgMusicVolume;
-      
-      // For Android: load then play
-      this.bgMusic.load();
-      
-      const playMusic = () => {
-        if (this.musicEnabled && this.bgMusic) {
-          this.bgMusic.play()
-            .then(() => console.log('Music playing'))
-            .catch(e => console.log('Music play failed:', e.message));
-        }
-      };
-
-      // Try to play immediately
-      playMusic();
-      
-      // Also try on canplaythrough event
-      this.bgMusic.addEventListener('canplaythrough', playMusic, { once: true });
-      
-    } catch (e) {
-      console.warn('Could not create music:', e);
-    }
+    this.onUserInteraction();
   }
 
   stopBackgroundMusic() {
-    if (this.bgMusic) {
-      this.bgMusic.pause();
-      this.bgMusic.currentTime = 0;
-    }
+    this.stopMusic();
   }
 
   pauseBackgroundMusic() {
-    if (this.bgMusic) this.bgMusic.pause();
+    this.stopMusic();
   }
 
   resumeBackgroundMusic() {
-    if (this.bgMusic && this.musicEnabled) {
-      this.bgMusic.play().catch(() => {});
+    if (this.musicEnabled && this.hasInteracted && this.musicBuffer) {
+      this.startMusic();
     }
   }
 
   setBgMusicVolume(vol) {
     this.bgMusicVolume = Math.max(0, Math.min(1, vol));
-    if (this.bgMusic) this.bgMusic.volume = this.bgMusicVolume;
+    if (this.musicGainNode) {
+      this.musicGainNode.gain.value = this.bgMusicVolume;
+    }
   }
 
   setSfxVolume(vol) {
@@ -116,8 +172,11 @@ class SoundManager {
 
   setMusicEnabled(enabled) {
     this.musicEnabled = enabled;
-    if (!enabled) this.pauseBackgroundMusic();
-    else if (this.hasInteracted) this.resumeBackgroundMusic();
+    if (!enabled) {
+      this.stopMusic();
+    } else if (this.hasInteracted && this.musicBuffer) {
+      this.startMusic();
+    }
   }
 
   setSfxEnabled(enabled) {

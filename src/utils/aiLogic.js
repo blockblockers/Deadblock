@@ -200,16 +200,47 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
   
   if (possibleMoves.length === 0) return null;
 
-  const isEarlyGame = usedPieces.length < 4;
+  // Early game = first 3 AI moves (pieces 0-5 placed means AI has moved 0-2 times)
+  const isEarlyGame = usedPieces.length < 6;
+  // Very early = first move
+  const isOpeningMove = usedPieces.length < 2;
 
   switch (difficulty) {
     case AI_DIFFICULTY.RANDOM:
-      // Level 1: Random
+      // Level 1: Completely random
       return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
 
     case AI_DIFFICULTY.PROFESSIONAL:
-      // Level 3: Minimax lookahead (2-3 moves deep)
-      console.log('Expert AI thinking...');
+      // Level 3: Minimax lookahead, but random opening
+      
+      // For opening moves, pick randomly from reasonable positions to add variety
+      if (isOpeningMove) {
+        console.log('Expert AI: Random opening move for variety');
+        // Filter to center-ish positions but pick randomly
+        const centerMoves = possibleMoves.filter(m => {
+          const centerRow = m.row + 2; // Approximate center of piece
+          const centerCol = m.col + 2;
+          return centerRow >= 1 && centerRow <= 6 && centerCol >= 1 && centerCol <= 6;
+        });
+        const pool = centerMoves.length > 10 ? centerMoves : possibleMoves;
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+      
+      // Early game: add significant randomness
+      if (isEarlyGame) {
+        console.log('Expert AI: Semi-random early game');
+        // Score moves but add heavy randomness
+        const scoredMoves = possibleMoves.map(m => ({
+          ...m,
+          score: evaluateAIMove(board, m.row, m.col, m.coords, m.pieceType, usedPieces) + Math.random() * 500
+        }));
+        scoredMoves.sort((a, b) => b.score - a.score);
+        // Pick randomly from top 8
+        const topN = Math.min(8, scoredMoves.length);
+        return scoredMoves[Math.floor(Math.random() * topN)];
+      }
+      
+      console.log('Expert AI thinking with minimax...');
       
       // Use deeper search in late game when fewer pieces remain
       const depth = usedPieces.length >= 8 ? 3 : 2;
@@ -227,20 +258,38 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
 
     case AI_DIFFICULTY.AVERAGE:
     default:
-      // Level 2: Basic strategy
+      // Level 2: Basic strategy with randomness
+      
+      // Opening move: pick completely randomly from good positions
+      if (isOpeningMove) {
+        // Any move that's not right on the edge is fine for opening
+        const goodOpeners = possibleMoves.filter(m => 
+          m.row >= 1 && m.row <= 5 && m.col >= 1 && m.col <= 5
+        );
+        const pool = goodOpeners.length > 5 ? goodOpeners : possibleMoves;
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+      
+      // Score all moves
       for (const move of possibleMoves) {
         const coords = getPieceCoords(move.pieceType, move.rot, move.flip);
         let score = evaluateAIMove(board, move.row, move.col, coords, move.pieceType, usedPieces);
+        
+        // Add randomness - more in early game
         if (isEarlyGame) {
-          score += Math.random() * 200;
+          score += Math.random() * 400; // Heavy randomness early
+        } else {
+          score += Math.random() * 50;  // Light randomness late
         }
         move.score = score;
       }
 
       possibleMoves.sort((a, b) => b.score - a.score);
-      const bestScore = possibleMoves[0].score;
-      const topMoves = possibleMoves.filter(m => m.score >= bestScore - (isEarlyGame ? 50 : 1));
       
-      return topMoves[Math.floor(Math.random() * Math.min(isEarlyGame ? 5 : 2, topMoves.length))];
+      // Pick from top moves - more variety in early game
+      const topCount = isEarlyGame ? 6 : 3;
+      const topMoves = possibleMoves.slice(0, Math.min(topCount, possibleMoves.length));
+      
+      return topMoves[Math.floor(Math.random() * topMoves.length)];
   }
 };
