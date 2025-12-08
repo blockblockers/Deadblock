@@ -10,6 +10,7 @@ import GameOverModal from './GameOverModal';
 import { getPieceCoords, canPlacePiece } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const GameScreen = ({
   board,
@@ -42,12 +43,11 @@ const GameScreen = ({
   onMenu
 }) => {
   const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const { needsScroll } = useResponsiveLayout(750);
 
   useEffect(() => {
     if (gameOver) {
-      const timer = setTimeout(() => {
-        setShowGameOverModal(true);
-      }, 500);
+      const timer = setTimeout(() => setShowGameOverModal(true), 500);
       return () => clearTimeout(timer);
     } else {
       setShowGameOverModal(false);
@@ -66,142 +66,116 @@ const GameScreen = ({
     onMenu();
   };
 
-  const handleCloseModal = () => {
-    setShowGameOverModal(false);
-  };
+  const handleCloseModal = () => setShowGameOverModal(false);
 
   const playerWon = winner === 1;
   const isPuzzle = gameMode === 'puzzle';
 
   return (
-    <>
-      {/* Scrollable container - fixed position with overflow scroll */}
-      <div 
-        className="bg-slate-950"
-        style={{ 
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          overflowX: 'hidden',
-          overflowY: 'scroll',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
-        {/* Grid background - fixed */}
-        <div 
-          className="pointer-events-none"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            opacity: 0.2,
-            backgroundImage: 'linear-gradient(rgba(34,211,238,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.4) 1px, transparent 1px)',
-            backgroundSize: '40px 40px'
-          }} 
-        />
-        
-        {/* Scrollable content */}
-        <div style={{ position: 'relative', padding: 8, paddingBottom: 250 }}>
-          <div className="max-w-lg mx-auto">
-            {/* Header - CENTERED */}
-            <div className="flex items-center justify-center mb-2 sm:mb-4 relative">
-              <NeonTitle className="text-xl sm:text-3xl md:text-4xl text-center">DEADBLOCK</NeonTitle>
-              <button 
-                onClick={handleMenuClick}
-                className="absolute right-0 px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs sm:text-sm border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
-              >
-                MENU
-              </button>
+    <div 
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      style={needsScroll ? {
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
+      } : {}}
+    >
+      {/* Grid background */}
+      <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+        backgroundImage: 'linear-gradient(rgba(34,211,238,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.4) 1px, transparent 1px)',
+        backgroundSize: '40px 40px'
+      }} />
+      
+      {/* Content */}
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full flex flex-col'} p-2 sm:p-4`}>
+        <div className={`max-w-lg mx-auto w-full ${needsScroll ? '' : 'flex-1 flex flex-col'}`}>
+          {/* Header */}
+          <div className="flex items-center justify-center mb-2 sm:mb-3 relative flex-shrink-0">
+            <NeonTitle className="text-xl sm:text-3xl text-center">DEADBLOCK</NeonTitle>
+            <button 
+              onClick={handleMenuClick}
+              className="absolute right-0 px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs sm:text-sm border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
+            >
+              MENU
+            </button>
+          </div>
+
+          {/* AI Difficulty Badge */}
+          {gameMode === 'ai' && aiDifficulty && (
+            <div className={`text-center mb-2 flex-shrink-0 ${
+              aiDifficulty === AI_DIFFICULTY.RANDOM ? 'text-green-400' : 
+              aiDifficulty === AI_DIFFICULTY.AVERAGE ? 'text-amber-400' : 'text-purple-400'
+            }`}>
+              <span className="text-xs tracking-widest opacity-70">
+                {aiDifficulty === AI_DIFFICULTY.RANDOM && '🎲 BEGINNER'}
+                {aiDifficulty === AI_DIFFICULTY.AVERAGE && '🧠 INTERMEDIATE'}
+                {aiDifficulty === AI_DIFFICULTY.PROFESSIONAL && '✨ EXPERT (Claude AI)'}
+              </span>
             </div>
+          )}
 
-            {/* AI Difficulty Badge */}
-            {gameMode === 'ai' && aiDifficulty && (
-              <div className={`text-center mb-2 ${
-                aiDifficulty === AI_DIFFICULTY.RANDOM 
-                  ? 'text-green-400' 
-                  : aiDifficulty === AI_DIFFICULTY.AVERAGE 
-                    ? 'text-amber-400' 
-                    : 'text-purple-400'
-              }`}>
-                <span className="text-xs tracking-widest opacity-70">
-                  {aiDifficulty === AI_DIFFICULTY.RANDOM && '🎲 BEGINNER MODE'}
-                  {aiDifficulty === AI_DIFFICULTY.AVERAGE && '🧠 INTERMEDIATE MODE'}
-                  {aiDifficulty === AI_DIFFICULTY.PROFESSIONAL && '✨ EXPERT MODE (Claude AI)'}
-                </span>
+          {/* Puzzle Info */}
+          {gameMode === 'puzzle' && currentPuzzle && !isGeneratingPuzzle && (
+            <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-2 mb-2 text-center flex-shrink-0">
+              <span className="font-bold text-green-300 text-sm">{currentPuzzle.name}</span>
+              <span className="text-green-400/70 text-xs ml-2">- {currentPuzzle.description}</span>
+            </div>
+          )}
+
+          {/* Generating Puzzle */}
+          {isGeneratingPuzzle && (
+            <div className="bg-cyan-900/30 border border-cyan-500/50 rounded-lg p-3 mb-2 text-center flex-shrink-0">
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <span className="font-bold text-cyan-300 text-sm">Generating Puzzle...</span>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Puzzle Info */}
-            {gameMode === 'puzzle' && currentPuzzle && !isGeneratingPuzzle && (
-              <div className="bg-green-900/30 border border-green-500/50 rounded-lg p-2 mb-2 text-center shadow-[0_0_15px_rgba(74,222,128,0.3)]">
-                <span className="font-bold text-green-300 text-sm">{currentPuzzle.name}</span>
-                <span className="text-green-400/70 text-xs ml-2">- {currentPuzzle.description}</span>
-              </div>
-            )}
+          {/* Main Game Panel */}
+          <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-cyan-500/20 ${needsScroll ? '' : 'flex-shrink-0'}`}>
+            <PlayerIndicator currentPlayer={currentPlayer} gameMode={gameMode} />
+            <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
 
-            {/* Generating Puzzle Message */}
-            {isGeneratingPuzzle && (
-              <div className="bg-cyan-900/30 border border-cyan-500/50 rounded-lg p-3 mb-2 text-center shadow-[0_0_15px_rgba(34,211,238,0.3)]">
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="font-bold text-cyan-300 text-sm">Generating New Puzzle...</span>
-                </div>
-                <span className="text-cyan-400/70 text-xs">Claude AI is creating a challenge for you</span>
-              </div>
-            )}
-
-            {/* Main Game Panel */}
-            <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
-              <PlayerIndicator currentPlayer={currentPlayer} gameMode={gameMode} />
-              <GameStatus 
-                isAIThinking={isAIThinking}
-                gameOver={gameOver}
-                winner={winner}
-                gameMode={gameMode}
-                aiDifficulty={aiDifficulty}
-              />
-
-              {/* Game Board - CENTERED */}
-              <div className="flex justify-center pb-4">
-                <GameBoard
-                  board={board}
-                  boardPieces={boardPieces}
-                  pendingMove={pendingMove}
-                  rotation={rotation}
-                  flipped={flipped}
-                  gameOver={gameOver}
-                  gameMode={gameMode}
-                  currentPlayer={currentPlayer}
-                  onCellClick={onCellClick}
-                />
-              </div>
-
-              {pendingMove && !isGeneratingPuzzle && <DPad onMove={onMovePiece} />}
-
-              <ControlButtons
-                selectedPiece={selectedPiece}
+            {/* Game Board */}
+            <div className="flex justify-center pb-4">
+              <GameBoard
+                board={board}
+                boardPieces={boardPieces}
                 pendingMove={pendingMove}
-                canConfirm={canConfirm}
+                rotation={rotation}
+                flipped={flipped}
                 gameOver={gameOver}
                 gameMode={gameMode}
                 currentPlayer={currentPlayer}
-                moveHistoryLength={moveHistory.length}
-                isGeneratingPuzzle={isGeneratingPuzzle}
-                onRotate={onRotate}
-                onFlip={onFlip}
-                onConfirm={onConfirm}
-                onCancel={onCancel}
-                onUndo={onUndo}
-                onReset={onReset}
-                onRetryPuzzle={onRetryPuzzle}
+                onCellClick={onCellClick}
               />
             </div>
 
-            {/* Piece Tray */}
+            {pendingMove && !isGeneratingPuzzle && <DPad onMove={onMovePiece} />}
+
+            <ControlButtons
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              canConfirm={canConfirm}
+              gameOver={gameOver}
+              gameMode={gameMode}
+              currentPlayer={currentPlayer}
+              moveHistoryLength={moveHistory.length}
+              isGeneratingPuzzle={isGeneratingPuzzle}
+              onRotate={onRotate}
+              onFlip={onFlip}
+              onConfirm={onConfirm}
+              onCancel={onCancel}
+              onUndo={onUndo}
+              onReset={onReset}
+              onRetryPuzzle={onRetryPuzzle}
+            />
+          </div>
+
+          {/* Piece Tray */}
+          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
@@ -213,12 +187,10 @@ const GameScreen = ({
               isGeneratingPuzzle={isGeneratingPuzzle}
               onSelectPiece={onSelectPiece}
             />
-            
-            {/* Scroll indicator */}
-            <div className="text-center mt-4 text-slate-600 text-xs">
-              ↕ Scroll for more
-            </div>
           </div>
+          
+          {/* Bottom padding */}
+          {needsScroll && <div className="h-8" />}
         </div>
       </div>
 
@@ -235,7 +207,7 @@ const GameScreen = ({
           onMenu={onMenu}
         />
       )}
-    </>
+    </div>
   );
 };
 
