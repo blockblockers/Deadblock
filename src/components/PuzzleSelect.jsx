@@ -1,10 +1,35 @@
 import { useState } from 'react';
-import { Trophy, Loader, AlertCircle, Play, Zap, Brain, Flame } from 'lucide-react';
+import { Trophy, Loader, AlertCircle, Play } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { pieces } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+
+// Theme configurations (same as DifficultySelector)
+const themes = {
+  easy: {
+    gridColor: 'rgba(34,197,94,0.3)',
+    glow1: 'bg-green-500/25',
+    glow2: 'bg-emerald-500/20',
+    cardBorder: 'border-green-500/40',
+    cardShadow: 'shadow-[0_0_50px_rgba(34,197,94,0.3)]',
+  },
+  medium: {
+    gridColor: 'rgba(251,191,36,0.3)',
+    glow1: 'bg-amber-500/25',
+    glow2: 'bg-orange-500/20',
+    cardBorder: 'border-amber-500/40',
+    cardShadow: 'shadow-[0_0_50px_rgba(251,191,36,0.3)]',
+  },
+  hard: {
+    gridColor: 'rgba(168,85,247,0.3)',
+    glow1: 'bg-purple-500/25',
+    glow2: 'bg-pink-500/20',
+    cardBorder: 'border-purple-500/40',
+    cardShadow: 'shadow-[0_0_50px_rgba(168,85,247,0.3)]',
+  },
+};
 
 // Mini pentomino shape
 const MiniPentomino = ({ pieceName, color, size = 8 }) => {
@@ -31,13 +56,61 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState(PUZZLE_DIFFICULTY.EASY);
-  const { needsScroll } = useResponsiveLayout(700);
+  const { needsScroll } = useResponsiveLayout(750);
 
   const difficulties = [
-    { id: PUZZLE_DIFFICULTY.EASY, name: 'EASY', moves: 3, pieces: 9, description: '9 pieces placed, finish the last 3', pieceName: 'I', color: 'from-green-500 to-emerald-600', borderColor: 'border-green-500/30', textColor: 'text-green-400', bgColor: 'bg-green-900/20', pieceColor: 'bg-green-400' },
-    { id: PUZZLE_DIFFICULTY.MEDIUM, name: 'MEDIUM', moves: 5, pieces: 7, description: '7 pieces placed, finish the last 5', pieceName: 'T', color: 'from-amber-500 to-orange-600', borderColor: 'border-amber-500/30', textColor: 'text-amber-400', bgColor: 'bg-amber-900/20', pieceColor: 'bg-amber-400' },
-    { id: PUZZLE_DIFFICULTY.HARD, name: 'HARD', moves: 7, pieces: 5, description: '5 pieces placed, finish the last 7', pieceName: 'X', color: 'from-red-500 to-pink-600', borderColor: 'border-red-500/30', textColor: 'text-red-400', bgColor: 'bg-red-900/20', pieceColor: 'bg-red-400' }
+    { 
+      id: PUZZLE_DIFFICULTY.EASY, 
+      name: 'EASY', 
+      moves: 3, 
+      pieces: 9, 
+      description: '9 pieces placed, finish the last 3', 
+      pieceName: 'I', 
+      color: 'from-green-500 to-emerald-600', 
+      glowColor: 'rgba(34,197,94,0.5)',
+      borderColor: 'border-green-500/40', 
+      textColor: 'text-green-400', 
+      bgColor: 'bg-green-900/20', 
+      pieceColor: 'bg-green-400',
+      icon: '🌱',
+      theme: 'easy',
+    },
+    { 
+      id: PUZZLE_DIFFICULTY.MEDIUM, 
+      name: 'MEDIUM', 
+      moves: 5, 
+      pieces: 7, 
+      description: '7 pieces placed, finish the last 5', 
+      pieceName: 'T', 
+      color: 'from-amber-500 to-orange-600', 
+      glowColor: 'rgba(251,191,36,0.5)',
+      borderColor: 'border-amber-500/40', 
+      textColor: 'text-amber-400', 
+      bgColor: 'bg-amber-900/20', 
+      pieceColor: 'bg-amber-400',
+      icon: '🔥',
+      theme: 'medium',
+    },
+    { 
+      id: PUZZLE_DIFFICULTY.HARD, 
+      name: 'HARD', 
+      moves: 7, 
+      pieces: 5, 
+      description: '5 pieces placed, finish the last 7', 
+      pieceName: 'X', 
+      color: 'from-purple-500 to-pink-600', 
+      glowColor: 'rgba(168,85,247,0.5)',
+      borderColor: 'border-purple-500/40', 
+      textColor: 'text-purple-400', 
+      bgColor: 'bg-purple-900/20', 
+      pieceColor: 'bg-purple-400',
+      icon: '✨',
+      theme: 'hard',
+    }
   ];
+
+  const selectedDiff = difficulties.find(d => d.id === selectedDifficulty) || difficulties[0];
+  const theme = themes[selectedDiff.theme];
 
   const handleSelectDifficulty = (diffId) => {
     soundManager.playClickSound('select');
@@ -74,68 +147,78 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
     onBack();
   };
 
-  const selectedDiff = difficulties.find(d => d.id === selectedDifficulty);
-
   return (
     <div 
       className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
       style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
     >
-      {/* Background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+      {/* Themed Grid background */}
+      <div className="fixed inset-0 opacity-30 pointer-events-none transition-all duration-500" style={{
+        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-green-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
+      
+      {/* Themed glow effects */}
+      <div className={`fixed top-1/4 left-1/4 w-72 h-72 ${theme.glow1} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
+      <div className={`fixed bottom-1/4 right-1/4 w-72 h-72 ${theme.glow2} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-md">
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 border border-green-500/30">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Trophy size={28} className="text-green-400" />
-                <NeonTitle className="text-2xl sm:text-3xl">PUZZLE</NeonTitle>
-              </div>
-              <button onClick={handleBack} disabled={isLoading}
-                className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs border border-cyan-500/30 hover:bg-slate-700 disabled:opacity-50"
-              >BACK</button>
+          {/* Title above card */}
+          <div className="text-center mb-4">
+            <div className="flex items-center justify-center gap-3 mb-1">
+              <Trophy size={28} className={selectedDiff.textColor} />
+              <NeonTitle size="default" />
             </div>
+            <p className="text-slate-400 text-sm">Puzzle Mode - Choose Difficulty</p>
+          </div>
+
+          <div className={`bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-500`}>
 
             {/* Difficulty Selection */}
-            <div className="mb-6 space-y-2">
-              <p className="text-slate-400 text-xs uppercase tracking-wider mb-3">Select Difficulty</p>
-              
+            <div className="space-y-3 mb-5">
               {difficulties.map((diff) => {
                 const isSelected = selectedDifficulty === diff.id;
                 return (
                   <button key={diff.id} onClick={() => handleSelectDifficulty(diff.id)} disabled={isLoading}
-                    className={`w-full p-3 rounded-xl border transition-all text-left flex items-center gap-3 ${
-                      isSelected ? `bg-gradient-to-r ${diff.color} border-white/30 shadow-lg` : `${diff.bgColor} ${diff.borderColor} hover:bg-slate-700/50`
+                    className={`w-full p-4 rounded-xl border transition-all text-left ${
+                      isSelected 
+                        ? `bg-gradient-to-r ${diff.color} border-white/30 shadow-lg` 
+                        : `${diff.bgColor} ${diff.borderColor} hover:bg-slate-700/50`
                     } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    style={isSelected ? { boxShadow: `0 0 30px ${diff.glowColor}` } : {}}
                   >
-                    <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/20' : 'bg-slate-700'} flex items-center justify-center`}>
-                      <MiniPentomino pieceName={diff.pieceName} color={isSelected ? 'bg-white' : diff.pieceColor} size={6} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`font-bold tracking-wide ${isSelected ? 'text-white' : diff.textColor}`}>{diff.name}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-400'}`}>{diff.moves} moves</span>
+                    <div className="flex items-center gap-3">
+                      {/* Icon + Pentomino */}
+                      <div className={`p-2.5 rounded-lg ${isSelected ? 'bg-white/20' : 'bg-slate-700'} flex items-center justify-center`}>
+                        <span className="text-xl mr-1">{diff.icon}</span>
+                        <MiniPentomino pieceName={diff.pieceName} color={isSelected ? 'bg-white' : diff.pieceColor} size={6} />
                       </div>
-                      <p className={`text-xs mt-0.5 ${isSelected ? 'text-white/70' : 'text-slate-500'}`}>{diff.description}</p>
-                    </div>
-                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-white bg-white' : 'border-slate-600'}`}>
-                      {isSelected && <div className="w-2 h-2 rounded-full bg-green-600" />}
+                      
+                      {/* Text */}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold tracking-wide ${isSelected ? 'text-white' : diff.textColor}`}>{diff.name}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                            {diff.moves} moves
+                          </span>
+                        </div>
+                        <p className={`text-xs mt-0.5 ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>{diff.description}</p>
+                      </div>
+                      
+                      {/* Radio indicator */}
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'border-white bg-white' : 'border-slate-600'}`}>
+                        {isSelected && <div className="w-2 h-2 rounded-full bg-slate-900" />}
+                      </div>
                     </div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Turn order */}
-            <div className="mb-6 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+            {/* Turn order info */}
+            <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
               <div className="text-xs text-slate-400 mb-2 text-center">Turn Order</div>
               <div className="flex items-center justify-center gap-1 text-xs flex-wrap">
                 {Array.from({ length: selectedDiff.moves }).map((_, i) => (
@@ -149,6 +232,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
               </div>
             </div>
 
+            {/* Error message */}
             {error && (
               <div className="mb-4 p-3 bg-red-900/50 border border-red-500/50 rounded-lg flex items-center gap-2">
                 <AlertCircle size={16} className="text-red-400" />
@@ -156,10 +240,14 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
               </div>
             )}
 
+            {/* Start Button */}
             <button onClick={handleGeneratePuzzle} disabled={isLoading}
               className={`w-full p-4 rounded-xl font-bold tracking-wide transition-all flex items-center justify-center gap-3 ${
-                isLoading ? 'bg-slate-700 text-slate-400 cursor-wait' : `bg-gradient-to-r ${selectedDiff.color} text-white hover:opacity-90 shadow-lg`
+                isLoading 
+                  ? 'bg-slate-700 text-slate-400 cursor-wait' 
+                  : `bg-gradient-to-r ${selectedDiff.color} text-white hover:opacity-90`
               }`}
+              style={!isLoading ? { boxShadow: `0 0 25px ${selectedDiff.glowColor}` } : {}}
             >
               {isLoading ? (
                 <>
@@ -175,6 +263,13 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                   <span>START {selectedDiff.name} PUZZLE</span>
                 </>
               )}
+            </button>
+            
+            {/* Back button */}
+            <button onClick={handleBack} disabled={isLoading}
+              className="w-full mt-3 py-2.5 text-slate-400 hover:text-slate-200 text-sm transition-colors disabled:opacity-50"
+            >
+              ← Back to Menu
             </button>
           </div>
         </div>

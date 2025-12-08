@@ -1,4 +1,4 @@
-import { Bot, Users, Puzzle, Settings, HelpCircle } from 'lucide-react';
+import { Bot, Users, Trophy, Settings, HelpCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
@@ -13,7 +13,7 @@ const buttonShapes = {
 };
 
 // Pentomino button component
-const PentominoButton = ({ onClick, shape, color, glowColor, iconColor, icon: Icon, title, subtitle }) => {
+const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, subtitle }) => {
   const coords = buttonShapes[shape] || buttonShapes.T;
   
   const minX = Math.min(...coords.map(([x]) => x));
@@ -25,52 +25,71 @@ const PentominoButton = ({ onClick, shape, color, glowColor, iconColor, icon: Ic
   
   const normalizedCoords = coords.map(([x, y]) => [x - minX, y - minY]);
   
+  const centerX = (maxX - minX) / 2;
+  const centerY = (maxY - minY) / 2;
+  let iconCell = normalizedCoords[0];
+  let minDist = Infinity;
+  for (const [x, y] of normalizedCoords) {
+    const dist = Math.abs(x - centerX) + Math.abs(y - centerY);
+    if (dist < minDist) {
+      minDist = dist;
+      iconCell = [x, y];
+    }
+  }
+  
   const handleClick = () => {
     soundManager.playButtonClick();
     onClick();
   };
   
-  const cellSize = 28;
+  const cellSize = 26;
   const gap = 2;
   
   return (
     <button onClick={handleClick} className="w-full group">
-      <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/80 hover:border-slate-500/50 transition-all duration-200 group-active:scale-[0.98]">
-        {/* Pentomino shape - no icon inside */}
+      <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/80 hover:border-slate-500/50 transition-all duration-200 group-active:scale-[0.98]">
+        {/* Fixed width pentomino container for alignment */}
         <div 
           className="relative flex-shrink-0 transition-transform duration-200 group-hover:scale-105"
-          style={{ width: 90, height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ width: 80, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <div className="relative" style={{ width: width * (cellSize + gap) - gap, height: height * (cellSize + gap) - gap }}>
-            {normalizedCoords.map(([x, y], idx) => (
-              <div
-                key={idx}
-                className={`absolute ${color} rounded-md border border-white/20`}
-                style={{
-                  width: cellSize,
-                  height: cellSize,
-                  left: x * (cellSize + gap),
-                  top: y * (cellSize + gap),
-                  boxShadow: `0 0 15px ${glowColor}`,
-                }}
-              />
-            ))}
+            {normalizedCoords.map(([x, y], idx) => {
+              const isIconCell = x === iconCell[0] && y === iconCell[1];
+              return (
+                <div
+                  key={idx}
+                  className={`absolute ${color} rounded-md border border-white/20`}
+                  style={{
+                    width: cellSize,
+                    height: cellSize,
+                    left: x * (cellSize + gap),
+                    top: y * (cellSize + gap),
+                    boxShadow: `0 0 15px ${glowColor}`,
+                  }}
+                >
+                  {isIconCell && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Icon size={14} className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
         
-        {/* Icon and text - icon left of text with matching color */}
-        <div className="flex-1 flex items-center gap-3 min-w-0">
-          <Icon size={24} className={`${iconColor} group-hover:brightness-125 transition-all flex-shrink-0`} style={{ filter: 'drop-shadow(0 0 6px currentColor)' }} />
-          <div className="min-w-0">
-            <div className="text-white font-bold text-base sm:text-lg tracking-wide group-hover:text-cyan-300 transition-colors truncate">
-              {title}
-            </div>
-            <div className="text-slate-500 text-xs sm:text-sm group-hover:text-slate-400 transition-colors truncate">
-              {subtitle}
-            </div>
+        {/* Text container - fixed width ensures alignment */}
+        <div className="flex-1 text-left">
+          <div className="text-white font-bold text-sm sm:text-base tracking-wide group-hover:text-cyan-300 transition-colors">
+            {title}
+          </div>
+          <div className="text-slate-500 text-xs sm:text-sm group-hover:text-slate-400 transition-colors">
+            {subtitle}
           </div>
         </div>
         
+        {/* Arrow */}
         <div className="text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all duration-200 flex-shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -121,16 +140,15 @@ const MenuScreen = ({
           </div>
           
           {/* Menu Box */}
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-5 sm:p-6 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
+          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-4 sm:p-5 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
             
             {/* Game Mode Buttons */}
-            <div className="space-y-2 mb-5">
+            <div className="space-y-2 mb-4">
               <PentominoButton
                 onClick={() => onStartGame('ai')}
                 shape="T"
                 color="bg-gradient-to-br from-purple-500 to-pink-600"
                 glowColor="rgba(168,85,247,0.4)"
-                iconColor="text-purple-400"
                 icon={Bot}
                 title="VS AI"
                 subtitle="Challenge the computer"
@@ -141,7 +159,6 @@ const MenuScreen = ({
                 shape="L"
                 color="bg-gradient-to-br from-cyan-500 to-blue-600"
                 glowColor="rgba(34,211,238,0.4)"
-                iconColor="text-cyan-400"
                 icon={Users}
                 title="2 PLAYER"
                 subtitle="Local multiplayer"
@@ -152,8 +169,7 @@ const MenuScreen = ({
                 shape="S"
                 color="bg-gradient-to-br from-green-500 to-emerald-600"
                 glowColor="rgba(34,197,94,0.4)"
-                iconColor="text-green-400"
-                icon={Puzzle}
+                icon={Trophy}
                 title="PUZZLE"
                 subtitle="Solve challenges"
               />

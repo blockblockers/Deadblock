@@ -1,4 +1,4 @@
-// AI Logic for Deadblock - Enhanced Expert AI with deeper Minimax
+// AI Logic for Deadblock - Optimized for Speed
 import { pieces } from './pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from './gameLogic';
 
@@ -8,18 +8,43 @@ export const AI_DIFFICULTY = {
   PROFESSIONAL: 'professional'
 };
 
-// Get all possible moves for a board state
-export const getAllPossibleMoves = (board, usedPieces) => {
+// ====== OPTIMIZED MOVE GENERATION ======
+
+// Cache for piece coordinates to avoid recalculation
+const pieceCoordCache = new Map();
+
+const getCachedPieceCoords = (pieceType, rot, flip) => {
+  const key = `${pieceType}-${rot}-${flip}`;
+  if (!pieceCoordCache.has(key)) {
+    pieceCoordCache.set(key, getPieceCoords(pieceType, rot, flip));
+  }
+  return pieceCoordCache.get(key);
+};
+
+// Generate a hash for piece placement to detect duplicates
+const getPlacementHash = (coords, row, col) => {
+  const placed = coords.map(([dx, dy]) => `${row + dy},${col + dx}`).sort().join('|');
+  return placed;
+};
+
+// Get all possible moves with deduplication (many rotations produce same result)
+export const getAllPossibleMoves = (board, usedPieces, dedupe = false) => {
   const available = Object.keys(pieces).filter(p => !usedPieces.includes(p));
   const moves = [];
+  const seen = dedupe ? new Set() : null;
 
   for (const pieceType of available) {
     for (let flip = 0; flip < 2; flip++) {
       for (let rot = 0; rot < 4; rot++) {
-        const coords = getPieceCoords(pieceType, rot, flip === 1);
+        const coords = getCachedPieceCoords(pieceType, rot, flip);
         for (let row = 0; row < BOARD_SIZE; row++) {
           for (let col = 0; col < BOARD_SIZE; col++) {
             if (canPlacePiece(board, row, col, coords)) {
+              if (dedupe) {
+                const hash = pieceType + getPlacementHash(coords, row, col);
+                if (seen.has(hash)) continue;
+                seen.add(hash);
+              }
               moves.push({ pieceType, row, col, rot, flip: flip === 1, coords });
             }
           }
@@ -30,50 +55,47 @@ export const getAllPossibleMoves = (board, usedPieces) => {
   return moves;
 };
 
-// Count valid moves for a given player
-const countPlayerMoves = (board, usedPieces) => {
+// Fast check: can ANY piece be placed? (stops at first valid placement)
+const canAnyMoveBeMade = (board, usedPieces) => {
   const available = Object.keys(pieces).filter(p => !usedPieces.includes(p));
-  let count = 0;
-
+  
   for (const pieceType of available) {
     for (let flip = 0; flip < 2; flip++) {
       for (let rot = 0; rot < 4; rot++) {
-        const coords = getPieceCoords(pieceType, rot, flip === 1);
+        const coords = getCachedPieceCoords(pieceType, rot, flip);
         for (let row = 0; row < BOARD_SIZE; row++) {
           for (let col = 0; col < BOARD_SIZE; col++) {
             if (canPlacePiece(board, row, col, coords)) {
-              count++;
+              return true;
             }
           }
         }
       }
     }
   }
-  return count;
+  return false;
 };
 
-// Count unique pieces that can still be placed (more important than total moves)
+// Count placeable pieces (faster than counting all moves)
 const countPlaceablePieces = (board, usedPieces) => {
   const available = Object.keys(pieces).filter(p => !usedPieces.includes(p));
   let count = 0;
 
   for (const pieceType of available) {
-    let canPlace = false;
     outerLoop:
     for (let flip = 0; flip < 2; flip++) {
       for (let rot = 0; rot < 4; rot++) {
-        const coords = getPieceCoords(pieceType, rot, flip === 1);
+        const coords = getCachedPieceCoords(pieceType, rot, flip);
         for (let row = 0; row < BOARD_SIZE; row++) {
           for (let col = 0; col < BOARD_SIZE; col++) {
             if (canPlacePiece(board, row, col, coords)) {
-              canPlace = true;
+              count++;
               break outerLoop;
             }
           }
         }
       }
     }
-    if (canPlace) count++;
   }
   return count;
 };
@@ -87,216 +109,221 @@ const applyMove = (board, move, player = 2) => {
   return newBoard;
 };
 
-// Enhanced evaluation function
-export const evaluateAIMove = (board, row, col, coords, pieceType, usedPieces, isExpert = false) => {
-  const simBoard = board.map(r => [...r]);
-  for (const [dx, dy] of coords) {
-    simBoard[row + dy][col + dx] = 2;
-  }
-  
-  const simUsed = [...usedPieces, pieceType];
-  
-  // Instant win = best score
-  if (!canAnyPieceBePlaced(simBoard, simUsed)) {
-    return 100000;
-  }
+// ====== FAST EVALUATION ======
 
+// Quick evaluation for move ordering (must be fast)
+const quickEval = (board, row, col, coords) => {
   let score = 0;
-
-  // Primary: Reduce opponent's available pieces (more important than total moves)
-  const oppPlaceablePieces = countPlaceablePieces(simBoard, simUsed);
-  score -= oppPlaceablePieces * 100;
-
-  // Secondary: Reduce opponent's total move count
-  const oppMoves = countPlayerMoves(simBoard, simUsed);
-  score -= oppMoves * 2;
-
-  // Tertiary: Position bonuses
+  
+  // Center bonus
   for (const [dx, dy] of coords) {
     const r = row + dy;
     const c = col + dx;
-    
-    // Center control bonus (center is stronger)
-    const centerDist = Math.abs(r - 3.5) + Math.abs(c - 3.5);
-    score += (7 - centerDist) * 3;
-    
-    // Edge penalty
-    if (r === 0 || r === 7 || c === 0 || c === 7) {
-      score -= 5;
-    }
-    
-    // Corner penalty (corners are weakest)
-    if ((r === 0 || r === 7) && (c === 0 || c === 7)) {
-      score -= 8;
-    }
-  }
-  
-  // Bonus for blocking large contiguous empty areas
-  if (isExpert) {
-    // Count adjacent empty cells being blocked
-    const adjacentEmpty = new Set();
-    for (const [dx, dy] of coords) {
-      const r = row + dy;
-      const c = col + dx;
-      const neighbors = [[0, 1], [0, -1], [1, 0], [-1, 0]];
-      for (const [nr, nc] of neighbors) {
-        const newR = r + nr;
-        const newC = c + nc;
-        if (newR >= 0 && newR < 8 && newC >= 0 && newC < 8 && board[newR][newC] === 0) {
-          adjacentEmpty.add(`${newR},${newC}`);
-        }
-      }
-    }
-    score += adjacentEmpty.size * 2;
+    score += (3.5 - Math.abs(r - 3.5)) + (3.5 - Math.abs(c - 3.5));
   }
   
   return score;
 };
 
-// ====== IMPROVED MINIMAX FOR EXPERT MODE ======
+// Full evaluation for a position
+const evaluatePosition = (board, usedPieces, isAITurn) => {
+  // Count how many pieces each side can still place
+  const placeablePieces = countPlaceablePieces(board, usedPieces);
+  
+  // From AI's perspective: fewer opponent options = better
+  return isAITurn ? -placeablePieces * 100 : placeablePieces * 100;
+};
 
-const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta, moveCache = new Map()) => {
-  // Create cache key
-  const boardKey = board.map(r => r.join('')).join('') + usedPieces.sort().join(',') + depth + isMaximizing;
-  if (moveCache.has(boardKey)) {
-    return moveCache.get(boardKey);
+// Evaluate a specific move
+export const evaluateAIMove = (board, row, col, coords, pieceType, usedPieces) => {
+  const simBoard = applyMove(board, { row, col, coords }, 2);
+  const simUsed = [...usedPieces, pieceType];
+  
+  // Instant win
+  if (!canAnyMoveBeMade(simBoard, simUsed)) {
+    return 100000;
   }
 
-  const moves = getAllPossibleMoves(board, usedPieces);
+  // Count opponent's placeable pieces
+  const oppPieces = countPlaceablePieces(simBoard, simUsed);
+  let score = 1000 - oppPieces * 100;
+
+  // Position bonus
+  for (const [dx, dy] of coords) {
+    const r = row + dy;
+    const c = col + dx;
+    score += (3.5 - Math.abs(r - 3.5)) * 2;
+    score += (3.5 - Math.abs(c - 3.5)) * 2;
+  }
   
-  // Terminal: current player can't move = they lose
+  return score;
+};
+
+// ====== TIME-LIMITED MINIMAX ======
+
+let searchStartTime = 0;
+let nodesSearched = 0;
+const MAX_SEARCH_TIME = 1200; // 1.2 seconds max
+
+const isTimeUp = () => {
+  return Date.now() - searchStartTime > MAX_SEARCH_TIME;
+};
+
+const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
+  nodesSearched++;
+  
+  // Time check every 500 nodes
+  if (nodesSearched % 500 === 0 && isTimeUp()) {
+    return isMaximizing ? -999 : 999; // Return neutral-ish value
+  }
+
+  // Get moves with deduplication for speed
+  const moves = getAllPossibleMoves(board, usedPieces, true);
+  
+  // Terminal: current player can't move
   if (moves.length === 0) {
-    const result = isMaximizing ? -50000 + depth : 50000 - depth;
-    return result;
+    return isMaximizing ? -10000 + depth : 10000 - depth;
   }
   
-  // Depth limit reached - evaluate position
+  // Depth limit
   if (depth === 0) {
-    const aiPieces = countPlaceablePieces(board, usedPieces);
-    const aiMoves = countPlayerMoves(board, usedPieces);
-    // Positive = good for AI (maximizing player)
-    const result = isMaximizing ? (-aiMoves - aiPieces * 50) : (aiMoves + aiPieces * 50);
-    return result;
+    return evaluatePosition(board, usedPieces, isMaximizing);
   }
 
-  // Pre-score all moves for better ordering
-  const scoredMoves = moves.map(m => ({
-    ...m,
-    quickScore: evaluateAIMove(board, m.row, m.col, m.coords, m.pieceType, usedPieces, true)
-  }));
+  // Quick sort by heuristic for better pruning
+  moves.forEach(m => {
+    m.quickScore = quickEval(board, m.row, m.col, m.coords);
+  });
+  moves.sort((a, b) => isMaximizing ? (b.quickScore - a.quickScore) : (a.quickScore - b.quickScore));
   
-  // Sort by score (best first for better pruning)
-  scoredMoves.sort((a, b) => isMaximizing ? (b.quickScore - a.quickScore) : (a.quickScore - b.quickScore));
-  
-  // Limit moves to evaluate based on depth
-  const maxMoves = depth >= 3 ? 8 : depth >= 2 ? 10 : 12;
-  const movesToEval = scoredMoves.slice(0, Math.min(maxMoves, scoredMoves.length));
+  // Only evaluate top moves
+  const maxMoves = depth >= 2 ? 6 : 8;
+  const movesToEval = moves.slice(0, Math.min(maxMoves, moves.length));
 
-  let result;
-  
   if (isMaximizing) {
     let maxEval = -Infinity;
     
     for (const move of movesToEval) {
+      if (isTimeUp()) break;
+      
       const newBoard = applyMove(board, move, 2);
       const newUsed = [...usedPieces, move.pieceType];
       
       // Check for instant win
-      if (!canAnyPieceBePlaced(newBoard, newUsed)) {
-        return 50000 - depth;
+      if (!canAnyMoveBeMade(newBoard, newUsed)) {
+        return 10000 - depth;
       }
       
-      const evalScore = minimax(newBoard, newUsed, depth - 1, false, alpha, beta, moveCache);
+      const evalScore = minimax(newBoard, newUsed, depth - 1, false, alpha, beta);
       maxEval = Math.max(maxEval, evalScore);
       alpha = Math.max(alpha, evalScore);
       if (beta <= alpha) break;
     }
-    result = maxEval;
+    return maxEval;
   } else {
     let minEval = Infinity;
     
     for (const move of movesToEval) {
+      if (isTimeUp()) break;
+      
       const newBoard = applyMove(board, move, 1);
       const newUsed = [...usedPieces, move.pieceType];
       
-      // Check for instant loss
-      if (!canAnyPieceBePlaced(newBoard, newUsed)) {
-        return -50000 + depth;
+      // Check for instant loss (opponent wins)
+      if (!canAnyMoveBeMade(newBoard, newUsed)) {
+        return -10000 + depth;
       }
       
-      const evalScore = minimax(newBoard, newUsed, depth - 1, true, alpha, beta, moveCache);
+      const evalScore = minimax(newBoard, newUsed, depth - 1, true, alpha, beta);
       minEval = Math.min(minEval, evalScore);
       beta = Math.min(beta, evalScore);
       if (beta <= alpha) break;
     }
-    result = minEval;
+    return minEval;
   }
-  
-  moveCache.set(boardKey, result);
-  return result;
 };
 
-// Find best move using minimax with iterative deepening
-const findBestMoveWithMinimax = (board, usedPieces, targetDepth = 3) => {
-  const moves = getAllPossibleMoves(board, usedPieces);
+// Find best move with time limit
+const findBestMove = (board, usedPieces) => {
+  searchStartTime = Date.now();
+  nodesSearched = 0;
+  
+  // Get moves with deduplication
+  const moves = getAllPossibleMoves(board, usedPieces, true);
   if (moves.length === 0) return null;
   
-  console.log(`Expert AI: Analyzing ${moves.length} possible moves...`);
+  console.log(`Expert AI: ${moves.length} unique moves to analyze`);
   
-  // Pre-score moves
+  // Quick evaluation for all moves
   const scoredMoves = moves.map(m => ({
     ...m,
-    quickScore: evaluateAIMove(board, m.row, m.col, m.coords, m.pieceType, usedPieces, true)
-  })).sort((a, b) => b.quickScore - a.quickScore);
+    score: evaluateAIMove(board, m.row, m.col, m.coords, m.pieceType, usedPieces)
+  }));
   
-  // Check for immediate winning move
-  for (const move of scoredMoves) {
-    const newBoard = applyMove(board, move);
-    const newUsed = [...usedPieces, move.pieceType];
-    if (!canAnyPieceBePlaced(newBoard, newUsed)) {
-      console.log('Expert AI: Found winning move!');
-      return move;
-    }
+  // Sort by quick score
+  scoredMoves.sort((a, b) => b.score - a.score);
+  
+  // Check for instant winning move
+  if (scoredMoves[0].score >= 100000) {
+    console.log('Expert AI: Found winning move!');
+    return scoredMoves[0];
+  }
+  
+  // Determine search depth based on game stage
+  const piecesRemaining = 12 - usedPieces.length;
+  let depth;
+  if (piecesRemaining <= 4) {
+    depth = 4; // Deep endgame search
+  } else if (piecesRemaining <= 6) {
+    depth = 3;
+  } else {
+    depth = 2;
   }
   
   // Evaluate top candidates with minimax
-  const candidates = scoredMoves.slice(0, Math.min(15, scoredMoves.length));
-  const moveCache = new Map();
+  const candidates = scoredMoves.slice(0, Math.min(8, scoredMoves.length));
   
   let bestMove = candidates[0];
   let bestScore = -Infinity;
   
   for (const move of candidates) {
-    const newBoard = applyMove(board, move);
+    if (isTimeUp()) {
+      console.log('Expert AI: Time limit reached');
+      break;
+    }
+    
+    const newBoard = applyMove(board, move, 2);
     const newUsed = [...usedPieces, move.pieceType];
     
-    const score = minimax(newBoard, newUsed, targetDepth, false, -Infinity, Infinity, moveCache);
-    
-    console.log(`  ${move.pieceType} at (${move.row},${move.col}): score ${score}`);
+    const score = minimax(newBoard, newUsed, depth, false, -Infinity, Infinity);
     
     if (score > bestScore) {
       bestScore = score;
       bestMove = move;
     }
     
-    // If we found a very good move, accept it
-    if (score > 40000) break;
+    // Early exit if we found a very strong move
+    if (score > 5000) {
+      console.log('Expert AI: Found strong winning path');
+      break;
+    }
   }
   
-  console.log(`Expert AI: Best move ${bestMove.pieceType} with score ${bestScore}`);
+  const elapsed = Date.now() - searchStartTime;
+  console.log(`Expert AI: ${nodesSearched} nodes in ${elapsed}ms, best score: ${bestScore}`);
+  
   return bestMove;
 };
 
 // ====== MAIN SELECT FUNCTION ======
 
 export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = AI_DIFFICULTY.AVERAGE) => {
-  const possibleMoves = getAllPossibleMoves(board, usedPieces);
+  const possibleMoves = getAllPossibleMoves(board, usedPieces, false);
   
   if (possibleMoves.length === 0) return null;
 
   const isEarlyGame = usedPieces.length < 6;
   const isOpeningMove = usedPieces.length < 2;
-  const isLateGame = usedPieces.length >= 8;
 
   switch (difficulty) {
     case AI_DIFFICULTY.RANDOM:
@@ -304,36 +331,26 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
       return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
 
     case AI_DIFFICULTY.PROFESSIONAL:
-      // Level 3: Full minimax - NO random openings, always play optimally
-      console.log(`Expert AI thinking... (${usedPieces.length} pieces used)`);
+      // Level 3: Time-limited minimax
+      console.log(`Expert AI thinking... (${usedPieces.length} pieces placed)`);
       
       // Small delay for UX
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 50));
       
-      // Deeper search as game progresses (more pruning possible)
-      let depth;
-      if (isLateGame) {
-        depth = 4; // Deep search in endgame
-      } else if (usedPieces.length >= 4) {
-        depth = 3; // Medium search in mid-game
-      } else {
-        depth = 3; // Still play strategically in opening
-      }
-      
-      const bestMove = findBestMoveWithMinimax(board, usedPieces, depth);
+      const bestMove = findBestMove(board, usedPieces);
       
       if (bestMove) {
         return bestMove;
       }
       
-      // Fall through only if minimax completely fails
-      console.log('Expert AI: Minimax failed, using strategic fallback');
-      
+      console.log('Expert AI: Falling back to strategic move');
+      // Fall through to average if minimax fails
+
     case AI_DIFFICULTY.AVERAGE:
     default:
       // Level 2: Basic strategy with randomness
       
-      // Opening move: pick from good positions with some randomness
+      // Opening move: random from good positions
       if (isOpeningMove) {
         const goodOpeners = possibleMoves.filter(m => 
           m.row >= 1 && m.row <= 5 && m.col >= 1 && m.col <= 5
@@ -344,10 +361,9 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
       
       // Score all moves
       for (const move of possibleMoves) {
-        const coords = getPieceCoords(move.pieceType, move.rot, move.flip);
-        let score = evaluateAIMove(board, move.row, move.col, coords, move.pieceType, usedPieces);
+        let score = evaluateAIMove(board, move.row, move.col, move.coords, move.pieceType, usedPieces);
         
-        // Add randomness - more in early game
+        // Add randomness
         if (isEarlyGame) {
           score += Math.random() * 400;
         } else {
