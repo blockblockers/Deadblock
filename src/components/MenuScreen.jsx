@@ -1,19 +1,19 @@
-import { Bot, Users, Trophy, Settings, HelpCircle } from 'lucide-react';
+import { Bot, Users, Puzzle, Settings, HelpCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
-// Custom pentomino shapes optimized for horizontal button layout
+// Custom pentomino shapes for buttons
 const buttonShapes = {
   T: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]],
   L: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]],
   S: [[0, 1], [0, 2], [1, 0], [1, 1], [2, 0]],
 };
 
-// Clean pentomino button component
-const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, subtitle }) => {
+// Pentomino button component
+const PentominoButton = ({ onClick, shape, color, glowColor, iconColor, icon: Icon, title, subtitle }) => {
   const coords = buttonShapes[shape] || buttonShapes.T;
   
   const minX = Math.min(...coords.map(([x]) => x));
@@ -24,18 +24,6 @@ const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, 
   const height = maxY - minY + 1;
   
   const normalizedCoords = coords.map(([x, y]) => [x - minX, y - minY]);
-  
-  const centerX = (maxX - minX) / 2;
-  const centerY = (maxY - minY) / 2;
-  let iconCell = normalizedCoords[0];
-  let minDist = Infinity;
-  for (const [x, y] of normalizedCoords) {
-    const dist = Math.abs(x - centerX) + Math.abs(y - centerY);
-    if (dist < minDist) {
-      minDist = dist;
-      iconCell = [x, y];
-    }
-  }
   
   const handleClick = () => {
     soundManager.playButtonClick();
@@ -48,42 +36,38 @@ const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, 
   return (
     <button onClick={handleClick} className="w-full group">
       <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/80 hover:border-slate-500/50 transition-all duration-200 group-active:scale-[0.98]">
+        {/* Pentomino shape - no icon inside */}
         <div 
           className="relative flex-shrink-0 transition-transform duration-200 group-hover:scale-105"
           style={{ width: 90, height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
           <div className="relative" style={{ width: width * (cellSize + gap) - gap, height: height * (cellSize + gap) - gap }}>
-            {normalizedCoords.map(([x, y], idx) => {
-              const isIconCell = x === iconCell[0] && y === iconCell[1];
-              return (
-                <div
-                  key={idx}
-                  className={`absolute ${color} rounded-md border border-white/20`}
-                  style={{
-                    width: cellSize,
-                    height: cellSize,
-                    left: x * (cellSize + gap),
-                    top: y * (cellSize + gap),
-                    boxShadow: `0 0 15px ${glowColor}`,
-                  }}
-                >
-                  {isIconCell && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Icon size={16} className="text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]" />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {normalizedCoords.map(([x, y], idx) => (
+              <div
+                key={idx}
+                className={`absolute ${color} rounded-md border border-white/20`}
+                style={{
+                  width: cellSize,
+                  height: cellSize,
+                  left: x * (cellSize + gap),
+                  top: y * (cellSize + gap),
+                  boxShadow: `0 0 15px ${glowColor}`,
+                }}
+              />
+            ))}
           </div>
         </div>
         
-        <div className="flex-1 text-left min-w-0">
-          <div className="text-white font-bold text-base sm:text-lg tracking-wide group-hover:text-cyan-300 transition-colors truncate">
-            {title}
-          </div>
-          <div className="text-slate-500 text-xs sm:text-sm group-hover:text-slate-400 transition-colors truncate">
-            {subtitle}
+        {/* Icon and text - icon left of text with matching color */}
+        <div className="flex-1 flex items-center gap-3 min-w-0">
+          <Icon size={24} className={`${iconColor} group-hover:brightness-125 transition-all flex-shrink-0`} style={{ filter: 'drop-shadow(0 0 6px currentColor)' }} />
+          <div className="min-w-0">
+            <div className="text-white font-bold text-base sm:text-lg tracking-wide group-hover:text-cyan-300 transition-colors truncate">
+              {title}
+            </div>
+            <div className="text-slate-500 text-xs sm:text-sm group-hover:text-slate-400 transition-colors truncate">
+              {subtitle}
+            </div>
           </div>
         </div>
         
@@ -97,16 +81,6 @@ const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, 
   );
 };
 
-// Mini pentomino icon for themed buttons
-const MiniPentomino = ({ className = '' }) => (
-  <svg viewBox="0 0 20 20" className={className} fill="currentColor">
-    <rect x="0" y="6" width="6" height="6" rx="1" />
-    <rect x="7" y="6" width="6" height="6" rx="1" />
-    <rect x="14" y="6" width="6" height="6" rx="1" />
-    <rect x="7" y="13" width="6" height="6" rx="1" />
-  </svg>
-);
-
 const MenuScreen = ({ 
   onStartGame, 
   onPuzzleSelect, 
@@ -115,7 +89,7 @@ const MenuScreen = ({
   showSettings,
   onToggleSettings
 }) => {
-  const { needsScroll, isSmallScreen } = useResponsiveLayout(650);
+  const { needsScroll } = useResponsiveLayout(700);
 
   return (
     <div 
@@ -140,11 +114,14 @@ const MenuScreen = ({
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-sm">
+          
+          {/* TITLE - Above the box, larger */}
+          <div className="text-center mb-6">
+            <NeonTitle size="large" />
+          </div>
+          
+          {/* Menu Box */}
           <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-5 sm:p-6 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
-            {/* Title - Just DEADBLOCK */}
-            <div className="text-center mb-6">
-              <NeonTitle className="text-3xl sm:text-4xl">DEADBLOCK</NeonTitle>
-            </div>
             
             {/* Game Mode Buttons */}
             <div className="space-y-2 mb-5">
@@ -153,6 +130,7 @@ const MenuScreen = ({
                 shape="T"
                 color="bg-gradient-to-br from-purple-500 to-pink-600"
                 glowColor="rgba(168,85,247,0.4)"
+                iconColor="text-purple-400"
                 icon={Bot}
                 title="VS AI"
                 subtitle="Challenge the computer"
@@ -163,6 +141,7 @@ const MenuScreen = ({
                 shape="L"
                 color="bg-gradient-to-br from-cyan-500 to-blue-600"
                 glowColor="rgba(34,211,238,0.4)"
+                iconColor="text-cyan-400"
                 icon={Users}
                 title="2 PLAYER"
                 subtitle="Local multiplayer"
@@ -173,7 +152,8 @@ const MenuScreen = ({
                 shape="S"
                 color="bg-gradient-to-br from-green-500 to-emerald-600"
                 glowColor="rgba(34,197,94,0.4)"
-                icon={Trophy}
+                iconColor="text-green-400"
+                icon={Puzzle}
                 title="PUZZLE"
                 subtitle="Solve challenges"
               />
@@ -205,7 +185,7 @@ const MenuScreen = ({
           </div>
         </div>
         
-        {/* Bottom padding for scroll */}
+        {/* Bottom padding */}
         {needsScroll && <div className="h-8 flex-shrink-0" />}
       </div>
 
