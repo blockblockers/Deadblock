@@ -1,10 +1,10 @@
-import { Bot, Sparkles, Brain, Zap } from 'lucide-react';
+import { Bot, Sparkles } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { pieces } from '../utils/pieces';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { soundManager } from '../utils/soundManager';
 
-// Mini pentomino shape component for decoration
+// Mini pentomino shape component
 const MiniPentomino = ({ pieceName, color, size = 8 }) => {
   const pieceCoords = pieces[pieceName] || pieces.T;
   const minX = Math.min(...pieceCoords.map(([x]) => x));
@@ -17,12 +17,7 @@ const MiniPentomino = ({ pieceName, color, size = 8 }) => {
         <div
           key={idx}
           className={`absolute ${color} rounded-sm`}
-          style={{
-            width: size,
-            height: size,
-            left: x * (size + 1),
-            top: y * (size + 1),
-          }}
+          style={{ width: size, height: size, left: x * (size + 1), top: y * (size + 1) }}
         />
       ))}
     </div>
@@ -35,7 +30,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       id: AI_DIFFICULTY.RANDOM,
       name: 'BEGINNER',
       subtitle: 'Random Moves',
-      description: 'AI makes completely random valid moves. Perfect for learning the game.',
+      description: 'AI makes completely random valid moves. Perfect for learning.',
       pieceName: 'I',
       color: 'from-green-500 to-emerald-600',
       glowColor: 'rgba(74,222,128,0.5)',
@@ -47,7 +42,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       id: AI_DIFFICULTY.AVERAGE,
       name: 'INTERMEDIATE',
       subtitle: 'Strategic Thinker',
-      description: 'AI uses basic strategy: controls center, limits your options, thinks ahead.',
+      description: 'AI uses strategy: controls center, limits options, thinks ahead.',
       pieceName: 'T',
       color: 'from-amber-500 to-orange-600',
       glowColor: 'rgba(251,191,36,0.5)',
@@ -59,7 +54,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       id: AI_DIFFICULTY.PROFESSIONAL,
       name: 'EXPERT',
       subtitle: 'Claude AI Powered',
-      description: 'Powered by Claude AI. Analyzes the board like a professional player.',
+      description: 'Powered by Claude AI. Analyzes like a professional player.',
       pieceName: 'X',
       color: 'from-purple-500 to-pink-600',
       glowColor: 'rgba(168,85,247,0.5)',
@@ -92,6 +87,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
       {/* Grid background */}
@@ -116,7 +112,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
               </div>
               <button 
                 onClick={handleBack}
-                className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
+                className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs border border-cyan-500/30 hover:bg-slate-700"
               >
                 BACK
               </button>
@@ -139,15 +135,13 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
                     }`}
                     style={isSelected ? { boxShadow: `0 0 30px ${diff.glowColor}` } : {}}
                   >
-                    {/* Badge */}
                     {diff.badge && (
-                      <span className="absolute top-2 right-2 px-2 py-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full shadow-[0_0_10px_rgba(168,85,247,0.5)]">
+                      <span className="absolute top-2 right-2 px-2 py-0.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs font-bold rounded-full">
                         {diff.badge}
                       </span>
                     )}
                     
                     <div className="flex items-start gap-3">
-                      {/* Pentomino shape instead of icon */}
                       <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/20' : 'bg-slate-700'} flex items-center justify-center`}>
                         <MiniPentomino 
                           pieceName={diff.pieceName} 
@@ -169,11 +163,8 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
                         </p>
                       </div>
                       
-                      {/* Selection indicator */}
                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                        isSelected 
-                          ? 'border-white bg-white' 
-                          : 'border-slate-600'
+                        isSelected ? 'border-white bg-white' : 'border-slate-600'
                       }`}>
                         {isSelected && (
                           <div className={`w-2 h-2 rounded-full ${
@@ -193,8 +184,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
               <div className="mb-4 p-3 bg-purple-900/30 border border-purple-500/30 rounded-lg">
                 <p className="text-xs text-purple-300">
                   <Sparkles size={12} className="inline mr-1" />
-                  Requires internet connection.
-                  The AI will consider board state, available pieces, and strategic positioning.
+                  Requires internet connection. The AI will analyze board state and strategic positioning.
                 </p>
               </div>
             )}
@@ -210,8 +200,8 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
           </div>
         </div>
         
-        {/* Bottom padding */}
-        <div className="h-12 flex-shrink-0" />
+        {/* Extra bottom padding for iOS Safari */}
+        <div className="h-32 flex-shrink-0" />
       </div>
     </div>
   );

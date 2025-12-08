@@ -5,7 +5,7 @@ import { pieces } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 
-// Mini pentomino shape component for decoration
+// Mini pentomino shape component
 const MiniPentomino = ({ pieceName, color, size = 8 }) => {
   const pieceCoords = pieces[pieceName] || pieces.T;
   const minX = Math.min(...pieceCoords.map(([x]) => x));
@@ -18,12 +18,7 @@ const MiniPentomino = ({ pieceName, color, size = 8 }) => {
         <div
           key={idx}
           className={`absolute ${color} rounded-sm`}
-          style={{
-            width: size,
-            height: size,
-            left: x * (size + 1),
-            top: y * (size + 1),
-          }}
+          style={{ width: size, height: size, left: x * (size + 1), top: y * (size + 1) }}
         />
       ))}
     </div>
@@ -41,9 +36,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       id: PUZZLE_DIFFICULTY.EASY,
       name: 'EASY',
       moves: 3,
-      pieces: 9,
       description: '9 pieces placed, finish the last 3',
-      icon: Zap,
       pieceName: 'I',
       color: 'from-green-500 to-emerald-600',
       borderColor: 'border-green-500/30',
@@ -55,9 +48,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       id: PUZZLE_DIFFICULTY.MEDIUM,
       name: 'MEDIUM',
       moves: 5,
-      pieces: 7,
       description: '7 pieces placed, finish the last 5',
-      icon: Brain,
       pieceName: 'T',
       color: 'from-amber-500 to-orange-600',
       borderColor: 'border-amber-500/30',
@@ -69,9 +60,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       id: PUZZLE_DIFFICULTY.HARD,
       name: 'HARD',
       moves: 7,
-      pieces: 5,
       description: '5 pieces placed, finish the last 7',
-      icon: Flame,
       pieceName: 'X',
       color: 'from-red-500 to-pink-600',
       borderColor: 'border-red-500/30',
@@ -98,7 +87,6 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       });
       
       if (puzzle) {
-        console.log('Puzzle generated:', puzzle.id, puzzle.difficulty);
         setProgress(100);
         await new Promise(r => setTimeout(r, 200));
         onSelectPuzzle(puzzle);
@@ -127,6 +115,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
       {/* Grid background */}
@@ -163,7 +152,6 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
               <p className="text-slate-400 text-xs uppercase tracking-wider mb-3">Select Difficulty</p>
               
               {difficulties.map((diff) => {
-                const Icon = diff.icon;
                 const isSelected = selectedDifficulty === diff.id;
                 
                 return (
@@ -177,7 +165,6 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                         : `${diff.bgColor} ${diff.borderColor} hover:bg-slate-700/50`
                     } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {/* Pentomino shape instead of icon background */}
                     <div className={`p-2 rounded-lg ${isSelected ? 'bg-white/20' : 'bg-slate-700'} flex items-center justify-center`}>
                       <MiniPentomino 
                         pieceName={diff.pieceName} 
@@ -201,7 +188,6 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                       </p>
                     </div>
                     
-                    {/* Selection indicator */}
                     <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                       isSelected ? 'border-white bg-white' : 'border-slate-600'
                     }`}>
@@ -212,7 +198,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
               })}
             </div>
 
-            {/* Turn order for selected difficulty */}
+            {/* Turn order */}
             <div className="mb-6 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
               <div className="text-xs text-slate-400 mb-2 text-center">Turn Order</div>
               <div className="flex items-center justify-center gap-1 text-xs flex-wrap">
@@ -265,8 +251,8 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
           </div>
         </div>
         
-        {/* Bottom padding */}
-        <div className="h-12 flex-shrink-0" />
+        {/* Extra bottom padding for iOS Safari */}
+        <div className="h-32 flex-shrink-0" />
       </div>
     </div>
   );

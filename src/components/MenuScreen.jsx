@@ -5,13 +5,9 @@ import SettingsModal from './SettingsModal';
 import { soundManager } from '../utils/soundManager';
 
 // Custom pentomino shapes optimized for horizontal button layout
-// All shapes are rotated/flipped to be roughly 3 wide x 2 tall for consistency
 const buttonShapes = {
-  // T-piece: flat T shape
   T: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]],
-  // L-piece: horizontal L
   L: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]],
-  // S-piece: zigzag
   S: [[0, 1], [0, 2], [1, 0], [1, 1], [2, 0]],
 };
 
@@ -19,7 +15,6 @@ const buttonShapes = {
 const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, subtitle }) => {
   const coords = buttonShapes[shape] || buttonShapes.T;
   
-  // Calculate bounds
   const minX = Math.min(...coords.map(([x]) => x));
   const maxX = Math.max(...coords.map(([x]) => x));
   const minY = Math.min(...coords.map(([, y]) => y));
@@ -27,10 +22,8 @@ const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, 
   const width = maxX - minX + 1;
   const height = maxY - minY + 1;
   
-  // Normalize coordinates
   const normalizedCoords = coords.map(([x, y]) => [x - minX, y - minY]);
   
-  // Find center cell for icon placement
   const centerX = (maxX - minX) / 2;
   const centerY = (maxY - minY) / 2;
   let iconCell = normalizedCoords[0];
@@ -57,32 +50,15 @@ const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, 
       className="w-full group"
     >
       <div className="flex items-center gap-4 p-4 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/80 hover:border-slate-500/50 transition-all duration-200 group-active:scale-[0.98]"
-        style={{
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05)`,
-        }}
+        style={{ boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05)` }}
       >
-        {/* Pentomino shape container - fixed width for alignment */}
         <div 
           className="relative flex-shrink-0 transition-transform duration-200 group-hover:scale-105"
-          style={{
-            width: 90,
-            height: 90,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
+          style={{ width: 90, height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         >
-          {/* Actual pentomino shape */}
-          <div
-            className="relative"
-            style={{
-              width: width * (cellSize + gap) - gap,
-              height: height * (cellSize + gap) - gap,
-            }}
-          >
+          <div className="relative" style={{ width: width * (cellSize + gap) - gap, height: height * (cellSize + gap) - gap }}>
             {normalizedCoords.map(([x, y], idx) => {
               const isIconCell = x === iconCell[0] && y === iconCell[1];
-              
               return (
                 <div
                   key={idx}
@@ -106,7 +82,6 @@ const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, 
           </div>
         </div>
         
-        {/* Text */}
         <div className="flex-1 text-left min-w-0">
           <div className="text-white font-bold text-base sm:text-lg tracking-wide group-hover:text-cyan-300 transition-colors truncate">
             {title}
@@ -116,7 +91,6 @@ const PentominoButton = ({ onClick, shape, color, glowColor, icon: Icon, title, 
           </div>
         </div>
         
-        {/* Arrow indicator */}
         <div className="text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all duration-200 flex-shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -142,6 +116,7 @@ const MenuScreen = ({
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
       {/* Grid background */}
@@ -228,8 +203,8 @@ const MenuScreen = ({
           </div>
         </div>
         
-        {/* Bottom padding */}
-        <div className="h-12 flex-shrink-0" />
+        {/* Extra bottom padding for iOS Safari */}
+        <div className="h-32 flex-shrink-0" />
       </div>
 
       {/* Modals */}

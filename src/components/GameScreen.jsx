@@ -43,7 +43,6 @@ const GameScreen = ({
 }) => {
   const [showGameOverModal, setShowGameOverModal] = useState(false);
 
-  // Show game over modal when game ends
   useEffect(() => {
     if (gameOver) {
       const timer = setTimeout(() => {
@@ -55,7 +54,6 @@ const GameScreen = ({
     }
   }, [gameOver]);
 
-  // Check if pending move can be confirmed
   const canConfirm = pendingMove && canPlacePiece(
     board, 
     pendingMove.row, 
@@ -72,7 +70,6 @@ const GameScreen = ({
     setShowGameOverModal(false);
   };
 
-  // Determine if player won
   const playerWon = winner === 1;
   const isPuzzle = gameMode === 'puzzle';
 
@@ -83,16 +80,17 @@ const GameScreen = ({
         overflowY: 'auto',
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      {/* Grid background - fixed */}
+      {/* Grid background */}
       <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
         backgroundImage: 'linear-gradient(rgba(34,211,238,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.4) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Content wrapper */}
-      <div className="relative min-h-screen p-2 sm:p-4 pb-16">
+      {/* Content */}
+      <div className="relative min-h-screen p-2 sm:p-4">
         <div className="max-w-lg mx-auto">
           {/* Header - CENTERED */}
           <div className="flex items-center justify-center mb-2 sm:mb-4 relative">
@@ -143,10 +141,7 @@ const GameScreen = ({
 
           {/* Main Game Panel */}
           <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-cyan-500/20 shadow-[0_0_20px_rgba(34,211,238,0.2)]">
-            {/* Player Indicator */}
             <PlayerIndicator currentPlayer={currentPlayer} gameMode={gameMode} />
-
-            {/* Game Status Messages */}
             <GameStatus 
               isAIThinking={isAIThinking}
               gameOver={gameOver}
@@ -170,10 +165,8 @@ const GameScreen = ({
               />
             </div>
 
-            {/* D-Pad for moving pieces */}
             {pendingMove && !isGeneratingPuzzle && <DPad onMove={onMovePiece} />}
 
-            {/* Control Buttons */}
             <ControlButtons
               selectedPiece={selectedPiece}
               pendingMove={pendingMove}
@@ -206,8 +199,8 @@ const GameScreen = ({
             onSelectPiece={onSelectPiece}
           />
           
-          {/* Bottom safe area padding */}
-          <div className="h-12" />
+          {/* Extra bottom padding for iOS Safari - generous space */}
+          <div className="h-40" />
         </div>
       </div>
 
