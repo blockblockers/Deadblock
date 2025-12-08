@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trophy, Loader, AlertCircle, Play, Zap, Brain, Flame } from 'lucide-react';
+import { Trophy, Loader, AlertCircle, Play } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { pieces } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
@@ -110,27 +110,40 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 overflow-x-hidden"
+      className="bg-slate-950"
       style={{ 
-        overflowY: 'auto',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflowX: 'hidden',
+        overflowY: 'scroll',
         WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}
     >
-      {/* Grid background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
-        backgroundSize: '40px 40px'
-      }} />
+      {/* Grid background - fixed */}
+      <div 
+        className="pointer-events-none"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          opacity: 0.3,
+          backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} 
+      />
       
-      {/* Glow effects */}
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-green-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
+      {/* Glow effects - fixed */}
+      <div className="pointer-events-none" style={{ position: 'fixed', top: '25%', left: '25%', width: 256, height: 256, background: 'rgba(34,197,94,0.2)', borderRadius: '50%', filter: 'blur(48px)' }} />
+      <div className="pointer-events-none" style={{ position: 'fixed', bottom: '25%', right: '25%', width: 256, height: 256, background: 'rgba(236,72,153,0.2)', borderRadius: '50%', filter: 'blur(48px)' }} />
       
-      {/* Content */}
-      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
+      {/* Scrollable content */}
+      <div style={{ position: 'relative', paddingTop: 48, paddingBottom: 200, paddingLeft: 16, paddingRight: 16 }}>
+        <div className="max-w-md mx-auto">
           <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 border border-green-500/30 shadow-[0_0_30px_rgba(74,222,128,0.3)]">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
@@ -251,8 +264,10 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
           </div>
         </div>
         
-        {/* Extra bottom padding for iOS Safari */}
-        <div className="h-32 flex-shrink-0" />
+        {/* Scroll indicator */}
+        <div className="text-center mt-8 text-slate-600 text-xs animate-bounce">
+          ↕ Scroll to navigate
+        </div>
       </div>
     </div>
   );

@@ -110,107 +110,125 @@ const MenuScreen = ({
   onToggleSettings
 }) => {
   return (
-    <div 
-      className="min-h-screen bg-slate-950 overflow-x-hidden"
-      style={{ 
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-      }}
-    >
-      {/* Grid background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
-        backgroundSize: '40px 40px'
-      }} />
-      
-      {/* Glow effects */}
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
-      
-      {/* Content */}
-      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm">
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-5 sm:p-6 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
-            {/* Title */}
-            <div className="text-center mb-6">
-              <NeonTitle className="text-3xl sm:text-4xl mb-1">DEADBLOCK</NeonTitle>
-              <p className="text-cyan-300/70 text-xs tracking-widest">PENTOMINO STRATEGY</p>
-            </div>
-            
-            {/* Game Mode Buttons */}
-            <div className="space-y-2 mb-5">
-              <PentominoButton
-                onClick={() => onStartGame('ai')}
-                shape="T"
-                color="bg-gradient-to-br from-purple-500 to-pink-600"
-                glowColor="rgba(168,85,247,0.4)"
-                icon={Bot}
-                title="VS AI"
-                subtitle="Challenge the computer"
-              />
+    <>
+      {/* Scrollable container - fixed position with overflow scroll */}
+      <div 
+        className="bg-slate-950"
+        style={{ 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          overflowX: 'hidden',
+          overflowY: 'scroll',
+          WebkitOverflowScrolling: 'touch',
+        }}
+      >
+        {/* Grid background - fixed, non-interactive */}
+        <div 
+          className="pointer-events-none"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            opacity: 0.3,
+            backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+            backgroundSize: '40px 40px'
+          }} 
+        />
+        
+        {/* Glow effects - fixed, non-interactive */}
+        <div className="pointer-events-none" style={{ position: 'fixed', top: '25%', left: '25%', width: 256, height: 256, background: 'rgba(236,72,153,0.2)', borderRadius: '50%', filter: 'blur(48px)' }} />
+        <div className="pointer-events-none" style={{ position: 'fixed', bottom: '25%', right: '25%', width: 256, height: 256, background: 'rgba(34,211,238,0.2)', borderRadius: '50%', filter: 'blur(48px)' }} />
+        
+        {/* Scrollable content - natural document flow */}
+        <div style={{ position: 'relative', paddingTop: 48, paddingBottom: 200, paddingLeft: 16, paddingRight: 16 }}>
+          <div className="max-w-sm mx-auto">
+            <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-5 sm:p-6 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
+              {/* Title */}
+              <div className="text-center mb-6">
+                <NeonTitle className="text-3xl sm:text-4xl mb-1">DEADBLOCK</NeonTitle>
+                <p className="text-cyan-300/70 text-xs tracking-widest">PENTOMINO STRATEGY</p>
+              </div>
               
-              <PentominoButton
-                onClick={() => onStartGame('2player')}
-                shape="L"
-                color="bg-gradient-to-br from-cyan-500 to-blue-600"
-                glowColor="rgba(34,211,238,0.4)"
-                icon={Users}
-                title="2 PLAYER"
-                subtitle="Local multiplayer"
-              />
+              {/* Game Mode Buttons */}
+              <div className="space-y-2 mb-5">
+                <PentominoButton
+                  onClick={() => onStartGame('ai')}
+                  shape="T"
+                  color="bg-gradient-to-br from-purple-500 to-pink-600"
+                  glowColor="rgba(168,85,247,0.4)"
+                  icon={Bot}
+                  title="VS AI"
+                  subtitle="Challenge the computer"
+                />
+                
+                <PentominoButton
+                  onClick={() => onStartGame('2player')}
+                  shape="L"
+                  color="bg-gradient-to-br from-cyan-500 to-blue-600"
+                  glowColor="rgba(34,211,238,0.4)"
+                  icon={Users}
+                  title="2 PLAYER"
+                  subtitle="Local multiplayer"
+                />
+                
+                <PentominoButton
+                  onClick={onPuzzleSelect}
+                  shape="S"
+                  color="bg-gradient-to-br from-green-500 to-emerald-600"
+                  glowColor="rgba(34,197,94,0.4)"
+                  icon={Trophy}
+                  title="PUZZLE"
+                  subtitle="Solve challenges"
+                />
+              </div>
               
-              <PentominoButton
-                onClick={onPuzzleSelect}
-                shape="S"
-                color="bg-gradient-to-br from-green-500 to-emerald-600"
-                glowColor="rgba(34,197,94,0.4)"
-                icon={Trophy}
-                title="PUZZLE"
-                subtitle="Solve challenges"
-              />
-            </div>
-            
-            {/* Bottom Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  soundManager.playButtonClick();
-                  onToggleHowToPlay(true);
-                }}
-                className="flex-1 py-2.5 bg-slate-800/80 text-cyan-300 rounded-lg text-xs sm:text-sm font-semibold hover:bg-slate-700 transition-all border border-cyan-500/30 flex items-center justify-center gap-2"
-              >
-                <HelpCircle size={16} />
-                HOW TO PLAY
-              </button>
+              {/* Bottom Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    soundManager.playButtonClick();
+                    onToggleHowToPlay(true);
+                  }}
+                  className="flex-1 py-2.5 bg-slate-800/80 text-cyan-300 rounded-lg text-xs sm:text-sm font-semibold hover:bg-slate-700 transition-all border border-cyan-500/30 flex items-center justify-center gap-2"
+                >
+                  <HelpCircle size={16} />
+                  HOW TO PLAY
+                </button>
+                
+                <button
+                  onClick={() => {
+                    soundManager.playButtonClick();
+                    onToggleSettings(true);
+                  }}
+                  className="py-2.5 px-3 bg-slate-800/80 text-slate-300 rounded-lg hover:bg-slate-700 transition-all border border-slate-600/50 flex items-center justify-center"
+                >
+                  <Settings size={18} />
+                </button>
+              </div>
               
-              <button
-                onClick={() => {
-                  soundManager.playButtonClick();
-                  onToggleSettings(true);
-                }}
-                className="py-2.5 px-3 bg-slate-800/80 text-slate-300 rounded-lg hover:bg-slate-700 transition-all border border-slate-600/50 flex items-center justify-center"
-              >
-                <Settings size={18} />
-              </button>
-            </div>
-            
-            {/* Version */}
-            <div className="text-center mt-4 text-slate-600 text-xs">
-              v3.0 • Pentomino Edition
+              {/* Version */}
+              <div className="text-center mt-4 text-slate-600 text-xs">
+                v3.0 • Pentomino Edition
+              </div>
             </div>
           </div>
+          
+          {/* Scroll indicator */}
+          <div className="text-center mt-8 text-slate-600 text-xs animate-bounce">
+            ↕ Scroll to navigate
+          </div>
         </div>
-        
-        {/* Extra bottom padding for iOS Safari */}
-        <div className="h-32 flex-shrink-0" />
       </div>
 
       {/* Modals */}
       <HowToPlayModal isOpen={showHowToPlay} onClose={() => onToggleHowToPlay(false)} />
       <SettingsModal isOpen={showSettings} onClose={() => onToggleSettings(false)} />
-    </div>
+    </>
   );
 };
 
