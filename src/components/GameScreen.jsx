@@ -4,7 +4,6 @@ import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import ControlButtons from './ControlButtons';
 import DPad from './DPad';
-import PlayerIndicator from './PlayerIndicator';
 import GameStatus from './GameStatus';
 import GameOverModal from './GameOverModal';
 import { getPieceCoords, canPlacePiece } from '../utils/gameLogic';
@@ -15,65 +14,52 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
-  // Beginner / Easy - Green forest theme
   beginner: {
-    gridColor: 'rgba(34,197,94,0.3)',
-    glow1: 'bg-green-500/20',
-    glow2: 'bg-emerald-500/15',
-    panelBorder: 'border-green-500/30',
-    panelShadow: 'shadow-[0_0_30px_rgba(34,197,94,0.2)]',
-    accentColor: 'text-green-400',
-    badgeBg: 'bg-gradient-to-r from-green-900/80 to-emerald-900/80',
-    badgeBorder: 'border-green-500/50',
-    badgeGlow: 'shadow-[0_0_20px_rgba(34,197,94,0.4)]',
-    icon: '🌱',
+    gridColor: 'rgba(34,197,94,0.4)',
+    glow1: 'bg-green-500/30',
+    glow2: 'bg-emerald-400/20',
+    panelBorder: 'border-green-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(34,197,94,0.3)]',
     label: 'BEGINNER',
+    labelBg: 'from-green-600 via-emerald-500 to-green-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(34,197,94,0.8)]',
+    labelBorder: 'border-green-400/50',
   },
-  // Intermediate / Medium - Amber fire theme
   intermediate: {
-    gridColor: 'rgba(251,191,36,0.3)',
-    glow1: 'bg-amber-500/20',
-    glow2: 'bg-orange-500/15',
-    panelBorder: 'border-amber-500/30',
-    panelShadow: 'shadow-[0_0_30px_rgba(251,191,36,0.2)]',
-    accentColor: 'text-amber-400',
-    badgeBg: 'bg-gradient-to-r from-amber-900/80 to-orange-900/80',
-    badgeBorder: 'border-amber-500/50',
-    badgeGlow: 'shadow-[0_0_20px_rgba(251,191,36,0.4)]',
-    icon: '🔥',
+    gridColor: 'rgba(251,191,36,0.4)',
+    glow1: 'bg-amber-500/30',
+    glow2: 'bg-orange-400/20',
+    panelBorder: 'border-amber-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.3)]',
     label: 'INTERMEDIATE',
+    labelBg: 'from-amber-600 via-orange-500 to-amber-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(251,191,36,0.8)]',
+    labelBorder: 'border-amber-400/50',
   },
-  // Expert / Hard - Purple cosmic theme
   expert: {
-    gridColor: 'rgba(168,85,247,0.3)',
-    glow1: 'bg-purple-500/20',
-    glow2: 'bg-pink-500/15',
-    panelBorder: 'border-purple-500/30',
-    panelShadow: 'shadow-[0_0_30px_rgba(168,85,247,0.2)]',
-    accentColor: 'text-purple-400',
-    badgeBg: 'bg-gradient-to-r from-purple-900/80 to-pink-900/80',
-    badgeBorder: 'border-purple-500/50',
-    badgeGlow: 'shadow-[0_0_20px_rgba(168,85,247,0.4)]',
-    icon: '✨',
+    gridColor: 'rgba(168,85,247,0.4)',
+    glow1: 'bg-purple-500/30',
+    glow2: 'bg-pink-400/20',
+    panelBorder: 'border-purple-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
     label: 'EXPERT',
+    labelBg: 'from-purple-600 via-pink-500 to-purple-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(168,85,247,0.8)]',
+    labelBorder: 'border-purple-400/50',
   },
-  // Default - Cyan theme (for 2-player or fallback)
   default: {
     gridColor: 'rgba(34,211,238,0.3)',
     glow1: 'bg-cyan-500/20',
     glow2: 'bg-pink-500/15',
     panelBorder: 'border-cyan-500/20',
     panelShadow: '',
-    accentColor: 'text-cyan-400',
-    badgeBg: '',
-    badgeBorder: '',
-    badgeGlow: '',
-    icon: '',
     label: '',
+    labelBg: '',
+    labelGlow: '',
+    labelBorder: '',
   },
 };
 
-// Get theme based on difficulty
 const getTheme = (gameMode, aiDifficulty, puzzleDifficulty) => {
   if (gameMode === 'ai') {
     if (aiDifficulty === AI_DIFFICULTY.RANDOM) return difficultyThemes.beginner;
@@ -88,16 +74,80 @@ const getTheme = (gameMode, aiDifficulty, puzzleDifficulty) => {
   return difficultyThemes.default;
 };
 
-// Themed difficulty badge component
-const DifficultyBadge = ({ theme }) => {
-  if (!theme.label) return null;
+// Animated player indicator with difficulty in center
+const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking }) => {
+  const is2Player = gameMode === '2player';
+  const isPuzzle = gameMode === 'puzzle';
+  
+  const player1Active = currentPlayer === 1;
+  const player2Active = currentPlayer === 2;
   
   return (
-    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${theme.badgeBg} ${theme.badgeBorder} border ${theme.badgeGlow} backdrop-blur-sm`}>
-      <span className="text-lg">{theme.icon}</span>
-      <span className={`font-bold tracking-widest text-xs ${theme.accentColor}`}>
-        {theme.label}
-      </span>
+    <div className="flex items-center justify-between mb-3">
+      {/* Player 1 */}
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+        player1Active 
+          ? 'bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
+          : 'bg-slate-800/50 border border-slate-700/50'
+      }`}>
+        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+          player1Active ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] animate-pulse' : 'bg-slate-600'
+        }`} />
+        <span className={`text-sm font-bold tracking-wide ${player1Active ? 'text-cyan-300' : 'text-slate-500'}`}>
+          {isPuzzle ? 'YOU' : 'P1'}
+        </span>
+      </div>
+      
+      {/* Center - Difficulty Badge (animated) */}
+      {theme.label && (
+        <div className={`relative px-4 py-1.5 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
+          {/* Animated shimmer effect */}
+          <div className="absolute inset-0 rounded-full overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
+          </div>
+          <span className="relative text-xs font-black tracking-widest text-white drop-shadow-lg">
+            {theme.label}
+          </span>
+        </div>
+      )}
+      
+      {/* Player 2 / AI */}
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+        player2Active 
+          ? is2Player
+            ? 'bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]'
+            : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'
+          : 'bg-slate-800/50 border border-slate-700/50'
+      }`}>
+        <span className={`text-sm font-bold tracking-wide ${
+          player2Active 
+            ? is2Player ? 'text-pink-300' : 'text-purple-300'
+            : 'text-slate-500'
+        }`}>
+          {is2Player ? 'P2' : 'AI'}
+        </span>
+        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+          player2Active 
+            ? is2Player 
+              ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse'
+              : 'bg-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-pulse'
+            : 'bg-slate-600'
+        }`} />
+        {isAIThinking && player2Active && (
+          <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin ml-1" />
+        )}
+      </div>
+      
+      {/* Shimmer animation */}
+      <style>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        .animate-shimmer {
+          animation: shimmer 2s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 };
@@ -135,10 +185,7 @@ const GameScreen = ({
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const { needsScroll } = useResponsiveLayout(750);
 
-  // Get puzzle difficulty from current puzzle
   const puzzleDifficulty = currentPuzzle?.difficulty;
-  
-  // Get theme for current game
   const theme = getTheme(gameMode, aiDifficulty, puzzleDifficulty);
 
   useEffect(() => {
@@ -166,7 +213,6 @@ const GameScreen = ({
 
   const playerWon = winner === 1;
   const isPuzzle = gameMode === 'puzzle';
-  const showDifficultyBadge = gameMode === 'ai' || gameMode === 'puzzle';
 
   return (
     <div 
@@ -179,14 +225,14 @@ const GameScreen = ({
       } : {}}
     >
       {/* Themed Grid background */}
-      <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+      <div className="fixed inset-0 opacity-25 pointer-events-none transition-all duration-500" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
       
       {/* Themed glow effects */}
-      <div className={`fixed top-1/4 left-1/4 w-72 h-72 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
-      <div className={`fixed bottom-1/4 right-1/4 w-72 h-72 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed top-1/4 left-1/4 w-80 h-80 ${theme.glow1} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
+      <div className={`fixed bottom-1/4 right-1/4 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full flex flex-col'} p-2 sm:p-4`}>
@@ -202,34 +248,35 @@ const GameScreen = ({
             </button>
           </div>
 
-          {/* Themed Difficulty Badge */}
-          {showDifficultyBadge && theme.label && (
-            <div className="flex justify-center mb-3 flex-shrink-0">
-              <DifficultyBadge theme={theme} />
-            </div>
-          )}
-
           {/* Puzzle Info */}
           {gameMode === 'puzzle' && currentPuzzle && !isGeneratingPuzzle && (
-            <div className={`${theme.badgeBg} ${theme.badgeBorder} border rounded-lg p-2 mb-2 text-center flex-shrink-0`}>
-              <span className={`font-bold ${theme.accentColor} text-sm`}>{currentPuzzle.name}</span>
-              <span className={`${theme.accentColor} opacity-70 text-xs ml-2`}>- {currentPuzzle.description}</span>
+            <div className={`bg-slate-800/60 border ${theme.panelBorder} rounded-lg p-2 mb-2 text-center flex-shrink-0`}>
+              <span className="font-bold text-slate-200 text-sm">{currentPuzzle.name}</span>
+              <span className="text-slate-400 text-xs ml-2">- {currentPuzzle.description}</span>
             </div>
           )}
 
           {/* Generating Puzzle */}
           {isGeneratingPuzzle && (
-            <div className={`${theme.badgeBg} ${theme.badgeBorder} border rounded-lg p-3 mb-2 text-center flex-shrink-0`}>
+            <div className={`bg-slate-800/60 border ${theme.panelBorder} rounded-lg p-3 mb-2 text-center flex-shrink-0`}>
               <div className="flex items-center justify-center gap-2">
-                <div className={`w-4 h-4 border-2 ${theme.accentColor.replace('text', 'border')} border-t-transparent rounded-full animate-spin`} />
-                <span className={`font-bold ${theme.accentColor} text-sm`}>Generating Puzzle...</span>
+                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <span className="font-bold text-cyan-300 text-sm">Generating Puzzle...</span>
               </div>
             </div>
           )}
 
           {/* Main Game Panel */}
           <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border ${theme.panelBorder} ${theme.panelShadow} ${needsScroll ? '' : 'flex-shrink-0'}`}>
-            <PlayerIndicator currentPlayer={currentPlayer} gameMode={gameMode} />
+            
+            {/* Player Bar with centered difficulty */}
+            <PlayerBar 
+              currentPlayer={currentPlayer} 
+              gameMode={gameMode} 
+              theme={theme}
+              isAIThinking={isAIThinking}
+            />
+            
             <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
 
             {/* Game Board */}
@@ -283,7 +330,6 @@ const GameScreen = ({
             />
           </div>
           
-          {/* Bottom padding */}
           {needsScroll && <div className="h-8" />}
         </div>
       </div>
