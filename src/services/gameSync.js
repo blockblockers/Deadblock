@@ -204,12 +204,28 @@ class GameSyncService {
       }
     }
 
+    console.log('gameSync.makeMove: Updating game with:', {
+      gameId,
+      updateData: {
+        ...updateData,
+        board: `[${updateData.board.length}x${updateData.board[0]?.length} array]`,
+        board_pieces: `${Object.keys(updateData.board_pieces || {}).length} pieces`
+      }
+    });
+
     const { data, error } = await supabase
       .from('games')
       .update(updateData)
       .eq('id', gameId)
       .select()
       .single();
+
+    console.log('gameSync.makeMove: Update result', { 
+      success: !error, 
+      error: error?.message,
+      dataId: data?.id,
+      dataBoardSample: data?.board?.[0]?.slice(0, 3)
+    });
 
     return { data, error };
   }

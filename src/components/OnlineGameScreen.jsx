@@ -8,7 +8,7 @@ import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
 import GameOverModal from './GameOverModal';
-import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
+import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -369,17 +369,70 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
   // Handle confirm move
   const handleConfirm = async () => {
-    if (!pendingMove || !isMyTurn || !game) return;
-
-    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
+    console.log('handleConfirm: Starting...', { 
+      pendingMove, 
+      isMyTurn, 
+      hasGame: !!game,
+      myPlayerNumber,
+      rotation,
+      flipped
+    });
+    
+    if (!pendingMove || !isMyTurn || !game) {
+      console.log('handleConfirm: Cannot confirm', { pendingMove, isMyTurn, game: !!game });
       return;
     }
 
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    console.log('handleConfirm: Piece coords', { piece: pendingMove.piece, coords });
+    
+    if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
+      console.log('handleConfirm: Invalid placement - canPlacePiece returned false');
+      return;
+    }
+
+    console.log('handleConfirm: Confirming move', { piece: pendingMove.piece, row: pendingMove.row, col: pendingMove.col });
+
     soundManager.playClickSound('confirm');
 
-    // Send move to server
-    const { error: moveError } = await gameSyncService.makeMove(
+    // Calculate new board state
+    const newBoard = board.map(row => [...row]);
+    const newBoardPieces = { ...boardPieces };
+    
+    // Place the piece on the board
+    for (const [dx, dy] of coords) {
+      const newRow = pendingMove.row + dy;
+      const newCol = pendingMove.col + dx;
+      newBoard[newRow][newCol] = myPlayerNumber; // 1 or 2
+      newBoardPieces[`${newRow},${newCol}`] = pendingMove.piece;
+    }
+    
+    console.log('handleConfirm: New board state calculated', { 
+      newBoardSample: newBoard[pendingMove.row],
+      newBoardPiecesSample: Object.keys(newBoardPieces).slice(0, 5)
+    });
+    
+    // Add piece to used pieces
+    const newUsedPieces = [...usedPieces, pendingMove.piece];
+    
+    // Determine next player
+    const nextPlayer = myPlayerNumber === 1 ? 2 : 1;
+    
+    // Check if game is over (opponent can't place any pieces)
+    const opponentCanMove = canAnyPieceBePlaced(newBoard, newUsedPieces);
+    const gameOver = !opponentCanMove;
+    const winnerId = gameOver ? user.id : null;
+    
+    console.log('handleConfirm: Calculated game state', { 
+      newUsedPieces, 
+      nextPlayer, 
+      gameOver, 
+      opponentCanMove 
+    });
+
+    // Send move to server with full state
+    console.log('handleConfirm: Sending to server...');
+    const { data: responseData, error: moveError } = await gameSyncService.makeMove(
       gameId,
       user.id,
       {
@@ -387,9 +440,17 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
         row: pendingMove.row,
         col: pendingMove.col,
         rotation,
-        flipped
+        flipped,
+        newBoard,
+        newBoardPieces,
+        newUsedPieces,
+        nextPlayer,
+        gameOver,
+        winnerId
       }
     );
+
+    console.log('handleConfirm: Server response', { responseData, moveError });
 
     if (moveError) {
       console.error('Move failed:', moveError);
@@ -397,11 +458,42 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       return;
     }
 
+    console.log('handleConfirm: Move successful, applying optimistic update');
+
+    // Apply optimistic update to local state immediately
+    // (The real-time subscription will confirm/correct this)
+    setBoard(newBoard);
+    setBoardPieces(newBoardPieces);
+    setUsedPieces(newUsedPieces);
+    setIsMyTurn(false); // It's now the opponent's turn
+
     // Clear selection
     setSelectedPiece(null);
     setPendingMove(null);
     setRotation(0);
     setFlipped(false);
+    
+    // If game is over, show game over modal
+    if (gameOver) {
+      setGameResult({
+        isWin: true,
+        winnerId: user.id,
+        reason: 'normal'
+      });
+      setShowGameOver(true);
+      soundManager.playSound('win');
+    }
+    
+    // Backup: manually refresh game state after a short delay
+    // This handles cases where real-time subscription might not be working
+    setTimeout(async () => {
+      console.log('handleConfirm: Fetching fresh game state as backup...');
+      const { data: freshData } = await gameSyncService.getGame(gameId);
+      if (freshData) {
+        console.log('handleConfirm: Got fresh data, updating state');
+        updateGameState(freshData, user.id);
+      }
+    }, 1000);
   };
 
   // Handle cancel
