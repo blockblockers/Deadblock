@@ -75,33 +75,60 @@ class MatchmakingService {
     // Randomly decide who goes first
     const firstPlayer = Math.random() < 0.5 ? 1 : 2;
     
-    const { data: game, error } = await supabase
-      .from('games')
-      .insert({
-        player1_id: player1Id,
-        player2_id: player2Id,
-        board: emptyBoard,
-        board_pieces: {},
-        used_pieces: [],
-        current_player: firstPlayer,
-        status: 'active'
-      })
-      .select(`
-        *,
-        player1:profiles!games_player1_id_fkey(*),
-        player2:profiles!games_player2_id_fkey(*)
-      `)
-      .single();
+    console.log('Creating game between', player1Id, 'and', player2Id);
+    
+    try {
+      // First, create the game without the profile joins
+      const { data: game, error: createError } = await supabase
+        .from('games')
+        .insert({
+          player1_id: player1Id,
+          player2_id: player2Id,
+          board: emptyBoard,
+          board_pieces: {},
+          used_pieces: [],
+          current_player: firstPlayer,
+          status: 'active'
+        })
+        .select()
+        .single();
 
-    if (!error && game) {
+      if (createError) {
+        console.error('Error creating game:', createError);
+        return { game: null, error: createError };
+      }
+
+      console.log('Game created:', game.id);
+
+      // Now fetch the game with player profiles
+      const { data: fullGame, error: fetchError } = await supabase
+        .from('games')
+        .select(`
+          *,
+          player1:profiles!games_player1_id_fkey(*),
+          player2:profiles!games_player2_id_fkey(*)
+        `)
+        .eq('id', game.id)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching game with profiles:', fetchError);
+        // Return the basic game even if profile fetch fails
+        return { game, error: null };
+      }
+
       // Remove both players from queue
       await supabase
         .from('matchmaking_queue')
         .delete()
         .in('user_id', [player1Id, player2Id]);
-    }
 
-    return { game, error };
+      console.log('Game ready with profiles:', fullGame.id);
+      return { game: fullGame, error: null };
+    } catch (err) {
+      console.error('Exception creating game:', err);
+      return { game: null, error: { message: err.message || 'Unknown error' } };
+    }
   }
 
   // Start searching for a match with polling
