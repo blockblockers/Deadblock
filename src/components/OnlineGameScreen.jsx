@@ -409,7 +409,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     
     console.log('handleConfirm: New board state calculated', { 
       newBoardSample: newBoard[pendingMove.row],
-      newBoardPiecesSample: Object.keys(newBoardPieces).slice(0, 5)
+      newBoardPiecesSample: Object.keys(newBoardPieces).slice(0, 5),
+      newBoardPiecesAll: newBoardPieces
     });
     
     // Add piece to used pieces
@@ -419,9 +420,34 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     const nextPlayer = myPlayerNumber === 1 ? 2 : 1;
     
     // Check if game is over (opponent can't place any pieces)
-    const opponentCanMove = canAnyPieceBePlaced(newBoard, newUsedPieces);
-    const gameOver = !opponentCanMove;
-    const winnerId = gameOver ? user.id : null;
+    // Be conservative - only check for game over if at least 4 pieces have been placed
+    // (early game should never be marked as over)
+    let opponentCanMove = true;
+    let gameOver = false;
+    let winnerId = null;
+    
+    if (newUsedPieces.length >= 4) {
+      console.log('handleConfirm: Checking if opponent can move...', { 
+        totalUsedPieces: newUsedPieces.length,
+        usedPieces: newUsedPieces 
+      });
+      opponentCanMove = canAnyPieceBePlaced(newBoard, newUsedPieces);
+      gameOver = !opponentCanMove;
+      winnerId = gameOver ? user.id : null;
+      
+      console.log('handleConfirm: Game over check result', { 
+        opponentCanMove, 
+        gameOver,
+        winnerId,
+        willSetStatusCompleted: gameOver
+      });
+      
+      if (gameOver) {
+        console.warn('handleConfirm: GAME MARKED AS OVER - This will remove it from active games list!');
+      }
+    } else {
+      console.log('handleConfirm: Skipping game over check (only', newUsedPieces.length, 'pieces placed)');
+    }
     
     console.log('handleConfirm: Calculated game state', { 
       newUsedPieces, 
@@ -488,12 +514,31 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     // This handles cases where real-time subscription might not be working
     setTimeout(async () => {
       console.log('handleConfirm: Fetching fresh game state as backup...');
-      const { data: freshData } = await gameSyncService.getGame(gameId);
+      const { data: freshData, error: fetchError } = await gameSyncService.getGame(gameId);
+      console.log('handleConfirm: Backup fetch result', { 
+        success: !!freshData, 
+        error: fetchError?.message,
+        freshBoardSample: freshData?.board?.[0],
+        freshUsedPieces: freshData?.used_pieces,
+        freshBoardPieces: freshData?.board_pieces ? Object.keys(freshData.board_pieces).length : 0
+      });
+      
+      // Only update if the fresh data has at least as many pieces as we expect
       if (freshData) {
-        console.log('handleConfirm: Got fresh data, updating state');
-        updateGameState(freshData, user.id);
+        const freshUsedCount = freshData.used_pieces?.length || 0;
+        const expectedUsedCount = newUsedPieces.length;
+        
+        if (freshUsedCount >= expectedUsedCount) {
+          console.log('handleConfirm: Fresh data looks valid, updating state');
+          updateGameState(freshData, user.id);
+        } else {
+          console.log('handleConfirm: Fresh data seems stale, keeping local state', {
+            freshUsedCount,
+            expectedUsedCount
+          });
+        }
       }
-    }, 1000);
+    }, 1500); // Increased to 1.5s to ensure server has processed
   };
 
   // Handle cancel

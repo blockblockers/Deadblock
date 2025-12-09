@@ -147,6 +147,8 @@ class GameSyncService {
   async makeMove(gameId, playerId, moveData) {
     if (!supabase) return { error: { message: 'Not configured' } };
 
+    console.log('gameSync.makeMove: Starting move', { gameId, playerId });
+
     const { 
       pieceType, 
       row, 
@@ -161,14 +163,29 @@ class GameSyncService {
       winnerId 
     } = moveData;
 
+    console.log('gameSync.makeMove: Move details', {
+      pieceType,
+      row,
+      col,
+      rotation,
+      flipped,
+      newBoardFirstRow: newBoard?.[0],
+      newBoardPiecesKeys: Object.keys(newBoardPieces || {}),
+      newUsedPieces,
+      nextPlayer,
+      gameOver
+    });
+
     // Get current move count
-    const { count: moveCount } = await supabase
+    const { count: moveCount, error: countError } = await supabase
       .from('game_moves')
       .select('*', { count: 'exact', head: true })
       .eq('game_id', gameId);
 
+    console.log('gameSync.makeMove: Move count', { moveCount, countError });
+
     // Record the move in history
-    const { error: moveError } = await supabase
+    const { data: moveRecord, error: moveError } = await supabase
       .from('game_moves')
       .insert({
         game_id: gameId,
@@ -179,10 +196,15 @@ class GameSyncService {
         rotation,
         flipped: flipped || false,
         move_number: (moveCount || 0) + 1
-      });
+      })
+      .select()
+      .single();
 
     if (moveError) {
-      console.error('Error recording move:', moveError);
+      console.error('gameSync.makeMove: Error recording move:', moveError);
+      // Don't return here - still try to update the game
+    } else {
+      console.log('gameSync.makeMove: Move recorded', { moveId: moveRecord?.id });
     }
 
     // Update game state
@@ -344,6 +366,8 @@ class GameSyncService {
   async getActiveGames(playerId) {
     if (!supabase) return { data: [], error: null };
 
+    console.log('gameSync.getActiveGames: Fetching for player', playerId);
+
     try {
       // Fetch active games first
       const { data: games, error } = await supabase
@@ -353,12 +377,19 @@ class GameSyncService {
         .eq('status', 'active')
         .order('updated_at', { ascending: false });
 
+      console.log('gameSync.getActiveGames: Query result', { 
+        count: games?.length, 
+        error: error?.message,
+        gameStatuses: games?.map(g => ({ id: g.id, status: g.status }))
+      });
+
       if (error || !games) {
         console.error('Error fetching active games:', error);
         return { data: [], error };
       }
 
       if (games.length === 0) {
+        console.log('gameSync.getActiveGames: No active games found');
         return { data: [], error: null };
       }
 

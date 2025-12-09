@@ -1,8 +1,9 @@
 // Online Menu - Hub for online features
-import { useState, useEffect } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
+import { inviteService } from '../services/inviteService';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -133,27 +134,97 @@ const OnlineMenu = ({
   const [recentGames, setRecentGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showActivePrompt, setShowActivePrompt] = useState(true);
+  
+  // Friend search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  
+  // Invite state
+  const [receivedInvites, setReceivedInvites] = useState([]);
+  const [sentInvites, setSentInvites] = useState([]);
+  const [sendingInvite, setSendingInvite] = useState(null);
+  const [processingInvite, setProcessingInvite] = useState(null);
 
+  // Load games and invites
   useEffect(() => {
     loadGames();
+    loadInvites();
   }, [profile?.id]);
+  
+  // Subscribe to invite updates
+  useEffect(() => {
+    if (!profile?.id) return;
+    
+    const subscription = inviteService.subscribeToInvites(
+      profile.id,
+      // On new invite received
+      async () => {
+        await loadInvites();
+        soundManager.playButtonClick();
+      },
+      // On invite updated
+      async (updatedInvite) => {
+        await loadInvites();
+        // If an invite was accepted and created a game, refresh games
+        if (updatedInvite.status === 'accepted' && updatedInvite.game_id) {
+          await loadGames();
+        }
+      }
+    );
+    
+    return () => {
+      inviteService.unsubscribeFromInvites(subscription);
+    };
+  }, [profile?.id]);
+
+  const loadInvites = async () => {
+    if (!profile?.id) return;
+    
+    try {
+      const [received, sent] = await Promise.all([
+        inviteService.getReceivedInvites(profile.id),
+        inviteService.getSentInvites(profile.id)
+      ]);
+      
+      setReceivedInvites(received.data || []);
+      setSentInvites(sent.data || []);
+    } catch (err) {
+      console.error('Error loading invites:', err);
+    }
+  };
 
   const loadGames = async () => {
     if (!profile?.id) {
+      console.log('OnlineMenu.loadGames: No profile ID');
       setLoading(false);
       return;
     }
 
+    console.log('OnlineMenu.loadGames: Loading games for', profile.id);
+
     try {
       // Get active games
-      const { data: active } = await gameSyncService.getActiveGames(profile.id);
+      const { data: active, error: activeError } = await gameSyncService.getActiveGames(profile.id);
+      console.log('OnlineMenu.loadGames: Active games result', { 
+        count: active?.length, 
+        error: activeError?.message,
+        gameIds: active?.map(g => g.id)
+      });
       setActiveGames(active || []);
 
       // Get recent completed games
-      const { data: recent } = await gameSyncService.getPlayerGames(profile.id, 5);
-      setRecentGames((recent || []).filter(g => g.status === 'completed'));
+      const { data: recent, error: recentError } = await gameSyncService.getPlayerGames(profile.id, 5);
+      const completedGames = (recent || []).filter(g => g.status === 'completed');
+      console.log('OnlineMenu.loadGames: Recent games', { 
+        total: recent?.length, 
+        completed: completedGames.length,
+        error: recentError?.message
+      });
+      setRecentGames(completedGames);
     } catch (err) {
-      console.error('Error loading games:', err);
+      console.error('OnlineMenu.loadGames: Error loading games:', err);
     }
     
     setLoading(false);
@@ -173,6 +244,95 @@ const OnlineMenu = ({
   const handleBack = () => {
     soundManager.playButtonClick();
     onBack();
+  };
+
+  // Search for users
+  const handleSearch = useCallback(async (query) => {
+    setSearchQuery(query);
+    
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setSearching(true);
+    const { data } = await inviteService.searchUsers(query, profile?.id);
+    setSearchResults(data || []);
+    setSearching(false);
+  }, [profile?.id]);
+
+  // Send invite to a user
+  const handleSendInvite = async (toUserId) => {
+    if (!profile?.id) return;
+    
+    setSendingInvite(toUserId);
+    soundManager.playButtonClick();
+    
+    const { data, error } = await inviteService.sendInvite(profile.id, toUserId);
+    
+    if (error) {
+      console.error('Error sending invite:', error);
+      alert(error.message || 'Failed to send invite');
+    } else if (data?.game) {
+      // If the other user had already invited us, a game was created
+      soundManager.playSound('win');
+      onResumeGame(data.game);
+    } else {
+      // Invite sent successfully
+      soundManager.playClickSound('confirm');
+      await loadInvites();
+      // Remove from search results
+      setSearchResults(prev => prev.filter(u => u.id !== toUserId));
+    }
+    
+    setSendingInvite(null);
+  };
+
+  // Accept an invite
+  const handleAcceptInvite = async (invite) => {
+    if (!profile?.id) return;
+    
+    setProcessingInvite(invite.id);
+    soundManager.playButtonClick();
+    
+    const { data, error } = await inviteService.acceptInvite(invite.id, profile.id);
+    
+    if (error) {
+      console.error('Error accepting invite:', error);
+      alert(error.message || 'Failed to accept invite');
+    } else if (data?.game) {
+      soundManager.playSound('win');
+      await loadGames();
+      onResumeGame(data.game);
+    }
+    
+    setProcessingInvite(null);
+  };
+
+  // Decline an invite
+  const handleDeclineInvite = async (invite) => {
+    if (!profile?.id) return;
+    
+    setProcessingInvite(invite.id);
+    soundManager.playButtonClick();
+    
+    await inviteService.declineInvite(invite.id, profile.id);
+    await loadInvites();
+    
+    setProcessingInvite(null);
+  };
+
+  // Cancel a sent invite
+  const handleCancelInvite = async (invite) => {
+    if (!profile?.id) return;
+    
+    setProcessingInvite(invite.id);
+    soundManager.playButtonClick();
+    
+    await inviteService.cancelInvite(invite.id, profile.id);
+    await loadInvites();
+    
+    setProcessingInvite(null);
   };
 
   const getOpponentName = (game) => {
@@ -266,6 +426,185 @@ const OnlineMenu = ({
             >
               FIND MATCH
             </button>
+
+            {/* Friend Search / Invite Section */}
+            <div className="bg-slate-800/40 rounded-xl p-4 mb-4 border border-slate-700/50">
+              {/* Toggle Search */}
+              <button
+                onClick={() => {
+                  setShowSearch(!showSearch);
+                  if (!showSearch) {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }
+                }}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <UserPlus size={18} className="text-amber-400" />
+                  <span className="text-sm font-medium text-slate-300">Invite a Friend</span>
+                </div>
+                <ChevronRight 
+                  size={18} 
+                  className={`text-slate-500 transition-transform ${showSearch ? 'rotate-90' : ''}`} 
+                />
+              </button>
+              
+              {/* Search Input & Results */}
+              {showSearch && (
+                <div className="mt-3 space-y-3">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      placeholder="Search by username..."
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-900/80 rounded-lg text-white text-sm border border-slate-700/50 focus:border-amber-500/50 focus:outline-none placeholder:text-slate-600"
+                    />
+                    {searching && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Search Results */}
+                  {searchResults.length > 0 && (
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {searchResults.map(user => {
+                        const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
+                        return (
+                          <div
+                            key={user.id}
+                            className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-700/30"
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                {user.username?.[0]?.toUpperCase() || '?'}
+                              </div>
+                              <div>
+                                <div className="text-white text-sm font-medium">{user.username}</div>
+                                <div className="text-amber-400/70 text-xs">⭐ {user.rating || 1000}</div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleSendInvite(user.id)}
+                              disabled={sendingInvite === user.id || alreadyInvited}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                                alreadyInvited
+                                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                  : 'bg-amber-500 text-white hover:bg-amber-400 active:scale-95'
+                              }`}
+                            >
+                              {sendingInvite === user.id ? (
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : alreadyInvited ? (
+                                <>
+                                  <Clock size={12} />
+                                  Sent
+                                </>
+                              ) : (
+                                <>
+                                  <Send size={12} />
+                                  Invite
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* No Results */}
+                  {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+                    <p className="text-slate-500 text-xs text-center py-2">No players found</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Received Invites */}
+            {receivedInvites.length > 0 && (
+              <div className="bg-green-900/20 rounded-xl p-4 mb-4 border border-green-500/30">
+                <h3 className="text-green-400 font-bold text-sm mb-3 flex items-center gap-2">
+                  <Mail size={16} />
+                  GAME INVITES ({receivedInvites.length})
+                </h3>
+                <div className="space-y-2">
+                  {receivedInvites.map(invite => (
+                    <div
+                      key={invite.id}
+                      className="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-green-500/20"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">
+                          {invite.from_user?.username?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <div>
+                          <div className="text-white text-sm font-medium">{invite.from_user?.username || 'Unknown'}</div>
+                          <div className="text-green-400/70 text-xs">wants to play!</div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleAcceptInvite(invite)}
+                          disabled={processingInvite === invite.id}
+                          className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          {processingInvite === invite.id ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Check size={16} />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleDeclineInvite(invite)}
+                          disabled={processingInvite === invite.id}
+                          className="p-2 bg-slate-700 text-slate-400 rounded-lg hover:bg-slate-600 hover:text-white transition-all active:scale-95 disabled:opacity-50"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sent Invites (Pending) */}
+            {sentInvites.length > 0 && (
+              <div className="bg-slate-800/30 rounded-xl p-4 mb-4 border border-slate-700/50">
+                <h3 className="text-slate-400 font-bold text-sm mb-3 flex items-center gap-2">
+                  <Clock size={16} />
+                  PENDING INVITES ({sentInvites.length})
+                </h3>
+                <div className="space-y-2">
+                  {sentInvites.map(invite => (
+                    <div
+                      key={invite.id}
+                      className="flex items-center justify-between p-2.5 bg-slate-900/40 rounded-lg border border-slate-700/30"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center justify-center text-white text-xs">
+                          {invite.to_user?.username?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <div className="text-slate-400 text-sm">{invite.to_user?.username || 'Unknown'}</div>
+                      </div>
+                      <button
+                        onClick={() => handleCancelInvite(invite)}
+                        disabled={processingInvite === invite.id}
+                        className="text-xs text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Secondary actions */}
             <div className="grid grid-cols-2 gap-3 mb-4">
