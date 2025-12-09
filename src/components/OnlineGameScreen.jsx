@@ -48,10 +48,23 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
     console.log('updateGameState: Updating with game', gameData.id);
     
+    // Validate and fix board data
+    let validBoard = gameData.board;
+    
+    // Check if board is valid (2D array with all rows being arrays)
+    const isValidBoard = Array.isArray(validBoard) && 
+                         validBoard.length === BOARD_SIZE &&
+                         validBoard.every(row => Array.isArray(row) && row.length === BOARD_SIZE);
+    
+    if (!isValidBoard) {
+      console.log('updateGameState: Invalid board data, creating empty board');
+      validBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+    }
+    
     setGame(gameData);
-    setBoard(gameData.board || Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0)));
+    setBoard(validBoard);
     setBoardPieces(gameData.board_pieces || {});
-    setUsedPieces(gameData.used_pieces || []);
+    setUsedPieces(Array.isArray(gameData.used_pieces) ? gameData.used_pieces : []);
     setConnected(true);
 
     // Only set player-specific state if user is available
@@ -338,14 +351,6 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     onGameEnd?.(gameResult);
   };
 
-  // Calculate if confirm is possible
-  const canConfirm = pendingMove && canPlacePiece(
-    board,
-    pendingMove.row,
-    pendingMove.col,
-    getPieceCoords(pendingMove.piece, rotation, flipped)
-  );
-
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -408,6 +413,37 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       </div>
     );
   }
+
+  // Validate board data before rendering
+  const isBoardValid = Array.isArray(board) && 
+                       board.length === BOARD_SIZE && 
+                       board.every(row => Array.isArray(row) && row.length === BOARD_SIZE);
+
+  if (!isBoardValid) {
+    console.error('OnlineGameScreen: Invalid board data', board);
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="relative text-center max-w-sm mx-4">
+          <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-amber-300 mb-6">Initializing game board...</p>
+          <button
+            onClick={onLeave}
+            className="px-6 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors"
+          >
+            ← Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Calculate if confirm is possible (after board is validated)
+  const canConfirm = pendingMove && canPlacePiece(
+    board,
+    pendingMove.row,
+    pendingMove.col,
+    getPieceCoords(pendingMove.piece, rotation, flipped)
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 overflow-auto">
@@ -483,8 +519,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-3 mb-3 border border-slate-700/50">
             <div className="flex justify-center pb-3">
               <GameBoard
-                board={board}
-                boardPieces={boardPieces}
+                board={board || Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0))}
+                boardPieces={boardPieces || {}}
                 pendingMove={pendingMove}
                 rotation={rotation}
                 flipped={flipped}
