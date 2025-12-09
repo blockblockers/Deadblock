@@ -1,15 +1,17 @@
-import { Settings, HelpCircle } from 'lucide-react';
+import { Settings, HelpCircle, Wifi } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { isSupabaseConfigured } from '../utils/supabase';
 
 // Custom pentomino shapes for buttons
 const buttonShapes = {
   T: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]],
   L: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]],
   S: [[0, 1], [0, 2], [1, 0], [1, 1], [2, 0]],
+  X: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]], // X shape for online
 };
 
 // Pentomino shape component (no icons inside)
@@ -95,9 +97,12 @@ const MenuScreen = ({
   showHowToPlay, 
   onToggleHowToPlay,
   showSettings,
-  onToggleSettings
+  onToggleSettings,
+  isOnlineEnabled = false,
+  isAuthenticated = false
 }) => {
   const { needsScroll } = useResponsiveLayout(700);
+  const showOnline = isSupabaseConfigured();
 
   return (
     <div 
@@ -133,6 +138,20 @@ const MenuScreen = ({
             
             {/* Game Mode Buttons */}
             <div className="space-y-3 mb-4">
+              {/* Online Button - Show if Supabase is configured */}
+              {showOnline && (
+                <PentominoButton
+                  onClick={() => onStartGame('online')}
+                  shape="X"
+                  color="bg-gradient-to-br from-amber-500 to-orange-600"
+                  glowColor="rgba(251,191,36,0.5)"
+                  title="ONLINE"
+                  subtitle={isAuthenticated ? "Play ranked matches" : "Sign in to play"}
+                  textColor="text-amber-300"
+                  hoverTextColor="group-hover:text-amber-200"
+                />
+              )}
+              
               <PentominoButton
                 onClick={() => onStartGame('ai')}
                 shape="T"

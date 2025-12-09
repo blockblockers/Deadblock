@@ -1,12 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useGameState } from './hooks/useGameState';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { isSupabaseConfigured } from './utils/supabase';
+
+// Screens
 import MenuScreen from './components/MenuScreen';
 import PuzzleSelect from './components/PuzzleSelect';
 import GameScreen from './components/GameScreen';
 import DifficultySelector from './components/DifficultySelector';
 
-function App() {
+// Online components (lazy loaded if needed)
+import AuthScreen from './components/AuthScreen';
+import OnlineMenu from './components/OnlineMenu';
+import MatchmakingScreen from './components/MatchmakingScreen';
+import OnlineGameScreen from './components/OnlineGameScreen';
+import UserProfile from './components/UserProfile';
+import Leaderboard from './components/Leaderboard';
+
+// Main App Content (wrapped in AuthProvider)
+function AppContent() {
   const [isMobile, setIsMobile] = useState(false);
+  const [onlineGameId, setOnlineGameId] = useState(null);
+  
+  const { isAuthenticated, loading: authLoading, isOnlineEnabled } = useAuth();
   
   // Detect mobile device
   useEffect(() => {
@@ -64,6 +80,17 @@ function App() {
   const handleStartGame = (mode) => {
     if (mode === 'ai') {
       setGameMode('difficulty-select');
+    } else if (mode === 'online') {
+      // Check if online is enabled and user is authenticated
+      if (!isOnlineEnabled) {
+        alert('Online features are not configured. Please set up Supabase.');
+        return;
+      }
+      if (!isAuthenticated) {
+        setGameMode('auth');
+      } else {
+        setGameMode('online-menu');
+      }
     } else {
       startNewGame(mode);
     }
@@ -79,6 +106,33 @@ function App() {
     loadPuzzle(puzzle);
   };
 
+  // Handle match found
+  const handleMatchFound = (game) => {
+    setOnlineGameId(game.id);
+    setGameMode('online-game');
+  };
+
+  // Handle online game end
+  const handleOnlineGameEnd = (result) => {
+    setOnlineGameId(null);
+    setGameMode('online-menu');
+  };
+
+  // Handle resume game
+  const handleResumeGame = (game) => {
+    setOnlineGameId(game.id);
+    setGameMode('online-game');
+  };
+
+  // Show loading while auth is initializing (only if online enabled)
+  if (isOnlineEnabled && authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   // Render Menu Screen
   if (!gameMode) {
     return (
@@ -89,9 +143,84 @@ function App() {
         onToggleHowToPlay={setShowHowToPlay}
         showSettings={showSettings}
         onToggleSettings={setShowSettings}
+        isOnlineEnabled={isOnlineEnabled}
+        isAuthenticated={isAuthenticated}
       />
     );
   }
+
+  // =====================================================
+  // ONLINE MODES
+  // =====================================================
+
+  // Auth Screen (Login/Signup)
+  if (gameMode === 'auth') {
+    return (
+      <AuthScreen
+        onBack={() => setGameMode(null)}
+        onSuccess={() => setGameMode('online-menu')}
+      />
+    );
+  }
+
+  // Online Menu/Lobby
+  if (gameMode === 'online-menu') {
+    return (
+      <OnlineMenu
+        onFindMatch={() => setGameMode('matchmaking')}
+        onViewProfile={() => setGameMode('profile')}
+        onViewLeaderboard={() => setGameMode('leaderboard')}
+        onResumeGame={handleResumeGame}
+        onBack={() => setGameMode(null)}
+      />
+    );
+  }
+
+  // Matchmaking Screen
+  if (gameMode === 'matchmaking') {
+    return (
+      <MatchmakingScreen
+        onMatchFound={handleMatchFound}
+        onCancel={() => setGameMode('online-menu')}
+      />
+    );
+  }
+
+  // Online Game
+  if (gameMode === 'online-game' && onlineGameId) {
+    return (
+      <OnlineGameScreen
+        gameId={onlineGameId}
+        onGameEnd={handleOnlineGameEnd}
+        onLeave={() => {
+          setOnlineGameId(null);
+          setGameMode('online-menu');
+        }}
+      />
+    );
+  }
+
+  // User Profile
+  if (gameMode === 'profile') {
+    return (
+      <UserProfile
+        onBack={() => setGameMode('online-menu')}
+      />
+    );
+  }
+
+  // Leaderboard
+  if (gameMode === 'leaderboard') {
+    return (
+      <Leaderboard
+        onBack={() => setGameMode('online-menu')}
+      />
+    );
+  }
+
+  // =====================================================
+  // OFFLINE MODES
+  // =====================================================
 
   // Render Difficulty Selector for AI
   if (gameMode === 'difficulty-select') {
@@ -147,6 +276,15 @@ function App() {
       onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}
     />
+  );
+}
+
+// Main App with Auth Provider wrapper
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
