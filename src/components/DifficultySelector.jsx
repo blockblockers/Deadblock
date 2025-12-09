@@ -7,7 +7,6 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 // Dramatically different themes for each difficulty
 const themes = {
   beginner: {
-    // Forest / Nature theme
     gridColor: 'rgba(34,197,94,0.5)',
     glow1: { color: 'bg-green-500/40', pos: 'top-20 left-10' },
     glow2: { color: 'bg-emerald-400/30', pos: 'bottom-32 right-10' },
@@ -15,10 +14,8 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-green-950/50 to-slate-900/95',
     cardBorder: 'border-green-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(34,197,94,0.4),inset_0_0_30px_rgba(34,197,94,0.1)]',
-    accent: 'green',
   },
   intermediate: {
-    // Fire / Energy theme
     gridColor: 'rgba(251,191,36,0.5)',
     glow1: { color: 'bg-amber-500/40', pos: 'top-10 right-20' },
     glow2: { color: 'bg-orange-500/35', pos: 'bottom-20 left-10' },
@@ -26,10 +23,8 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/50 to-slate-900/95',
     cardBorder: 'border-amber-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(251,191,36,0.4),inset_0_0_30px_rgba(251,191,36,0.1)]',
-    accent: 'amber',
   },
   expert: {
-    // Cosmic / Electric theme
     gridColor: 'rgba(168,85,247,0.5)',
     glow1: { color: 'bg-purple-500/40', pos: 'top-16 left-20' },
     glow2: { color: 'bg-pink-500/35', pos: 'bottom-24 right-16' },
@@ -37,7 +32,6 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-purple-950/50 to-slate-900/95',
     cardBorder: 'border-purple-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(168,85,247,0.4),inset_0_0_30px_rgba(168,85,247,0.1)]',
-    accent: 'purple',
   },
 };
 
@@ -129,13 +123,10 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-md">
-          {/* Title */}
-          <div className="text-center mb-4">
-            <div className="flex items-center justify-center gap-3 mb-1">
-              <Bot size={28} className={selectedDiff.colors.text} />
-              <NeonTitle size="default" />
-            </div>
-            <p className="text-slate-400 text-sm">VS AI - Choose Difficulty</p>
+          {/* Title - Centered and Large */}
+          <div className="text-center mb-6">
+            <NeonTitle size="large" />
+            <p className="text-slate-400 text-sm mt-2">VS AI - Choose Difficulty</p>
           </div>
 
           {/* Card with dramatic theme */}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trophy, Loader, AlertCircle, Play } from 'lucide-react';
+import { Loader, AlertCircle, Play } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
@@ -148,13 +148,10 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-md">
-          {/* Title */}
-          <div className="text-center mb-4">
-            <div className="flex items-center justify-center gap-3 mb-1">
-              <Trophy size={28} className={selectedDiff.colors.text} />
-              <NeonTitle size="default" />
-            </div>
-            <p className="text-slate-400 text-sm">Puzzle Mode - Choose Difficulty</p>
+          {/* Title - Centered and Large */}
+          <div className="text-center mb-6">
+            <NeonTitle size="large" />
+            <p className="text-slate-400 text-sm mt-2">Puzzle Mode - Choose Difficulty</p>
           </div>
 
           {/* Card with dramatic theme */}

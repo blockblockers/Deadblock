@@ -1,0 +1,8 @@
+# Netlify Redirects for Deadblock PWA
+# This file handles client-side routing for the SPA
+
+# Auth callback - important for OAuth redirects
+/auth/callback    /index.html    200
+
+# All other routes go to index.html (SPA routing)
+/*                /index.html    200
