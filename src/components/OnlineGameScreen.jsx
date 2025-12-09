@@ -14,13 +14,14 @@ import { pieces } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
 
 const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   
   // Game state
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [connected, setConnected] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
   
   // Local game state for UI
   const [board, setBoard] = useState(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0)));
@@ -38,23 +39,132 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const [showGameOver, setShowGameOver] = useState(false);
   const [gameResult, setGameResult] = useState(null);
 
+  // Update local state from game data
+  const updateGameState = useCallback((gameData, userId) => {
+    if (!gameData) {
+      console.log('updateGameState: No game data');
+      return;
+    }
+
+    console.log('updateGameState: Updating with game', gameData.id);
+    
+    setGame(gameData);
+    setBoard(gameData.board || Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0)));
+    setBoardPieces(gameData.board_pieces || {});
+    setUsedPieces(gameData.used_pieces || []);
+    setConnected(true);
+
+    // Only set player-specific state if user is available
+    if (userId) {
+      // Determine player number and opponent
+      const playerNum = gameSyncService.getPlayerNumber(gameData, userId);
+      setMyPlayerNumber(playerNum);
+      
+      const opp = playerNum === 1 ? gameData.player2 : gameData.player1;
+      setOpponent(opp);
+
+      // Check if it's my turn
+      const myTurn = gameSyncService.isPlayerTurn(gameData, userId);
+      setIsMyTurn(myTurn);
+
+      // Check for game over
+      if (gameData.status === 'completed') {
+        const iWon = gameData.winner_id === userId;
+        setGameResult({
+          isWin: iWon,
+          winnerId: gameData.winner_id,
+          reason: gameData.winner_id ? 'normal' : 'draw'
+        });
+        setShowGameOver(true);
+        soundManager.playSound(iWon ? 'win' : 'lose');
+      }
+    }
+  }, []);
+
   // Load game and subscribe to updates
   useEffect(() => {
+    console.log('OnlineGameScreen useEffect triggered:', { gameId, userId: user?.id, authLoading, retryCount });
+    
+    if (!gameId) {
+      console.log('OnlineGameScreen: No gameId provided');
+      setError('No game ID provided');
+      setLoading(false);
+      return;
+    }
+
+    // Wait for auth to finish loading first
+    if (authLoading) {
+      console.log('OnlineGameScreen: Waiting for auth to complete...');
+      return;
+    }
+
+    // After auth is complete, check if user is available
+    if (!user?.id) {
+      console.log('OnlineGameScreen: User not authenticated');
+      setError('Please sign in to view this game');
+      setLoading(false);
+      return;
+    }
+
+    const userId = user.id;
     let mounted = true;
+    let loadingTimeout;
+    
+    console.log('OnlineGameScreen: Starting game load for:', gameId, 'user:', userId);
+
+    // Set a timeout to show error if loading takes too long
+    loadingTimeout = setTimeout(() => {
+      if (mounted) {
+        console.error('OnlineGameScreen: Loading timeout reached after 15 seconds');
+        setError('Loading took too long. Please try again.');
+        setLoading(false);
+      }
+    }, 15000); // 15 second timeout
 
     const loadGame = async () => {
-      const { data, error } = await gameSyncService.getGame(gameId);
-      
-      if (!mounted) return;
-      
-      if (error) {
-        setError('Failed to load game');
-        setLoading(false);
-        return;
-      }
+      try {
+        console.log('OnlineGameScreen: Calling gameSyncService.getGame...');
+        const { data, error: fetchError } = await gameSyncService.getGame(gameId);
+        
+        console.log('OnlineGameScreen: Server response:', { 
+          hasData: !!data, 
+          gameId: data?.id, 
+          error: fetchError 
+        });
+        
+        if (!mounted) {
+          console.log('OnlineGameScreen: Component unmounted, ignoring response');
+          return;
+        }
+        
+        clearTimeout(loadingTimeout);
+        
+        if (fetchError) {
+          console.error('OnlineGameScreen: Error loading game:', fetchError);
+          setError('Failed to load game: ' + (fetchError.message || 'Unknown error'));
+          setLoading(false);
+          return;
+        }
 
-      updateGameState(data);
-      setLoading(false);
+        if (!data) {
+          console.error('OnlineGameScreen: No game data returned');
+          setError('Game not found');
+          setLoading(false);
+          return;
+        }
+
+        console.log('OnlineGameScreen: Game loaded successfully, calling updateGameState');
+        updateGameState(data, userId);
+        setLoading(false);
+        console.log('OnlineGameScreen: Loading complete, setLoading(false) called');
+      } catch (err) {
+        console.error('OnlineGameScreen: Exception loading game:', err);
+        if (mounted) {
+          clearTimeout(loadingTimeout);
+          setError('Error loading game: ' + err.message);
+          setLoading(false);
+        }
+      }
     };
 
     loadGame();
@@ -64,59 +174,24 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       gameId,
       (updatedGame) => {
         if (mounted) {
-          updateGameState(updatedGame);
+          console.log('Real-time update received');
+          updateGameState(updatedGame, userId);
         }
       },
       (err) => {
         console.error('Connection error:', err);
-        setConnected(false);
+        if (mounted) {
+          setConnected(false);
+        }
       }
     );
 
     return () => {
       mounted = false;
+      clearTimeout(loadingTimeout);
       gameSyncService.unsubscribe();
     };
-  }, [gameId, user?.id]);
-
-  // Update local state from game data
-  const updateGameState = useCallback((gameData) => {
-    if (!gameData || !user) return;
-
-    setGame(gameData);
-    setBoard(gameData.board);
-    setBoardPieces(gameData.board_pieces || {});
-    setUsedPieces(gameData.used_pieces || []);
-    setConnected(true);
-
-    // Determine player number and opponent
-    const playerNum = gameSyncService.getPlayerNumber(gameData, user.id);
-    setMyPlayerNumber(playerNum);
-    
-    const opp = playerNum === 1 ? gameData.player2 : gameData.player1;
-    setOpponent(opp);
-
-    // Check if it's my turn
-    const myTurn = gameSyncService.isPlayerTurn(gameData, user.id);
-    setIsMyTurn(myTurn);
-
-    // Play sound on turn change
-    if (myTurn && gameData.status === 'active') {
-      soundManager.playSound('select');
-    }
-
-    // Check for game over
-    if (gameData.status === 'completed') {
-      const iWon = gameData.winner_id === user.id;
-      setGameResult({
-        isWin: iWon,
-        winnerId: gameData.winner_id,
-        reason: gameData.winner_id ? 'normal' : 'draw'
-      });
-      setShowGameOver(true);
-      soundManager.playSound(iWon ? 'win' : 'lose');
-    }
-  }, [user]);
+  }, [gameId, user?.id, authLoading, updateGameState, retryCount]);
 
   // Handle cell click
   const handleCellClick = (row, col) => {
@@ -274,9 +349,23 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-cyan-300">Loading game...</p>
+        {/* Themed background */}
+        <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        <div className="fixed top-1/4 right-1/4 w-64 h-64 bg-amber-500/30 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed bottom-1/4 left-1/4 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="relative text-center">
+          <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-amber-300 mb-6">Loading game...</p>
+          <button
+            onClick={onLeave}
+            className="px-6 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors"
+          >
+            ← Cancel
+          </button>
         </div>
       </div>
     );
@@ -285,14 +374,36 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   if (error) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-400 mb-4">{error}</p>
-          <button
-            onClick={onLeave}
-            className="px-6 py-2 bg-slate-700 text-white rounded-lg"
-          >
-            Return to Menu
-          </button>
+        {/* Themed background */}
+        <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        
+        <div className="relative text-center max-w-sm mx-4">
+          <div className="w-16 h-16 rounded-full bg-red-900/50 flex items-center justify-center mx-auto mb-4 border-2 border-red-500/50">
+            <span className="text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-bold text-red-400 mb-2">Failed to Load Game</h2>
+          <p className="text-slate-400 mb-6">{error}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => {
+                setError('');
+                setLoading(true);
+                setRetryCount(c => c + 1);
+              }}
+              className="px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-500 transition-all font-bold"
+            >
+              Retry
+            </button>
+            <button
+              onClick={onLeave}
+              className="px-6 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all"
+            >
+              Back to Menu
+            </button>
+          </div>
         </div>
       </div>
     );

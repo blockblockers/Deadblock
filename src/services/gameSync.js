@@ -54,11 +54,18 @@ class GameSyncService {
   async getGame(gameId) {
     if (!supabase) return { data: null, error: { message: 'Not configured' } };
 
-    console.log('Fetching game:', gameId);
+    console.log('gameSync.getGame: Starting fetch for game:', gameId);
+
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timed out after 10 seconds')), 10000);
+    });
 
     // First try with foreign key joins
     try {
-      const { data, error } = await supabase
+      console.log('gameSync.getGame: Trying with foreign key joins...');
+      
+      const queryPromise = supabase
         .from('games')
         .select(`
           *,
@@ -68,45 +75,59 @@ class GameSyncService {
         .eq('id', gameId)
         .single();
 
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
+
       if (!error && data) {
-        console.log('Game loaded with profiles:', data);
+        console.log('gameSync.getGame: Success with foreign keys, game:', data.id);
         return { data, error: null };
       }
       
-      console.log('Foreign key join failed, trying manual join:', error?.message);
+      console.log('gameSync.getGame: Foreign key join failed:', error?.message);
     } catch (e) {
-      console.log('Exception with foreign key join:', e.message);
+      console.log('gameSync.getGame: Exception with foreign key join:', e.message);
     }
 
     // Fallback: fetch game and profiles separately
     try {
-      const { data: game, error: gameError } = await supabase
+      console.log('gameSync.getGame: Trying fallback (separate queries)...');
+      
+      const gameQueryPromise = supabase
         .from('games')
         .select('*')
         .eq('id', gameId)
         .single();
 
+      const { data: game, error: gameError } = await Promise.race([gameQueryPromise, timeoutPromise]);
+
       if (gameError) {
-        console.error('Error fetching game:', gameError);
+        console.error('gameSync.getGame: Error fetching game:', gameError);
         return { data: null, error: gameError };
       }
 
       if (!game) {
+        console.log('gameSync.getGame: Game not found');
         return { data: null, error: { message: 'Game not found' } };
       }
 
-      console.log('Game loaded:', game);
+      console.log('gameSync.getGame: Game loaded, fetching profiles...');
 
       // Fetch player profiles separately
-      const { data: profiles } = await supabase
+      const profilesPromise = supabase
         .from('profiles')
         .select('*')
-        .in('id', [game.player1_id, game.player2_id]);
+        .in('id', [game.player1_id, game.player2_id].filter(Boolean));
+
+      const { data: profiles, error: profilesError } = await Promise.race([profilesPromise, timeoutPromise]);
+      
+      if (profilesError) {
+        console.log('gameSync.getGame: Profiles fetch failed, returning game without profiles:', profilesError.message);
+        return { data: { ...game, player1: null, player2: null }, error: null };
+      }
 
       const player1 = profiles?.find(p => p.id === game.player1_id) || null;
       const player2 = profiles?.find(p => p.id === game.player2_id) || null;
 
-      console.log('Profiles loaded:', { player1, player2 });
+      console.log('gameSync.getGame: Complete success, returning game with profiles');
 
       return {
         data: {
@@ -117,7 +138,7 @@ class GameSyncService {
         error: null
       };
     } catch (e) {
-      console.error('Exception fetching game:', e);
+      console.error('gameSync.getGame: Exception in fallback:', e.message);
       return { data: null, error: { message: e.message } };
     }
   }
