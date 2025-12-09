@@ -21,9 +21,9 @@ import Leaderboard from './components/Leaderboard';
 function AppContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [onlineGameId, setOnlineGameId] = useState(null);
-  const [pendingOAuthRedirect, setPendingOAuthRedirect] = useState(false);
+  const [hasRedirectedAfterOAuth, setHasRedirectedAfterOAuth] = useState(false);
   
-  const { isAuthenticated, loading: authLoading, isOnlineEnabled } = useAuth();
+  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback } = useAuth();
   
   // Get all game state and actions from custom hook
   const {
@@ -67,27 +67,14 @@ function AppContent() {
     resetCurrentPuzzle,
   } = useGameState();
 
-  // Check for OAuth callback on mount
-  useEffect(() => {
-    const url = window.location.href;
-    const isCallback = url.includes('/auth/callback') || 
-                       url.includes('access_token=') || 
-                       url.includes('code=');
-    
-    if (isCallback) {
-      setPendingOAuthRedirect(true);
-      // Clean up URL
-      window.history.replaceState({}, document.title, '/');
-    }
-  }, []);
-
   // Redirect to online menu after OAuth completes
   useEffect(() => {
-    if (pendingOAuthRedirect && isAuthenticated && !authLoading) {
-      setPendingOAuthRedirect(false);
+    if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
+      console.log('OAuth complete, redirecting to online menu');
+      setHasRedirectedAfterOAuth(true);
       setGameMode('online-menu');
     }
-  }, [pendingOAuthRedirect, isAuthenticated, authLoading, setGameMode]);
+  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, setGameMode]);
   
   // Detect mobile device
   useEffect(() => {
@@ -147,11 +134,14 @@ function AppContent() {
     setGameMode('online-game');
   };
 
-  // Show loading while auth is initializing (only if online enabled)
-  if (isOnlineEnabled && authLoading) {
+  // Show loading while auth is initializing or processing OAuth callback
+  if (isOnlineEnabled && (authLoading || isOAuthCallback)) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
+        <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-amber-300 text-sm">
+          {isOAuthCallback ? 'Signing you in...' : 'Loading...'}
+        </p>
       </div>
     );
   }

@@ -8,6 +8,7 @@ const AuthContext = createContext({
   loading: true,
   isAuthenticated: false,
   isOnlineEnabled: false,
+  isOAuthCallback: false,
   signUp: async () => {},
   signIn: async () => {},
   signInWithGoogle: async () => {},
@@ -19,6 +20,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isOAuthCallback, setIsOAuthCallback] = useState(false);
 
   const isOnlineEnabled = isSupabaseConfigured();
 
@@ -46,24 +48,73 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
+    // Check if this is an OAuth callback
+    const url = window.location.href;
+    const hasAuthParams = url.includes('access_token=') || 
+                          url.includes('code=') ||
+                          url.includes('/auth/callback');
+    
+    if (hasAuthParams) {
+      console.log('OAuth callback detected, processing...');
+      setIsOAuthCallback(true);
+    }
+
+    // Handle OAuth callback - extract session from URL
+    const handleOAuthCallback = async () => {
+      if (hasAuthParams) {
+        try {
+          // This extracts the session from the URL hash/params
+          const { data, error } = await supabase.auth.getSession();
+          
+          if (error) {
+            console.error('Error getting session from callback:', error);
+          } else if (data?.session) {
+            console.log('Session established from OAuth callback');
+            setUser(data.session.user);
+            await fetchProfile(data.session.user.id);
+          }
+          
+          // Clean up URL after processing
+          if (window.location.hash || window.location.search.includes('code=')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } catch (err) {
+          console.error('OAuth callback error:', err);
+        }
+      }
+    };
+
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initAuth = async () => {
+      // First handle any OAuth callback
+      await handleOAuthCallback();
+      
+      // Then get the current session
+      const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        await fetchProfile(session.user.id);
       }
       setLoading(false);
-    });
+    };
+
+    initAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth event:', event);
+        console.log('Auth event:', event, session?.user?.email);
         setUser(session?.user ?? null);
         
-        if (session?.user) {
+        if (event === 'SIGNED_IN' && session?.user) {
           await fetchProfile(session.user.id);
-        } else {
+          setIsOAuthCallback(false);
+          
+          // Clean up URL if it still has auth params
+          if (window.location.hash || window.location.search.includes('code=')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } else if (event === 'SIGNED_OUT') {
           setProfile(null);
         }
       }
@@ -159,6 +210,7 @@ export const AuthProvider = ({ children }) => {
       loading,
       isAuthenticated: !!user,
       isOnlineEnabled,
+      isOAuthCallback,
       signUp,
       signIn,
       signInWithGoogle,
