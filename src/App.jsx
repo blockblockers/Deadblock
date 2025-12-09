@@ -23,7 +23,7 @@ function AppContent() {
   const [onlineGameId, setOnlineGameId] = useState(null);
   const [hasRedirectedAfterOAuth, setHasRedirectedAfterOAuth] = useState(false);
   
-  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback } = useAuth();
+  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback } = useAuth();
 
   // Clean up stale OAuth callback URLs
   useEffect(() => {
@@ -82,12 +82,14 @@ function AppContent() {
 
   // Redirect to online menu after OAuth completes
   useEffect(() => {
+    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth });
     if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
       console.log('OAuth complete, redirecting to online menu');
       setHasRedirectedAfterOAuth(true);
+      clearOAuthCallback?.(); // Clear the flag after handling
       setGameMode('online-menu');
     }
-  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, setGameMode]);
+  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, setGameMode, clearOAuthCallback]);
   
   // Detect mobile device
   useEffect(() => {

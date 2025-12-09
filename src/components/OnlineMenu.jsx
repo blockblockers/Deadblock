@@ -21,11 +21,12 @@ const theme = {
 // Active Game Prompt Modal
 const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   // Find games where it's the user's turn
-  const myTurnGames = games.filter(game => gameSyncService.isPlayerTurn(game, profile?.id));
+  const myTurnGames = games?.filter(game => game && gameSyncService.isPlayerTurn(game, profile?.id)) || [];
   
   if (myTurnGames.length === 0) return null;
 
   const getOpponentName = (game) => {
+    if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
       return game.player2?.username || 'Unknown';
     }
@@ -33,6 +34,7 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
+  if (!game) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -69,7 +71,7 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
               <div className="text-xl font-black text-amber-400">VS</div>
               <div className="text-center">
                 <div className="w-12 h-12 mx-auto rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold mb-1">
-                  {getOpponentName(game)[0]?.toUpperCase()}
+                  {getOpponentName(game)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="text-white text-xs font-medium">{getOpponentName(game)}</div>
               </div>
@@ -174,6 +176,7 @@ const OnlineMenu = ({
   };
 
   const getOpponentName = (game) => {
+    if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
       return game.player2?.username || 'Unknown';
     }
@@ -181,13 +184,14 @@ const OnlineMenu = ({
   };
 
   const getGameResult = (game) => {
+    if (!game) return { text: 'Unknown', color: 'text-slate-400' };
     if (!game.winner_id) return { text: 'Draw', color: 'text-slate-400' };
     if (game.winner_id === profile?.id) return { text: 'Won', color: 'text-green-400' };
     return { text: 'Lost', color: 'text-red-400' };
   };
 
   // Check if there are games where it's the user's turn
-  const hasMyTurnGames = activeGames.some(game => gameSyncService.isPlayerTurn(game, profile?.id));
+  const hasMyTurnGames = activeGames?.some(game => game && gameSyncService.isPlayerTurn(game, profile?.id)) || false;
 
   return (
     <div 
@@ -295,8 +299,9 @@ const OnlineMenu = ({
                   ACTIVE GAMES ({activeGames.length})
                 </h3>
                 <div className="space-y-2">
-                  {activeGames.map(game => {
+                  {activeGames.filter(g => g).map(game => {
                     const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
+                    const opponentName = getOpponentName(game);
                     return (
                       <button
                         key={game.id}
@@ -312,10 +317,10 @@ const OnlineMenu = ({
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                            {getOpponentName(game)[0]?.toUpperCase()}
+                            {opponentName?.[0]?.toUpperCase() || '?'}
                           </div>
                           <div className="text-left">
-                            <div className="text-white text-sm font-medium">vs {getOpponentName(game)}</div>
+                            <div className="text-white text-sm font-medium">vs {opponentName}</div>
                             <div className={`text-xs ${isMyTurn ? 'text-amber-300 font-medium' : 'text-slate-500'}`}>
                               {isMyTurn ? '🎮 Your turn!' : 'Waiting for opponent...'}
                             </div>
@@ -339,8 +344,9 @@ const OnlineMenu = ({
                   RECENT GAMES
                 </h3>
                 <div className="space-y-2">
-                  {recentGames.slice(0, 3).map(game => {
+                  {recentGames.slice(0, 3).filter(g => g).map(game => {
                     const result = getGameResult(game);
+                    const opponentName = getOpponentName(game);
                     return (
                       <div
                         key={game.id}
@@ -348,12 +354,12 @@ const OnlineMenu = ({
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 text-xs font-bold">
-                            {getOpponentName(game)[0]?.toUpperCase()}
+                            {opponentName?.[0]?.toUpperCase() || '?'}
                           </div>
                           <div className="text-left">
-                            <div className="text-slate-300 text-sm">vs {getOpponentName(game)}</div>
+                            <div className="text-slate-300 text-sm">vs {opponentName}</div>
                             <div className="text-slate-600 text-xs">
-                              {new Date(game.created_at).toLocaleDateString()}
+                              {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'Unknown date'}
                             </div>
                           </div>
                         </div>

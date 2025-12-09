@@ -14,6 +14,7 @@ const AuthContext = createContext({
   signInWithGoogle: async () => {},
   signOut: async () => {},
   updateProfile: async () => {},
+  clearOAuthCallback: () => {},
 });
 
 export const AuthProvider = ({ children }) => {
@@ -116,7 +117,7 @@ export const AuthProvider = ({ children }) => {
         
         if (event === 'SIGNED_IN' && session?.user) {
           await fetchProfile(session.user.id);
-          setIsOAuthCallback(false);
+          // Don't set isOAuthCallback to false here - let App.jsx handle it after redirect
           
           // Clean up URL - always redirect to root after sign in
           const currentPath = window.location.pathname;
@@ -125,6 +126,7 @@ export const AuthProvider = ({ children }) => {
           }
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
+          setIsOAuthCallback(false);
         }
       }
     );
@@ -212,6 +214,10 @@ export const AuthProvider = ({ children }) => {
     return { data, error };
   };
 
+  const clearOAuthCallback = () => {
+    setIsOAuthCallback(false);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -226,6 +232,7 @@ export const AuthProvider = ({ children }) => {
       signOut,
       updateProfile,
       refreshProfile: () => user && fetchProfile(user.id),
+      clearOAuthCallback,
     }}>
       {children}
     </AuthContext.Provider>
