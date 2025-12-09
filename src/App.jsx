@@ -154,6 +154,22 @@ function AppContent() {
     setGameMode('online-game');
   };
 
+  // Fallback timeout for stuck loading state
+  const [loadingStuck, setLoadingStuck] = useState(false);
+  
+  useEffect(() => {
+    if (isOnlineEnabled && (authLoading || isOAuthCallback)) {
+      const timeout = setTimeout(() => {
+        console.log('Loading stuck timeout triggered');
+        setLoadingStuck(true);
+      }, 15000); // 15 seconds
+      
+      return () => clearTimeout(timeout);
+    } else {
+      setLoadingStuck(false);
+    }
+  }, [isOnlineEnabled, authLoading, isOAuthCallback]);
+
   // Show loading while auth is initializing or processing OAuth callback
   if (isOnlineEnabled && (authLoading || isOAuthCallback)) {
     return (
@@ -162,6 +178,28 @@ function AppContent() {
         <p className="text-amber-300 text-sm">
           {isOAuthCallback ? 'Signing you in...' : 'Loading...'}
         </p>
+        {loadingStuck && (
+          <div className="mt-6 text-center">
+            <p className="text-slate-400 text-xs mb-3">Taking longer than expected...</p>
+            <button
+              onClick={() => {
+                // Clear all Supabase related storage and reload
+                Object.keys(localStorage).forEach(key => {
+                  if (key.startsWith('sb-') || key.includes('supabase')) {
+                    localStorage.removeItem(key);
+                  }
+                });
+                // Clear session storage too
+                sessionStorage.clear();
+                // Force reload to root
+                window.location.replace('/');
+              }}
+              className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg text-sm hover:bg-slate-600"
+            >
+              Reset & Reload
+            </button>
+          </div>
+        )}
       </div>
     );
   }

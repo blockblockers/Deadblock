@@ -76,7 +76,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const [retryCount, setRetryCount] = useState(0);
   
   // Local game state for UI
-  const [board, setBoard] = useState(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0)));
+  const [board, setBoard] = useState(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
   const [boardPieces, setBoardPieces] = useState({});
   const [usedPieces, setUsedPieces] = useState([]);
   const [selectedPiece, setSelectedPiece] = useState(null);
@@ -98,7 +98,14 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       return;
     }
 
-    console.log('updateGameState: Updating with game', gameData.id);
+    console.log('updateGameState: Updating with game', gameData.id, {
+      current_player: gameData.current_player,
+      player1_id: gameData.player1_id,
+      player2_id: gameData.player2_id,
+      status: gameData.status,
+      boardSample: gameData.board?.[0]?.slice(0, 3),
+      used_pieces: gameData.used_pieces
+    });
     
     // Validate and fix board data
     let validBoard = gameData.board;
@@ -110,8 +117,15 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     
     if (!isValidBoard) {
       console.log('updateGameState: Invalid board data, creating empty board');
-      validBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+      validBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+    } else {
+      // Convert any 0s to nulls for compatibility with game logic
+      validBoard = validBoard.map(row => 
+        row.map(cell => (cell === 0 ? null : cell))
+      );
     }
+    
+    console.log('updateGameState: Board validated', { firstRow: validBoard[0] });
     
     setGame(gameData);
     setBoard(validBoard);
@@ -131,6 +145,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       // Check if it's my turn
       const myTurn = gameSyncService.isPlayerTurn(gameData, userId);
       setIsMyTurn(myTurn);
+      
+      console.log('updateGameState: Player state', { playerNum, myTurn, current_player: gameData.current_player });
 
       // Check for game over
       if (gameData.status === 'completed') {
@@ -260,20 +276,47 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
   // Handle cell click
   const handleCellClick = (row, col) => {
-    if (!isMyTurn || !selectedPiece || game?.status !== 'active') return;
+    console.log('handleCellClick:', { row, col, isMyTurn, selectedPiece, gameStatus: game?.status });
+    
+    if (!isMyTurn) {
+      console.log('handleCellClick: Not my turn');
+      return;
+    }
+    if (!selectedPiece) {
+      console.log('handleCellClick: No piece selected');
+      return;
+    }
+    if (game?.status !== 'active') {
+      console.log('handleCellClick: Game not active');
+      return;
+    }
 
     const coords = getPieceCoords(selectedPiece, rotation, flipped);
+    console.log('handleCellClick: Checking canPlacePiece', { row, col, coords, boardCell: board[row]?.[col] });
     
     if (canPlacePiece(board, row, col, coords)) {
+      console.log('handleCellClick: Setting pending move');
       setPendingMove({ piece: selectedPiece, row, col });
       soundManager.playClickSound('place');
+    } else {
+      console.log('handleCellClick: Cannot place piece here');
     }
   };
 
   // Handle piece selection
   const handleSelectPiece = (pieceType) => {
-    if (!isMyTurn || usedPieces.includes(pieceType)) return;
+    console.log('handleSelectPiece:', { pieceType, isMyTurn, isUsed: usedPieces.includes(pieceType), usedPieces });
     
+    if (!isMyTurn) {
+      console.log('handleSelectPiece: Not my turn');
+      return;
+    }
+    if (usedPieces.includes(pieceType)) {
+      console.log('handleSelectPiece: Piece already used');
+      return;
+    }
+    
+    console.log('handleSelectPiece: Selecting piece', pieceType);
     setSelectedPiece(pieceType);
     setRotation(0);
     setFlipped(false);
@@ -499,15 +542,23 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full flex flex-col'} p-2 sm:p-4`}>
         <div className={`max-w-lg mx-auto w-full ${needsScroll ? '' : 'flex-1 flex flex-col'}`}>
           
-          {/* Header - Centered Large Title */}
-          <div className="flex items-center justify-center mb-3 relative flex-shrink-0">
-            <NeonTitle size="large" />
-            <button 
-              onClick={handleLeave}
-              className={`absolute right-0 px-3 py-1.5 bg-slate-800 ${theme.accent} rounded-lg text-xs sm:text-sm border ${theme.accentBorder} hover:bg-slate-700 shadow-[0_0_10px_rgba(251,191,36,0.3)]`}
-            >
-              MENU
-            </button>
+          {/* Header - Centered Title with ONLINE subtitle */}
+          <div className="flex items-center justify-between mb-3 flex-shrink-0">
+            <div className="flex-1" /> {/* Spacer for centering */}
+            <div className="text-center">
+              <NeonTitle size="small" />
+              <div className="text-xs font-bold tracking-[0.3em] bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
+                ONLINE
+              </div>
+            </div>
+            <div className="flex-1 flex justify-end">
+              <button 
+                onClick={handleLeave}
+                className={`px-3 py-1.5 bg-slate-800 ${theme.accent} rounded-lg text-xs sm:text-sm border ${theme.accentBorder} hover:bg-slate-700 shadow-[0_0_10px_rgba(251,191,36,0.3)]`}
+              >
+                MENU
+              </button>
+            </div>
           </div>
 
           {/* Turn Indicator */}

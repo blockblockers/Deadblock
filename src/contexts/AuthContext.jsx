@@ -74,37 +74,68 @@ export const AuthProvider = ({ children }) => {
     const handleOAuthCallback = async () => {
       if (hasAuthData) {
         try {
+          // Set a timeout for OAuth processing
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('OAuth timeout')), 8000)
+          );
+          
           // This extracts the session from the URL hash/params
-          const { data, error } = await supabase.auth.getSession();
+          const sessionPromise = supabase.auth.getSession();
+          
+          const { data, error } = await Promise.race([sessionPromise, timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))]);
           
           if (error) {
             console.error('Error getting session from callback:', error);
+            setIsOAuthCallback(false); // Clear flag on error
           } else if (data?.session) {
             console.log('Session established from OAuth callback');
             setUser(data.session.user);
             await fetchProfile(data.session.user.id);
+          } else {
+            console.log('No session in OAuth callback response');
+            setIsOAuthCallback(false);
           }
           
           // Clean up URL after processing
           window.history.replaceState({}, document.title, '/');
         } catch (err) {
           console.error('OAuth callback error:', err);
+          setIsOAuthCallback(false); // Clear flag on error
+          window.history.replaceState({}, document.title, '/');
         }
       }
     };
 
     // Get initial session
     const initAuth = async () => {
-      // First handle any OAuth callback
-      await handleOAuthCallback();
-      
-      // Then get the current session
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+      try {
+        // Set a timeout to ensure loading completes even if there's an issue
+        const timeout = setTimeout(() => {
+          console.log('Auth initialization timeout - forcing loading to complete');
+          setLoading(false);
+        }, 10000); // 10 second timeout
+
+        // First handle any OAuth callback
+        await handleOAuthCallback();
+        
+        // Then get the current session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        clearTimeout(timeout);
+        
+        if (error) {
+          console.error('Error getting session:', error);
+        }
+        
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('Auth initialization error:', err);
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     initAuth();

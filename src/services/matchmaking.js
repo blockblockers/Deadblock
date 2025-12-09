@@ -69,8 +69,8 @@ class MatchmakingService {
   async createGame(player1Id, player2Id) {
     if (!supabase) return { error: { message: 'Not configured' } };
 
-    // Initialize empty 8x8 board
-    const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
+    // Initialize empty 8x8 board (null = empty cell)
+    const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(null));
     
     // Randomly decide who goes first
     const firstPlayer = Math.random() < 0.5 ? 1 : 2;
