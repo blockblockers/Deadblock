@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader, AlertCircle, Play } from 'lucide-react';
+import { Loader, AlertCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
@@ -251,7 +251,6 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                 </>
               ) : (
                 <>
-                  <Play size={22} />
                   START {selectedDiff.name} PUZZLE
                 </>
               )}

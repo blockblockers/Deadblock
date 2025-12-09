@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect } from 'react';
-import { Swords, Trophy, User, LogOut, History, Users, ChevronRight, Wifi } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, Wifi } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import NeonTitle from './NeonTitle';
@@ -128,7 +128,6 @@ const OnlineMenu = ({
               onClick={handleFindMatch}
               className="w-full p-4 mb-3 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl font-bold text-white flex items-center justify-center gap-3 hover:from-cyan-400 hover:to-blue-500 transition-all shadow-[0_0_25px_rgba(34,211,238,0.4)] active:scale-[0.98]"
             >
-              <Swords size={24} />
               FIND MATCH
             </button>
 

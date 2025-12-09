@@ -1,4 +1,3 @@
-import { Bot } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { soundManager } from '../utils/soundManager';
@@ -187,7 +186,6 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
               className={`w-full p-4 rounded-xl font-black tracking-wider text-lg transition-all flex items-center justify-center gap-3 text-white bg-gradient-to-r ${selectedDiff.colors.gradient} hover:scale-[1.02] active:scale-[0.98]`}
               style={{ boxShadow: `0 0 30px ${selectedDiff.colors.glow}` }}
             >
-              <Bot size={22} />
               START GAME
             </button>
             

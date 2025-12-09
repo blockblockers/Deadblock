@@ -11,7 +11,7 @@ const buttonShapes = {
   T: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]],
   L: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]],
   S: [[0, 1], [0, 2], [1, 0], [1, 1], [2, 0]],
-  X: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]], // X shape for online
+  W: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]], // W shape for online - stair pattern
 };
 
 // Pentomino shape component (no icons inside)
@@ -142,7 +142,7 @@ const MenuScreen = ({
               {showOnline && (
                 <PentominoButton
                   onClick={() => onStartGame('online')}
-                  shape="X"
+                  shape="W"
                   color="bg-gradient-to-br from-amber-500 to-orange-600"
                   glowColor="rgba(251,191,36,0.5)"
                   title="ONLINE"
