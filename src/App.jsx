@@ -24,6 +24,19 @@ function AppContent() {
   const [hasRedirectedAfterOAuth, setHasRedirectedAfterOAuth] = useState(false);
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback } = useAuth();
+
+  // Clean up stale OAuth callback URLs
+  useEffect(() => {
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    const hasRealAuthData = hash.includes('access_token=') || window.location.search.includes('code=');
+    
+    // If we're on /auth/callback but there's no actual auth data, clean up the URL
+    if (path.includes('/auth/callback') && !hasRealAuthData) {
+      console.log('App: Cleaning up stale OAuth callback URL');
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, []); // Run once on mount
   
   // Get all game state and actions from custom hook
   const {
@@ -130,6 +143,11 @@ function AppContent() {
 
   // Handle resume game
   const handleResumeGame = (game) => {
+    console.log('handleResumeGame called:', { gameId: game?.id, game });
+    if (!game?.id) {
+      console.error('handleResumeGame: No game ID!');
+      return;
+    }
     setOnlineGameId(game.id);
     setGameMode('online-game');
   };
@@ -145,6 +163,9 @@ function AppContent() {
       </div>
     );
   }
+
+  // Debug logging
+  console.log('App render:', { gameMode, onlineGameId, isAuthenticated, authLoading, isOAuthCallback });
 
   // Render Menu Screen
   if (!gameMode) {
@@ -200,7 +221,20 @@ function AppContent() {
   }
 
   // Online Game
-  if (gameMode === 'online-game' && onlineGameId) {
+  if (gameMode === 'online-game') {
+    if (!onlineGameId) {
+      console.error('online-game mode but no gameId, redirecting to menu');
+      // Reset to online menu if we somehow got here without a game ID
+      return (
+        <OnlineMenu
+          onFindMatch={() => setGameMode('matchmaking')}
+          onViewProfile={() => setGameMode('profile')}
+          onViewLeaderboard={() => setGameMode('leaderboard')}
+          onResumeGame={handleResumeGame}
+          onBack={() => setGameMode(null)}
+        />
+      );
+    }
     return (
       <OnlineGameScreen
         gameId={onlineGameId}
