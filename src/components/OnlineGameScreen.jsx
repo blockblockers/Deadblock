@@ -1,20 +1,72 @@
 // Online Game Screen - Real-time multiplayer game
 import { useState, useEffect, useCallback } from 'react';
-import { Wifi, WifiOff, Flag, MessageCircle, Clock } from 'lucide-react';
+import { Flag } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import NeonTitle from './NeonTitle';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
-import ControlButtons from './ControlButtons';
 import DPad from './DPad';
 import GameOverModal from './GameOverModal';
-import { getPieceCoords, canPlacePiece, placePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
-import { pieces } from '../utils/pieces';
+import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+
+// Orange/Amber theme for online mode
+const theme = {
+  gridColor: 'rgba(251,191,36,0.4)',
+  glow1: 'bg-amber-500/30',
+  glow2: 'bg-orange-500/25',
+  panelBorder: 'border-amber-500/40',
+  panelShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.2)]',
+  accent: 'text-amber-400',
+  accentBg: 'bg-amber-500/20',
+  accentBorder: 'border-amber-400/50',
+};
+
+// Player indicator bar for online games
+const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
+  return (
+    <div className="flex items-center justify-between mb-3">
+      {/* Me */}
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+        isMyTurn && gameStatus === 'active'
+          ? 'bg-amber-500/20 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4)]' 
+          : 'bg-slate-800/50 border border-slate-700/50'
+      }`}>
+        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+          isMyTurn && gameStatus === 'active' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] animate-pulse' : 'bg-slate-600'
+        }`} />
+        <span className={`text-sm font-bold tracking-wide ${isMyTurn ? 'text-amber-300' : 'text-slate-500'}`}>
+          {profile?.username || 'You'}
+        </span>
+        <span className="text-xs text-slate-600">({profile?.rating || 1000})</span>
+      </div>
+      
+      {/* VS */}
+      <div className="text-slate-600 text-xs font-bold px-2">VS</div>
+      
+      {/* Opponent */}
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+        !isMyTurn && gameStatus === 'active'
+          ? 'bg-orange-500/20 border border-orange-400/50 shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
+          : 'bg-slate-800/50 border border-slate-700/50'
+      }`}>
+        <span className={`text-sm font-bold tracking-wide ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
+          {opponent?.username || 'Opponent'}
+        </span>
+        <span className="text-xs text-slate-600">({opponent?.rating || 1000})</span>
+        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+          !isMyTurn && gameStatus === 'active' ? 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse' : 'bg-slate-600'
+        }`} />
+      </div>
+    </div>
+  );
+};
 
 const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const { user, profile, loading: authLoading } = useAuth();
+  const { needsScroll } = useResponsiveLayout(750);
   
   // Game state
   const [game, setGame] = useState(null);
@@ -132,7 +184,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
         setError('Loading took too long. Please try again.');
         setLoading(false);
       }
-    }, 15000); // 15 second timeout
+    }, 15000);
 
     const loadGame = async () => {
       try {
@@ -222,127 +274,106 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const handleSelectPiece = (pieceType) => {
     if (!isMyTurn || usedPieces.includes(pieceType)) return;
     
-    soundManager.playClickSound('select');
     setSelectedPiece(pieceType);
     setRotation(0);
     setFlipped(false);
     setPendingMove(null);
+    soundManager.playClickSound('select');
   };
 
-  // Rotation and flip
+  // Handle rotation
   const handleRotate = () => {
+    if (!selectedPiece) return;
+    setRotation((r) => (r + 90) % 360);
     soundManager.playClickSound('rotate');
-    setRotation((r) => (r + 1) % 4);
-  };
-
-  const handleFlip = () => {
-    soundManager.playClickSound('flip');
-    setFlipped((f) => !f);
-  };
-
-  // Move piece with D-pad
-  const handleMovePiece = (direction) => {
-    if (!pendingMove) return;
-
-    const deltas = {
-      up: [-1, 0],
-      down: [1, 0],
-      left: [0, -1],
-      right: [0, 1]
-    };
-
-    const [dRow, dCol] = deltas[direction];
-    const newRow = pendingMove.row + dRow;
-    const newCol = pendingMove.col + dCol;
-    const coords = getPieceCoords(selectedPiece, rotation, flipped);
-
-    if (canPlacePiece(board, newRow, newCol, coords)) {
-      setPendingMove({ ...pendingMove, row: newRow, col: newCol });
-      soundManager.playClickSound('move');
+    
+    // Update pending move position if exists
+    if (pendingMove) {
+      setPendingMove({ ...pendingMove });
     }
   };
 
-  // Cancel pending move
-  const handleCancel = () => {
-    soundManager.playButtonClick();
-    setPendingMove(null);
-    setSelectedPiece(null);
-    setRotation(0);
-    setFlipped(false);
+  // Handle flip
+  const handleFlip = () => {
+    if (!selectedPiece) return;
+    setFlipped((f) => !f);
+    soundManager.playClickSound('flip');
+    
+    if (pendingMove) {
+      setPendingMove({ ...pendingMove });
+    }
   };
 
-  // Confirm and send move
+  // Handle move piece with D-pad
+  const handleMovePiece = (direction) => {
+    if (!pendingMove) return;
+    
+    const { row, col } = pendingMove;
+    let newRow = row;
+    let newCol = col;
+    
+    switch (direction) {
+      case 'up': newRow = Math.max(0, row - 1); break;
+      case 'down': newRow = Math.min(BOARD_SIZE - 1, row + 1); break;
+      case 'left': newCol = Math.max(0, col - 1); break;
+      case 'right': newCol = Math.min(BOARD_SIZE - 1, col + 1); break;
+      default: break;
+    }
+    
+    setPendingMove({ ...pendingMove, row: newRow, col: newCol });
+    soundManager.playClickSound('move');
+  };
+
+  // Handle confirm move
   const handleConfirm = async () => {
     if (!pendingMove || !isMyTurn || !game) return;
 
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
       return;
     }
 
-    soundManager.playSound('place');
+    soundManager.playClickSound('confirm');
 
-    // Calculate new state
-    const newBoard = placePiece(board, pendingMove.row, pendingMove.col, coords, myPlayerNumber);
-    const newBoardPieces = {
-      ...boardPieces,
-      [pendingMove.piece]: {
+    // Send move to server
+    const { error: moveError } = await gameSyncService.makeMove(
+      gameId,
+      user.id,
+      {
+        pieceType: pendingMove.piece,
         row: pendingMove.row,
         col: pendingMove.col,
         rotation,
-        flipped,
-        player: myPlayerNumber
+        flipped
       }
-    };
-    const newUsedPieces = [...usedPieces, pendingMove.piece];
-    
-    // Determine next player
-    const nextPlayer = myPlayerNumber === 1 ? 2 : 1;
-    
-    // Check for game over
-    const opponentCanMove = canAnyPieceBePlaced(newBoard, newUsedPieces);
-    const gameOver = !opponentCanMove;
-    
-    // If game over, current player wins (opponent can't move)
-    const winnerId = gameOver ? user.id : null;
+    );
 
-    // Send move to server
-    const { error } = await gameSyncService.makeMove(gameId, user.id, {
-      pieceType: pendingMove.piece,
-      row: pendingMove.row,
-      col: pendingMove.col,
-      rotation,
-      flipped,
-      newBoard,
-      newBoardPieces,
-      newUsedPieces,
-      nextPlayer,
-      gameOver,
-      winnerId
-    });
-
-    if (error) {
-      console.error('Error making move:', error);
+    if (moveError) {
+      console.error('Move failed:', moveError);
       soundManager.playSound('invalid');
       return;
     }
 
-    // Clear local state
-    setPendingMove(null);
+    // Clear selection
     setSelectedPiece(null);
+    setPendingMove(null);
     setRotation(0);
     setFlipped(false);
   };
 
-  // Forfeit game
-  const handleForfeit = async () => {
-    if (!confirm('Are you sure you want to forfeit? This counts as a loss.')) {
-      return;
-    }
+  // Handle cancel
+  const handleCancel = () => {
+    setPendingMove(null);
+    soundManager.playClickSound('cancel');
+  };
 
-    soundManager.playButtonClick();
-    await gameSyncService.forfeitGame(gameId, user.id);
+  // Handle forfeit
+  const handleForfeit = async () => {
+    if (!game || game.status !== 'active') return;
+    
+    if (window.confirm('Are you sure you want to forfeit this game?')) {
+      await gameSyncService.forfeitGame(gameId, user.id);
+    }
   };
 
   // Handle game over modal close
@@ -351,22 +382,28 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     onGameEnd?.(gameResult);
   };
 
+  // Handle leave
+  const handleLeave = () => {
+    soundManager.playButtonClick();
+    onLeave();
+  };
+
+  // Loading screen
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        {/* Themed background */}
         <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
+          backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
           backgroundSize: '40px 40px'
         }} />
-        <div className="fixed top-1/4 right-1/4 w-64 h-64 bg-amber-500/30 rounded-full blur-3xl pointer-events-none" />
-        <div className="fixed bottom-1/4 left-1/4 w-64 h-64 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className={`fixed top-1/4 right-1/4 w-64 h-64 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
+        <div className={`fixed bottom-1/4 left-1/4 w-64 h-64 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
         
         <div className="relative text-center">
           <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-amber-300 mb-6">Loading game...</p>
           <button
-            onClick={onLeave}
+            onClick={handleLeave}
             className="px-6 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors"
           >
             ← Cancel
@@ -376,12 +413,12 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     );
   }
 
+  // Error screen
   if (error) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        {/* Themed background */}
         <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
+          backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
           backgroundSize: '40px 40px'
         }} />
         
@@ -403,7 +440,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
               Retry
             </button>
             <button
-              onClick={onLeave}
+              onClick={handleLeave}
               className="px-6 py-3 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all"
             >
               Back to Menu
@@ -420,24 +457,17 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
                        board.every(row => Array.isArray(row) && row.length === BOARD_SIZE);
 
   if (!isBoardValid) {
-    console.error('OnlineGameScreen: Invalid board data', board);
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="relative text-center max-w-sm mx-4">
+        <div className="relative text-center">
           <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-amber-300 mb-6">Initializing game board...</p>
-          <button
-            onClick={onLeave}
-            className="px-6 py-2 text-slate-400 hover:text-slate-200 text-sm transition-colors"
-          >
-            ← Cancel
-          </button>
+          <p className="text-amber-300">Initializing game board...</p>
         </div>
       </div>
     );
   }
 
-  // Calculate if confirm is possible (after board is validated)
+  // Calculate if confirm is possible
   const canConfirm = pendingMove && canPlacePiece(
     board,
     pendingMove.row,
@@ -446,81 +476,67 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 overflow-auto">
-      {/* Grid background */}
-      <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+    <div 
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      style={needsScroll ? {
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y',
+      } : {}}
+    >
+      {/* Themed Grid background */}
+      <div className="fixed inset-0 opacity-25 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
+      
+      {/* Themed glow effects */}
+      <div className={`fixed top-1/4 left-1/4 w-80 h-80 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed bottom-1/4 right-1/4 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
       {/* Content */}
-      <div className="relative min-h-screen p-2 sm:p-4">
-        <div className="max-w-lg mx-auto">
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full flex flex-col'} p-2 sm:p-4`}>
+        <div className={`max-w-lg mx-auto w-full ${needsScroll ? '' : 'flex-1 flex flex-col'}`}>
           
-          {/* Header */}
-          <div className="flex items-center justify-between mb-3">
-            <NeonTitle size="small" />
-            <div className="flex items-center gap-2">
-              {/* Connection status */}
-              {connected ? (
-                <Wifi size={16} className="text-green-400" />
-              ) : (
-                <WifiOff size={16} className="text-red-400 animate-pulse" />
-              )}
-              <span className="text-xs text-slate-500">ONLINE</span>
-            </div>
+          {/* Header - Centered Large Title */}
+          <div className="flex items-center justify-center mb-3 relative flex-shrink-0">
+            <NeonTitle size="large" />
+            <button 
+              onClick={handleLeave}
+              className={`absolute right-0 px-3 py-1.5 bg-slate-800 ${theme.accent} rounded-lg text-xs sm:text-sm border ${theme.accentBorder} hover:bg-slate-700 shadow-[0_0_10px_rgba(251,191,36,0.3)]`}
+            >
+              MENU
+            </button>
           </div>
 
-          {/* Players bar */}
-          <div className="flex items-center justify-between mb-3 bg-slate-900/80 rounded-xl p-3 border border-slate-700/50">
-            {/* Me */}
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-              isMyTurn 
-                ? 'bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
-                : 'bg-slate-800/50'
-            }`}>
-              <div className={`w-3 h-3 rounded-full ${isMyTurn ? 'bg-cyan-400 animate-pulse' : 'bg-slate-600'}`} />
-              <span className={`text-sm font-bold ${isMyTurn ? 'text-cyan-300' : 'text-slate-500'}`}>
-                {profile?.username || 'You'}
-              </span>
-              <span className="text-xs text-slate-600">({profile?.rating || 1000})</span>
-            </div>
-
-            {/* VS */}
-            <div className="text-slate-600 text-xs font-bold">VS</div>
-
-            {/* Opponent */}
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-              !isMyTurn && game?.status === 'active'
-                ? 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]' 
-                : 'bg-slate-800/50'
-            }`}>
-              <span className={`text-sm font-bold ${!isMyTurn ? 'text-purple-300' : 'text-slate-500'}`}>
-                {opponent?.username || 'Opponent'}
-              </span>
-              <span className="text-xs text-slate-600">({opponent?.rating || 1000})</span>
-              <div className={`w-3 h-3 rounded-full ${!isMyTurn && game?.status === 'active' ? 'bg-purple-400 animate-pulse' : 'bg-slate-600'}`} />
-            </div>
-          </div>
-
-          {/* Turn indicator */}
-          <div className={`text-center py-2 mb-3 rounded-lg font-bold text-sm ${
+          {/* Turn Indicator */}
+          <div className={`text-center py-2 mb-2 rounded-lg font-bold text-sm flex-shrink-0 ${
             isMyTurn 
-              ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' 
-              : 'bg-slate-800/50 text-slate-400'
+              ? `${theme.accentBg} ${theme.accent} border ${theme.accentBorder}` 
+              : 'bg-slate-800/50 text-slate-400 border border-slate-700/50'
           }`}>
             {game?.status === 'active' 
-              ? (isMyTurn ? "🎮 YOUR TURN" : "⏳ Waiting for opponent...")
-              : "Game Over"
-            }
+              ? (isMyTurn ? "YOUR TURN" : "Waiting for opponent...")
+              : (game?.status === 'completed' ? "GAME OVER" : "Loading...")}
           </div>
 
-          {/* Game board */}
-          <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-3 mb-3 border border-slate-700/50">
-            <div className="flex justify-center pb-3">
+          {/* Main Game Panel */}
+          <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border ${theme.panelBorder} ${theme.panelShadow} ${needsScroll ? '' : 'flex-shrink-0'}`}>
+            
+            {/* Player Bar */}
+            <OnlinePlayerBar 
+              profile={profile}
+              opponent={opponent}
+              isMyTurn={isMyTurn}
+              gameStatus={game?.status}
+            />
+
+            {/* Game Board */}
+            <div className="flex justify-center pb-4">
               <GameBoard
-                board={board || Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0))}
-                boardPieces={boardPieces || {}}
+                board={board}
+                boardPieces={boardPieces}
                 pendingMove={pendingMove}
                 rotation={rotation}
                 flipped={flipped}
@@ -554,14 +570,14 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
                 <>
                   <button
                     onClick={handleCancel}
-                    className="flex-1 py-2 bg-red-900/50 text-red-300 rounded-lg hover:bg-red-900/70 transition-all text-sm"
+                    className="flex-1 py-2 bg-slate-600 text-slate-300 rounded-lg hover:bg-slate-500 transition-all text-sm"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleConfirm}
                     disabled={!canConfirm}
-                    className="flex-1 py-2 bg-green-600 text-white rounded-lg disabled:opacity-30 hover:bg-green-500 transition-all text-sm font-bold"
+                    className="flex-1 py-2 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg disabled:opacity-30 hover:from-amber-400 hover:to-orange-500 transition-all text-sm font-bold shadow-[0_0_15px_rgba(251,191,36,0.4)]"
                   >
                     Confirm
                   </button>
@@ -569,7 +585,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
               ) : (
                 <button
                   onClick={handleForfeit}
-                  className="py-2 px-4 bg-slate-800 text-slate-400 rounded-lg hover:bg-red-900/50 hover:text-red-300 transition-all text-sm"
+                  disabled={game?.status !== 'active'}
+                  className="py-2 px-4 bg-slate-800 text-slate-400 rounded-lg hover:bg-red-900/50 hover:text-red-300 transition-all text-sm disabled:opacity-30"
                 >
                   <Flag size={16} />
                 </button>
@@ -577,25 +594,21 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
             </div>
           </div>
 
-          {/* Piece tray */}
-          <PieceTray
-            usedPieces={usedPieces}
-            selectedPiece={selectedPiece}
-            pendingMove={pendingMove}
-            gameOver={game?.status === 'completed'}
-            gameMode="online"
-            currentPlayer={myPlayerNumber}
-            isMobile={true}
-            onSelectPiece={handleSelectPiece}
-          />
-
-          {/* Leave button */}
-          <button
-            onClick={onLeave}
-            className="w-full mt-4 py-2 text-slate-500 hover:text-slate-300 text-sm transition-colors"
-          >
-            Leave Game
-          </button>
+          {/* Piece Tray */}
+          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
+            <PieceTray
+              usedPieces={usedPieces}
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              gameOver={game?.status === 'completed'}
+              gameMode="online"
+              currentPlayer={myPlayerNumber}
+              isMobile={true}
+              onSelectPiece={handleSelectPiece}
+            />
+          </div>
+          
+          {needsScroll && <div className="h-8" />}
         </div>
       </div>
 
