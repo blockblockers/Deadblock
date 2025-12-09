@@ -21,19 +21,10 @@ import Leaderboard from './components/Leaderboard';
 function AppContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [onlineGameId, setOnlineGameId] = useState(null);
+  const [pendingOAuthRedirect, setPendingOAuthRedirect] = useState(false);
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled } = useAuth();
   
-  // Detect mobile device
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
   // Get all game state and actions from custom hook
   const {
     // State
@@ -75,6 +66,38 @@ function AppContent() {
     flipPiece,
     resetCurrentPuzzle,
   } = useGameState();
+
+  // Check for OAuth callback on mount
+  useEffect(() => {
+    const url = window.location.href;
+    const isCallback = url.includes('/auth/callback') || 
+                       url.includes('access_token=') || 
+                       url.includes('code=');
+    
+    if (isCallback) {
+      setPendingOAuthRedirect(true);
+      // Clean up URL
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, []);
+
+  // Redirect to online menu after OAuth completes
+  useEffect(() => {
+    if (pendingOAuthRedirect && isAuthenticated && !authLoading) {
+      setPendingOAuthRedirect(false);
+      setGameMode('online-menu');
+    }
+  }, [pendingOAuthRedirect, isAuthenticated, authLoading, setGameMode]);
+  
+  // Detect mobile device
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Handle starting a game (with difficulty selection for AI mode)
   const handleStartGame = (mode) => {

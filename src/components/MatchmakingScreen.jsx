@@ -5,9 +5,21 @@ import { useAuth } from '../contexts/AuthContext';
 import { matchmakingService } from '../services/matchmaking';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+
+// Online theme - amber/orange to match the menu button
+const theme = {
+  gridColor: 'rgba(251,191,36,0.4)',
+  glow1: { color: 'bg-amber-500/40', pos: 'top-1/3 left-1/4' },
+  glow2: { color: 'bg-orange-500/35', pos: 'bottom-1/3 right-1/4' },
+  cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/40 to-slate-900/95',
+  cardBorder: 'border-amber-500/40',
+  cardShadow: 'shadow-[0_0_60px_rgba(251,191,36,0.3),inset_0_0_20px_rgba(251,191,36,0.05)]',
+};
 
 const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
   const { user, profile } = useAuth();
+  const { needsScroll } = useResponsiveLayout(700);
   const [status, setStatus] = useState('idle'); // idle, searching, found, loading, error
   const [searchTime, setSearchTime] = useState(0);
   const [playersInQueue, setPlayersInQueue] = useState(0);
@@ -162,48 +174,51 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
-      {/* Animated grid background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+    <div 
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+    >
+      {/* Themed Grid background */}
+      <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px',
         animation: 'gridMove 20s linear infinite'
       }} />
       
-      {/* Pulsing glow effects */}
-      <div className="fixed top-1/3 left-1/4 w-80 h-80 bg-cyan-500/30 rounded-full blur-3xl pointer-events-none animate-pulse" />
-      <div className="fixed bottom-1/3 right-1/4 w-80 h-80 bg-purple-500/30 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDelay: '1s' }} />
+      {/* Themed glow orbs */}
+      <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none animate-pulse`} />
+      <div className={`fixed ${theme.glow2.pos} w-80 h-80 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDelay: '1s' }} />
 
       {/* Content */}
-      <div className="relative flex-1 flex flex-col items-center justify-center px-4">
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-md text-center">
           
           {/* Title - Large and centered */}
           <div className="mb-6">
             <NeonTitle size="large" />
-            <p className="text-slate-400 text-sm mt-2">Online Matchmaking</p>
+            <p className="text-amber-400/80 text-sm mt-2 font-medium">Online Matchmaking</p>
           </div>
           
           {/* Status Card */}
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl p-8 border border-cyan-500/30 shadow-[0_0_60px_rgba(34,211,238,0.3)]">
+          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-8 border ${theme.cardBorder} ${theme.cardShadow}`}>
             
             {status === 'searching' && (
               <>
                 {/* Animated search indicator */}
                 <div className="relative w-24 h-24 mx-auto mb-6">
                   {/* Outer ring */}
-                  <div className="absolute inset-0 border-4 border-cyan-500/30 rounded-full animate-ping" />
+                  <div className="absolute inset-0 border-4 border-amber-500/30 rounded-full animate-ping" />
                   {/* Middle ring */}
-                  <div className="absolute inset-2 border-4 border-cyan-400/50 rounded-full animate-pulse" />
+                  <div className="absolute inset-2 border-4 border-amber-400/50 rounded-full animate-pulse" />
                   {/* Inner spinning ring */}
-                  <div className="absolute inset-4 border-4 border-transparent border-t-cyan-400 rounded-full animate-spin" />
+                  <div className="absolute inset-4 border-4 border-transparent border-t-amber-400 rounded-full animate-spin" />
                   {/* Center icon */}
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Search size={28} className="text-cyan-300" />
+                    <Search size={28} className="text-amber-300" />
                   </div>
                 </div>
 
-                <h2 className="text-2xl font-bold text-cyan-300 mb-2">
+                <h2 className="text-2xl font-bold text-amber-300 mb-2">
                   Finding Opponent...
                 </h2>
                 
@@ -213,20 +228,20 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="bg-slate-800/50 rounded-lg p-3">
+                  <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
                     <div className="text-2xl font-bold text-white">{formatTime(searchTime)}</div>
                     <div className="text-xs text-slate-500">Search Time</div>
                   </div>
-                  <div className="bg-slate-800/50 rounded-lg p-3">
+                  <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
                     <div className="text-2xl font-bold text-white">{playersInQueue}</div>
                     <div className="text-xs text-slate-500">In Queue</div>
                   </div>
                 </div>
 
                 {/* Player info */}
-                <div className="bg-slate-800/30 rounded-lg p-4 mb-6 flex items-center justify-between">
+                <div className="bg-slate-800/30 rounded-lg p-4 mb-6 flex items-center justify-between border border-slate-700/50">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold">
                       {profile?.username?.[0]?.toUpperCase() || '?'}
                     </div>
                     <div className="text-left">
@@ -282,9 +297,9 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
 
                 {/* Opponent info (if available) */}
                 {matchedGame && (
-                  <div className="bg-slate-800/30 rounded-lg p-4 flex items-center justify-center gap-4">
+                  <div className="bg-slate-800/30 rounded-lg p-4 flex items-center justify-center gap-4 border border-slate-700/50">
                     <div className="text-center">
-                      <div className="w-10 h-10 mx-auto rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold mb-1">
+                      <div className="w-10 h-10 mx-auto rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold mb-1">
                         {profile?.username?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div className="text-white text-xs font-medium">{profile?.username}</div>
@@ -333,7 +348,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
                   </button>
                   <button
                     onClick={handleRetry}
-                    className="flex-1 py-3 bg-cyan-600 text-white rounded-lg hover:bg-cyan-500 transition-all font-bold"
+                    className="flex-1 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-500 transition-all font-bold"
                   >
                     Retry
                   </button>
@@ -349,6 +364,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
             </div>
           )}
         </div>
+        {needsScroll && <div className="h-8 flex-shrink-0" />}
       </div>
 
       {/* Animations */}

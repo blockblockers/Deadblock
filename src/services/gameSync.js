@@ -54,17 +54,72 @@ class GameSyncService {
   async getGame(gameId) {
     if (!supabase) return { data: null, error: { message: 'Not configured' } };
 
-    const { data, error } = await supabase
-      .from('games')
-      .select(`
-        *,
-        player1:profiles!games_player1_id_fkey(*),
-        player2:profiles!games_player2_id_fkey(*)
-      `)
-      .eq('id', gameId)
-      .single();
+    console.log('Fetching game:', gameId);
 
-    return { data, error };
+    // First try with foreign key joins
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select(`
+          *,
+          player1:profiles!games_player1_id_fkey(*),
+          player2:profiles!games_player2_id_fkey(*)
+        `)
+        .eq('id', gameId)
+        .single();
+
+      if (!error && data) {
+        console.log('Game loaded with profiles:', data);
+        return { data, error: null };
+      }
+      
+      console.log('Foreign key join failed, trying manual join:', error?.message);
+    } catch (e) {
+      console.log('Exception with foreign key join:', e.message);
+    }
+
+    // Fallback: fetch game and profiles separately
+    try {
+      const { data: game, error: gameError } = await supabase
+        .from('games')
+        .select('*')
+        .eq('id', gameId)
+        .single();
+
+      if (gameError) {
+        console.error('Error fetching game:', gameError);
+        return { data: null, error: gameError };
+      }
+
+      if (!game) {
+        return { data: null, error: { message: 'Game not found' } };
+      }
+
+      console.log('Game loaded:', game);
+
+      // Fetch player profiles separately
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', [game.player1_id, game.player2_id]);
+
+      const player1 = profiles?.find(p => p.id === game.player1_id) || null;
+      const player2 = profiles?.find(p => p.id === game.player2_id) || null;
+
+      console.log('Profiles loaded:', { player1, player2 });
+
+      return {
+        data: {
+          ...game,
+          player1,
+          player2
+        },
+        error: null
+      };
+    } catch (e) {
+      console.error('Exception fetching game:', e);
+      return { data: null, error: { message: e.message } };
+    }
   }
 
   // Make a move
@@ -208,36 +263,92 @@ class GameSyncService {
   async getPlayerGames(playerId, limit = 10) {
     if (!supabase) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('games')
-      .select(`
-        *,
-        player1:profiles!games_player1_id_fkey(id, username, rating),
-        player2:profiles!games_player2_id_fkey(id, username, rating)
-      `)
-      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    try {
+      // Fetch games first
+      const { data: games, error } = await supabase
+        .from('games')
+        .select('*')
+        .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    return { data: data || [], error };
+      if (error || !games) {
+        console.error('Error fetching player games:', error);
+        return { data: [], error };
+      }
+
+      // Get unique player IDs
+      const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
+      
+      // Fetch profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username, rating')
+        .in('id', playerIds);
+
+      const profileMap = {};
+      profiles?.forEach(p => { profileMap[p.id] = p; });
+
+      // Attach profiles to games
+      const gamesWithProfiles = games.map(game => ({
+        ...game,
+        player1: profileMap[game.player1_id] || null,
+        player2: profileMap[game.player2_id] || null
+      }));
+
+      return { data: gamesWithProfiles, error: null };
+    } catch (e) {
+      console.error('Exception fetching player games:', e);
+      return { data: [], error: { message: e.message } };
+    }
   }
 
   // Get active games for a player
   async getActiveGames(playerId) {
     if (!supabase) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('games')
-      .select(`
-        *,
-        player1:profiles!games_player1_id_fkey(id, username, rating),
-        player2:profiles!games_player2_id_fkey(id, username, rating)
-      `)
-      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
-      .eq('status', 'active')
-      .order('updated_at', { ascending: false });
+    try {
+      // Fetch active games first
+      const { data: games, error } = await supabase
+        .from('games')
+        .select('*')
+        .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+        .eq('status', 'active')
+        .order('updated_at', { ascending: false });
 
-    return { data: data || [], error };
+      if (error || !games) {
+        console.error('Error fetching active games:', error);
+        return { data: [], error };
+      }
+
+      if (games.length === 0) {
+        return { data: [], error: null };
+      }
+
+      // Get unique player IDs
+      const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
+      
+      // Fetch profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, username, rating')
+        .in('id', playerIds);
+
+      const profileMap = {};
+      profiles?.forEach(p => { profileMap[p.id] = p; });
+
+      // Attach profiles to games
+      const gamesWithProfiles = games.map(game => ({
+        ...game,
+        player1: profileMap[game.player1_id] || null,
+        player2: profileMap[game.player2_id] || null
+      }));
+
+      return { data: gamesWithProfiles, error: null };
+    } catch (e) {
+      console.error('Exception fetching active games:', e);
+      return { data: [], error: { message: e.message } };
+    }
   }
 
   // Check if it's the player's turn
