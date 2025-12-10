@@ -187,34 +187,78 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
               })}
             </div>
 
-            {/* AI Goes First Toggle */}
-            <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+            {/* AI Goes First Toggle - Enhanced Cyberpunk Style */}
+            <div className="mb-5 p-4 bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.1),inset_0_0_30px_rgba(0,0,0,0.3)]">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+                <span className="text-xs font-bold tracking-widest text-cyan-300/90">TURN ORDER</span>
+                <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/50 to-transparent" />
+              </div>
+              
               <button
                 onClick={toggleAiFirst}
-                className="w-full flex items-center justify-between"
+                className="w-full flex items-center justify-between group"
               >
                 <div className="text-left">
-                  <div className="text-sm font-medium text-slate-300">Turn Order</div>
+                  <div className={`text-sm font-semibold transition-colors ${aiGoesFirst ? 'text-purple-300' : 'text-cyan-300'}`}>
+                    {aiGoesFirst ? 'A.I. Leads' : 'You Lead'}
+                  </div>
                   <div className="text-xs text-slate-500">
-                    {aiGoesFirst ? 'A.I. plays first, you play second' : 'You play first, A.I. plays second'}
+                    {aiGoesFirst ? 'A.I. makes the first move' : 'You make the first move'}
                   </div>
                 </div>
-                <div className={`relative w-14 h-7 rounded-full transition-colors duration-300 ${
-                  aiGoesFirst ? 'bg-purple-600' : 'bg-slate-600'
+                
+                {/* Enhanced Toggle Switch */}
+                <div className={`relative w-16 h-8 rounded-full transition-all duration-300 ${
+                  aiGoesFirst 
+                    ? 'bg-gradient-to-r from-purple-600 to-purple-800 shadow-[0_0_15px_rgba(168,85,247,0.5),inset_0_2px_4px_rgba(0,0,0,0.3)]' 
+                    : 'bg-gradient-to-r from-cyan-600 to-cyan-800 shadow-[0_0_15px_rgba(34,211,238,0.5),inset_0_2px_4px_rgba(0,0,0,0.3)]'
                 }`}>
-                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
-                    aiGoesFirst ? 'translate-x-8' : 'translate-x-1'
-                  }`} />
+                  <div className={`absolute top-1 w-6 h-6 rounded-full transition-all duration-300 ${
+                    aiGoesFirst 
+                      ? 'translate-x-9 bg-gradient-to-br from-purple-300 to-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.8)]' 
+                      : 'translate-x-1 bg-gradient-to-br from-cyan-300 to-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]'
+                  }`}>
+                    <div className="absolute inset-0 rounded-full bg-white/30" />
+                  </div>
                 </div>
               </button>
-              <div className="flex items-center justify-center gap-1 text-xs mt-2">
-                <span className={`px-2 py-1 rounded font-medium ${!aiGoesFirst ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
-                  {aiGoesFirst ? 'A.I.' : 'You'}
-                </span>
-                <span className="text-slate-600">→</span>
-                <span className={`px-2 py-1 rounded font-medium ${aiGoesFirst ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
-                  {aiGoesFirst ? 'You' : 'A.I.'}
-                </span>
+              
+              {/* Turn Order Visualization */}
+              <div className="flex items-center justify-center gap-2 mt-4 p-2 bg-slate-900/50 rounded-lg">
+                {/* First Player */}
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+                  !aiGoesFirst 
+                    ? 'bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
+                    : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${!aiGoesFirst ? 'bg-cyan-400' : 'bg-purple-400'} animate-pulse`} />
+                  <span className={`text-xs font-bold tracking-wide ${!aiGoesFirst ? 'text-cyan-300' : 'text-purple-300'}`}>
+                    {aiGoesFirst ? 'A.I.' : 'YOU'}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-medium">1ST</span>
+                </div>
+                
+                {/* Arrow */}
+                <div className="flex items-center">
+                  <div className={`w-8 h-0.5 ${!aiGoesFirst ? 'bg-gradient-to-r from-cyan-500 to-purple-500' : 'bg-gradient-to-r from-purple-500 to-cyan-500'}`} />
+                  <div className={`w-0 h-0 border-t-4 border-b-4 border-l-6 border-transparent ${!aiGoesFirst ? 'border-l-purple-500' : 'border-l-cyan-500'}`} 
+                       style={{ borderLeftWidth: '8px' }} />
+                </div>
+                
+                {/* Second Player */}
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+                  aiGoesFirst 
+                    ? 'bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
+                    : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'
+                }`}>
+                  <div className={`w-2 h-2 rounded-full ${aiGoesFirst ? 'bg-cyan-400' : 'bg-purple-400'}`} />
+                  <span className={`text-xs font-bold tracking-wide ${aiGoesFirst ? 'text-cyan-300' : 'text-purple-300'}`}>
+                    {aiGoesFirst ? 'YOU' : 'A.I.'}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-700/50 text-slate-400 font-medium">2ND</span>
+                </div>
               </div>
             </div>
 

@@ -127,8 +127,8 @@ const GameBoard = ({
               // Determine ring style
               let ringClass = '';
               if (isAiAnimatingCell) {
-                // Purple glow for AI placing
-                ringClass = 'ring-2 ring-purple-400 shadow-[0_0_30px_rgba(168,85,247,0.9)]';
+                // Enhanced purple glow for AI placing - more dramatic
+                ringClass = 'ring-2 ring-purple-300 shadow-[0_0_30px_rgba(168,85,247,1),0_0_60px_rgba(168,85,247,0.6),0_0_90px_rgba(168,85,247,0.3)]';
               } else if (isInBoundsPendingCell) {
                 if (hasOverlap) {
                   ringClass = 'ring-2 ring-red-500 shadow-[0_0_25px_rgba(239,68,68,0.8)] animate-pulse';
@@ -150,6 +150,25 @@ const GameBoard = ({
                   className={`w-9 h-9 sm:w-12 sm:h-12 rounded-lg transition-all relative overflow-hidden ${bgClass} ${ringClass} ${extraClass}`}
                   disabled={isDisabled}
                 >
+                  {/* AI placing effect - energy burst overlay */}
+                  {isAiAnimatingCell && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* Radial energy burst */}
+                      <div className="absolute inset-0 animate-ai-burst bg-gradient-radial from-white/60 via-purple-400/30 to-transparent" />
+                      {/* Scan lines */}
+                      <div className="absolute inset-0 opacity-40 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(168,85,247,0.3)_2px,rgba(168,85,247,0.3)_4px)] animate-ai-scan" />
+                      {/* Corner sparks */}
+                      <div className="absolute top-0 left-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '0ms' }} />
+                      <div className="absolute top-0 right-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '100ms' }} />
+                      <div className="absolute bottom-0 left-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '200ms' }} />
+                      <div className="absolute bottom-0 right-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '300ms' }} />
+                      {/* Center flash */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-4 h-4 bg-white rounded-full animate-ai-flash" />
+                      </div>
+                    </div>
+                  )}
+                  
                   {/* Cyberpunk scan line overlay for placed pieces */}
                   {isPlacedPiece && (
                     <div className="absolute inset-0 pointer-events-none">
@@ -215,31 +234,113 @@ const GameBoard = ({
       <style>{`
         @keyframes ai-place {
           0% {
-            transform: scale(0.3) rotate(-5deg);
+            transform: scale(0) rotate(-15deg);
             opacity: 0;
-            filter: brightness(2) hue-rotate(20deg);
+            filter: brightness(3) saturate(2) hue-rotate(30deg);
+          }
+          15% {
+            transform: scale(1.3) rotate(8deg);
+            opacity: 1;
+            filter: brightness(2.5) saturate(1.5) hue-rotate(20deg);
           }
           30% {
-            transform: scale(1.15) rotate(2deg);
-            opacity: 1;
-            filter: brightness(1.5) hue-rotate(10deg);
+            transform: scale(0.85) rotate(-5deg);
+            filter: brightness(2) saturate(1.3) hue-rotate(10deg);
           }
-          50% {
-            transform: scale(0.95) rotate(-1deg);
-            filter: brightness(1.2) hue-rotate(0deg);
+          45% {
+            transform: scale(1.15) rotate(3deg);
+            filter: brightness(1.5) saturate(1.2) hue-rotate(5deg);
           }
-          70% {
-            transform: scale(1.05);
-            filter: brightness(1.1);
+          60% {
+            transform: scale(0.95) rotate(-2deg);
+            filter: brightness(1.3) saturate(1.1);
+          }
+          75% {
+            transform: scale(1.05) rotate(1deg);
+            filter: brightness(1.15);
+          }
+          90% {
+            transform: scale(0.98);
+            filter: brightness(1.05);
           }
           100% {
             transform: scale(1) rotate(0deg);
             opacity: 1;
-            filter: brightness(1) hue-rotate(0deg);
+            filter: brightness(1) saturate(1) hue-rotate(0deg);
           }
         }
         .animate-ai-place {
-          animation: ai-place 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+          animation: ai-place 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        
+        @keyframes ai-burst {
+          0% {
+            transform: scale(0);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.5);
+            opacity: 0.6;
+          }
+          100% {
+            transform: scale(2);
+            opacity: 0;
+          }
+        }
+        .animate-ai-burst {
+          animation: ai-burst 0.5s ease-out forwards;
+        }
+        
+        @keyframes ai-scan {
+          0% {
+            transform: translateY(-100%);
+          }
+          100% {
+            transform: translateY(100%);
+          }
+        }
+        .animate-ai-scan {
+          animation: ai-scan 0.4s linear;
+        }
+        
+        @keyframes ai-spark {
+          0% {
+            transform: scale(0);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.5);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(0);
+            opacity: 0;
+          }
+        }
+        .animate-ai-spark {
+          animation: ai-spark 0.4s ease-out forwards;
+        }
+        
+        @keyframes ai-flash {
+          0% {
+            transform: scale(0);
+            opacity: 1;
+          }
+          30% {
+            transform: scale(2);
+            opacity: 0.8;
+          }
+          100% {
+            transform: scale(4);
+            opacity: 0;
+          }
+        }
+        .animate-ai-flash {
+          animation: ai-flash 0.5s ease-out forwards;
+        }
+        
+        .bg-gradient-radial {
+          background: radial-gradient(circle, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
         }
       `}</style>
     </div>

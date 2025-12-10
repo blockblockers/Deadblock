@@ -83,12 +83,12 @@ const QuickChat = ({ gameId, userId, opponentName, disabled = false }) => {
         </div>
       )}
 
-      {/* Chat Button */}
+      {/* Chat Button - positioned top-right under MENU */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         disabled={disabled}
         className={`
-          fixed bottom-24 right-4 z-40 p-3 rounded-full shadow-lg transition-all
+          fixed top-20 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all
           ${isOpen 
             ? 'bg-amber-500 text-slate-900' 
             : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
@@ -96,15 +96,15 @@ const QuickChat = ({ gameId, userId, opponentName, disabled = false }) => {
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}
       >
-        {isOpen ? <X size={24} /> : <MessageCircle size={24} />}
+        {isOpen ? <X size={20} /> : <MessageCircle size={20} />}
         {cooldown && (
           <div className="absolute inset-0 rounded-full border-2 border-amber-400 animate-ping" />
         )}
       </button>
 
-      {/* Chat Panel */}
+      {/* Chat Panel - positioned near the button */}
       {isOpen && (
-        <div className="fixed bottom-40 right-4 z-40 w-72 bg-slate-900 border border-amber-500/30 rounded-xl shadow-xl overflow-hidden">
+        <div className="fixed top-32 right-4 z-40 w-72 bg-slate-900 border border-amber-500/30 rounded-xl shadow-xl overflow-hidden">
           {/* Tabs */}
           <div className="flex border-b border-amber-500/20">
             <button

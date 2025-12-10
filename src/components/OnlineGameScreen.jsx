@@ -50,7 +50,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, oppo
             isMyTurn && gameStatus === 'active' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] animate-pulse' : 'bg-slate-600'
           }`} />
           <span className={`text-sm font-bold tracking-wide ${isMyTurn ? 'text-amber-300' : 'text-slate-500'}`}>
-            {profile?.username || 'You'}
+            You
           </span>
           <span className={`text-xs ${myTier.color}`}>{myTier.icon}</span>
           <span className="text-xs text-slate-600">{profile?.elo_rating || profile?.rating || 1200}</span>
@@ -66,7 +66,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, oppo
             : 'bg-slate-800/50 border border-slate-700/50'
         }`}>
           <span className={`text-sm font-bold tracking-wide ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
-            {opponent?.username || 'Opponent'}
+            Opponent
           </span>
           <span className={`text-xs ${oppTier.color}`}>{oppTier.icon}</span>
           <span className="text-xs text-slate-600">{opponent?.elo_rating || opponent?.rating || 1200}</span>
@@ -88,7 +88,9 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, oppo
 
 const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const { user, profile, loading: authLoading } = useAuth();
-  const { needsScroll } = useResponsiveLayout(750);
+  // Always enable scroll for game screen to ensure controls are accessible
+  const { needsScroll: checkScroll } = useResponsiveLayout(900);
+  const needsScroll = true; // Force scroll mode for better mobile experience
   
   // Game state
   const [game, setGame] = useState(null);

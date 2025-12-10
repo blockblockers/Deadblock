@@ -268,9 +268,71 @@ class SoundManager {
     this.vibrate('win');
   }
 
+  playLose() {
+    this.playBeep(220, 0.3);
+    this.vibrate('error');
+  }
+
   playError() {
     this.playBeep(220, 0.15);
     this.vibrate('error');
+  }
+
+  playNotification() {
+    this.playBeep(660, 0.1);
+    this.vibrate('soft');
+  }
+
+  playSuccess() {
+    this.playBeep(770, 0.15);
+    this.vibrate('soft');
+  }
+
+  playInvalid() {
+    this.playBeep(180, 0.2);
+    this.vibrate('error');
+  }
+
+  // Generic playSound method - maps sound names to methods
+  playSound(name) {
+    this.onUserInteraction();
+    switch (name) {
+      case 'win':
+        this.playWin();
+        break;
+      case 'lose':
+        this.playLose();
+        break;
+      case 'error':
+        this.playError();
+        break;
+      case 'notification':
+        this.playNotification();
+        break;
+      case 'success':
+        this.playSuccess();
+        break;
+      case 'invalid':
+        this.playInvalid();
+        break;
+      case 'click':
+        this.playButtonClick();
+        break;
+      case 'select':
+        this.playPieceSelect();
+        break;
+      case 'place':
+        this.playPiecePlace();
+        break;
+      case 'confirm':
+        this.playConfirm();
+        break;
+      case 'cancel':
+        this.playCancel();
+        break;
+      default:
+        this.playBeep(500, 0.1);
+    }
   }
 
   playClickSound(type) {

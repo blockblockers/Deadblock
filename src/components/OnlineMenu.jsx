@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -139,10 +139,14 @@ const OnlineMenu = ({
   onBack 
 }) => {
   const { profile, signOut } = useAuth();
-  const { needsScroll } = useResponsiveLayout(700);
+  // OnlineMenu has substantial content, so always enable scroll
+  const { needsScroll: checkScroll, viewportHeight } = useResponsiveLayout(1200);
+  // Force scroll for this menu due to amount of content
+  const needsScroll = true;
   const [activeGames, setActiveGames] = useState([]);
   const [recentGames, setRecentGames] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showActivePrompt, setShowActivePrompt] = useState(true);
   
   // Friend search state
@@ -172,6 +176,7 @@ const OnlineMenu = ({
   const [showFriendsList, setShowFriendsList] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSpectateList, setShowSpectateList] = useState(false);
+  const [showRecentGames, setShowRecentGames] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
 
@@ -198,8 +203,25 @@ const OnlineMenu = ({
 
   // Load games and invites
   useEffect(() => {
-    loadGames();
-    loadInvites();
+    if (!profile?.id) return;
+    
+    // Set loading only on initial load
+    setLoading(true);
+    
+    const load = async () => {
+      await loadGames();
+      await loadInvites();
+    };
+    
+    load();
+    
+    // Periodic refresh every 30 seconds for active games
+    const refreshInterval = setInterval(() => {
+      loadGames();
+      loadInvites();
+    }, 30000);
+    
+    return () => clearInterval(refreshInterval);
   }, [profile?.id]);
   
   // Subscribe to invite updates
@@ -306,6 +328,15 @@ const OnlineMenu = ({
     soundManager.playButtonClick();
     await signOut();
     onBack();
+  };
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    soundManager.playButtonClick();
+    await loadGames();
+    await loadInvites();
+    setRefreshing(false);
   };
 
   const handleFindMatch = () => {
@@ -576,7 +607,7 @@ const OnlineMenu = ({
 
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
-        <div className="w-full max-w-md">
+        <div className={`w-full max-w-md ${needsScroll ? 'my-auto' : ''}`}>
           
           {/* Title - Centered and Large */}
           <div className="text-center mb-6">
@@ -601,13 +632,23 @@ const OnlineMenu = ({
                     <span className="text-green-400">{profile?.games_won || 0} wins</span>
                   </div>
                 </div>
-                <button
-                  onClick={handleSignOut}
-                  className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                  title="Sign Out"
-                >
-                  <LogOut size={20} />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={handleRefresh}
+                    disabled={refreshing}
+                    className={`p-2 text-slate-500 hover:text-amber-400 transition-colors ${refreshing ? 'animate-spin' : ''}`}
+                    title="Refresh"
+                  >
+                    <RefreshCw size={18} />
+                  </button>
+                  <button
+                    onClick={handleSignOut}
+                    className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                    title="Sign Out"
+                  >
+                    <LogOut size={20} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1058,54 +1099,26 @@ const OnlineMenu = ({
               </div>
             )}
 
-            {/* Recent Games */}
+            {/* Recent Games Button */}
             {recentGames.length > 0 && (
-              <div data-section="recent-games" className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
-                <h3 className="text-slate-400 font-bold text-sm mb-3 flex items-center gap-2">
-                  <History size={16} />
-                  RECENT GAMES
-                </h3>
-                <div className="space-y-2">
-                  {recentGames.slice(0, 3).filter(g => g).map(game => {
-                    const result = getGameResult(game);
-                    const opponentName = getOpponentName(game);
-                    return (
-                      <div
-                        key={game.id}
-                        className="p-3 bg-slate-800/50 rounded-lg flex items-center justify-between border border-slate-700/30"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-slate-400 text-xs font-bold">
-                            {opponentName?.[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div className="text-left">
-                            <div className="text-slate-300 text-sm">vs {opponentName}</div>
-                            <div className="text-slate-600 text-xs">
-                              {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'Unknown date'}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              soundManager.playButtonClick();
-                              onViewReplay?.(game.id);
-                            }}
-                            className="p-1.5 text-slate-500 hover:text-pink-400 transition-colors"
-                            title="Watch Replay"
-                          >
-                            <PlayCircle size={16} />
-                          </button>
-                          <span className={`text-sm font-bold ${result.color}`}>
-                            {result.text}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
+              <button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  setShowRecentGames(true);
+                }}
+                className="w-full p-4 bg-slate-800/40 rounded-xl flex items-center justify-between border border-slate-700/50 hover:border-slate-600 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center group-hover:bg-slate-600/50 transition-colors">
+                    <History size={20} className="text-slate-400" />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-slate-300 font-medium text-sm">Recent Games</div>
+                    <div className="text-slate-500 text-xs">{recentGames.length} completed {recentGames.length === 1 ? 'game' : 'games'}</div>
+                  </div>
                 </div>
-              </div>
+                <ChevronRight size={20} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+              </button>
             )}
 
             {/* Back button */}
@@ -1152,6 +1165,80 @@ const OnlineMenu = ({
         />
       )}
       
+      {/* Recent Games Modal */}
+      {showRecentGames && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+            {/* Header */}
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History size={24} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-amber-300">Recent Games</h2>
+              </div>
+              <button
+                onClick={() => setShowRecentGames(false)}
+                className="p-1 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Games List */}
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {recentGames.length === 0 ? (
+                <div className="text-center py-8">
+                  <History className="mx-auto text-slate-600 mb-2" size={40} />
+                  <p className="text-slate-400">No recent games</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentGames.filter(g => g).map(game => {
+                    const result = getGameResult(game);
+                    const opponentName = getOpponentName(game);
+                    return (
+                      <div
+                        key={game.id}
+                        className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition-all"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
+                              {opponentName?.[0]?.toUpperCase() || '?'}
+                            </div>
+                            <div>
+                              <div className="text-slate-200 font-medium">vs {opponentName}</div>
+                              <div className="text-slate-500 text-xs">
+                                {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'Unknown date'}
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`text-lg font-bold ${result.color}`}>
+                            {result.text}
+                          </span>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => {
+                              soundManager.playButtonClick();
+                              setShowRecentGames(false);
+                              onViewReplay?.(game.id);
+                            }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-pink-500/20 text-pink-300 rounded-lg hover:bg-pink-500/30 transition-colors text-sm"
+                          >
+                            <PlayCircle size={16} />
+                            Watch Replay
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Friends List Modal */}
       {showFriendsList && (
         <FriendsList

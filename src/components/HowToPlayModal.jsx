@@ -1,85 +1,112 @@
-import { X } from 'lucide-react';
-import { soundManager } from '../utils/soundManager';
+// How to Play Modal
+import { X, Target, Users, Trophy, Lightbulb } from 'lucide-react';
 
 const HowToPlayModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
-  const handleClose = () => {
-    soundManager.playButtonClick();
-    onClose();
-  };
-
   return (
-    <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={handleClose}
-    >
-      <div 
-        className="bg-slate-900/95 rounded-2xl p-6 max-w-lg w-full border border-amber-500/30 shadow-[0_0_40px_rgba(251,191,36,0.3)] max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[85vh] overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.3)]">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-amber-300 tracking-wide">HOW TO PLAY</h2>
-          <button 
-            onClick={handleClose}
-            className="text-slate-400 hover:text-white transition-colors"
+        <div className="p-4 border-b border-cyan-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 to-slate-800">
+          <h2 className="text-xl font-black text-cyan-300 tracking-wider">HOW TO PLAY</h2>
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-white transition-colors"
           >
             <X size={24} />
           </button>
         </div>
-        
+
         {/* Content */}
-        <div className="space-y-4 text-slate-300 text-sm leading-relaxed">
-          <section>
-            <h3 className="text-cyan-400 font-bold mb-1 tracking-wide">OBJECTIVE</h3>
-            <p>Be the last player to place a piece on the board. When your opponent cannot make a valid move, you win!</p>
-          </section>
-          
-          <section>
-            <h3 className="text-pink-400 font-bold mb-1 tracking-wide">GAMEPLAY</h3>
-            <p>Players take turns placing one of the 12 unique pentomino pieces (shapes made of 5 squares) onto the 8×8 board. Each piece can only be used once per game by either player.</p>
-          </section>
-          
-          <section>
-            <h3 className="text-green-400 font-bold mb-1 tracking-wide">PLACEMENT RULES</h3>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>Pieces cannot overlap with other pieces</li>
-              <li>Pieces must fit entirely within the board</li>
-              <li>You can rotate and flip pieces before placing</li>
-              <li>Once placed, pieces cannot be moved</li>
+        <div className="p-5 overflow-y-auto max-h-[70vh] space-y-5">
+          {/* Objective */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-cyan-400">
+              <Target size={20} />
+              <h3 className="font-bold tracking-wide">OBJECTIVE</h3>
+            </div>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              Be the last player to place a piece! Force your opponent into a position where they can't make a valid move.
+            </p>
+          </div>
+
+          {/* Gameplay */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-emerald-400">
+              <Users size={20} />
+              <h3 className="font-bold tracking-wide">GAMEPLAY</h3>
+            </div>
+            <ul className="text-slate-300 text-sm space-y-2 leading-relaxed">
+              <li className="flex gap-2">
+                <span className="text-emerald-400">1.</span>
+                <span>Players take turns placing one of 12 unique pentomino pieces on the 8×8 board.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-emerald-400">2.</span>
+                <span>Each piece can only be used once per game.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-emerald-400">3.</span>
+                <span>Pieces cannot overlap with existing pieces.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-emerald-400">4.</span>
+                <span>Use rotate and flip buttons to adjust piece orientation.</span>
+              </li>
             </ul>
-          </section>
-          
-          <section>
-            <h3 className="text-purple-400 font-bold mb-1 tracking-wide">CONTROLS</h3>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li><span className="text-white">Select</span> a piece from the tray below the board</li>
-              <li><span className="text-white">Tap</span> a cell on the board to position it</li>
-              <li><span className="text-white">Rotate/Flip</span> to change orientation</li>
-              <li><span className="text-white">D-Pad</span> to fine-tune position</li>
-              <li><span className="text-white">Confirm</span> to place or <span className="text-white">Cancel</span> to pick a different piece</li>
+          </div>
+
+          {/* Winning */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-amber-400">
+              <Trophy size={20} />
+              <h3 className="font-bold tracking-wide">WINNING</h3>
+            </div>
+            <p className="text-slate-300 text-sm leading-relaxed">
+              The game ends when a player cannot place any remaining piece. The player who made the last successful move wins!
+            </p>
+          </div>
+
+          {/* Tips */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-purple-400">
+              <Lightbulb size={20} />
+              <h3 className="font-bold tracking-wide">TIPS</h3>
+            </div>
+            <ul className="text-slate-300 text-sm space-y-2 leading-relaxed">
+              <li className="flex gap-2">
+                <span className="text-purple-400">•</span>
+                <span>Save flexible pieces for later in the game.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-purple-400">•</span>
+                <span>Create awkward spaces that are hard for opponents to fill.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-purple-400">•</span>
+                <span>Watch what pieces your opponent has left.</span>
+              </li>
             </ul>
-          </section>
-          
-          <section>
-            <h3 className="text-yellow-400 font-bold mb-1 tracking-wide">STRATEGY TIPS</h3>
-            <ul className="list-disc list-inside space-y-1 ml-2">
-              <li>Control the center of the board early</li>
-              <li>Try to leave awkward spaces your opponent can't fill</li>
-              <li>Save flexible pieces for later in the game</li>
-              <li>Watch which pieces have been used!</li>
-            </ul>
-          </section>
+          </div>
+
+          {/* Piece Info */}
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+            <p className="text-slate-400 text-xs text-center">
+              There are 12 unique pentomino shapes, each made of 5 connected squares: F, I, L, N, P, T, U, V, W, X, Y, Z
+            </p>
+          </div>
         </div>
-        
-        {/* Close Button */}
-        <button 
-          onClick={handleClose}
-          className="w-full mt-6 p-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-xl font-bold tracking-wide hover:from-amber-500 hover:to-orange-500 transition-all shadow-[0_0_20px_rgba(251,191,36,0.4)]"
-        >
-          GOT IT!
-        </button>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-cyan-500/20">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-white font-bold rounded-lg transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+          >
+            GOT IT!
+          </button>
+        </div>
       </div>
     </div>
   );
