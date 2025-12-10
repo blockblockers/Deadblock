@@ -1,7 +1,6 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Zap, Trophy, Play, Home, RotateCcw, Timer, Flame } from 'lucide-react';
-import NeonTitle from './NeonTitle';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
@@ -10,6 +9,7 @@ import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, createEmptyBoard, B
 import { getSpeedPuzzle } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { statsService } from '../utils/statsService';
 
 const TIMER_DURATION = 7; // 7 seconds per puzzle
 
@@ -22,226 +22,144 @@ const theme = {
   panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
 };
 
-// Animated countdown timer with dramatic effects
-const SpeedTimer = ({ timeLeft, maxTime, isActive }) => {
+// Compact animated countdown timer
+const SpeedTimer = ({ timeLeft, maxTime }) => {
   const percentage = (timeLeft / maxTime) * 100;
   const isLow = timeLeft <= 3;
   const isCritical = timeLeft <= 2;
   const isUrgent = timeLeft <= 1;
   
-  // Calculate color transition
   const getTimerColor = () => {
-    if (isUrgent) return '#ef4444'; // red-500
-    if (isCritical) return '#f97316'; // orange-500
-    if (isLow) return '#fbbf24'; // amber-400
-    return '#22d3ee'; // cyan-400
+    if (isUrgent) return '#ef4444';
+    if (isCritical) return '#f97316';
+    if (isLow) return '#fbbf24';
+    return '#22d3ee';
   };
   
+  const color = getTimerColor();
+  
   return (
-    <div className="relative w-full max-w-xs mx-auto">
-      {/* Background glow that intensifies */}
-      <div 
-        className="absolute inset-0 rounded-2xl blur-xl transition-all duration-200"
-        style={{
-          background: `radial-gradient(circle, ${getTimerColor()}40 0%, transparent 70%)`,
-          transform: isUrgent ? 'scale(1.3)' : isCritical ? 'scale(1.2)' : 'scale(1)',
-        }}
-      />
-      
-      {/* Main container */}
-      <div 
-        className={`
-          relative rounded-2xl p-1 transition-all duration-200
-          ${isUrgent ? 'animate-timer-shake' : isCritical ? 'animate-timer-critical' : isLow ? 'animate-timer-pulse' : ''}
-        `}
-        style={{
-          background: `linear-gradient(135deg, ${getTimerColor()}60, ${getTimerColor()}30)`,
-          boxShadow: `0 0 ${isUrgent ? '50' : isCritical ? '35' : '20'}px ${getTimerColor()}${isUrgent ? 'cc' : '80'}`,
-        }}
-      >
-        <div className="bg-slate-950/95 rounded-xl p-4">
-          {/* Circular progress ring */}
-          <div className="relative w-32 h-32 mx-auto mb-3">
-            {/* Background ring */}
-            <svg className="w-full h-full transform -rotate-90">
-              <circle
-                cx="64"
-                cy="64"
-                r="56"
-                fill="none"
-                stroke="rgba(100,116,139,0.2)"
-                strokeWidth="8"
-              />
-              {/* Progress ring */}
-              <circle
-                cx="64"
-                cy="64"
-                r="56"
-                fill="none"
-                stroke={getTimerColor()}
-                strokeWidth="8"
-                strokeLinecap="round"
-                strokeDasharray={`${2 * Math.PI * 56}`}
-                strokeDashoffset={`${2 * Math.PI * 56 * (1 - percentage / 100)}`}
-                className="transition-all duration-100"
-                style={{
-                  filter: `drop-shadow(0 0 ${isUrgent ? '15' : '8'}px ${getTimerColor()})`,
-                }}
-              />
-            </svg>
-            
-            {/* Center content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div 
-                className={`
-                  font-black tabular-nums tracking-tight transition-all duration-100
-                  ${isUrgent ? 'text-5xl animate-pulse' : isCritical ? 'text-5xl' : 'text-4xl'}
-                `}
-                style={{ color: getTimerColor() }}
-              >
-                {timeLeft.toFixed(1)}
-              </div>
-              <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">SEC</div>
-            </div>
-            
-            {/* Pulsing center glow for critical */}
-            {isCritical && (
-              <div 
-                className="absolute inset-4 rounded-full animate-ping"
-                style={{ background: `radial-gradient(circle, ${getTimerColor()}30 0%, transparent 70%)` }}
-              />
-            )}
-          </div>
-          
-          {/* Urgency indicator bars */}
-          <div className="flex justify-center gap-1">
-            {[7, 6, 5, 4, 3, 2, 1].map((n) => (
-              <div
-                key={n}
-                className={`
-                  w-6 h-2 rounded-full transition-all duration-200
-                  ${timeLeft >= n 
-                    ? n <= 2 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]' 
-                      : n <= 3 ? 'bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.6)]' 
-                      : 'bg-cyan-500 shadow-[0_0_6px_rgba(34,211,238,0.5)]'
-                    : 'bg-slate-700/50'
-                  }
-                `}
-              />
-            ))}
-          </div>
-        </div>
+    <div 
+      className={`
+        relative flex items-center gap-2 px-3 py-1.5 rounded-full 
+        bg-slate-900/90 border transition-all duration-200
+        ${isUrgent ? 'animate-timer-shake border-red-500/70' : isCritical ? 'animate-timer-critical border-orange-500/60' : isLow ? 'animate-timer-pulse border-amber-500/50' : 'border-cyan-500/40'}
+      `}
+      style={{
+        boxShadow: `0 0 ${isUrgent ? '20' : isCritical ? '15' : '10'}px ${color}60`,
+      }}
+    >
+      {/* Mini circular progress */}
+      <div className="relative w-8 h-8">
+        <svg className="w-full h-full transform -rotate-90">
+          <circle cx="16" cy="16" r="12" fill="none" stroke="rgba(100,116,139,0.3)" strokeWidth="3" />
+          <circle
+            cx="16" cy="16" r="12" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round"
+            strokeDasharray={`${2 * Math.PI * 12}`}
+            strokeDashoffset={`${2 * Math.PI * 12 * (1 - percentage / 100)}`}
+            className="transition-all duration-100"
+            style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+          />
+        </svg>
+        <Timer 
+          size={14} 
+          className="absolute inset-0 m-auto transition-colors"
+          style={{ color }}
+        />
       </div>
       
-      {/* Outer ring pulses */}
-      {isUrgent && (
-        <>
-          <div className="absolute inset-0 rounded-2xl border-2 border-red-500 animate-ping opacity-50" />
-          <div className="absolute inset-[-4px] rounded-2xl border border-red-400/50 animate-pulse" />
-          <div className="absolute inset-[-8px] rounded-2xl border border-red-300/30 animate-ping" style={{ animationDuration: '0.8s' }} />
-        </>
-      )}
+      {/* Time display */}
+      <div 
+        className={`font-black tabular-nums text-xl transition-all ${isUrgent ? 'scale-110' : ''}`}
+        style={{ color, textShadow: `0 0 10px ${color}` }}
+      >
+        {timeLeft.toFixed(1)}
+      </div>
+      
+      {/* Urgency indicator dots */}
+      <div className="flex gap-0.5">
+        {[1, 2, 3].map((n) => (
+          <div
+            key={n}
+            className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
+              timeLeft <= n ? 'bg-red-500' : timeLeft <= n + 2 ? 'bg-amber-500' : 'bg-cyan-500/50'
+            }`}
+            style={{ boxShadow: timeLeft <= n ? '0 0 6px #ef4444' : 'none' }}
+          />
+        ))}
+      </div>
     </div>
   );
 };
 
-// Enhanced streak display with fire effects
-const StreakDisplay = ({ streak, isNewRecord }) => {
+// Compact streak display with fire effects
+const StreakDisplay = ({ streak, isNewRecord, bestStreak = 0 }) => {
   const isHot = streak >= 3;
   const isOnFire = streak >= 5;
   const isLegendary = streak >= 10;
   
   const getStreakColor = () => {
-    if (isLegendary) return '#fbbf24'; // amber-400
-    if (isOnFire) return '#f97316'; // orange-500
-    if (isHot) return '#fb923c'; // orange-400
-    return '#94a3b8'; // slate-400
+    if (isLegendary) return '#fbbf24';
+    if (isOnFire) return '#f97316';
+    if (isHot) return '#fb923c';
+    return '#94a3b8';
   };
   
+  const color = getStreakColor();
+  
   return (
-    <div className="relative">
-      {/* Background glow for high streaks */}
-      {isHot && (
-        <div 
-          className="absolute inset-0 rounded-2xl blur-lg animate-pulse"
-          style={{ 
-            background: `radial-gradient(circle, ${getStreakColor()}40 0%, transparent 70%)`,
-          }}
+    <div 
+      className={`
+        flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border transition-all duration-300
+        ${isLegendary ? 'border-amber-400/60' : isOnFire ? 'border-orange-500/50' : isHot ? 'border-orange-400/40' : 'border-slate-700/50'}
+      `}
+      style={{
+        boxShadow: isHot ? `0 0 ${isLegendary ? '20' : isOnFire ? '15' : '10'}px ${color}40` : 'none',
+      }}
+    >
+      {/* Flame icon */}
+      <div className="relative">
+        <Flame 
+          size={18} 
+          className={`transition-all duration-300 ${isOnFire ? 'animate-bounce' : ''}`}
+          style={{ color, filter: isHot ? `drop-shadow(0 0 4px ${color})` : 'none' }}
         />
+      </div>
+      
+      {/* Streak number */}
+      <div 
+        className="font-black tabular-nums text-lg"
+        style={{ color, textShadow: isHot ? `0 0 10px ${color}` : 'none' }}
+      >
+        {streak}
+      </div>
+      
+      {/* Best streak indicator (when not a new record) */}
+      {bestStreak > 0 && !isNewRecord && streak < bestStreak && (
+        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-700/50 border border-slate-600/50">
+          <Trophy size={10} className="text-slate-400" />
+          <span className="text-slate-400 text-[10px] font-medium">{bestStreak}</span>
+        </div>
       )}
       
-      <div 
-        className={`
-          relative flex items-center gap-4 px-5 py-3 rounded-2xl bg-slate-900/90 border-2 transition-all duration-300
-          ${isLegendary ? 'border-amber-400/70' : isOnFire ? 'border-orange-500/60' : isHot ? 'border-orange-400/50' : 'border-slate-700/50'}
-        `}
-        style={{
-          boxShadow: isHot ? `0 0 ${isLegendary ? '40' : isOnFire ? '30' : '20'}px ${getStreakColor()}50` : 'none',
-        }}
-      >
-        {/* Flame icon with animation */}
-        <div className="relative">
-          <Flame 
-            size={32} 
-            className={`transition-all duration-300 ${isHot ? 'animate-bounce' : ''}`}
-            style={{ 
-              color: getStreakColor(),
-              filter: isHot ? `drop-shadow(0 0 8px ${getStreakColor()})` : 'none',
-            }}
-          />
-          {/* Extra flames for high streaks */}
-          {isOnFire && (
-            <>
-              <Flame 
-                size={20} 
-                className="absolute -top-2 -left-1 text-amber-400 animate-pulse" 
-                style={{ filter: 'drop-shadow(0 0 4px #fbbf24)' }}
-              />
-              <Flame 
-                size={16} 
-                className="absolute -top-1 -right-1 text-orange-400 animate-pulse" 
-                style={{ animationDelay: '0.2s', filter: 'drop-shadow(0 0 4px #fb923c)' }}
-              />
-            </>
-          )}
+      {/* New record badge */}
+      {isNewRecord && streak > 0 && (
+        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/50">
+          <Trophy size={12} className="text-amber-400" />
+          <span className="text-amber-300 text-[10px] font-bold uppercase">Best</span>
         </div>
-        
-        {/* Streak number */}
-        <div className="text-center">
-          <div className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Streak</div>
-          <div 
-            className={`
-              font-black tabular-nums transition-all duration-300
-              ${isLegendary ? 'text-4xl' : isOnFire ? 'text-3xl' : 'text-2xl'}
-            `}
-            style={{ 
-              color: getStreakColor(),
-              textShadow: isHot ? `0 0 20px ${getStreakColor()}` : 'none',
-            }}
-          >
-            {streak}
-          </div>
-        </div>
-        
-        {/* New record badge */}
-        {isNewRecord && streak > 0 && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/50 animate-bounce">
-            <Trophy size={18} className="text-amber-400" />
-            <span className="text-amber-300 text-xs font-bold uppercase tracking-wider">Best!</span>
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 };
 
 // Success overlay
 const SuccessOverlay = ({ streak, onContinue }) => (
-  <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
-    <div className="bg-slate-900 rounded-2xl p-8 max-w-sm w-full mx-4 border border-green-500/50 shadow-[0_0_60px_rgba(34,197,94,0.4)] animate-scale-in">
+  <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
+    <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border border-green-500/50 shadow-[0_0_60px_rgba(34,197,94,0.4)]">
       <div className="text-center">
-        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center animate-pulse">
-          <Zap size={40} className="text-white" />
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center animate-pulse">
+          <Zap size={32} className="text-white" />
         </div>
         <h2 className="text-2xl font-black text-green-400 mb-2">CORRECT!</h2>
         <p className="text-slate-400 mb-4">Streak: <span className="text-white font-bold text-xl">{streak}</span></p>
@@ -263,64 +181,69 @@ const SuccessOverlay = ({ streak, onContinue }) => (
 );
 
 // Game over overlay
-const GameOverOverlay = ({ streak, bestStreak, onPlayAgain, onMenu }) => (
-  <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm animate-fade-in">
-    <div className="bg-slate-900 rounded-2xl p-8 max-w-sm w-full mx-4 border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.3)] animate-scale-in">
-      <div className="text-center">
-        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center">
-          <Timer size={40} className="text-white" />
-        </div>
-        <h2 className="text-2xl font-black text-red-400 mb-2">TIME'S UP!</h2>
-        
-        <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Final Streak</div>
-              <div className="text-3xl font-black text-white">{streak}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Best Ever</div>
-              <div className={`text-3xl font-black ${streak >= bestStreak ? 'text-amber-400' : 'text-slate-400'}`}>
-                {Math.max(streak, bestStreak)}
+const GameOverOverlay = ({ streak, bestStreak, onPlayAgain, onMenu }) => {
+  // Log when rendered
+  console.log('[SpeedPuzzle] Rendering GameOverOverlay, streak:', streak, 'bestStreak:', bestStreak);
+  
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
+      <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.3)]">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center">
+            <Timer size={32} className="text-white" />
+          </div>
+          <h2 className="text-2xl font-black text-red-400 mb-4">TIME'S UP!</h2>
+          
+          <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Final Streak</div>
+                <div className="text-3xl font-black text-white">{streak}</div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Best Ever</div>
+                <div className={`text-3xl font-black ${streak >= bestStreak && streak > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                  {Math.max(streak, bestStreak)}
+                </div>
               </div>
             </div>
+            
+            {streak >= bestStreak && streak > 0 && (
+              <div className="mt-3 flex items-center justify-center gap-2 text-amber-400">
+                <Trophy size={18} />
+                <span className="font-bold text-sm">New Personal Best!</span>
+              </div>
+            )}
           </div>
           
-          {streak >= bestStreak && streak > 0 && (
-            <div className="mt-3 flex items-center justify-center gap-2 text-amber-400">
-              <Trophy size={18} />
-              <span className="font-bold text-sm">New Personal Best!</span>
-            </div>
-          )}
-        </div>
-        
-        <div className="space-y-3">
-          <button
-            onClick={onPlayAgain}
-            className="w-full py-4 rounded-xl font-black tracking-wider text-lg bg-gradient-to-r from-red-500 to-orange-600 text-white hover:from-red-400 hover:to-orange-500 transition-all shadow-[0_0_30px_rgba(239,68,68,0.5)] active:scale-[0.98]"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <RotateCcw size={22} />
-              PLAY AGAIN
-            </div>
-          </button>
-          
-          <button
-            onClick={onMenu}
-            className="w-full py-3 rounded-xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-all border border-slate-600"
-          >
-            <div className="flex items-center justify-center gap-2">
-              <Home size={18} />
-              Back to Menu
-            </div>
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={onPlayAgain}
+              className="w-full py-4 rounded-xl font-black tracking-wider text-lg bg-gradient-to-r from-red-500 to-orange-600 text-white hover:from-red-400 hover:to-orange-500 transition-all shadow-[0_0_30px_rgba(239,68,68,0.5)] active:scale-[0.98]"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <RotateCcw size={22} />
+                PLAY AGAIN
+              </div>
+            </button>
+            
+            <button
+              onClick={onMenu}
+              className="w-full py-3 rounded-xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-all border border-slate-600"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Home size={18} />
+                Back to Menu
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
-const SpeedPuzzleScreen = ({ onMenu }) => {
+const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const { needsScroll } = useResponsiveLayout(750);
   
   // Game state
@@ -333,6 +256,35 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
       return 0;
     }
   });
+  const [dbBestStreak, setDbBestStreak] = useState(0); // Best streak from database
+  
+  // Load database best streak on mount (if logged in)
+  useEffect(() => {
+    if (!isOfflineMode) {
+      const loadDbStats = async () => {
+        const stats = await statsService.getStats();
+        if (stats?.speed_best_streak) {
+          setDbBestStreak(stats.speed_best_streak);
+          // If database has higher streak, update local
+          if (stats.speed_best_streak > bestStreak) {
+            setBestStreak(stats.speed_best_streak);
+            try {
+              localStorage.setItem('speed-puzzle-best', stats.speed_best_streak.toString());
+            } catch {}
+          }
+        }
+      };
+      loadDbStats();
+    }
+  }, [isOfflineMode]);
+  
+  // Get the effective best streak (max of local and db)
+  const effectiveBestStreak = Math.max(bestStreak, dbBestStreak);
+  
+  // Log state changes
+  useEffect(() => {
+    console.log('[SpeedPuzzle] Game state changed to:', gameState);
+  }, [gameState]);
   
   // Timer
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
@@ -426,29 +378,37 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
   // Start timer when playing
   useEffect(() => {
     if (gameState === 'playing') {
+      console.log('[SpeedPuzzle] Starting timer');
+      lastTickRef.current = Date.now();
+      
       timerRef.current = setInterval(() => {
         const now = Date.now();
         const delta = (now - lastTickRef.current) / 1000;
         lastTickRef.current = now;
         
         setTimeLeft(prev => {
-          const newTime = prev - delta;
-          if (newTime <= 0) {
+          const newTime = Math.max(0, prev - delta);
+          if (newTime <= 0 && prev > 0) {
+            console.log('[SpeedPuzzle] Timer expired! Setting gameover state');
             clearInterval(timerRef.current);
+            timerRef.current = null;
             soundManager.playGameOver();
-            setGameState('gameover');
+            // Use setTimeout to ensure state update happens after this render
+            setTimeout(() => {
+              setGameState('gameover');
+            }, 0);
             return 0;
-          }
-          // Play tick sound when low
-          if (newTime <= 3 && prev > 3) {
-            // soundManager.playTick?.();
           }
           return newTime;
         });
       }, 50);
       
       return () => {
-        if (timerRef.current) clearInterval(timerRef.current);
+        console.log('[SpeedPuzzle] Cleaning up timer');
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
       };
     }
   }, [gameState]);
@@ -569,12 +529,23 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
         const newStreak = streak + 1;
         setStreak(newStreak);
         
+        // Track puzzle completion in database
+        if (!isOfflineMode) {
+          statsService.recordSpeedPuzzleComplete();
+        }
+        
         // Update best streak
-        if (newStreak > bestStreak) {
+        if (newStreak > effectiveBestStreak) {
           setBestStreak(newStreak);
+          setDbBestStreak(newStreak);
           try {
             localStorage.setItem('speed-puzzle-best', newStreak.toString());
           } catch {}
+          
+          // Update database with new best streak
+          if (!isOfflineMode) {
+            statsService.updateSpeedBestStreak(newStreak);
+          }
         }
         
         setGameState('success');
@@ -602,6 +573,12 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
   // Play again
   const handlePlayAgain = () => {
     soundManager.playButtonClick();
+    
+    // Record session completion with final streak
+    if (!isOfflineMode && streak > 0) {
+      statsService.recordSpeedSessionComplete(streak);
+    }
+    
     setStreak(0);
     loadNewPuzzle();
   };
@@ -610,13 +587,36 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
   const handleMenu = () => {
     soundManager.playButtonClick();
     if (timerRef.current) clearInterval(timerRef.current);
+    
+    // Record session completion with final streak if any
+    if (!isOfflineMode && streak > 0) {
+      statsService.recordSpeedSessionComplete(streak);
+    }
+    
     onMenu();
   };
 
-  const isNewRecord = streak > 0 && streak >= bestStreak;
+  const isNewRecord = streak > 0 && streak >= effectiveBestStreak;
+
+  // Use lower threshold for speed puzzle (650px) since it has compact layout
+  const { needsScroll, viewportHeight, isMobile } = useResponsiveLayout(650);
+
+  // Scroll container styles - enhanced for mobile
+  const scrollStyles = needsScroll ? {
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    WebkitOverflowScrolling: 'touch',
+    touchAction: 'pan-y',
+    scrollBehavior: 'smooth',
+    // Prevent pull-to-refresh on mobile
+    overscrollBehavior: 'contain',
+  } : {};
 
   return (
-    <div className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}>
+    <div 
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      style={scrollStyles}
+    >
       {/* Grid background */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -628,42 +628,41 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
       <div className={`fixed bottom-20 right-10 w-72 h-72 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
       
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center px-2 py-3`}>
-        {/* Header */}
-        <div className="w-full max-w-md mb-2">
-          <div className="flex items-center justify-between mb-3">
+      <div className={`relative ${needsScroll ? 'pb-safe min-h-full' : 'h-full'} flex flex-col items-center px-2 py-2`}>
+        {/* Compact Header with title + back button */}
+        <div className="w-full max-w-md mb-1 flex-shrink-0">
+          <div className="flex items-center justify-between">
             <button
               onClick={handleMenu}
               className="p-2 text-slate-400 hover:text-white transition-colors"
             >
-              <Home size={24} />
+              <Home size={20} />
             </button>
             
             <div className="text-center">
-              <NeonTitle size="small" />
-              <div className="speed-subtitle font-black tracking-[0.2em] text-xs mt-1">
+              <div className="speed-subtitle font-black tracking-[0.15em] text-xs">
                 SPEED MODE
               </div>
             </div>
             
-            <div className="w-10" /> {/* Spacer for centering */}
-          </div>
-          
-          {/* Timer - Always visible during play */}
-          {gameState === 'playing' && (
-            <div className="flex justify-center mb-3">
-              <SpeedTimer timeLeft={timeLeft} maxTime={TIMER_DURATION} isActive={true} />
-            </div>
-          )}
-          
-          {/* Streak display */}
-          <div className="flex justify-center mb-3">
-            <StreakDisplay streak={streak} isNewRecord={isNewRecord} />
+            <div className="w-9" />
           </div>
         </div>
         
+        {/* Timer and Streak row - always visible */}
+        <div className="w-full max-w-md flex items-center justify-center gap-3 mb-2 flex-shrink-0">
+          {gameState === 'playing' ? (
+            <SpeedTimer timeLeft={timeLeft} maxTime={TIMER_DURATION} />
+          ) : (
+            <div className="px-3 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/50 text-slate-500 text-sm">
+              {gameState === 'loading' ? 'Loading...' : 'Ready'}
+            </div>
+          )}
+          <StreakDisplay streak={streak} isNewRecord={isNewRecord} bestStreak={effectiveBestStreak} />
+        </div>
+        
         {/* Game board */}
-        <div className={`${theme.panelBorder} border rounded-2xl p-3 bg-slate-900/60 backdrop-blur ${theme.panelShadow}`}>
+        <div className={`${theme.panelBorder} border rounded-2xl p-3 bg-slate-900/60 backdrop-blur ${theme.panelShadow} flex-shrink-0`}>
           {gameState === 'loading' ? (
             <div className="w-[280px] h-[280px] sm:w-[320px] sm:h-[320px] flex items-center justify-center">
               <div className="text-center">
@@ -689,7 +688,7 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
         
         {/* Piece tray */}
         {gameState === 'playing' && (
-          <div className="mt-3 w-full max-w-md">
+          <div className="mt-3 w-full max-w-md flex-shrink-0">
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
@@ -702,7 +701,7 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
         
         {/* Controls */}
         {gameState === 'playing' && pendingMove && (
-          <div className="mt-3 w-full max-w-md">
+          <div className="mt-3 w-full max-w-md flex-shrink-0">
             <DPad
               onMove={movePendingPiece}
               onRotate={rotatePiece}
@@ -715,7 +714,8 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
           </div>
         )}
         
-        {needsScroll && <div className="h-8 flex-shrink-0" />}
+        {/* Bottom safe area spacer */}
+        {needsScroll && <div className="h-12 flex-shrink-0" />}
       </div>
       
       {/* Success overlay */}
@@ -727,7 +727,7 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
       {gameState === 'gameover' && (
         <GameOverOverlay
           streak={streak}
-          bestStreak={bestStreak}
+          bestStreak={effectiveBestStreak}
           onPlayAgain={handlePlayAgain}
           onMenu={handleMenu}
         />
@@ -735,6 +735,10 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
       
       {/* Styles */}
       <style>{`
+        .pb-safe {
+          padding-bottom: env(safe-area-inset-bottom, 20px);
+        }
+        
         .speed-subtitle {
           color: #fff;
           text-shadow:

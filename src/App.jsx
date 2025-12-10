@@ -11,6 +11,11 @@ import GameScreen from './components/GameScreen';
 import DifficultySelector from './components/DifficultySelector';
 import NeonTitle from './components/NeonTitle';
 
+// Entry and Profile components
+import EntryAuthScreen from './components/EntryAuthScreen';
+import PlayerProfileCard from './components/PlayerProfileCard';
+import PlayerStatsModal from './components/PlayerStatsModal';
+
 // Online components (lazy loaded if needed)
 import AuthScreen from './components/AuthScreen';
 import OnlineMenu from './components/OnlineMenu';
@@ -32,11 +37,25 @@ function AppContent() {
   const [pendingInviteCode, setPendingInviteCode] = useState(null);
   const [inviteInfo, setInviteInfo] = useState(null);
   
+  // Entry auth and offline mode state
+  const [hasPassedEntryAuth, setHasPassedEntryAuth] = useState(false);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showOnlineAuthPrompt, setShowOnlineAuthPrompt] = useState(false);
+  
   // Spectating and replay state
   const [spectatingGameId, setSpectatingGameId] = useState(null);
   const [replayGameId, setReplayGameId] = useState(null);
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile } = useAuth();
+
+  // Check if user was already authenticated (skip entry screen)
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !hasPassedEntryAuth) {
+      console.log('App: User already authenticated, skipping entry screen');
+      setHasPassedEntryAuth(true);
+    }
+  }, [authLoading, isAuthenticated, hasPassedEntryAuth]);
 
   // Check for invite code in URL
   useEffect(() => {
@@ -217,6 +236,11 @@ function AppContent() {
         alert('Online features are not configured. Please set up Supabase.');
         return;
       }
+      // If user is in offline mode, show auth prompt
+      if (isOfflineMode && !isAuthenticated) {
+        setShowOnlineAuthPrompt(true);
+        return;
+      }
       if (!isAuthenticated) {
         setGameMode('auth');
       } else {
@@ -225,6 +249,25 @@ function AppContent() {
     } else {
       startNewGame(mode);
     }
+  };
+
+  // Handle entry auth complete
+  const handleEntryAuthComplete = () => {
+    setHasPassedEntryAuth(true);
+    setIsOfflineMode(false);
+  };
+
+  // Handle offline mode selection
+  const handleOfflineMode = () => {
+    setHasPassedEntryAuth(true);
+    setIsOfflineMode(true);
+  };
+
+  // Handle online auth from offline mode
+  const handleOnlineAuthSuccess = () => {
+    setShowOnlineAuthPrompt(false);
+    setIsOfflineMode(false);
+    setGameMode('online-menu');
   };
 
   // Start AI game after difficulty selection
@@ -337,21 +380,52 @@ function AppContent() {
   }
 
   // Debug logging
-  console.log('App render:', { gameMode, onlineGameId, isAuthenticated, authLoading, isOAuthCallback });
+  console.log('App render:', { gameMode, onlineGameId, isAuthenticated, authLoading, isOAuthCallback, hasPassedEntryAuth, isOfflineMode });
+
+  // Show Entry Auth Screen first (before anything else)
+  // Skip if already authenticated or has passed entry screen
+  if (!hasPassedEntryAuth && !authLoading && !isOAuthCallback) {
+    return (
+      <EntryAuthScreen
+        onComplete={handleEntryAuthComplete}
+        onOfflineMode={handleOfflineMode}
+      />
+    );
+  }
+
+  // Online Auth Prompt (for offline users trying to go online)
+  if (showOnlineAuthPrompt) {
+    return (
+      <EntryAuthScreen
+        onComplete={handleOnlineAuthSuccess}
+        onOfflineMode={() => setShowOnlineAuthPrompt(false)}
+        forceOnlineOnly={true}
+      />
+    );
+  }
 
   // Render Menu Screen
   if (!gameMode) {
     return (
-      <MenuScreen
-        onStartGame={handleStartGame}
-        onPuzzleSelect={() => setGameMode('puzzle-select')}
-        showHowToPlay={showHowToPlay}
-        onToggleHowToPlay={setShowHowToPlay}
-        showSettings={showSettings}
-        onToggleSettings={setShowSettings}
-        isOnlineEnabled={isOnlineEnabled}
-        isAuthenticated={isAuthenticated}
-      />
+      <>
+        <MenuScreen
+          onStartGame={handleStartGame}
+          onPuzzleSelect={() => setGameMode('puzzle-select')}
+          showHowToPlay={showHowToPlay}
+          onToggleHowToPlay={setShowHowToPlay}
+          showSettings={showSettings}
+          onToggleSettings={setShowSettings}
+          isOnlineEnabled={isOnlineEnabled}
+          isAuthenticated={isAuthenticated}
+          isOfflineMode={isOfflineMode}
+          onShowProfile={() => setShowProfileModal(true)}
+        />
+        <PlayerStatsModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          isOffline={isOfflineMode}
+        />
+      </>
     );
   }
 
@@ -501,6 +575,7 @@ function AppContent() {
     return (
       <SpeedPuzzleScreen
         onMenu={() => setGameMode('puzzle-select')}
+        isOfflineMode={isOfflineMode}
       />
     );
   }

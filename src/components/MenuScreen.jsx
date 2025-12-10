@@ -1,8 +1,9 @@
-import { Settings, HelpCircle } from 'lucide-react';
+import { Settings, HelpCircle, Globe } from 'lucide-react';
 import { useMemo } from 'react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
+import PlayerProfileCard from './PlayerProfileCard';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { isSupabaseConfigured } from '../utils/supabase';
@@ -180,7 +181,9 @@ const MenuScreen = ({
   showSettings,
   onToggleSettings,
   isOnlineEnabled = false,
-  isAuthenticated = false
+  isAuthenticated = false,
+  isOfflineMode = false,
+  onShowProfile
 }) => {
   const { needsScroll } = useResponsiveLayout(700);
   const showOnline = isSupabaseConfigured();
@@ -267,8 +270,16 @@ const MenuScreen = ({
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-sm">
           
+          {/* Player Profile Card - At top */}
+          <div className="mb-4">
+            <PlayerProfileCard 
+              onClick={onShowProfile} 
+              isOffline={isOfflineMode}
+            />
+          </div>
+          
           {/* TITLE - Above the box */}
-          <div className="text-center mb-6">
+          <div className="text-center mb-4">
             <NeonTitle size="large" />
           </div>
           
@@ -285,7 +296,7 @@ const MenuScreen = ({
                   color="bg-gradient-to-br from-amber-500 to-orange-600"
                   glowColor="rgba(251,191,36,0.5)"
                   title="ONLINE"
-                  subtitle={isAuthenticated ? "Play ranked matches" : "Sign in to play"}
+                  subtitle={isOfflineMode ? "Sign in for ranked play" : (isAuthenticated ? "Ranked matches vs humans" : "Sign in to play")}
                   textColor="text-amber-300"
                   hoverTextColor="group-hover:text-amber-200"
                 />

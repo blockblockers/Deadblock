@@ -228,7 +228,9 @@ export const AuthProvider = ({ children }) => {
         data: { 
           username, 
           display_name: username 
-        }
+        },
+        // Don't require email verification redirect
+        emailRedirectTo: undefined
       }
     });
 
@@ -257,9 +259,18 @@ export const AuthProvider = ({ children }) => {
         
         if (profileError) {
           console.error('Failed to create profile manually:', profileError);
-          // Don't return error - user is created, profile will sync eventually
         }
       }
+      
+      // Check if email confirmation is required
+      // If session exists, user is auto-confirmed
+      const needsEmailConfirmation = !data.session;
+      
+      return { 
+        data, 
+        error: null, 
+        needsEmailConfirmation 
+      };
     }
 
     // Handle specific error messages
@@ -315,6 +326,53 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
     }
     return { error };
+  };
+
+  // Send password reset email
+  const resetPassword = async (email) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery`
+    });
+
+    return { data, error };
+  };
+
+  // Sign in with magic link (passwordless)
+  const signInWithMagicLink = async (email) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?type=magiclink`
+      }
+    });
+
+    return { data, error };
+  };
+
+  // Update user email (requires re-authentication)
+  const updateEmail = async (newEmail) => {
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+
+    const { data, error } = await supabase.auth.updateUser({
+      email: newEmail
+    });
+
+    return { data, error };
+  };
+
+  // Update user password
+  const updatePassword = async (newPassword) => {
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    return { data, error };
   };
 
   const updateProfile = async (updates) => {
@@ -377,7 +435,11 @@ export const AuthProvider = ({ children }) => {
       signUp,
       signIn,
       signInWithGoogle,
+      signInWithMagicLink,
       signOut,
+      resetPassword,
+      updateEmail,
+      updatePassword,
       updateProfile,
       checkUsernameAvailable,
       refreshProfile: async () => {
