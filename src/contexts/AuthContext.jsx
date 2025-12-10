@@ -201,6 +201,14 @@ export const AuthProvider = ({ children }) => {
   const signUp = async (email, password, username) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
+    // Validate username format
+    if (!username || username.length < 3 || username.length > 20) {
+      return { error: { message: 'Username must be 3-20 characters' } };
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
+    }
+
     // Check if username is taken
     const { data: existing } = await supabase
       .from('profiles')
@@ -212,6 +220,7 @@ export const AuthProvider = ({ children }) => {
       return { error: { message: 'Username already taken' } };
     }
 
+    // Sign up the user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -222,6 +231,53 @@ export const AuthProvider = ({ children }) => {
         }
       }
     });
+
+    // If signup succeeded but we got a database error, try to manually create profile
+    if (!error && data?.user) {
+      // Wait a moment for the trigger to run
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Check if profile was created
+      const { data: profileCheck } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', data.user.id)
+        .single();
+      
+      // If no profile exists, create it manually
+      if (!profileCheck) {
+        console.log('Profile not created by trigger, creating manually...');
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            username: username,
+            display_name: username
+          });
+        
+        if (profileError) {
+          console.error('Failed to create profile manually:', profileError);
+          // Don't return error - user is created, profile will sync eventually
+        }
+      }
+    }
+
+    // Handle specific error messages
+    if (error) {
+      let friendlyMessage = error.message;
+      
+      if (error.message.includes('database error')) {
+        friendlyMessage = 'Account created but profile setup failed. Please try signing in.';
+      } else if (error.message.includes('already registered')) {
+        friendlyMessage = 'An account with this email already exists';
+      } else if (error.message.includes('invalid email')) {
+        friendlyMessage = 'Please enter a valid email address';
+      } else if (error.message.includes('weak password')) {
+        friendlyMessage = 'Password is too weak. Use at least 6 characters';
+      }
+      
+      return { data, error: { ...error, message: friendlyMessage } };
+    }
 
     return { data, error };
   };

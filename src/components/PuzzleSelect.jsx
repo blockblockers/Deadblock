@@ -35,6 +35,15 @@ const themes = {
     cardBorder: 'border-purple-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(168,85,247,0.4),inset_0_0_30px_rgba(168,85,247,0.1)]',
   },
+  speed: {
+    gridColor: 'rgba(239,68,68,0.5)',
+    glow1: { color: 'bg-red-500/40', pos: 'top-10 left-20' },
+    glow2: { color: 'bg-orange-500/35', pos: 'bottom-24 right-10' },
+    glow3: { color: 'bg-amber-500/20', pos: 'top-1/2 right-1/3' },
+    cardBg: 'bg-gradient-to-br from-slate-900/95 via-red-950/50 to-slate-900/95',
+    cardBorder: 'border-red-500/50',
+    cardShadow: 'shadow-[0_0_60px_rgba(239,68,68,0.4),inset_0_0_30px_rgba(239,68,68,0.1)]',
+  },
 };
 
 const difficulties = [
@@ -82,6 +91,22 @@ const difficulties = [
       bg: 'bg-purple-900/30',
       border: 'border-purple-500/40',
     }
+  },
+  { 
+    id: 'speed', 
+    name: 'SPEED', 
+    moves: null, // Special - timed mode
+    description: 'Beat the clock! 7 seconds per puzzle.', 
+    theme: 'speed',
+    isSpeed: true,
+    colors: {
+      gradient: 'from-red-500 to-orange-600',
+      glow: 'rgba(239,68,68,0.6)',
+      text: 'text-red-300',
+      ring: 'ring-red-500/50',
+      bg: 'bg-red-900/30',
+      border: 'border-red-500/40',
+    }
   }
 ];
 
@@ -111,6 +136,13 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
 
   const handleGeneratePuzzle = async () => {
     soundManager.playButtonClick();
+    
+    // Speed mode goes directly to speed puzzle screen
+    if (selectedDifficulty === 'speed') {
+      onSpeedMode?.();
+      return;
+    }
+    
     setIsLoading(true);
     setError(null);
     setProgress(0);
@@ -171,6 +203,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
             <div className="space-y-3 mb-5">
               {difficulties.map((diff) => {
                 const isSelected = selectedDifficulty === diff.id;
+                const isSpeedMode = diff.isSpeed;
                 return (
                   <button 
                     key={diff.id} 
@@ -190,15 +223,34 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                       </div>
                     )}
                     
+                    {/* Speed mode pulse effect when not selected */}
+                    {isSpeedMode && !isSelected && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 via-orange-500/10 to-red-500/5 animate-speed-pulse" />
+                    )}
+                    
                     <div className="relative flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className={`font-black tracking-wide text-lg ${isSelected ? 'text-white' : diff.colors.text}`}>
                             {diff.name}
                           </h3>
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-700/50 text-slate-400'}`}>
-                            {diff.moves} moves
-                          </span>
+                          {isSpeedMode ? (
+                            <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${isSelected ? 'bg-white/20 text-white' : 'bg-red-500/30 text-red-300'}`}>
+                              <Timer size={10} />
+                              7s
+                            </span>
+                          ) : (
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-700/50 text-slate-400'}`}>
+                              {diff.moves} {diff.moves === 1 ? 'move' : 'moves'}
+                            </span>
+                          )}
+                          {/* Best streak badge for speed mode */}
+                          {isSpeedMode && bestSpeedStreak > 0 && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/30 text-amber-300 text-xs">
+                              <Flame size={10} />
+                              {bestSpeedStreak}
+                            </span>
+                          )}
                         </div>
                         <p className={`text-sm ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
                           {diff.description}
@@ -215,72 +267,41 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                   </button>
                 );
               })}
-              
-              {/* Speed Mode - Special button */}
-              <button
-                onClick={() => {
-                  soundManager.playButtonClick();
-                  onSpeedMode?.();
-                }}
-                disabled={isLoading}
-                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 text-left relative overflow-hidden
-                  bg-gradient-to-r from-red-900/40 via-orange-900/40 to-red-900/40 
-                  border-red-500/50 hover:border-red-400/70
-                  ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-[0_0_30px_rgba(239,68,68,0.4)]'}
-                `}
-              >
-                {/* Animated pulse background */}
-                <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 via-orange-500/20 to-red-500/10 animate-speed-pulse" />
-                
-                <div className="relative flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.5)]">
-                      <Zap size={22} className="text-white" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h3 className="font-black tracking-wide text-lg text-red-300">
-                          SPEED MODE
-                        </h3>
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/30 text-red-300 flex items-center gap-1">
-                          <Timer size={10} />
-                          7s
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-400">
-                        Beat the clock! How many can you solve?
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* Best streak badge */}
-                  {bestSpeedStreak > 0 && (
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40">
-                      <Flame size={14} className="text-amber-400" />
-                      <span className="text-amber-400 text-xs font-bold">{bestSpeedStreak}</span>
-                    </div>
-                  )}
-                </div>
-              </button>
             </div>
 
-            {/* Turn order info - Enhanced styling */}
-            <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-              {/* Styled header */}
-              <div className="text-center mb-3">
-                <span className="turn-order-title font-black tracking-[0.2em] text-xs">TURN ORDER</span>
+            {/* Turn order info - Enhanced styling (hide for speed mode) */}
+            {!selectedDiff.isSpeed && (
+              <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                {/* Styled header */}
+                <div className="text-center mb-3">
+                  <span className="turn-order-title font-black tracking-[0.2em] text-xs">TURN ORDER</span>
+                </div>
+                <div className="flex items-center justify-center gap-1 text-xs flex-wrap">
+                  {Array.from({ length: selectedDiff.moves }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className={`px-2 py-1 rounded font-medium ${i % 2 === 0 ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
+                        {i % 2 === 0 ? 'You' : 'A.I.'}
+                      </span>
+                      {i < selectedDiff.moves - 1 && <span className="text-slate-600">→</span>}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center justify-center gap-1 text-xs flex-wrap">
-                {Array.from({ length: selectedDiff.moves }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-1">
-                    <span className={`px-2 py-1 rounded font-medium ${i % 2 === 0 ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
-                      {i % 2 === 0 ? 'You' : 'A.I.'}
-                    </span>
-                    {i < selectedDiff.moves - 1 && <span className="text-slate-600">→</span>}
+            )}
+            
+            {/* Speed mode info */}
+            {selectedDiff.isSpeed && (
+              <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-red-500/30">
+                <div className="text-center">
+                  <span className="speed-info-title font-black tracking-[0.2em] text-xs">HOW IT WORKS</span>
+                  <div className="mt-2 text-sm text-slate-400 space-y-1">
+                    <p>Solve easy puzzles as fast as you can!</p>
+                    <p className="text-red-300">⏱ 7 seconds per puzzle</p>
+                    <p>Build your streak - how far can you go?</p>
                   </div>
-                ))}
+                </div>
               </div>
-            </div>
+            )}
             
             {/* Turn Order title styling */}
             <style>{`
@@ -293,6 +314,17 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                   0 0 20px #a855f7,
                   0 0 40px #a855f7,
                   0 0 60px #ec4899;
+                animation: turn-order-pulse 3s ease-in-out infinite;
+              }
+              .speed-info-title {
+                font-family: system-ui, -apple-system, sans-serif;
+                color: #fff;
+                text-shadow:
+                  0 0 5px #fff,
+                  0 0 10px #fff,
+                  0 0 20px #ef4444,
+                  0 0 40px #ef4444,
+                  0 0 60px #f97316;
                 animation: turn-order-pulse 3s ease-in-out infinite;
               }
               @keyframes turn-order-pulse {
@@ -343,6 +375,11 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                     <div className="text-sm">GENERATING...</div>
                     <div className="text-xs opacity-70">{progress}%</div>
                   </div>
+                </>
+              ) : selectedDiff.isSpeed ? (
+                <>
+                  <Zap size={22} />
+                  START SPEED MODE
                 </>
               ) : (
                 <>

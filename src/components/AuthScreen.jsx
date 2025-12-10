@@ -25,13 +25,29 @@ const AuthScreen = ({ onBack, onSuccess, inviteInfo }) => {
 
     try {
       if (mode === 'signup') {
+        // Validate username
         if (!username || username.length < 3) {
           setError('Username must be at least 3 characters');
           setLoading(false);
           return;
         }
+        if (username.length > 20) {
+          setError('Username must be 20 characters or less');
+          setLoading(false);
+          return;
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+          setError('Username can only contain letters, numbers, and underscores');
+          setLoading(false);
+          return;
+        }
         if (password.length < 6) {
           setError('Password must be at least 6 characters');
+          setLoading(false);
+          return;
+        }
+        if (!email || !email.includes('@')) {
+          setError('Please enter a valid email address');
           setLoading(false);
           return;
         }

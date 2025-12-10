@@ -7,7 +7,7 @@ import PieceTray from './PieceTray';
 import DPad from './DPad';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, createEmptyBoard, BOARD_SIZE } from '../utils/gameLogic';
-import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
+import { getSpeedPuzzle } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -22,121 +22,218 @@ const theme = {
   panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
 };
 
-// Animated countdown timer
+// Animated countdown timer with dramatic effects
 const SpeedTimer = ({ timeLeft, maxTime, isActive }) => {
   const percentage = (timeLeft / maxTime) * 100;
   const isLow = timeLeft <= 3;
   const isCritical = timeLeft <= 2;
+  const isUrgent = timeLeft <= 1;
+  
+  // Calculate color transition
+  const getTimerColor = () => {
+    if (isUrgent) return '#ef4444'; // red-500
+    if (isCritical) return '#f97316'; // orange-500
+    if (isLow) return '#fbbf24'; // amber-400
+    return '#22d3ee'; // cyan-400
+  };
   
   return (
-    <div className="relative">
-      {/* Outer glow container */}
-      <div className={`
-        relative p-1 rounded-2xl transition-all duration-300
-        ${isCritical ? 'animate-timer-critical' : isLow ? 'animate-timer-pulse' : ''}
-      `}
-      style={{
-        background: isCritical 
-          ? 'linear-gradient(135deg, rgba(239,68,68,0.6), rgba(249,115,22,0.6))'
-          : isLow 
-            ? 'linear-gradient(135deg, rgba(251,191,36,0.4), rgba(249,115,22,0.4))'
-            : 'linear-gradient(135deg, rgba(34,211,238,0.3), rgba(168,85,247,0.3))',
-        boxShadow: isCritical 
-          ? '0 0 30px rgba(239,68,68,0.8), 0 0 60px rgba(239,68,68,0.4)'
-          : isLow
-            ? '0 0 20px rgba(251,191,36,0.6), 0 0 40px rgba(249,115,22,0.3)'
-            : '0 0 15px rgba(34,211,238,0.4)',
-      }}>
-        <div className="bg-slate-900/90 rounded-xl px-6 py-3 flex items-center gap-4">
-          {/* Timer icon */}
-          <div className={`relative ${isCritical ? 'animate-bounce' : ''}`}>
-            <Timer 
-              size={28} 
-              className={`transition-colors duration-200 ${
-                isCritical ? 'text-red-400' : isLow ? 'text-amber-400' : 'text-cyan-400'
-              }`} 
-            />
-            {isCritical && (
-              <div className="absolute inset-0 animate-ping">
-                <Timer size={28} className="text-red-400 opacity-50" />
+    <div className="relative w-full max-w-xs mx-auto">
+      {/* Background glow that intensifies */}
+      <div 
+        className="absolute inset-0 rounded-2xl blur-xl transition-all duration-200"
+        style={{
+          background: `radial-gradient(circle, ${getTimerColor()}40 0%, transparent 70%)`,
+          transform: isUrgent ? 'scale(1.3)' : isCritical ? 'scale(1.2)' : 'scale(1)',
+        }}
+      />
+      
+      {/* Main container */}
+      <div 
+        className={`
+          relative rounded-2xl p-1 transition-all duration-200
+          ${isUrgent ? 'animate-timer-shake' : isCritical ? 'animate-timer-critical' : isLow ? 'animate-timer-pulse' : ''}
+        `}
+        style={{
+          background: `linear-gradient(135deg, ${getTimerColor()}60, ${getTimerColor()}30)`,
+          boxShadow: `0 0 ${isUrgent ? '50' : isCritical ? '35' : '20'}px ${getTimerColor()}${isUrgent ? 'cc' : '80'}`,
+        }}
+      >
+        <div className="bg-slate-950/95 rounded-xl p-4">
+          {/* Circular progress ring */}
+          <div className="relative w-32 h-32 mx-auto mb-3">
+            {/* Background ring */}
+            <svg className="w-full h-full transform -rotate-90">
+              <circle
+                cx="64"
+                cy="64"
+                r="56"
+                fill="none"
+                stroke="rgba(100,116,139,0.2)"
+                strokeWidth="8"
+              />
+              {/* Progress ring */}
+              <circle
+                cx="64"
+                cy="64"
+                r="56"
+                fill="none"
+                stroke={getTimerColor()}
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 56}`}
+                strokeDashoffset={`${2 * Math.PI * 56 * (1 - percentage / 100)}`}
+                className="transition-all duration-100"
+                style={{
+                  filter: `drop-shadow(0 0 ${isUrgent ? '15' : '8'}px ${getTimerColor()})`,
+                }}
+              />
+            </svg>
+            
+            {/* Center content */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div 
+                className={`
+                  font-black tabular-nums tracking-tight transition-all duration-100
+                  ${isUrgent ? 'text-5xl animate-pulse' : isCritical ? 'text-5xl' : 'text-4xl'}
+                `}
+                style={{ color: getTimerColor() }}
+              >
+                {timeLeft.toFixed(1)}
               </div>
+              <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">SEC</div>
+            </div>
+            
+            {/* Pulsing center glow for critical */}
+            {isCritical && (
+              <div 
+                className="absolute inset-4 rounded-full animate-ping"
+                style={{ background: `radial-gradient(circle, ${getTimerColor()}30 0%, transparent 70%)` }}
+              />
             )}
           </div>
           
-          {/* Time display */}
-          <div className="flex flex-col items-center">
-            <div className={`
-              text-4xl font-black tabular-nums tracking-wider transition-all duration-200
-              ${isCritical ? 'text-red-400 scale-110' : isLow ? 'text-amber-400' : 'text-white'}
-            `}>
-              {timeLeft.toFixed(1)}
-            </div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">seconds</div>
-          </div>
-          
-          {/* Progress bar */}
-          <div className="w-24 h-3 bg-slate-800 rounded-full overflow-hidden">
-            <div 
-              className={`h-full transition-all duration-100 rounded-full ${
-                isCritical ? 'bg-gradient-to-r from-red-500 to-orange-500' 
-                : isLow ? 'bg-gradient-to-r from-amber-500 to-orange-500'
-                : 'bg-gradient-to-r from-cyan-500 to-purple-500'
-              }`}
-              style={{ width: `${percentage}%` }}
-            />
+          {/* Urgency indicator bars */}
+          <div className="flex justify-center gap-1">
+            {[7, 6, 5, 4, 3, 2, 1].map((n) => (
+              <div
+                key={n}
+                className={`
+                  w-6 h-2 rounded-full transition-all duration-200
+                  ${timeLeft >= n 
+                    ? n <= 2 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]' 
+                      : n <= 3 ? 'bg-amber-500 shadow-[0_0_8px_rgba(251,191,36,0.6)]' 
+                      : 'bg-cyan-500 shadow-[0_0_6px_rgba(34,211,238,0.5)]'
+                    : 'bg-slate-700/50'
+                  }
+                `}
+              />
+            ))}
           </div>
         </div>
       </div>
       
-      {/* Animated rings when critical */}
-      {isCritical && (
+      {/* Outer ring pulses */}
+      {isUrgent && (
         <>
-          <div className="absolute inset-0 rounded-2xl border-2 border-red-500/50 animate-ping" />
-          <div className="absolute inset-0 rounded-2xl border border-red-400/30 animate-pulse" />
+          <div className="absolute inset-0 rounded-2xl border-2 border-red-500 animate-ping opacity-50" />
+          <div className="absolute inset-[-4px] rounded-2xl border border-red-400/50 animate-pulse" />
+          <div className="absolute inset-[-8px] rounded-2xl border border-red-300/30 animate-ping" style={{ animationDuration: '0.8s' }} />
         </>
       )}
     </div>
   );
 };
 
-// Streak display
-const StreakDisplay = ({ streak, isNewRecord }) => (
-  <div className="flex items-center gap-3">
-    <div className={`
-      flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-800/80 border
-      ${streak >= 5 ? 'border-amber-500/50' : streak >= 3 ? 'border-orange-500/50' : 'border-slate-600/50'}
-    `}
-    style={{
-      boxShadow: streak >= 5 
-        ? '0 0 20px rgba(251,191,36,0.4)'
-        : streak >= 3 
-          ? '0 0 15px rgba(249,115,22,0.3)'
-          : 'none'
-    }}>
-      <Flame 
-        size={22} 
-        className={`${
-          streak >= 5 ? 'text-amber-400' : streak >= 3 ? 'text-orange-400' : 'text-slate-500'
-        } ${streak >= 3 ? 'animate-pulse' : ''}`} 
-      />
-      <div>
-        <div className="text-xs text-slate-500 uppercase tracking-wider">Streak</div>
-        <div className={`text-2xl font-black ${
-          streak >= 5 ? 'text-amber-400' : streak >= 3 ? 'text-orange-400' : 'text-white'
-        }`}>
-          {streak}
+// Enhanced streak display with fire effects
+const StreakDisplay = ({ streak, isNewRecord }) => {
+  const isHot = streak >= 3;
+  const isOnFire = streak >= 5;
+  const isLegendary = streak >= 10;
+  
+  const getStreakColor = () => {
+    if (isLegendary) return '#fbbf24'; // amber-400
+    if (isOnFire) return '#f97316'; // orange-500
+    if (isHot) return '#fb923c'; // orange-400
+    return '#94a3b8'; // slate-400
+  };
+  
+  return (
+    <div className="relative">
+      {/* Background glow for high streaks */}
+      {isHot && (
+        <div 
+          className="absolute inset-0 rounded-2xl blur-lg animate-pulse"
+          style={{ 
+            background: `radial-gradient(circle, ${getStreakColor()}40 0%, transparent 70%)`,
+          }}
+        />
+      )}
+      
+      <div 
+        className={`
+          relative flex items-center gap-4 px-5 py-3 rounded-2xl bg-slate-900/90 border-2 transition-all duration-300
+          ${isLegendary ? 'border-amber-400/70' : isOnFire ? 'border-orange-500/60' : isHot ? 'border-orange-400/50' : 'border-slate-700/50'}
+        `}
+        style={{
+          boxShadow: isHot ? `0 0 ${isLegendary ? '40' : isOnFire ? '30' : '20'}px ${getStreakColor()}50` : 'none',
+        }}
+      >
+        {/* Flame icon with animation */}
+        <div className="relative">
+          <Flame 
+            size={32} 
+            className={`transition-all duration-300 ${isHot ? 'animate-bounce' : ''}`}
+            style={{ 
+              color: getStreakColor(),
+              filter: isHot ? `drop-shadow(0 0 8px ${getStreakColor()})` : 'none',
+            }}
+          />
+          {/* Extra flames for high streaks */}
+          {isOnFire && (
+            <>
+              <Flame 
+                size={20} 
+                className="absolute -top-2 -left-1 text-amber-400 animate-pulse" 
+                style={{ filter: 'drop-shadow(0 0 4px #fbbf24)' }}
+              />
+              <Flame 
+                size={16} 
+                className="absolute -top-1 -right-1 text-orange-400 animate-pulse" 
+                style={{ animationDelay: '0.2s', filter: 'drop-shadow(0 0 4px #fb923c)' }}
+              />
+            </>
+          )}
         </div>
+        
+        {/* Streak number */}
+        <div className="text-center">
+          <div className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Streak</div>
+          <div 
+            className={`
+              font-black tabular-nums transition-all duration-300
+              ${isLegendary ? 'text-4xl' : isOnFire ? 'text-3xl' : 'text-2xl'}
+            `}
+            style={{ 
+              color: getStreakColor(),
+              textShadow: isHot ? `0 0 20px ${getStreakColor()}` : 'none',
+            }}
+          >
+            {streak}
+          </div>
+        </div>
+        
+        {/* New record badge */}
+        {isNewRecord && streak > 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/50 animate-bounce">
+            <Trophy size={18} className="text-amber-400" />
+            <span className="text-amber-300 text-xs font-bold uppercase tracking-wider">Best!</span>
+          </div>
+        )}
       </div>
     </div>
-    
-    {isNewRecord && (
-      <div className="flex items-center gap-1 px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500/50 animate-bounce">
-        <Trophy size={16} className="text-amber-400" />
-        <span className="text-amber-400 text-xs font-bold">NEW BEST!</span>
-      </div>
-    )}
-  </div>
-);
+  );
+};
 
 // Success overlay
 const SuccessOverlay = ({ streak, onContinue }) => (
@@ -258,29 +355,30 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
   const [playerAnimatingMove, setPlayerAnimatingMove] = useState(null);
 
   // Load a new puzzle
+  const retryCountRef = useRef(0);
+  const maxRetries = 5;
+  
   const loadNewPuzzle = useCallback(async () => {
     setGameState('loading');
     
     try {
-      const puzzle = await getRandomPuzzle(PUZZLE_DIFFICULTY.EASY, false);
+      console.log('[SpeedPuzzle] Generating puzzle, attempt:', retryCountRef.current + 1);
+      const puzzle = await getSpeedPuzzle();
       
-      if (puzzle) {
-        // Set up board state from puzzle
+      console.log('[SpeedPuzzle] Puzzle result:', puzzle ? 'success' : 'null');
+      
+      if (puzzle && puzzle.boardState && puzzle.boardState.length === 64) {
+        // Parse boardState string (64 chars representing 8x8 grid)
         const newBoard = createEmptyBoard();
         const newBoardPieces = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
         
-        // Place pre-placed pieces
-        for (const placement of puzzle.placements) {
-          const coords = getPieceCoords(placement.pieceType, placement.rotation, placement.flipped);
-          const playerNum = placement.player;
-          
-          for (const [dr, dc] of coords) {
-            const r = placement.row + dr;
-            const c = placement.col + dc;
-            if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-              newBoard[r][c] = playerNum;
-              newBoardPieces[r][c] = placement.pieceType;
-            }
+        for (let i = 0; i < 64; i++) {
+          const char = puzzle.boardState[i];
+          if (char !== 'G') {
+            const row = Math.floor(i / BOARD_SIZE);
+            const col = i % BOARD_SIZE;
+            newBoard[row][col] = 1; // All pre-placed pieces show as player 1
+            newBoardPieces[row][col] = char === 'H' ? 'Y' : char; // H is legacy for Y
           }
         }
         
@@ -293,13 +391,35 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
         setFlipped(false);
         setPendingMove(null);
         
+        // Reset retry counter on success
+        retryCountRef.current = 0;
+        
         // Start playing
         setTimeLeft(TIMER_DURATION);
         lastTickRef.current = Date.now();
         setGameState('playing');
+      } else {
+        console.error('[SpeedPuzzle] Invalid puzzle data:', puzzle);
+        retryCountRef.current++;
+        if (retryCountRef.current < maxRetries) {
+          setTimeout(() => loadNewPuzzle(), 300);
+        } else {
+          console.error('[SpeedPuzzle] Max retries reached');
+          retryCountRef.current = 0;
+          // Still try once more after a longer delay
+          setTimeout(() => loadNewPuzzle(), 1000);
+        }
       }
     } catch (err) {
-      console.error('Failed to load puzzle:', err);
+      console.error('[SpeedPuzzle] Failed to load puzzle:', err);
+      retryCountRef.current++;
+      if (retryCountRef.current < maxRetries) {
+        setTimeout(() => loadNewPuzzle(), 300);
+      } else {
+        console.error('[SpeedPuzzle] Max retries reached after error');
+        retryCountRef.current = 0;
+        setTimeout(() => loadNewPuzzle(), 1000);
+      }
     }
   }, []);
 
@@ -648,6 +768,16 @@ const SpeedPuzzleScreen = ({ onMenu }) => {
         
         .animate-timer-critical {
           animation: timer-critical 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes timer-shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+          20%, 40%, 60%, 80% { transform: translateX(3px); }
+        }
+        
+        .animate-timer-shake {
+          animation: timer-shake 0.4s ease-in-out infinite, timer-critical 0.3s ease-in-out infinite;
         }
         
         @keyframes fade-in {

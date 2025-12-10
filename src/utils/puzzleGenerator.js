@@ -283,6 +283,46 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
   return null;
 };
 
+// Simple 1-move puzzle for speed mode (less strict requirements)
+export const generateSpeedPuzzle = () => {
+  // Try to generate a simple 1-move puzzle
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const game = playCompleteGame();
+    
+    // Need at least 2 moves (so we can back out 1)
+    if (game.totalMoves < 2) {
+      continue;
+    }
+    
+    // Get state from 1 move before end
+    const puzzleStateIndex = game.totalMoves - 1;
+    const puzzleState = game.history[puzzleStateIndex];
+    
+    if (!puzzleState) continue;
+    
+    // Get all valid moves from this state
+    const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
+    
+    // Just need at least 1 valid move
+    if (allMoves.length > 0) {
+      console.log(`Speed puzzle generated: ${allMoves.length} possible moves`);
+      
+      return {
+        id: `speed-puzzle-${Date.now()}`,
+        name: 'Speed Puzzle',
+        difficulty: PUZZLE_DIFFICULTY.EASY,
+        description: '1 move to win!',
+        boardState: boardToString(puzzleState.boardPieces),
+        usedPieces: [...puzzleState.usedPieces],
+        movesRemaining: 1
+      };
+    }
+  }
+  
+  console.error('Failed to generate speed puzzle after 30 attempts');
+  return null;
+};
+
 // Async wrapper
 export const getRandomPuzzle = async (difficulty = PUZZLE_DIFFICULTY.EASY, useAI = false, onProgress = null) => {
   await new Promise(resolve => setTimeout(resolve, 50));
@@ -295,6 +335,17 @@ export const getRandomPuzzle = async (difficulty = PUZZLE_DIFFICULTY.EASY, useAI
   }
   
   await new Promise(resolve => setTimeout(resolve, 100));
+  
+  return puzzle;
+};
+
+// Async wrapper for speed puzzles (simpler, faster generation)
+export const getSpeedPuzzle = async () => {
+  await new Promise(resolve => setTimeout(resolve, 10));
+  
+  const puzzle = generateSpeedPuzzle();
+  
+  await new Promise(resolve => setTimeout(resolve, 10));
   
   return puzzle;
 };
