@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import ControlButtons from './ControlButtons';
@@ -244,7 +245,25 @@ const GameScreen = ({
         <div className={`max-w-lg mx-auto w-full ${needsScroll ? '' : 'flex-1 flex flex-col'}`}>
           {/* Header */}
           <div className="flex items-center justify-center mb-2 sm:mb-3 relative flex-shrink-0">
-            <NeonTitle className="text-xl sm:text-2xl" />
+            <div className="text-center">
+              <NeonTitle size="small" />
+              {/* Subtitle based on game mode */}
+              {gameMode === 'ai' && (
+                <div className="text-xs font-bold tracking-[0.25em] bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 bg-clip-text text-transparent drop-shadow-[0_0_6px_rgba(168,85,247,0.6)]">
+                  VS A.I.
+                </div>
+              )}
+              {gameMode === '2player' && (
+                <div className="text-xs font-bold tracking-[0.25em] bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent drop-shadow-[0_0_6px_rgba(34,211,238,0.6)]">
+                  2 PLAYER
+                </div>
+              )}
+              {gameMode === 'puzzle' && (
+                <div className="text-xs font-bold tracking-[0.25em] bg-gradient-to-r from-green-400 via-emerald-400 to-green-400 bg-clip-text text-transparent drop-shadow-[0_0_6px_rgba(34,197,94,0.6)]">
+                  PUZZLE
+                </div>
+              )}
+            </div>
             <button 
               onClick={handleMenuClick}
               className="absolute right-0 px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs sm:text-sm border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"

@@ -1,10 +1,12 @@
-import { Settings, HelpCircle, Wifi } from 'lucide-react';
+import { Settings, HelpCircle } from 'lucide-react';
+import { useMemo } from 'react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { isSupabaseConfigured } from '../utils/supabase';
+import { pieces } from '../utils/pieces';
 
 // Custom pentomino shapes for buttons
 const buttonShapes = {
@@ -12,6 +14,85 @@ const buttonShapes = {
   V: [[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]], // V shape - bottom-left to up-right (VS AI)
   W: [[0, 2], [1, 1], [1, 2], [2, 0], [2, 1]], // W shape - stair bottom-left to up-right (2 Player)
   P: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1]], // P shape - flag pattern (Puzzle)
+};
+
+// Floating pentomino piece for background animation
+const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColor, size, rotation }) => {
+  const coords = pieces[piece] || pieces.T;
+  const minX = Math.min(...coords.map(([x]) => x));
+  const minY = Math.min(...coords.map(([, y]) => y));
+  
+  return (
+    <div
+      className="absolute pointer-events-none animate-float-piece"
+      style={{
+        left: `${startX}%`,
+        top: `${startY}%`,
+        animationDelay: `${delay}s`,
+        animationDuration: `${duration}s`,
+        transform: `rotate(${rotation}deg)`,
+        '--float-x': `${(Math.random() - 0.5) * 100}px`,
+        '--float-y': `${(Math.random() - 0.5) * 100}px`,
+      }}
+    >
+      <div className="relative" style={{ transform: `scale(${size})` }}>
+        {coords.map(([x, y], idx) => (
+          <div
+            key={idx}
+            className="absolute rounded-sm animate-sparkle"
+            style={{
+              width: 8,
+              height: 8,
+              left: (x - minX) * 10,
+              top: (y - minY) * 10,
+              backgroundColor: color,
+              boxShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}50`,
+              animationDelay: `${delay + idx * 0.1}s`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Background floating pieces container
+const FloatingPiecesBackground = () => {
+  const floatingPieces = useMemo(() => {
+    const pieceNames = Object.keys(pieces);
+    const colors = [
+      { color: '#22d3ee', glow: 'rgba(34,211,238,0.6)' },   // cyan
+      { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },   // pink
+      { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },   // purple
+      { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },    // green
+      { color: '#f59e0b', glow: 'rgba(245,158,11,0.6)' },   // amber
+      { color: '#6366f1', glow: 'rgba(99,102,241,0.6)' },   // indigo
+    ];
+    
+    return Array.from({ length: 12 }).map((_, i) => {
+      const colorSet = colors[i % colors.length];
+      return {
+        id: i,
+        piece: pieceNames[Math.floor(Math.random() * pieceNames.length)],
+        startX: Math.random() * 100,
+        startY: Math.random() * 100,
+        delay: Math.random() * 8,
+        duration: 15 + Math.random() * 10,
+        color: colorSet.color,
+        glowColor: colorSet.glow,
+        size: 0.6 + Math.random() * 0.6,
+        rotation: Math.random() * 360,
+      };
+    });
+  }, []);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      {floatingPieces.map((p) => (
+        <FloatingPiece key={p.id} {...p} />
+      ))}
+    </div>
+  );
 };
 
 // Pentomino shape component (no icons inside)
@@ -145,11 +226,42 @@ const MenuScreen = ({
           0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
           50% { transform: translate(-15px, -25px) scale(1.15); opacity: 0.22; }
         }
+        @keyframes float-piece {
+          0% { 
+            transform: translate(0, 0) rotate(0deg); 
+            opacity: 0;
+          }
+          10% { opacity: 0.6; }
+          50% { 
+            transform: translate(var(--float-x), var(--float-y)) rotate(180deg);
+            opacity: 0.8;
+          }
+          90% { opacity: 0.6; }
+          100% { 
+            transform: translate(calc(var(--float-x) * 2), calc(var(--float-y) * 2)) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        @keyframes sparkle {
+          0%, 100% { 
+            opacity: 0.4; 
+            box-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
+          }
+          50% { 
+            opacity: 1; 
+            box-shadow: 0 0 16px currentColor, 0 0 32px currentColor, 0 0 48px currentColor;
+          }
+        }
         .animate-grid-drift { animation: grid-drift 20s ease-in-out infinite; }
         .animate-orb-1 { animation: orb-1 15s ease-in-out infinite; }
         .animate-orb-2 { animation: orb-2 18s ease-in-out infinite; }
         .animate-orb-3 { animation: orb-3 12s ease-in-out infinite; }
+        .animate-float-piece { animation: float-piece var(--duration, 20s) ease-in-out infinite; }
+        .animate-sparkle { animation: sparkle 2s ease-in-out infinite; }
       `}</style>
+      
+      {/* Floating pentomino pieces */}
+      <FloatingPiecesBackground />
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>

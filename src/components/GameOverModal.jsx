@@ -380,7 +380,25 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
                 MAIN MENU
               </button>
             </>
+          ) : is2Player ? (
+            /* 2-Player mode - just Play Again and Main Menu */
+            <>
+              <button onClick={handleRetry}
+                className={`w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 transition-all ${colors.btn} text-white border border-white/10`}
+              >
+                <RotateCcw size={16} />
+                PLAY AGAIN
+              </button>
+
+              <button onClick={handleMenu}
+                className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-all border border-slate-700"
+              >
+                <Home size={16} />
+                MAIN MENU
+              </button>
+            </>
           ) : (
+            /* VS AI mode - Play Again, AI Difficulty, Main Menu */
             <>
               <button onClick={handleRetry}
                 className={`w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 transition-all ${colors.btn} text-white border border-white/10`}

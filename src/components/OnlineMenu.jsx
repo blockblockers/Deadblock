@@ -690,11 +690,11 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 overflow-y-auto overflow-x-hidden"
+      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
       style={{ 
         WebkitOverflowScrolling: 'touch', 
         touchAction: 'pan-y',
-        paddingBottom: 'env(safe-area-inset-bottom)'
+        overscrollBehavior: 'contain',
       }}
     >
       {/* Themed Grid background */}
@@ -722,7 +722,12 @@ const OnlineMenu = ({
       )}
 
       {/* Content */}
-      <div className="relative min-h-screen flex flex-col items-center px-4 py-8">
+      <div className="relative flex flex-col items-center px-4 pt-8 pb-24"
+        style={{ 
+          minHeight: '100%',
+          paddingBottom: 'max(96px, calc(env(safe-area-inset-bottom) + 96px))'
+        }}
+      >
         <div className="w-full max-w-md">
           
           {/* Title - Centered and Enlarged */}
@@ -1334,8 +1339,6 @@ const OnlineMenu = ({
             </button>
           )}
         </div>
-        {/* Bottom padding for scroll */}
-        <div className="h-12 flex-shrink-0" />
       </div>
       
       {/* Notification Prompt */}
