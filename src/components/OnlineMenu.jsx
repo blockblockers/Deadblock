@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -150,6 +150,13 @@ const OnlineMenu = ({
   const [sendingInvite, setSendingInvite] = useState(null);
   const [processingInvite, setProcessingInvite] = useState(null);
   
+  // Shareable invite link state
+  const [inviteLinks, setInviteLinks] = useState([]);
+  const [friendName, setFriendName] = useState('');
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [showInviteLink, setShowInviteLink] = useState(false);
+  const [copiedLinkId, setCopiedLinkId] = useState(null);
+  
   // Notification state
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -221,13 +228,15 @@ const OnlineMenu = ({
     if (!profile?.id) return;
     
     try {
-      const [received, sent] = await Promise.all([
+      const [received, sent, links] = await Promise.all([
         inviteService.getReceivedInvites(profile.id),
-        inviteService.getSentInvites(profile.id)
+        inviteService.getSentInvites(profile.id),
+        inviteService.getInviteLinks(profile.id)
       ]);
       
       setReceivedInvites(received.data || []);
       setSentInvites(sent.data || []);
+      setInviteLinks(links.data || []);
     } catch (err) {
       console.error('Error loading invites:', err);
     }
@@ -333,18 +342,47 @@ const OnlineMenu = ({
     setProcessingInvite(invite.id);
     soundManager.playButtonClick();
     
-    const { data, error } = await inviteService.acceptInvite(invite.id, profile.id);
-    
-    if (error) {
-      console.error('Error accepting invite:', error);
-      alert(error.message || 'Failed to accept invite');
-    } else if (data?.game) {
-      soundManager.playSound('win');
-      await loadGames();
-      onResumeGame(data.game);
+    try {
+      console.log('handleAcceptInvite: Starting', { inviteId: invite.id, profileId: profile.id });
+      
+      const { data, error } = await inviteService.acceptInvite(invite.id, profile.id);
+      
+      console.log('handleAcceptInvite: Result', { data, error, hasGame: !!data?.game });
+      
+      if (error) {
+        console.error('Error accepting invite:', error);
+        alert(error.message || 'Failed to accept invite');
+        setProcessingInvite(null);
+        return;
+      }
+      
+      if (data?.game) {
+        console.log('handleAcceptInvite: Game created successfully', { 
+          gameId: data.game.id,
+          player1: data.game.player1?.username,
+          player2: data.game.player2?.username
+        });
+        soundManager.playSound('win');
+        
+        // Clear spinner immediately before navigation
+        setProcessingInvite(null);
+        
+        // Small delay to ensure state updates are flushed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Navigate to game
+        console.log('handleAcceptInvite: Navigating to game...');
+        onResumeGame(data.game);
+      } else {
+        console.error('handleAcceptInvite: No game in response', data);
+        alert('Error: Game was not created properly. Please try again.');
+        setProcessingInvite(null);
+      }
+    } catch (err) {
+      console.error('handleAcceptInvite: Exception', err);
+      alert('An unexpected error occurred: ' + (err.message || 'Unknown error'));
+      setProcessingInvite(null);
     }
-    
-    setProcessingInvite(null);
   };
 
   // Decline an invite
@@ -368,6 +406,97 @@ const OnlineMenu = ({
     soundManager.playButtonClick();
     
     await inviteService.cancelInvite(invite.id, profile.id);
+    await loadInvites();
+    
+    setProcessingInvite(null);
+  };
+
+  // Create a shareable invite link
+  const handleCreateInviteLink = async () => {
+    if (!profile?.id) return;
+    
+    setCreatingLink(true);
+    soundManager.playButtonClick();
+    
+    try {
+      const { data, error } = await inviteService.createInviteLink(profile.id, friendName.trim());
+      
+      if (error) {
+        alert(error.message || 'Failed to create invite link');
+        setCreatingLink(false);
+        return;
+      }
+      
+      soundManager.playClickSound('confirm');
+      setFriendName('');
+      await loadInvites();
+      
+      // Auto-copy to clipboard
+      if (data?.inviteLink) {
+        try {
+          await navigator.clipboard.writeText(data.inviteLink);
+          setCopiedLinkId(data.id);
+          setTimeout(() => setCopiedLinkId(null), 2000);
+        } catch (clipErr) {
+          console.log('Could not auto-copy:', clipErr);
+        }
+      }
+    } catch (err) {
+      console.error('handleCreateInviteLink error:', err);
+      alert('Failed to create invite: ' + err.message);
+    }
+    
+    setCreatingLink(false);
+  };
+
+  // Copy invite link to clipboard
+  const handleCopyLink = async (invite) => {
+    try {
+      await navigator.clipboard.writeText(invite.inviteLink);
+      setCopiedLinkId(invite.id);
+      soundManager.playClickSound('confirm');
+      
+      // Mark as shared
+      await inviteService.markInviteLinkShared(invite.id, profile.id);
+      
+      setTimeout(() => setCopiedLinkId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback: show the link in an alert
+      alert(`Copy this link:\n${invite.inviteLink}`);
+    }
+  };
+
+  // Share link using native share (mobile)
+  const handleShareLink = async (invite) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Play Deadblock with me!',
+          text: `${profile?.username || 'A friend'} wants to challenge you to Deadblock!`,
+          url: invite.inviteLink
+        });
+        soundManager.playClickSound('confirm');
+        await inviteService.markInviteLinkShared(invite.id, profile.id);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Share failed:', err);
+        }
+      }
+    } else {
+      // Fallback to copy
+      handleCopyLink(invite);
+    }
+  };
+
+  // Cancel an invite link
+  const handleCancelInviteLink = async (invite) => {
+    if (!profile?.id) return;
+    
+    setProcessingInvite(invite.id);
+    soundManager.playButtonClick();
+    
+    await inviteService.cancelInviteLink(invite.id, profile.id);
     await loadInvites();
     
     setProcessingInvite(null);
@@ -491,74 +620,211 @@ const OnlineMenu = ({
               {/* Search Input & Results */}
               {showSearch && (
                 <div className="mt-3 space-y-3">
-                  {/* Search Input */}
-                  <div className="relative">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => handleSearch(e.target.value)}
-                      placeholder="Search by username..."
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-900/80 rounded-lg text-white text-sm border border-slate-700/50 focus:border-amber-500/50 focus:outline-none placeholder:text-slate-600"
-                    />
-                    {searching && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                      </div>
-                    )}
+                  {/* Tab buttons for Username vs Share Link */}
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      onClick={() => setShowInviteLink(false)}
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+                        !showInviteLink 
+                          ? 'bg-amber-500 text-white' 
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      By Username
+                    </button>
+                    <button
+                      onClick={() => setShowInviteLink(true)}
+                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
+                        showInviteLink 
+                          ? 'bg-amber-500 text-white' 
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Share Link
+                    </button>
                   </div>
-                  
-                  {/* Search Results */}
-                  {searchResults.length > 0 && (
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {searchResults.map(user => {
-                        const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
-                        return (
-                          <div
-                            key={user.id}
-                            className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-700/30"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                                {user.username?.[0]?.toUpperCase() || '?'}
-                              </div>
-                              <div>
-                                <div className="text-white text-sm font-medium">{user.username}</div>
-                                <div className="text-amber-400/70 text-xs">⭐ {user.rating || 1000}</div>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => handleSendInvite(user.id)}
-                              disabled={sendingInvite === user.id || alreadyInvited}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-                                alreadyInvited
-                                  ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                  : 'bg-amber-500 text-white hover:bg-amber-400 active:scale-95'
-                              }`}
-                            >
-                              {sendingInvite === user.id ? (
-                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              ) : alreadyInvited ? (
-                                <>
-                                  <Clock size={12} />
-                                  Sent
-                                </>
-                              ) : (
-                                <>
-                                  <Send size={12} />
-                                  Invite
-                                </>
-                              )}
-                            </button>
+
+                  {!showInviteLink ? (
+                    <>
+                      {/* Search Input */}
+                      <div className="relative">
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => handleSearch(e.target.value)}
+                          placeholder="Search by username..."
+                          className="w-full pl-9 pr-4 py-2.5 bg-slate-900/80 rounded-lg text-white text-sm border border-slate-700/50 focus:border-amber-500/50 focus:outline-none placeholder:text-slate-600"
+                        />
+                        {searching && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  
-                  {/* No Results */}
-                  {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
-                    <p className="text-slate-500 text-xs text-center py-2">No players found</p>
+                        )}
+                      </div>
+                      
+                      {/* Search Results */}
+                      {searchResults.length > 0 && (
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {searchResults.map(user => {
+                            const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
+                            return (
+                              <div
+                                key={user.id}
+                                className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-700/30"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                    {user.username?.[0]?.toUpperCase() || '?'}
+                                  </div>
+                                  <div>
+                                    <div className="text-white text-sm font-medium">{user.username}</div>
+                                    <div className="text-amber-400/70 text-xs">⭐ {user.rating || 1000}</div>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => handleSendInvite(user.id)}
+                                  disabled={sendingInvite === user.id || alreadyInvited}
+                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                                    alreadyInvited
+                                      ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                      : 'bg-amber-500 text-white hover:bg-amber-400 active:scale-95'
+                                  }`}
+                                >
+                                  {sendingInvite === user.id ? (
+                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  ) : alreadyInvited ? (
+                                    <>
+                                      <Clock size={12} />
+                                      Sent
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Send size={12} />
+                                      Invite
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      
+                      {/* No Results */}
+                      {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+                        <p className="text-slate-500 text-xs text-center py-2">No players found</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* Shareable Invite Link */}
+                      <div className="space-y-3">
+                        <p className="text-slate-400 text-xs">
+                          Create a link to share with friends who don't have an account yet. Send it via text, WhatsApp, email - however you like!
+                        </p>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <UserPlus size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                            <input
+                              type="text"
+                              value={friendName}
+                              onChange={(e) => setFriendName(e.target.value)}
+                              placeholder="Friend's name (optional)"
+                              className="w-full pl-9 pr-4 py-2.5 bg-slate-900/80 rounded-lg text-white text-sm border border-slate-700/50 focus:border-amber-500/50 focus:outline-none placeholder:text-slate-600"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleCreateInviteLink();
+                                }
+                              }}
+                            />
+                          </div>
+                          <button
+                            onClick={handleCreateInviteLink}
+                            disabled={creatingLink}
+                            className="px-4 py-2.5 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            {creatingLink ? (
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <>
+                                <Link size={14} />
+                                Create
+                              </>
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Pending Invite Links */}
+                        {inviteLinks.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-slate-700/50">
+                            <p className="text-slate-500 text-xs mb-2">Your invite links:</p>
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {inviteLinks.map(invite => (
+                                <div
+                                  key={invite.id}
+                                  className="p-3 bg-slate-900/40 rounded-lg border border-slate-700/30"
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-white text-sm font-medium">
+                                        {invite.recipientName || 'Friend'}
+                                      </span>
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                        invite.status === 'sent' 
+                                          ? 'bg-green-900/50 text-green-400' 
+                                          : 'bg-slate-700 text-slate-400'
+                                      }`}>
+                                        {invite.status === 'sent' ? 'Shared' : 'Ready'}
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() => handleCancelInviteLink(invite)}
+                                      disabled={processingInvite === invite.id}
+                                      className="text-slate-500 hover:text-red-400 transition-colors p-1 disabled:opacity-50"
+                                      title="Delete invite"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleCopyLink(invite)}
+                                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                                        copiedLinkId === invite.id
+                                          ? 'bg-green-600 text-white'
+                                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                      }`}
+                                    >
+                                      {copiedLinkId === invite.id ? (
+                                        <>
+                                          <Check size={12} />
+                                          Copied!
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy size={12} />
+                                          Copy Link
+                                        </>
+                                      )}
+                                    </button>
+                                    {navigator.share && (
+                                      <button
+                                        onClick={() => handleShareLink(invite)}
+                                        className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-400 transition-all flex items-center justify-center gap-1.5"
+                                      >
+                                        <Share2 size={12} />
+                                        Share
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               )}

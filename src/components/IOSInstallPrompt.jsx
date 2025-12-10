@@ -1,35 +1,38 @@
 import { useState, useEffect } from 'react';
-import { X, Share, Plus, ArrowUp } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 
 const IOSInstallPrompt = () => {
   const [show, setShow] = useState(false);
-  const [debugInfo, setDebugInfo] = useState('');
+  const [isSafariBrowser, setIsSafariBrowser] = useState(true);
 
   useEffect(() => {
-    // Debug function
-    const debug = (msg) => {
-      console.log('[iOS Prompt]', msg);
-      setDebugInfo(prev => prev + '\n' + msg);
-    };
-
-    // Check conditions
+    // Detect iOS/iPadOS (including iPad with desktop mode)
     const ua = navigator.userAgent || '';
-    debug('UA: ' + ua.substring(0, 50));
-
-    // Detect iOS (iPhone, iPad, iPod)
-    const isIOS = /iPhone|iPad|iPod/.test(ua);
-    debug('isIOS: ' + isIOS);
-
+    const platform = navigator.platform || '';
+    
+    // Check for iOS devices
+    const isIOS = /iPhone|iPad|iPod/.test(ua) || 
+                  (platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad with desktop UA
+    
+    // Check for Safari on Mac (also show for Mac Safari users)
+    const isMacSafari = /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua);
+    
     // Detect if already installed (standalone mode)
     const isStandalone = window.navigator.standalone === true || 
                          window.matchMedia('(display-mode: standalone)').matches;
-    debug('isStandalone: ' + isStandalone);
-
-    // Detect Safari - must be Safari for PWA install
-    // Chrome on iOS has "CriOS", Firefox has "FxiOS", etc.
-    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|EdgiOS|Chrome/.test(ua);
-    debug('isSafari: ' + isSafari);
-
+    
+    // Detect Safari browser
+    // Safari has "Safari" in UA but Chrome/Firefox/Edge on iOS have their own identifiers
+    const isSafari = /Safari/.test(ua) && 
+                     !/CriOS/.test(ua) &&  // Chrome on iOS
+                     !/FxiOS/.test(ua) &&  // Firefox on iOS
+                     !/OPiOS/.test(ua) &&  // Opera on iOS
+                     !/EdgiOS/.test(ua) && // Edge on iOS
+                     !/Chrome/.test(ua) && // Chrome
+                     !/Chromium/.test(ua); // Chromium-based
+    
+    setIsSafariBrowser(isSafari || isMacSafari);
+    
     // Check if dismissed recently
     let wasDismissed = false;
     try {
@@ -37,33 +40,34 @@ const IOSInstallPrompt = () => {
       if (dismissedAt) {
         const daysSince = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
         wasDismissed = daysSince < 7;
-        debug('dismissed ' + Math.round(daysSince) + ' days ago');
       }
     } catch (e) {
-      debug('localStorage error: ' + e.message);
+      console.log('localStorage error:', e);
     }
 
-    debug('wasDismissed: ' + wasDismissed);
+    // Debug logging
+    console.log('[PWA Install Prompt]', {
+      isIOS,
+      isMacSafari,
+      isStandalone,
+      isSafari,
+      wasDismissed,
+      ua: ua.substring(0, 100),
+      platform
+    });
 
-    // Show if: iOS + Not standalone + Safari + Not recently dismissed
-    const shouldShow = isIOS && !isStandalone && isSafari && !wasDismissed;
-    debug('shouldShow: ' + shouldShow);
+    // Show for:
+    // 1. iOS Safari users who haven't installed
+    // 2. iOS non-Safari users (to tell them to use Safari)
+    // 3. Mac Safari users (Safari on Mac also supports PWA)
+    const shouldShow = ((isIOS || isMacSafari) && !isStandalone && !wasDismissed);
 
     if (shouldShow) {
       // Delay showing for better UX
       const timer = setTimeout(() => {
-        debug('Showing prompt now');
+        console.log('[PWA Install Prompt] Showing prompt');
         setShow(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-
-    // If iOS but not Safari, we could show a different message
-    if (isIOS && !isStandalone && !isSafari && !wasDismissed) {
-      debug('iOS but not Safari - showing Safari redirect');
-      const timer = setTimeout(() => {
-        setShow(true);
-      }, 2000);
+      }, 3000); // 3 second delay
       return () => clearTimeout(timer);
     }
   }, []);
@@ -84,10 +88,6 @@ const IOSInstallPrompt = () => {
   };
 
   if (!show) return null;
-
-  // Check if Safari for message content
-  const ua = navigator.userAgent || '';
-  const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|OPiOS|EdgiOS|Chrome/.test(ua);
 
   return (
     <div 
@@ -118,14 +118,22 @@ const IOSInstallPrompt = () => {
           </button>
         </div>
 
-        {!isSafari ? (
+        {!isSafariBrowser ? (
           // Not Safari - show redirect message
           <div className="mb-4">
-            <p className="text-slate-300 text-sm">
+            <p className="text-slate-300 text-sm mb-3">
               To install this app, please open this page in <span className="text-cyan-400 font-bold">Safari</span>.
             </p>
-            <p className="text-slate-500 text-xs mt-2">
-              PWA installation is only available in Safari on iOS.
+            <div className="p-3 bg-slate-800/60 rounded-lg">
+              <p className="text-slate-400 text-xs">
+                📋 Copy this URL and paste it in Safari:
+              </p>
+              <p className="text-cyan-400 text-xs mt-1 break-all font-mono">
+                {window.location.origin}
+              </p>
+            </div>
+            <p className="text-slate-500 text-xs mt-3">
+              PWA installation requires Safari on iOS devices.
             </p>
           </div>
         ) : (
@@ -140,7 +148,12 @@ const IOSInstallPrompt = () => {
                 Tap the <span className="text-cyan-400 font-semibold">Share</span> button
               </p>
               <div className="w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center">
-                <ArrowUp size={18} className="text-cyan-400" />
+                {/* Safari Share Icon */}
+                <svg viewBox="0 0 24 24" className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
+                  <polyline points="16 6 12 2 8 6" />
+                  <line x1="12" y1="2" x2="12" y2="15" />
+                </svg>
               </div>
             </div>
 
@@ -150,7 +163,7 @@ const IOSInstallPrompt = () => {
                 <span className="text-purple-400 font-bold text-sm">2</span>
               </div>
               <p className="text-slate-200 text-sm flex-1">
-                Tap <span className="text-purple-400 font-semibold">"Add to Home Screen"</span>
+                Scroll down and tap <span className="text-purple-400 font-semibold">"Add to Home Screen"</span>
               </p>
               <div className="w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center">
                 <Plus size={18} className="text-purple-400" />
@@ -163,13 +176,15 @@ const IOSInstallPrompt = () => {
                 <span className="text-green-400 font-bold text-sm">3</span>
               </div>
               <p className="text-slate-200 text-sm flex-1">
-                Tap <span className="text-green-400 font-semibold">"Add"</span> to install
+                Tap <span className="text-green-400 font-semibold">"Add"</span> in the top right corner
               </p>
             </div>
 
-            {/* Arrow indicator */}
-            <div className="text-center text-slate-500 text-xs mb-4">
-              ↓ Share button is at the bottom of Safari ↓
+            {/* Arrow indicator pointing down */}
+            <div className="flex items-center justify-center gap-2 text-slate-500 text-xs mb-4">
+              <span>↓</span>
+              <span>Share button is at the bottom of Safari</span>
+              <span>↓</span>
             </div>
           </>
         )}
@@ -178,13 +193,13 @@ const IOSInstallPrompt = () => {
         <div className="flex gap-2">
           <button
             onClick={dismissForever}
-            className="flex-1 py-2.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold hover:bg-slate-700"
+            className="flex-1 py-2.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold hover:bg-slate-700 transition-colors"
           >
             Don't show again
           </button>
           <button
             onClick={dismiss}
-            className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg text-sm font-semibold hover:opacity-90"
+            className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             Got it!
           </button>

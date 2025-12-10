@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isSupabaseConfigured } from './utils/supabase';
@@ -17,13 +17,94 @@ import OnlineGameScreen from './components/OnlineGameScreen';
 import UserProfile from './components/UserProfile';
 import Leaderboard from './components/Leaderboard';
 
+// PWA Install Prompt for iOS/Safari
+import IOSInstallPrompt from './components/IOSInstallPrompt';
+
 // Main App Content (wrapped in AuthProvider)
 function AppContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [onlineGameId, setOnlineGameId] = useState(null);
   const [hasRedirectedAfterOAuth, setHasRedirectedAfterOAuth] = useState(false);
+  const [pendingInviteCode, setPendingInviteCode] = useState(null);
+  const [inviteInfo, setInviteInfo] = useState(null);
   
-  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback } = useAuth();
+  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile } = useAuth();
+
+  // Check for invite code in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('invite');
+    
+    if (inviteCode) {
+      console.log('App: Found invite code in URL:', inviteCode);
+      setPendingInviteCode(inviteCode);
+      
+      // Clean up URL but keep the code in state
+      window.history.replaceState({}, document.title, '/');
+      
+      // Fetch invite info
+      const fetchInviteInfo = async () => {
+        try {
+          const { inviteService } = await import('./services/inviteService');
+          const { data, error } = await inviteService.getInviteByCode(inviteCode);
+          
+          if (data && !error) {
+            setInviteInfo(data);
+            console.log('App: Invite info loaded:', data);
+          } else {
+            console.log('App: Invite not found or expired');
+            setPendingInviteCode(null);
+          }
+        } catch (err) {
+          console.error('App: Error fetching invite info:', err);
+        }
+      };
+      
+      if (isOnlineEnabled) {
+        fetchInviteInfo();
+      }
+    }
+  }, [isOnlineEnabled]);
+
+  // Handle accepting the invite after user logs in
+  // NOTE: This effect is defined early but uses setGameMode which is defined later
+  // We handle this by checking if setGameMode exists
+  const acceptInviteRef = React.useRef(null);
+  acceptInviteRef.current = async (setGameModeFn) => {
+    if (pendingInviteCode && isAuthenticated && profile?.id && isOnlineEnabled) {
+      console.log('App: User logged in with pending invite, accepting...');
+      
+      try {
+        const { getSupabase } = await import('./utils/supabase');
+        const supabase = getSupabase();
+        
+        if (supabase) {
+          const { data, error } = await supabase.rpc('accept_invite_link', {
+            code: pendingInviteCode,
+            accepting_user_id: profile.id
+          });
+          
+          if (data?.success) {
+            console.log('App: Invite accepted successfully!');
+            // Clear the pending invite
+            setPendingInviteCode(null);
+            setInviteInfo(null);
+            // Go to online menu to see the game invite
+            if (setGameModeFn) setGameModeFn('online-menu');
+          } else if (data?.error) {
+            console.log('App: Could not accept invite:', data.error);
+            if (data.error !== 'Cannot accept your own invite') {
+              alert(data.error);
+            }
+            setPendingInviteCode(null);
+            setInviteInfo(null);
+          }
+        }
+      } catch (err) {
+        console.error('App: Error accepting invite:', err);
+      }
+    }
+  };
 
   // Clean up stale OAuth callback URLs
   useEffect(() => {
@@ -79,6 +160,21 @@ function AppContent() {
     flipPiece,
     resetCurrentPuzzle,
   } = useGameState();
+
+  // Effect to accept pending invite after login (needs setGameMode from useGameState)
+  useEffect(() => {
+    if (acceptInviteRef.current) {
+      acceptInviteRef.current(setGameMode);
+    }
+  }, [pendingInviteCode, isAuthenticated, profile?.id, isOnlineEnabled, setGameMode]);
+
+  // If user has invite code but isn't logged in, redirect to auth
+  useEffect(() => {
+    if (inviteInfo && !isAuthenticated && !authLoading && isOnlineEnabled && gameMode === null) {
+      console.log('App: Invite detected but user not logged in, redirecting to auth');
+      setGameMode('auth');
+    }
+  }, [inviteInfo, isAuthenticated, authLoading, isOnlineEnabled, gameMode, setGameMode]);
 
   // Redirect to online menu after OAuth completes
   useEffect(() => {
@@ -233,6 +329,7 @@ function AppContent() {
       <AuthScreen
         onBack={() => setGameMode(null)}
         onSuccess={() => setGameMode('online-menu')}
+        inviteInfo={inviteInfo}
       />
     );
   }
@@ -371,6 +468,7 @@ function App() {
   return (
     <AuthProvider>
       <AppContent />
+      <IOSInstallPrompt />
     </AuthProvider>
   );
 }

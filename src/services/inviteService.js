@@ -168,6 +168,8 @@ class InviteService {
     }
 
     try {
+      console.log('acceptInvite: Starting', { inviteId, acceptingUserId });
+      
       // Get the invite
       const { data: invite, error: fetchError } = await supabase
         .from('game_invites')
@@ -175,6 +177,8 @@ class InviteService {
         .eq('id', inviteId)
         .eq('status', 'pending')
         .single();
+
+      console.log('acceptInvite: Fetched invite', { invite, fetchError });
 
       if (fetchError || !invite) {
         return { data: null, error: { message: 'Invite not found or already processed' } };
@@ -187,6 +191,8 @@ class InviteService {
 
       // Create the game - inviter (from_user) goes first as player 1
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(null));
+      
+      console.log('acceptInvite: Creating game...');
       
       const { data: game, error: gameError } = await supabase
         .from('games')
@@ -202,13 +208,15 @@ class InviteService {
         .select()
         .single();
 
+      console.log('acceptInvite: Game created', { game, gameError });
+
       if (gameError) {
         console.error('Error creating game from invite:', gameError);
         return { data: null, error: gameError };
       }
 
       // Update invite status
-      await supabase
+      const { error: updateError } = await supabase
         .from('game_invites')
         .update({ 
           status: 'accepted',
@@ -216,7 +224,44 @@ class InviteService {
         })
         .eq('id', inviteId);
 
-      return { data: { invite, game }, error: null };
+      console.log('acceptInvite: Invite updated', { updateError });
+
+      // Fetch the full game with player profiles
+      let fullGame = null;
+      try {
+        const { data: gameWithProfiles } = await supabase
+          .from('games')
+          .select(`
+            *,
+            player1:profiles!games_player1_id_fkey(id, username, display_name, rating),
+            player2:profiles!games_player2_id_fkey(id, username, display_name, rating)
+          `)
+          .eq('id', game.id)
+          .single();
+        
+        fullGame = gameWithProfiles;
+      } catch (joinError) {
+        console.log('acceptInvite: Join failed, fetching profiles separately', joinError);
+      }
+
+      // Fallback: fetch profiles separately if join didn't work
+      if (!fullGame || !fullGame.player1 || !fullGame.player2) {
+        console.log('acceptInvite: Fetching profiles separately');
+        const [{ data: p1 }, { data: p2 }] = await Promise.all([
+          supabase.from('profiles').select('id, username, display_name, rating').eq('id', invite.from_user_id).single(),
+          supabase.from('profiles').select('id, username, display_name, rating').eq('id', invite.to_user_id).single()
+        ]);
+        
+        fullGame = {
+          ...game,
+          player1: p1,
+          player2: p2
+        };
+      }
+
+      console.log('acceptInvite: Final game', { fullGame });
+
+      return { data: { invite, game: fullGame }, error: null };
     } catch (e) {
       console.error('acceptInvite exception:', e);
       return { data: null, error: { message: e.message } };
@@ -306,6 +351,150 @@ class InviteService {
   unsubscribeFromInvites(subscription) {
     if (subscription) {
       supabase?.removeChannel(subscription);
+    }
+  }
+
+  // ============ SHAREABLE INVITE LINKS ============
+  // No email service needed - users share links via text, WhatsApp, email, etc.
+
+  // Create a shareable invite link
+  async createInviteLink(fromUserId, recipientName = '') {
+    if (!supabase) {
+      return { data: null, error: { message: 'Not configured' } };
+    }
+
+    try {
+      // Create invite record
+      const { data: invite, error: createError } = await supabase
+        .from('email_invites')
+        .insert({
+          from_user_id: fromUserId,
+          to_email: recipientName.trim() || `friend_${Date.now()}`,
+          status: 'pending',
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating invite link:', createError);
+        return { data: null, error: createError };
+      }
+
+      // Generate the shareable link
+      const appUrl = window.location.origin;
+      const inviteLink = `${appUrl}/?invite=${invite.invite_code}`;
+
+      return { 
+        data: { 
+          ...invite, 
+          inviteLink,
+          recipientName: recipientName.trim() || 'Friend'
+        }, 
+        error: null 
+      };
+    } catch (e) {
+      console.error('createInviteLink exception:', e);
+      return { data: null, error: { message: e.message } };
+    }
+  }
+
+  // Get pending invite links created by user
+  async getInviteLinks(userId) {
+    if (!supabase) {
+      return { data: [], error: null };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('email_invites')
+        .select('*')
+        .eq('from_user_id', userId)
+        .in('status', ['pending', 'sent'])
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return { data: [], error };
+      }
+
+      // Add invite links to each record
+      const appUrl = window.location.origin;
+      const invitesWithLinks = (data || []).map(invite => ({
+        ...invite,
+        inviteLink: `${appUrl}/?invite=${invite.invite_code}`,
+        recipientName: invite.to_email?.startsWith('friend_') 
+          ? 'Friend' 
+          : invite.to_email
+      }));
+
+      return { data: invitesWithLinks, error: null };
+    } catch (e) {
+      console.error('getInviteLinks exception:', e);
+      return { data: [], error: { message: e.message } };
+    }
+  }
+
+  // Cancel/delete an invite link
+  async cancelInviteLink(inviteId, userId) {
+    if (!supabase) {
+      return { error: { message: 'Not configured' } };
+    }
+
+    try {
+      const { error } = await supabase
+        .from('email_invites')
+        .update({ status: 'expired' })
+        .eq('id', inviteId)
+        .eq('from_user_id', userId)
+        .in('status', ['pending', 'sent']);
+
+      return { error };
+    } catch (e) {
+      console.error('cancelInviteLink exception:', e);
+      return { error: { message: e.message } };
+    }
+  }
+
+  // Mark invite as "sent" (user copied/shared the link)
+  async markInviteLinkShared(inviteId, userId) {
+    if (!supabase) {
+      return { error: { message: 'Not configured' } };
+    }
+
+    try {
+      const { error } = await supabase
+        .from('email_invites')
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('id', inviteId)
+        .eq('from_user_id', userId)
+        .eq('status', 'pending');
+
+      return { error };
+    } catch (e) {
+      console.error('markInviteLinkShared exception:', e);
+      return { error: { message: e.message } };
+    }
+  }
+
+  // Get invite details by code (for the invite landing page)
+  async getInviteByCode(code) {
+    if (!supabase) {
+      return { data: null, error: { message: 'Not configured' } };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .rpc('get_email_invite_by_code', { code });
+
+      if (error || !data || data.length === 0) {
+        return { data: null, error: error || { message: 'Invite not found' } };
+      }
+
+      return { data: data[0], error: null };
+    } catch (e) {
+      console.error('getInviteByCode exception:', e);
+      return { data: null, error: { message: e.message } };
     }
   }
 }

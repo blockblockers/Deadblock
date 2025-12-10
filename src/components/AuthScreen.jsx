@@ -1,11 +1,11 @@
 // Authentication Screen - Login/Signup
 import { useState } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, ArrowLeft, UserPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 
-const AuthScreen = ({ onBack, onSuccess }) => {
+const AuthScreen = ({ onBack, onSuccess, inviteInfo }) => {
   const { signIn, signUp, signInWithGoogle } = useAuth();
   const [mode, setMode] = useState('login'); // login, signup
   const [email, setEmail] = useState('');
@@ -109,6 +109,28 @@ const AuthScreen = ({ onBack, onSuccess }) => {
               {mode === 'login' ? 'Sign in to play online' : 'Create your account'}
             </p>
           </div>
+
+          {/* Invite Banner */}
+          {inviteInfo && (
+            <div className="mb-4 p-4 bg-gradient-to-r from-amber-900/40 to-orange-900/40 border border-amber-500/50 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.2)]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold">
+                  <UserPlus size={20} />
+                </div>
+                <div>
+                  <p className="text-amber-300 font-medium">
+                    🎮 You've been invited!
+                  </p>
+                  <p className="text-amber-100/80 text-sm">
+                    <span className="font-bold">{inviteInfo.from_display_name || inviteInfo.from_username}</span> wants to challenge you to Deadblock!
+                  </p>
+                </div>
+              </div>
+              <p className="text-amber-200/60 text-xs mt-2">
+                Sign up or log in to accept the challenge
+              </p>
+            </div>
+          )}
 
           {/* Card */}
           <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl p-6 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.2)]">
