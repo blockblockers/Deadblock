@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from './utils/supabase';
 // Screens
 import MenuScreen from './components/MenuScreen';
 import PuzzleSelect from './components/PuzzleSelect';
+import SpeedPuzzleScreen from './components/SpeedPuzzleScreen';
 import GameScreen from './components/GameScreen';
 import DifficultySelector from './components/DifficultySelector';
 import NeonTitle from './components/NeonTitle';
@@ -149,6 +150,7 @@ function AppContent() {
     isGeneratingPuzzle,
     puzzleDifficulty,
     aiAnimatingMove,
+    playerAnimatingMove,
     
     // Actions
     setGameMode,
@@ -488,7 +490,17 @@ function AppContent() {
     return (
       <PuzzleSelect
         onSelectPuzzle={handlePuzzleSelect}
+        onSpeedMode={() => setGameMode('speed-puzzle')}
         onBack={() => setGameMode(null)}
+      />
+    );
+  }
+  
+  // Render Speed Puzzle Screen
+  if (gameMode === 'speed-puzzle') {
+    return (
+      <SpeedPuzzleScreen
+        onMenu={() => setGameMode('puzzle-select')}
       />
     );
   }
@@ -514,6 +526,7 @@ function AppContent() {
       isMobile={isMobile}
       isGeneratingPuzzle={isGeneratingPuzzle}
       aiAnimatingMove={aiAnimatingMove}
+      playerAnimatingMove={playerAnimatingMove}
       onCellClick={handleCellClick}
       onSelectPiece={selectPiece}
       onRotate={rotatePiece}

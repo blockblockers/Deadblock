@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Loader, AlertCircle, ArrowLeft, Zap, Timer, Flame } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
@@ -85,12 +85,21 @@ const difficulties = [
   }
 ];
 
-const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
+const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState(PUZZLE_DIFFICULTY.EASY);
   const { needsScroll } = useResponsiveLayout(750);
+  
+  // Get best speed streak for display
+  const [bestSpeedStreak] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem('speed-puzzle-best') || '0', 10);
+    } catch {
+      return 0;
+    }
+  });
 
   const selectedDiff = difficulties.find(d => d.id === selectedDifficulty) || difficulties[0];
   const theme = themes[selectedDiff.theme];
@@ -206,6 +215,53 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                   </button>
                 );
               })}
+              
+              {/* Speed Mode - Special button */}
+              <button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  onSpeedMode?.();
+                }}
+                disabled={isLoading}
+                className={`w-full p-4 rounded-xl border-2 transition-all duration-300 text-left relative overflow-hidden
+                  bg-gradient-to-r from-red-900/40 via-orange-900/40 to-red-900/40 
+                  border-red-500/50 hover:border-red-400/70
+                  ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-[0_0_30px_rgba(239,68,68,0.4)]'}
+                `}
+              >
+                {/* Animated pulse background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 via-orange-500/20 to-red-500/10 animate-speed-pulse" />
+                
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                      <Zap size={22} className="text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h3 className="font-black tracking-wide text-lg text-red-300">
+                          SPEED MODE
+                        </h3>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/30 text-red-300 flex items-center gap-1">
+                          <Timer size={10} />
+                          7s
+                        </span>
+                      </div>
+                      <p className="text-sm text-slate-400">
+                        Beat the clock! How many can you solve?
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Best streak badge */}
+                  {bestSpeedStreak > 0 && (
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40">
+                      <Flame size={14} className="text-amber-400" />
+                      <span className="text-amber-400 text-xs font-bold">{bestSpeedStreak}</span>
+                    </div>
+                  )}
+                </div>
+              </button>
             </div>
 
             {/* Turn order info - Enhanced styling */}
@@ -317,6 +373,14 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
         }
         .animate-shine {
           animation: shine 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes speed-pulse {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.6; }
+        }
+        .animate-speed-pulse {
+          animation: speed-pulse 2s ease-in-out infinite;
         }
       `}</style>
     </div>
