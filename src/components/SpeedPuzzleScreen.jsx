@@ -244,8 +244,6 @@ const GameOverOverlay = ({ streak, bestStreak, onPlayAgain, onMenu }) => {
 };
 
 const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
-  const { needsScroll } = useResponsiveLayout(750);
-  
   // Game state
   const [gameState, setGameState] = useState('loading'); // loading, playing, success, gameover
   const [streak, setStreak] = useState(0);

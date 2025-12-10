@@ -1,201 +1,305 @@
-// Achievements Service - Track and grant achievements
+// Achievements Service - Track and award player achievements
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
-export const achievementService = {
-  // Get all achievements
-  async getAllAchievements() {
-    if (!isSupabaseConfigured()) return { data: [], error: null };
+// Achievement icon mapping (Lucide icons)
+export const achievementIcons = {
+  Crown: 'Crown',
+  Medal: 'Medal',
+  Calendar: 'Calendar',
+  Flame: 'Flame',
+  Zap: 'Zap',
+  Target: 'Target',
+  Award: 'Award',
+  Trophy: 'Trophy',
+  Bot: 'Bot',
+  Gamepad2: 'Gamepad2',
+  User: 'User',
+};
 
-    const { data, error } = await supabase
-      .from('achievements')
-      .select('*')
-      .order('category')
-      .order('requirement_value');
+// Achievement definitions (for client-side reference)
+export const ACHIEVEMENTS = {
+  // Weekly
+  WEEKLY_CHAMPION: 'weekly_champion',
+  WEEKLY_TOP_3: 'weekly_top_3',
+  WEEKLY_FIRST: 'weekly_first',
+  WEEKLY_STREAK_4: 'weekly_streak_4',
+  
+  // Speed
+  SPEED_STREAK_5: 'speed_streak_5',
+  SPEED_STREAK_10: 'speed_streak_10',
+  SPEED_STREAK_25: 'speed_streak_25',
+  SPEED_STREAK_50: 'speed_streak_50',
+  
+  // Puzzle
+  PUZZLE_FIRST: 'puzzle_first',
+  PUZZLE_EASY_10: 'puzzle_easy_10',
+  PUZZLE_MEDIUM_10: 'puzzle_medium_10',
+  PUZZLE_HARD_10: 'puzzle_hard_10',
+  PUZZLE_TOTAL_100: 'puzzle_total_100',
+  
+  // Online
+  ONLINE_FIRST_WIN: 'online_first_win',
+  ONLINE_WINS_10: 'online_wins_10',
+  ONLINE_WINS_50: 'online_wins_50',
+  ONLINE_STREAK_5: 'online_streak_5',
+  
+  // AI
+  AI_FIRST_WIN: 'ai_first_win',
+  AI_HARD_WIN: 'ai_hard_win',
+  AI_HARD_WINS_10: 'ai_hard_wins_10',
+  
+  // General
+  GAMES_PLAYED_100: 'games_played_100',
+  PROFILE_COMPLETE: 'profile_complete',
+};
 
-    return { data: data || [], error };
-  },
-
-  // Get user's unlocked achievements
-  async getUserAchievements(userId) {
-    if (!isSupabaseConfigured()) return { data: [], error: null };
-
-    const { data, error } = await supabase
-      .from('user_achievements')
-      .select(`
-        id,
-        unlocked_at,
-        game_id,
-        achievement:achievements(*)
-      `)
-      .eq('user_id', userId)
-      .order('unlocked_at', { ascending: false });
-
-    return { data: data || [], error };
-  },
-
-  // Get achievements with unlock status for a user
-  async getAchievementsWithStatus(userId) {
-    if (!isSupabaseConfigured()) return { data: [], error: null };
-
-    // Get all achievements
-    const { data: allAchievements, error: achError } = await supabase
-      .from('achievements')
-      .select('*')
-      .order('category')
-      .order('requirement_value');
-
-    if (achError) return { data: null, error: achError };
-
-    // Get user's unlocked achievements
-    const { data: unlocked, error: unlockError } = await supabase
-      .from('user_achievements')
-      .select('achievement_id, unlocked_at')
-      .eq('user_id', userId);
-
-    if (unlockError) return { data: null, error: unlockError };
-
-    // Create a map of unlocked achievements
-    const unlockedMap = new Map(unlocked?.map(u => [u.achievement_id, u.unlocked_at]) || []);
-
-    // Merge the data
-    const achievementsWithStatus = allAchievements.map(a => ({
-      ...a,
-      unlocked: unlockedMap.has(a.id),
-      unlockedAt: unlockedMap.get(a.id) || null
-    }));
-
-    return { data: achievementsWithStatus, error: null };
-  },
-
-  // Check and grant achievements after a game
-  async checkAchievements(userId, gameId = null) {
-    if (!isSupabaseConfigured()) return { data: [], error: null };
-
-    const { data, error } = await supabase.rpc('check_achievements', {
-      p_user_id: userId,
-      p_game_id: gameId
-    });
-
-    return { data: data || [], error };
-  },
-
-  // Get achievement statistics
-  async getAchievementStats(userId) {
-    if (!isSupabaseConfigured()) return { data: null, error: null };
-
-    const [allResult, unlockedResult] = await Promise.all([
-      supabase.from('achievements').select('id, points'),
-      supabase.from('user_achievements')
-        .select('achievement:achievements(points)')
-        .eq('user_id', userId)
-    ]);
-
-    const totalAchievements = allResult.data?.length || 0;
-    const totalPoints = allResult.data?.reduce((sum, a) => sum + a.points, 0) || 0;
-    const unlockedCount = unlockedResult.data?.length || 0;
-    const earnedPoints = unlockedResult.data?.reduce((sum, u) => sum + (u.achievement?.points || 0), 0) || 0;
-
-    return {
-      data: {
-        totalAchievements,
-        unlockedCount,
-        totalPoints,
-        earnedPoints,
-        completionPercentage: totalAchievements > 0 ? Math.round((unlockedCount / totalAchievements) * 100) : 0
-      },
-      error: null
-    };
-  },
-
-  // Get recent achievements across all users (for feed)
-  async getRecentAchievements(limit = 10) {
-    if (!isSupabaseConfigured()) return { data: [], error: null };
-
-    const { data, error } = await supabase
-      .from('user_achievements')
-      .select(`
-        id,
-        unlocked_at,
-        user:profiles!user_achievements_user_id_fkey(id, username, avatar_url),
-        achievement:achievements(*)
-      `)
-      .order('unlocked_at', { ascending: false })
-      .limit(limit);
-
-    return { data: data || [], error };
-  },
-
-  // Get achievement by ID
-  async getAchievement(achievementId) {
-    if (!isSupabaseConfigured()) return { data: null, error: null };
-
-    const { data, error } = await supabase
-      .from('achievements')
-      .select('*')
-      .eq('id', achievementId)
-      .single();
-
-    return { data, error };
-  },
-
-  // Get users who have an achievement
-  async getAchievementHolders(achievementId, limit = 50) {
-    if (!isSupabaseConfigured()) return { data: [], error: null };
-
-    const { data, error } = await supabase
-      .from('user_achievements')
-      .select(`
-        unlocked_at,
-        user:profiles!user_achievements_user_id_fkey(id, username, avatar_url, elo_rating)
-      `)
-      .eq('achievement_id', achievementId)
-      .order('unlocked_at', { ascending: true })
-      .limit(limit);
-
-    return { data: data || [], error };
-  },
-
-  // Get rarity statistics for achievements
-  async getAchievementRarity() {
-    if (!isSupabaseConfigured()) return { data: {}, error: null };
-
-    // Get total user count
-    const { count: totalUsers } = await supabase
-      .from('profiles')
-      .select('id', { count: 'exact', head: true });
-
-    // Get count for each achievement
-    const { data: achievements } = await supabase
-      .from('achievements')
-      .select('id');
-
-    const rarityMap = {};
-
-    if (achievements && totalUsers > 0) {
-      for (const ach of achievements) {
-        const { count } = await supabase
-          .from('user_achievements')
-          .select('id', { count: 'exact', head: true })
-          .eq('achievement_id', ach.id);
-
-        rarityMap[ach.id] = {
-          holders: count || 0,
-          percentage: totalUsers > 0 ? Math.round(((count || 0) / totalUsers) * 100) : 0
-        };
-      }
-    }
-
-    return { data: rarityMap, error: null };
+class AchievementsService {
+  constructor() {
+    this.cache = null;
+    this.cacheTimestamp = null;
+    this.CACHE_DURATION = 60000; // 1 minute
   }
-};
+  
+  // Get all achievements for the current user
+  async getUserAchievements(forceRefresh = false) {
+    if (!isSupabaseConfigured()) return { data: [], error: 'Supabase not configured' };
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { data: [], error: 'Not authenticated' };
+    
+    // Check cache
+    if (!forceRefresh && this.cache && this.cacheTimestamp && 
+        Date.now() - this.cacheTimestamp < this.CACHE_DURATION) {
+      return { data: this.cache, error: null };
+    }
+    
+    try {
+      const { data, error } = await supabase.rpc('get_user_achievements', {
+        p_user_id: user.id
+      });
+      
+      if (!error && data) {
+        this.cache = data;
+        this.cacheTimestamp = Date.now();
+      }
+      
+      return { data: data || [], error };
+    } catch (err) {
+      console.error('Error getting achievements:', err);
+      return { data: [], error: err.message };
+    }
+  }
+  
+  // Award an achievement
+  async awardAchievement(achievementId, metadata = {}) {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase not configured' };
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Not authenticated' };
+    
+    try {
+      const { data, error } = await supabase.rpc('award_achievement', {
+        p_user_id: user.id,
+        p_achievement_id: achievementId,
+        p_metadata: metadata
+      });
+      
+      if (data?.success) {
+        // Invalidate cache
+        this.cache = null;
+        this.cacheTimestamp = null;
+      }
+      
+      return { success: data?.success || false, error: data?.error || error };
+    } catch (err) {
+      console.error('Error awarding achievement:', err);
+      return { success: false, error: err.message };
+    }
+  }
+  
+  // Check if user has a specific achievement
+  async hasAchievement(achievementId) {
+    const { data } = await this.getUserAchievements();
+    return data.some(a => a.achievement_id === achievementId);
+  }
+  
+  // Get all achievement definitions
+  async getAllAchievements() {
+    if (!isSupabaseConfigured()) return { data: [], error: 'Supabase not configured' };
+    
+    try {
+      const { data, error } = await supabase
+        .from('achievement_definitions')
+        .select('*')
+        .order('category', { ascending: true })
+        .order('points', { ascending: true });
+      
+      return { data: data || [], error };
+    } catch (err) {
+      console.error('Error getting achievement definitions:', err);
+      return { data: [], error: err.message };
+    }
+  }
+  
+  // Check and award achievements based on stats
+  async checkAndAwardAchievements(stats) {
+    if (!isSupabaseConfigured()) return;
+    
+    const awarded = [];
+    
+    // Speed Puzzle achievements
+    if (stats.speed_best_streak >= 5) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_5);
+      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_5);
+    }
+    if (stats.speed_best_streak >= 10) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_10);
+      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_10);
+    }
+    if (stats.speed_best_streak >= 25) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_25);
+      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_25);
+    }
+    if (stats.speed_best_streak >= 50) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_50);
+      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_50);
+    }
+    
+    // Puzzle achievements
+    const puzzleTotal = (stats.puzzles_easy_solved || 0) + 
+                        (stats.puzzles_medium_solved || 0) + 
+                        (stats.puzzles_hard_solved || 0);
+    
+    if (puzzleTotal >= 1) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_FIRST);
+      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_FIRST);
+    }
+    if (stats.puzzles_easy_solved >= 10) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_EASY_10);
+      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_EASY_10);
+    }
+    if (stats.puzzles_medium_solved >= 10) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_MEDIUM_10);
+      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_MEDIUM_10);
+    }
+    if (stats.puzzles_hard_solved >= 10) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_HARD_10);
+      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_HARD_10);
+    }
+    if (puzzleTotal >= 100) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_TOTAL_100);
+      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_TOTAL_100);
+    }
+    
+    // AI achievements
+    const aiTotalWins = (stats.ai_easy_wins || 0) + 
+                        (stats.ai_medium_wins || 0) + 
+                        (stats.ai_hard_wins || 0);
+    
+    if (aiTotalWins >= 1) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.AI_FIRST_WIN);
+      if (result.success) awarded.push(ACHIEVEMENTS.AI_FIRST_WIN);
+    }
+    if (stats.ai_hard_wins >= 1) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.AI_HARD_WIN);
+      if (result.success) awarded.push(ACHIEVEMENTS.AI_HARD_WIN);
+    }
+    if (stats.ai_hard_wins >= 10) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.AI_HARD_WINS_10);
+      if (result.success) awarded.push(ACHIEVEMENTS.AI_HARD_WINS_10);
+    }
+    
+    // Online achievements
+    if (stats.games_won >= 1) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.ONLINE_FIRST_WIN);
+      if (result.success) awarded.push(ACHIEVEMENTS.ONLINE_FIRST_WIN);
+    }
+    if (stats.games_won >= 10) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.ONLINE_WINS_10);
+      if (result.success) awarded.push(ACHIEVEMENTS.ONLINE_WINS_10);
+    }
+    if (stats.games_won >= 50) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.ONLINE_WINS_50);
+      if (result.success) awarded.push(ACHIEVEMENTS.ONLINE_WINS_50);
+    }
+    
+    // General achievements
+    const totalGames = (stats.games_played || 0) + 
+                       (stats.local_games_played || 0) + 
+                       puzzleTotal +
+                       (stats.ai_easy_wins || 0) + (stats.ai_easy_losses || 0) +
+                       (stats.ai_medium_wins || 0) + (stats.ai_medium_losses || 0) +
+                       (stats.ai_hard_wins || 0) + (stats.ai_hard_losses || 0);
+    
+    if (totalGames >= 100) {
+      const result = await this.awardAchievement(ACHIEVEMENTS.GAMES_PLAYED_100);
+      if (result.success) awarded.push(ACHIEVEMENTS.GAMES_PLAYED_100);
+    }
+    
+    return awarded;
+  }
+  
+  // Award weekly challenge achievements
+  async checkWeeklyAchievements(rank, challengeId) {
+    const awarded = [];
+    
+    // First weekly challenge completion
+    const firstResult = await this.awardAchievement(ACHIEVEMENTS.WEEKLY_FIRST, { challenge_id: challengeId });
+    if (firstResult.success) awarded.push(ACHIEVEMENTS.WEEKLY_FIRST);
+    
+    // Top 3 finish
+    if (rank <= 3) {
+      const top3Result = await this.awardAchievement(ACHIEVEMENTS.WEEKLY_TOP_3, { 
+        challenge_id: challengeId, 
+        rank 
+      });
+      if (top3Result.success) awarded.push(ACHIEVEMENTS.WEEKLY_TOP_3);
+    }
+    
+    // Note: Weekly champion is typically awarded after the week ends
+    // This would be handled by a server-side job
+    
+    return awarded;
+  }
+  
+  // Get achievement progress for display
+  getAchievementProgress(stats) {
+    return {
+      speed: {
+        current: stats.speed_best_streak || 0,
+        milestones: [5, 10, 25, 50],
+        next: this.getNextMilestone(stats.speed_best_streak || 0, [5, 10, 25, 50]),
+      },
+      puzzles: {
+        total: (stats.puzzles_easy_solved || 0) + 
+               (stats.puzzles_medium_solved || 0) + 
+               (stats.puzzles_hard_solved || 0),
+        milestones: [1, 10, 50, 100],
+      },
+      online: {
+        wins: stats.games_won || 0,
+        milestones: [1, 10, 50],
+      },
+      ai: {
+        hardWins: stats.ai_hard_wins || 0,
+        milestones: [1, 10],
+      },
+    };
+  }
+  
+  getNextMilestone(current, milestones) {
+    for (const milestone of milestones) {
+      if (current < milestone) return milestone;
+    }
+    return null;
+  }
+  
+  // Clear cache
+  clearCache() {
+    this.cache = null;
+    this.cacheTimestamp = null;
+  }
+}
 
-// Achievement rarity colors
-export const RARITY_COLORS = {
-  common: { bg: 'bg-slate-500/20', border: 'border-slate-400', text: 'text-slate-300', glow: 'rgba(148,163,184,0.3)' },
-  uncommon: { bg: 'bg-green-500/20', border: 'border-green-400', text: 'text-green-300', glow: 'rgba(74,222,128,0.3)' },
-  rare: { bg: 'bg-blue-500/20', border: 'border-blue-400', text: 'text-blue-300', glow: 'rgba(96,165,250,0.3)' },
-  epic: { bg: 'bg-purple-500/20', border: 'border-purple-400', text: 'text-purple-300', glow: 'rgba(192,132,252,0.3)' },
-  legendary: { bg: 'bg-amber-500/20', border: 'border-amber-400', text: 'text-amber-300', glow: 'rgba(251,191,36,0.4)' }
-};
-
-export default achievementService;
+export const achievementsService = new AchievementsService();
+export default achievementsService;

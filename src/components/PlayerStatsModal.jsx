@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { statsService } from '../utils/statsService';
 import { getRankInfo } from '../utils/rankUtils';
 import { soundManager } from '../utils/soundManager';
+import AchievementsDisplay from './AchievementsDisplay';
 
 const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const { profile, updateProfile } = useAuth();
@@ -244,6 +245,11 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     color="purple"
                   />
                 </div>
+              </Section>
+              
+              {/* Achievements Section */}
+              <Section id="achievements" title="Achievements" icon={Award} color="amber">
+                <AchievementsDisplay compact={false} />
               </Section>
               
               {/* Online Stats */}

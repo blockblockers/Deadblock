@@ -248,26 +248,20 @@ const GameScreen = ({
           <div className="flex items-center justify-center mb-2 sm:mb-3 relative flex-shrink-0">
             <div className="text-center">
               <NeonTitle size="small" />
-              {/* Subtitle based on game mode - NeonSubtitle style */}
+              {/* Subtitle based on game mode */}
               {gameMode === 'ai' && (
-                <div className="relative inline-block mt-1">
-                  <span className="game-subtitle-ai font-black tracking-[0.3em] text-sm sm:text-base">
-                    VS A.I.
-                  </span>
+                <div className="mt-1">
+                  <NeonSubtitle text="VS A.I." size="small" color="purple" />
                 </div>
               )}
               {gameMode === '2player' && (
-                <div className="relative inline-block mt-1">
-                  <span className="game-subtitle-2p font-black tracking-[0.3em] text-sm sm:text-base">
-                    2 PLAYER
-                  </span>
+                <div className="mt-1">
+                  <NeonSubtitle text="2 PLAYER" size="small" color="cyan" />
                 </div>
               )}
               {gameMode === 'puzzle' && (
-                <div className="relative inline-block mt-1">
-                  <span className="game-subtitle-puzzle font-black tracking-[0.3em] text-sm sm:text-base">
-                    PUZZLE
-                  </span>
+                <div className="mt-1">
+                  <NeonSubtitle text="PUZZLE" size="small" color="green" />
                 </div>
               )}
             </div>
@@ -278,103 +272,6 @@ const GameScreen = ({
               MENU
             </button>
           </div>
-          
-          {/* Subtitle styles */}
-          <style>{`
-            .game-subtitle-ai {
-              font-family: system-ui, -apple-system, sans-serif;
-              color: #fff;
-              text-shadow:
-                0 0 5px #fff,
-                0 0 10px #fff,
-                0 0 20px #a855f7,
-                0 0 40px #a855f7,
-                0 0 60px #ec4899;
-              animation: subtitle-ai-pulse 3s ease-in-out infinite;
-            }
-            @keyframes subtitle-ai-pulse {
-              0%, 100% {
-                text-shadow:
-                  0 0 5px #fff,
-                  0 0 10px #fff,
-                  0 0 20px #a855f7,
-                  0 0 40px #a855f7,
-                  0 0 60px #ec4899;
-                filter: brightness(1);
-              }
-              50% {
-                text-shadow:
-                  0 0 5px #fff,
-                  0 0 15px #fff,
-                  0 0 30px #a855f7,
-                  0 0 50px #a855f7,
-                  0 0 70px #ec4899;
-                filter: brightness(1.1);
-              }
-            }
-            .game-subtitle-2p {
-              font-family: system-ui, -apple-system, sans-serif;
-              color: #fff;
-              text-shadow:
-                0 0 5px #fff,
-                0 0 10px #fff,
-                0 0 20px #22d3ee,
-                0 0 40px #22d3ee,
-                0 0 60px #3b82f6;
-              animation: subtitle-2p-pulse 3s ease-in-out infinite;
-            }
-            @keyframes subtitle-2p-pulse {
-              0%, 100% {
-                text-shadow:
-                  0 0 5px #fff,
-                  0 0 10px #fff,
-                  0 0 20px #22d3ee,
-                  0 0 40px #22d3ee,
-                  0 0 60px #3b82f6;
-                filter: brightness(1);
-              }
-              50% {
-                text-shadow:
-                  0 0 5px #fff,
-                  0 0 15px #fff,
-                  0 0 30px #22d3ee,
-                  0 0 50px #22d3ee,
-                  0 0 70px #3b82f6;
-                filter: brightness(1.1);
-              }
-            }
-            .game-subtitle-puzzle {
-              font-family: system-ui, -apple-system, sans-serif;
-              color: #fff;
-              text-shadow:
-                0 0 5px #fff,
-                0 0 10px #fff,
-                0 0 20px #22c55e,
-                0 0 40px #22c55e,
-                0 0 60px #10b981;
-              animation: subtitle-puzzle-pulse 3s ease-in-out infinite;
-            }
-            @keyframes subtitle-puzzle-pulse {
-              0%, 100% {
-                text-shadow:
-                  0 0 5px #fff,
-                  0 0 10px #fff,
-                  0 0 20px #22c55e,
-                  0 0 40px #22c55e,
-                  0 0 60px #10b981;
-                filter: brightness(1);
-              }
-              50% {
-                text-shadow:
-                  0 0 5px #fff,
-                  0 0 15px #fff,
-                  0 0 30px #22c55e,
-                  0 0 50px #22c55e,
-                  0 0 70px #10b981;
-                filter: brightness(1.1);
-              }
-            }
-          `}</style>
 
           {/* Puzzle Info */}
           {gameMode === 'puzzle' && currentPuzzle && !isGeneratingPuzzle && (

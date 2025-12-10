@@ -11,6 +11,11 @@ import GameScreen from './components/GameScreen';
 import DifficultySelector from './components/DifficultySelector';
 import NeonTitle from './components/NeonTitle';
 
+// Weekly Challenge components
+import WeeklyChallengeMenu from './components/WeeklyChallengeMenu';
+import WeeklyChallengeScreen from './components/WeeklyChallengeScreen';
+import WeeklyLeaderboard from './components/WeeklyLeaderboard';
+
 // Entry and Profile components
 import EntryAuthScreen from './components/EntryAuthScreen';
 import PlayerProfileCard from './components/PlayerProfileCard';
@@ -46,6 +51,9 @@ function AppContent() {
   // Spectating and replay state
   const [spectatingGameId, setSpectatingGameId] = useState(null);
   const [replayGameId, setReplayGameId] = useState(null);
+  
+  // Weekly challenge state
+  const [currentWeeklyChallenge, setCurrentWeeklyChallenge] = useState(null);
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile } = useAuth();
 
@@ -270,6 +278,36 @@ function AppContent() {
     setGameMode('online-menu');
   };
 
+  // Handle weekly challenge button click
+  const handleWeeklyChallenge = () => {
+    // Weekly challenge requires authentication
+    if (!isOnlineEnabled) {
+      alert('Online features are not configured. Please set up Supabase.');
+      return;
+    }
+    if (isOfflineMode && !isAuthenticated) {
+      setShowOnlineAuthPrompt(true);
+      return;
+    }
+    if (!isAuthenticated) {
+      setGameMode('auth');
+      return;
+    }
+    setGameMode('weekly-menu');
+  };
+
+  // Handle playing the weekly challenge
+  const handlePlayWeeklyChallenge = (challenge) => {
+    setCurrentWeeklyChallenge(challenge);
+    setGameMode('weekly-game');
+  };
+
+  // Handle viewing weekly leaderboard
+  const handleWeeklyLeaderboard = (challenge) => {
+    setCurrentWeeklyChallenge(challenge);
+    setGameMode('weekly-leaderboard');
+  };
+
   // Start AI game after difficulty selection
   const handleStartAIGame = (aiGoesFirst = false) => {
     startNewGame('ai', aiGoesFirst);
@@ -411,6 +449,7 @@ function AppContent() {
         <MenuScreen
           onStartGame={handleStartGame}
           onPuzzleSelect={() => setGameMode('puzzle-select')}
+          onWeeklyChallenge={handleWeeklyChallenge}
           showHowToPlay={showHowToPlay}
           onToggleHowToPlay={setShowHowToPlay}
           showSettings={showSettings}
@@ -576,6 +615,42 @@ function AppContent() {
       <SpeedPuzzleScreen
         onMenu={() => setGameMode('puzzle-select')}
         isOfflineMode={isOfflineMode}
+      />
+    );
+  }
+
+  // =====================================================
+  // WEEKLY CHALLENGE MODES
+  // =====================================================
+
+  // Weekly Challenge Menu
+  if (gameMode === 'weekly-menu') {
+    return (
+      <WeeklyChallengeMenu
+        onPlay={handlePlayWeeklyChallenge}
+        onLeaderboard={handleWeeklyLeaderboard}
+        onBack={() => setGameMode(null)}
+      />
+    );
+  }
+
+  // Weekly Challenge Game
+  if (gameMode === 'weekly-game') {
+    return (
+      <WeeklyChallengeScreen
+        challenge={currentWeeklyChallenge}
+        onMenu={() => setGameMode('weekly-menu')}
+        onLeaderboard={handleWeeklyLeaderboard}
+      />
+    );
+  }
+
+  // Weekly Leaderboard
+  if (gameMode === 'weekly-leaderboard') {
+    return (
+      <WeeklyLeaderboard
+        challenge={currentWeeklyChallenge}
+        onBack={() => setGameMode('weekly-menu')}
       />
     );
   }

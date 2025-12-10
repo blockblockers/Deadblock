@@ -349,3 +349,123 @@ export const getSpeedPuzzle = async () => {
   
   return puzzle;
 };
+
+// =====================================================
+// SEEDED PUZZLE GENERATION (for Weekly Challenges)
+// =====================================================
+
+// Simple seeded random number generator (Mulberry32)
+const createSeededRandom = (seed) => {
+  // Convert string seed to number
+  let a = 0;
+  for (let i = 0; i < seed.length; i++) {
+    a = ((a << 5) - a) + seed.charCodeAt(i);
+    a = a & a; // Convert to 32-bit integer
+  }
+  a = Math.abs(a);
+  
+  return () => {
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+};
+
+// Seeded version of playCompleteGame
+const playCompleteGameSeeded = (random) => {
+  let board = createEmptyBoard();
+  let boardPieces = createEmptyBoard();
+  let usedPieces = [];
+  const history = [];
+  let currentPlayer = 1;
+  let moveCount = 0;
+  
+  while (moveCount < 12) {
+    const moves = getAllValidMoves(board, usedPieces);
+    if (moves.length === 0) break;
+    
+    // Save state before move
+    history.push({
+      board: board.map(r => [...r]),
+      boardPieces: boardPieces.map(r => [...r]),
+      usedPieces: [...usedPieces],
+      player: currentPlayer
+    });
+    
+    // Select random move using seeded RNG
+    const moveIndex = Math.floor(random() * moves.length);
+    const move = moves[moveIndex];
+    
+    // Apply move
+    for (const [dx, dy] of move.coords) {
+      board[move.row + dy][move.col + dx] = currentPlayer;
+      boardPieces[move.row + dy][move.col + dx] = move.pieceType;
+    }
+    usedPieces.push(move.pieceType);
+    moveCount++;
+    
+    // Switch player
+    currentPlayer = currentPlayer === 1 ? 2 : 1;
+  }
+  
+  return {
+    history,
+    totalMoves: moveCount
+  };
+};
+
+// Generate a deterministic puzzle from a seed string
+const generateSeededPuzzle = (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
+  const random = createSeededRandom(seed);
+  const movesToBackOut = getMovesForDifficulty(difficulty);
+  
+  // Try multiple games with the seeded RNG
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const game = playCompleteGameSeeded(random);
+    
+    // Need at least N moves to back out
+    if (game.totalMoves < movesToBackOut) {
+      continue;
+    }
+    
+    // Get the state from N moves before the end
+    const puzzleStateIndex = game.totalMoves - movesToBackOut;
+    const puzzleState = game.history[puzzleStateIndex];
+    
+    if (!puzzleState) continue;
+    
+    // Get all valid moves from this state
+    const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
+    
+    // Just need at least 1 valid move
+    if (allMoves.length > 0) {
+      console.log(`Seeded puzzle generated from seed "${seed}": ${allMoves.length} possible moves`);
+      
+      return {
+        id: `seeded-puzzle-${seed}`,
+        name: 'Weekly Challenge',
+        difficulty: difficulty,
+        description: `${movesToBackOut} move${movesToBackOut > 1 ? 's' : ''} to win!`,
+        boardState: boardToString(puzzleState.boardPieces),
+        usedPieces: [...puzzleState.usedPieces],
+        movesRemaining: movesToBackOut,
+        seed: seed
+      };
+    }
+  }
+  
+  console.error(`Failed to generate seeded puzzle from seed "${seed}" after 30 attempts`);
+  return null;
+};
+
+// Async wrapper for seeded puzzles
+export const getSeededPuzzle = async (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
+  await new Promise(resolve => setTimeout(resolve, 50));
+  
+  const puzzle = generateSeededPuzzle(seed, difficulty);
+  
+  await new Promise(resolve => setTimeout(resolve, 50));
+  
+  return puzzle;
+};

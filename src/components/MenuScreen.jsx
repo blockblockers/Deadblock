@@ -15,6 +15,7 @@ const buttonShapes = {
   V: [[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]], // V shape - bottom-left to up-right (VS AI)
   W: [[0, 2], [1, 1], [1, 2], [2, 0], [2, 1]], // W shape - stair bottom-left to up-right (2 Player)
   P: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1]], // P shape - flag pattern (Puzzle)
+  Z: [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]], // Z shape - diagonal pattern (Weekly)
 };
 
 // Floating pentomino piece for background animation
@@ -175,7 +176,8 @@ const PentominoButton = ({ onClick, shape, color, glowColor, title, subtitle, te
 
 const MenuScreen = ({ 
   onStartGame, 
-  onPuzzleSelect, 
+  onPuzzleSelect,
+  onWeeklyChallenge,
   showHowToPlay, 
   onToggleHowToPlay,
   showSettings,
@@ -334,6 +336,20 @@ const MenuScreen = ({
                 textColor="text-green-300"
                 hoverTextColor="group-hover:text-green-200"
               />
+              
+              {/* Weekly Challenge - Show if Supabase is configured */}
+              {showOnline && (
+                <PentominoButton
+                  onClick={onWeeklyChallenge}
+                  shape="Z"
+                  color="bg-gradient-to-br from-lime-500 to-green-600"
+                  glowColor="rgba(163,230,53,0.5)"
+                  title="WEEKLY"
+                  subtitle="Compete for best time"
+                  textColor="text-lime-300"
+                  hoverTextColor="group-hover:text-lime-200"
+                />
+              )}
             </div>
             
             {/* Bottom Buttons */}
