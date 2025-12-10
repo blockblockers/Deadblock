@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import NeonTitle from './NeonTitle';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { soundManager } from '../utils/soundManager';
@@ -39,7 +40,7 @@ const difficulties = [
     id: AI_DIFFICULTY.RANDOM, 
     name: 'BEGINNER', 
     subtitle: 'Random Moves', 
-    description: 'AI plays randomly. Perfect for learning the game.', 
+    description: 'A.I. plays randomly. Perfect for learning the game.', 
     theme: 'beginner',
     colors: {
       gradient: 'from-green-600 to-emerald-600',
@@ -54,7 +55,7 @@ const difficulties = [
     id: AI_DIFFICULTY.AVERAGE, 
     name: 'INTERMEDIATE', 
     subtitle: 'Strategic', 
-    description: 'AI uses strategy and thinks ahead.', 
+    description: 'A.I. uses strategy and thinks ahead.', 
     theme: 'intermediate',
     colors: {
       gradient: 'from-amber-500 to-orange-600',
@@ -68,8 +69,8 @@ const difficulties = [
   { 
     id: AI_DIFFICULTY.PROFESSIONAL, 
     name: 'EXPERT', 
-    subtitle: 'Advanced AI', 
-    description: 'AI analyzes deeply and plays to win.', 
+    subtitle: 'Advanced A.I.', 
+    description: 'A.I. analyzes deeply and plays to win.', 
     theme: 'expert',
     colors: {
       gradient: 'from-purple-500 to-pink-600',
@@ -84,6 +85,7 @@ const difficulties = [
 
 const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGame, onBack }) => {
   const { needsScroll } = useResponsiveLayout(700);
+  const [aiGoesFirst, setAiGoesFirst] = useState(false);
 
   const selectedDiff = difficulties.find(d => d.id === selectedDifficulty) || difficulties[0];
   const theme = themes[selectedDiff.theme];
@@ -95,12 +97,17 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
 
   const handleStart = () => {
     soundManager.playButtonClick();
-    onStartGame();
+    onStartGame(aiGoesFirst);
   };
 
   const handleBack = () => {
     soundManager.playButtonClick();
     onBack();
+  };
+
+  const toggleAiFirst = () => {
+    soundManager.playClickSound('select');
+    setAiGoesFirst(!aiGoesFirst);
   };
 
   return (
@@ -125,7 +132,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
           {/* Title - Centered and Large */}
           <div className="text-center mb-6">
             <NeonTitle size="large" />
-            <p className="text-slate-400 text-sm mt-2">VS AI - Choose Difficulty</p>
+            <p className="text-slate-400 text-sm mt-2">VS A.I. - Choose Difficulty</p>
           </div>
 
           {/* Card with dramatic theme */}
@@ -178,6 +185,37 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
                   </button>
                 );
               })}
+            </div>
+
+            {/* AI Goes First Toggle */}
+            <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+              <button
+                onClick={toggleAiFirst}
+                className="w-full flex items-center justify-between"
+              >
+                <div className="text-left">
+                  <div className="text-sm font-medium text-slate-300">Turn Order</div>
+                  <div className="text-xs text-slate-500">
+                    {aiGoesFirst ? 'A.I. plays first, you play second' : 'You play first, A.I. plays second'}
+                  </div>
+                </div>
+                <div className={`relative w-14 h-7 rounded-full transition-colors duration-300 ${
+                  aiGoesFirst ? 'bg-purple-600' : 'bg-slate-600'
+                }`}>
+                  <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-md transition-transform duration-300 ${
+                    aiGoesFirst ? 'translate-x-8' : 'translate-x-1'
+                  }`} />
+                </div>
+              </button>
+              <div className="flex items-center justify-center gap-1 text-xs mt-2">
+                <span className={`px-2 py-1 rounded font-medium ${!aiGoesFirst ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
+                  {aiGoesFirst ? 'A.I.' : 'You'}
+                </span>
+                <span className="text-slate-600">→</span>
+                <span className={`px-2 py-1 rounded font-medium ${aiGoesFirst ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
+                  {aiGoesFirst ? 'You' : 'A.I.'}
+                </span>
+              </div>
             </div>
 
             {/* Start Button */}

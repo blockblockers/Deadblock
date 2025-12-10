@@ -40,8 +40,8 @@ const difficulties = [
   { 
     id: PUZZLE_DIFFICULTY.EASY, 
     name: 'EASY', 
-    moves: 3, 
-    description: '3 moves to solve. Great for warming up.', 
+    moves: 1, 
+    description: '1 move to win. But watch out for traps!', 
     theme: 'easy',
     colors: {
       gradient: 'from-green-600 to-emerald-600',
@@ -55,8 +55,8 @@ const difficulties = [
   { 
     id: PUZZLE_DIFFICULTY.MEDIUM, 
     name: 'MEDIUM', 
-    moves: 5, 
-    description: '5 moves to solve. A solid challenge.', 
+    moves: 3, 
+    description: '3 moves to solve. A solid challenge.', 
     theme: 'medium',
     colors: {
       gradient: 'from-amber-500 to-orange-600',
@@ -70,8 +70,8 @@ const difficulties = [
   { 
     id: PUZZLE_DIFFICULTY.HARD, 
     name: 'HARD', 
-    moves: 7, 
-    description: '7 moves to solve. For puzzle masters.', 
+    moves: 5, 
+    description: '5 moves to solve. For puzzle masters.', 
     theme: 'hard',
     colors: {
       gradient: 'from-purple-500 to-pink-600',
@@ -214,7 +214,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                 {Array.from({ length: selectedDiff.moves }).map((_, i) => (
                   <div key={i} className="flex items-center gap-1">
                     <span className={`px-2 py-1 rounded font-medium ${i % 2 === 0 ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
-                      {i % 2 === 0 ? 'You' : 'AI'}
+                      {i % 2 === 0 ? 'You' : 'A.I.'}
                     </span>
                     {i < selectedDiff.moves - 1 && <span className="text-slate-600">→</span>}
                   </div>

@@ -184,7 +184,7 @@ class GameSyncService {
 
     console.log('gameSync.makeMove: Move count', { moveCount, countError });
 
-    // Record the move in history
+    // Record the move in history with board state for replays
     const { data: moveRecord, error: moveError } = await supabase
       .from('game_moves')
       .insert({
@@ -195,7 +195,8 @@ class GameSyncService {
         col,
         rotation,
         flipped: flipped || false,
-        move_number: (moveCount || 0) + 1
+        move_number: (moveCount || 0) + 1,
+        board_state: { board: newBoard, boardPieces: newBoardPieces }
       })
       .select()
       .single();
@@ -274,6 +275,32 @@ class GameSyncService {
       player_id: loserId,
       won: false
     });
+
+    // Update ELO ratings
+    try {
+      await supabase.rpc('update_ratings_after_game', {
+        p_game_id: gameId,
+        p_winner_id: winnerId
+      });
+      console.log('gameSync: ELO ratings updated for game', gameId);
+    } catch (err) {
+      console.error('gameSync: Error updating ELO ratings:', err);
+    }
+
+    // Check achievements for both players
+    try {
+      await supabase.rpc('check_achievements', {
+        p_user_id: winnerId,
+        p_game_id: gameId
+      });
+      await supabase.rpc('check_achievements', {
+        p_user_id: loserId,
+        p_game_id: gameId
+      });
+      console.log('gameSync: Achievements checked for both players');
+    } catch (err) {
+      console.error('gameSync: Error checking achievements:', err);
+    }
   }
 
   // Forfeit/abandon game

@@ -1,13 +1,18 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2 } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
 import { notificationService } from '../services/notificationService';
+import { friendsService } from '../services/friendsService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import NotificationPrompt from './NotificationPrompt';
+import FriendsList from './FriendsList';
+import Achievements, { AchievementPopup } from './Achievements';
+import { SpectatableGamesList } from './SpectatorView';
+import GameInviteNotification from './GameInviteNotification';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -129,6 +134,8 @@ const OnlineMenu = ({
   onViewProfile, 
   onViewLeaderboard, 
   onResumeGame,
+  onSpectateGame,
+  onViewReplay,
   onBack 
 }) => {
   const { profile, signOut } = useAuth();
@@ -160,6 +167,13 @@ const OnlineMenu = ({
   // Notification state
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  
+  // Social features state
+  const [showFriendsList, setShowFriendsList] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [showSpectateList, setShowSpectateList] = useState(false);
+  const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
+  const [unlockedAchievement, setUnlockedAchievement] = useState(null);
 
   // Initialize notifications
   useEffect(() => {
@@ -170,6 +184,17 @@ const OnlineMenu = ({
     };
     initNotifications();
   }, []);
+
+  // Load friend request count
+  useEffect(() => {
+    if (!profile?.id) return;
+    
+    const loadFriendRequests = async () => {
+      const { data } = await friendsService.getPendingRequests(profile.id);
+      setPendingFriendRequests(data?.length || 0);
+    };
+    loadFriendRequests();
+  }, [profile?.id]);
 
   // Load games and invites
   useEffect(() => {
@@ -910,8 +935,8 @@ const OnlineMenu = ({
               </div>
             )}
 
-            {/* Secondary actions */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            {/* Secondary actions - Row 1 */}
+            <div className="grid grid-cols-2 gap-3 mb-3">
               <button
                 onClick={() => {
                   soundManager.playButtonClick();
@@ -931,6 +956,60 @@ const OnlineMenu = ({
               >
                 <User size={18} className="text-amber-400" />
                 <span className="text-sm font-medium">Profile</span>
+              </button>
+            </div>
+            
+            {/* Secondary actions - Row 2: Social Features */}
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              <button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  setShowFriendsList(true);
+                }}
+                className="p-3 bg-slate-800/70 rounded-xl text-slate-300 hover:bg-slate-700/70 transition-all flex flex-col items-center justify-center gap-1 border border-slate-700/50 relative"
+              >
+                <Users size={20} className="text-cyan-400" />
+                <span className="text-xs">Friends</span>
+                {pendingFriendRequests > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {pendingFriendRequests}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  setShowAchievements(true);
+                }}
+                className="p-3 bg-slate-800/70 rounded-xl text-slate-300 hover:bg-slate-700/70 transition-all flex flex-col items-center justify-center gap-1 border border-slate-700/50"
+              >
+                <Award size={20} className="text-purple-400" />
+                <span className="text-xs">Awards</span>
+              </button>
+              <button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  setShowSpectateList(true);
+                }}
+                className="p-3 bg-slate-800/70 rounded-xl text-slate-300 hover:bg-slate-700/70 transition-all flex flex-col items-center justify-center gap-1 border border-slate-700/50"
+              >
+                <Eye size={20} className="text-green-400" />
+                <span className="text-xs">Watch</span>
+              </button>
+              <button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  // Show the recent games at bottom which have replay links
+                  // Or could scroll to recent games section
+                  const recentGamesSection = document.querySelector('[data-section="recent-games"]');
+                  if (recentGamesSection) {
+                    recentGamesSection.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
+                className="p-3 bg-slate-800/70 rounded-xl text-slate-300 hover:bg-slate-700/70 transition-all flex flex-col items-center justify-center gap-1 border border-slate-700/50"
+              >
+                <PlayCircle size={20} className="text-pink-400" />
+                <span className="text-xs">Replays</span>
               </button>
             </div>
 
@@ -981,7 +1060,7 @@ const OnlineMenu = ({
 
             {/* Recent Games */}
             {recentGames.length > 0 && (
-              <div className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
+              <div data-section="recent-games" className="bg-slate-800/30 rounded-xl p-4 border border-slate-700/50">
                 <h3 className="text-slate-400 font-bold text-sm mb-3 flex items-center gap-2">
                   <History size={16} />
                   RECENT GAMES
@@ -1006,9 +1085,22 @@ const OnlineMenu = ({
                             </div>
                           </div>
                         </div>
-                        <span className={`text-sm font-bold ${result.color}`}>
-                          {result.text}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              soundManager.playButtonClick();
+                              onViewReplay?.(game.id);
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-pink-400 transition-colors"
+                            title="Watch Replay"
+                          >
+                            <PlayCircle size={16} />
+                          </button>
+                          <span className={`text-sm font-bold ${result.color}`}>
+                            {result.text}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
@@ -1031,6 +1123,83 @@ const OnlineMenu = ({
       {/* Notification Prompt */}
       {showNotificationPrompt && (
         <NotificationPrompt onDismiss={() => setShowNotificationPrompt(false)} />
+      )}
+      
+      {/* Game Invite Notifications */}
+      {profile?.id && (
+        <GameInviteNotification
+          userId={profile.id}
+          onAccept={async (notification) => {
+            if (notification.type === 'invite') {
+              // Accept the game invite
+              const { data, error } = await inviteService.acceptInviteById(notification.id);
+              if (!error && data?.game_id) {
+                soundManager.playSound('success');
+                onResumeGame?.({ id: data.game_id });
+              }
+            } else if (notification.type === 'friend_request') {
+              // Accept friend request
+              await friendsService.acceptFriendRequest(notification.id, profile.id);
+              loadFriendRequests();
+              soundManager.playSound('success');
+            }
+          }}
+          onDecline={(notification) => {
+            if (notification.type === 'friend_request') {
+              friendsService.declineFriendRequest(notification.id, profile.id);
+            }
+          }}
+        />
+      )}
+      
+      {/* Friends List Modal */}
+      {showFriendsList && (
+        <FriendsList
+          userId={profile?.id}
+          onInviteFriend={async (friend) => {
+            // Send game invite to friend
+            setSendingInvite(friend.id);
+            const { error } = await inviteService.sendInvite(profile.id, friend.id);
+            setSendingInvite(null);
+            if (!error) {
+              soundManager.playSound('success');
+              setShowFriendsList(false);
+            }
+          }}
+          onSpectate={(gameId) => {
+            setShowFriendsList(false);
+            onSpectateGame?.(gameId);
+          }}
+          onClose={() => setShowFriendsList(false)}
+        />
+      )}
+      
+      {/* Achievements Modal */}
+      {showAchievements && (
+        <Achievements
+          userId={profile?.id}
+          onClose={() => setShowAchievements(false)}
+        />
+      )}
+      
+      {/* Spectatable Games List */}
+      {showSpectateList && (
+        <SpectatableGamesList
+          userId={profile?.id}
+          onSpectate={(gameId) => {
+            setShowSpectateList(false);
+            onSpectateGame?.(gameId);
+          }}
+          onClose={() => setShowSpectateList(false)}
+        />
+      )}
+      
+      {/* Achievement Unlock Popup */}
+      {unlockedAchievement && (
+        <AchievementPopup
+          achievement={unlockedAchievement}
+          onClose={() => setUnlockedAchievement(null)}
+        />
       )}
     </div>
   );

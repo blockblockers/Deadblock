@@ -1,6 +1,6 @@
 // Online Game Screen - Real-time multiplayer game
-import { useState, useEffect, useCallback } from 'react';
-import { Flag } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Flag, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import NeonTitle from './NeonTitle';
@@ -8,9 +8,16 @@ import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
 import GameOverModal from './GameOverModal';
+import QuickChat from './QuickChat';
+import TurnTimer from './TurnTimer';
+import HeadToHead from './HeadToHead';
+import { RatingChange, RatingBadge } from './RatingDisplay';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { notificationService } from '../services/notificationService';
+import { replayService } from '../services/replayService';
+import { ratingService } from '../services/ratingService';
+import { achievementService } from '../services/achievementService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Orange/Amber theme for online mode
@@ -26,41 +33,55 @@ const theme = {
 };
 
 // Player indicator bar for online games
-const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
+const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, opponentId }) => {
+  const myTier = ratingService.getRatingTier(profile?.elo_rating || profile?.rating || 1200);
+  const oppTier = ratingService.getRatingTier(opponent?.elo_rating || opponent?.rating || 1200);
+  
   return (
-    <div className="flex items-center justify-between mb-3">
-      {/* Me */}
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
-        isMyTurn && gameStatus === 'active'
-          ? 'bg-amber-500/20 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4)]' 
-          : 'bg-slate-800/50 border border-slate-700/50'
-      }`}>
-        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
-          isMyTurn && gameStatus === 'active' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] animate-pulse' : 'bg-slate-600'
-        }`} />
-        <span className={`text-sm font-bold tracking-wide ${isMyTurn ? 'text-amber-300' : 'text-slate-500'}`}>
-          {profile?.username || 'You'}
-        </span>
-        <span className="text-xs text-slate-600">({profile?.rating || 1000})</span>
+    <div className="mb-3">
+      <div className="flex items-center justify-between">
+        {/* Me */}
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+          isMyTurn && gameStatus === 'active'
+            ? 'bg-amber-500/20 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4)]' 
+            : 'bg-slate-800/50 border border-slate-700/50'
+        }`}>
+          <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+            isMyTurn && gameStatus === 'active' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] animate-pulse' : 'bg-slate-600'
+          }`} />
+          <span className={`text-sm font-bold tracking-wide ${isMyTurn ? 'text-amber-300' : 'text-slate-500'}`}>
+            {profile?.username || 'You'}
+          </span>
+          <span className={`text-xs ${myTier.color}`}>{myTier.icon}</span>
+          <span className="text-xs text-slate-600">{profile?.elo_rating || profile?.rating || 1200}</span>
+        </div>
+        
+        {/* VS */}
+        <div className="text-slate-600 text-xs font-bold px-2">VS</div>
+        
+        {/* Opponent */}
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+          !isMyTurn && gameStatus === 'active'
+            ? 'bg-orange-500/20 border border-orange-400/50 shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
+            : 'bg-slate-800/50 border border-slate-700/50'
+        }`}>
+          <span className={`text-sm font-bold tracking-wide ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
+            {opponent?.username || 'Opponent'}
+          </span>
+          <span className={`text-xs ${oppTier.color}`}>{oppTier.icon}</span>
+          <span className="text-xs text-slate-600">{opponent?.elo_rating || opponent?.rating || 1200}</span>
+          <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+            !isMyTurn && gameStatus === 'active' ? 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse' : 'bg-slate-600'
+          }`} />
+        </div>
       </div>
       
-      {/* VS */}
-      <div className="text-slate-600 text-xs font-bold px-2">VS</div>
-      
-      {/* Opponent */}
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
-        !isMyTurn && gameStatus === 'active'
-          ? 'bg-orange-500/20 border border-orange-400/50 shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
-          : 'bg-slate-800/50 border border-slate-700/50'
-      }`}>
-        <span className={`text-sm font-bold tracking-wide ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
-          {opponent?.username || 'Opponent'}
-        </span>
-        <span className="text-xs text-slate-600">({opponent?.rating || 1000})</span>
-        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
-          !isMyTurn && gameStatus === 'active' ? 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse' : 'bg-slate-600'
-        }`} />
-      </div>
+      {/* Head to head mini display */}
+      {userId && opponentId && (
+        <div className="mt-2 flex justify-center">
+          <HeadToHead userId={userId} opponentId={opponentId} compact={true} />
+        </div>
+      )}
     </div>
   );
 };
@@ -75,6 +96,10 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const [error, setError] = useState('');
   const [connected, setConnected] = useState(true);
   const [retryCount, setRetryCount] = useState(0);
+  
+  // Ref to track expected piece count after a move (to ignore stale real-time updates)
+  const expectedPieceCountRef = useRef(null);
+  const moveInProgressRef = useRef(false);
   
   // Local game state for UI
   const [board, setBoard] = useState(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
@@ -91,6 +116,13 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const [opponent, setOpponent] = useState(null);
   const [showGameOver, setShowGameOver] = useState(false);
   const [gameResult, setGameResult] = useState(null);
+  
+  // Social features state
+  const [moveCount, setMoveCount] = useState(0);
+  const [turnStartedAt, setTurnStartedAt] = useState(null);
+  const [ratingChange, setRatingChange] = useState(null);
+  const [newAchievements, setNewAchievements] = useState([]);
+  const turnStartRef = useRef(Date.now());
 
   // Update local state from game data
   const updateGameState = useCallback((gameData, userId) => {
@@ -99,13 +131,28 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       return;
     }
 
+    // Count non-null cells in board to verify piece placement
+    const countBoardPieces = (boardData) => {
+      if (!Array.isArray(boardData)) return 0;
+      let count = 0;
+      boardData.forEach(row => {
+        if (Array.isArray(row)) {
+          row.forEach(cell => {
+            if (cell !== null && cell !== 0) count++;
+          });
+        }
+      });
+      return count;
+    };
+
     console.log('updateGameState: Updating with game', gameData.id, {
       current_player: gameData.current_player,
       player1_id: gameData.player1_id,
       player2_id: gameData.player2_id,
       status: gameData.status,
-      boardSample: gameData.board?.[0]?.slice(0, 3),
-      used_pieces: gameData.used_pieces
+      used_pieces: gameData.used_pieces,
+      boardPiecesCount: gameData.board_pieces ? Object.keys(gameData.board_pieces).length : 0,
+      boardCellsOccupied: countBoardPieces(gameData.board)
     });
     
     // Validate and fix board data
@@ -133,6 +180,12 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     setBoardPieces(gameData.board_pieces || {});
     setUsedPieces(Array.isArray(gameData.used_pieces) ? gameData.used_pieces : []);
     setConnected(true);
+    
+    // Track move count and turn start time
+    setMoveCount(gameData.used_pieces?.length || 0);
+    if (gameData.turn_started_at) {
+      setTurnStartedAt(gameData.turn_started_at);
+    }
 
     // Only set player-specific state if user is available
     if (userId) {
@@ -145,7 +198,13 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
       // Check if it's my turn
       const myTurn = gameSyncService.isPlayerTurn(gameData, userId);
+      const wasMyTurn = isMyTurn;
       setIsMyTurn(myTurn);
+      
+      // Track turn start time when turn changes to us
+      if (myTurn && !wasMyTurn) {
+        turnStartRef.current = Date.now();
+      }
       
       console.log('updateGameState: Player state', { playerNum, myTurn, current_player: gameData.current_player });
 
@@ -159,6 +218,13 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
         });
         setShowGameOver(true);
         soundManager.playSound(iWon ? 'win' : 'lose');
+        
+        // Check for new achievements
+        achievementService.checkAchievements(userId, gameData.id).then(({ data }) => {
+          if (data?.length > 0) {
+            setNewAchievements(data);
+          }
+        });
       }
     }
   }, []);
@@ -256,7 +322,33 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       gameId,
       (updatedGame) => {
         if (mounted) {
-          console.log('Real-time update received');
+          console.log('Real-time update received', {
+            incomingPieceCount: updatedGame?.used_pieces?.length || 0,
+            expectedPieceCount: expectedPieceCountRef.current,
+            moveInProgress: moveInProgressRef.current
+          });
+          
+          // Check if this update is stale (has fewer pieces than we expect)
+          // This can happen when:
+          // 1. We just made a move and the server broadcasts the old state first
+          // 2. The server hasn't yet processed our move
+          if (moveInProgressRef.current || expectedPieceCountRef.current !== null) {
+            const incomingPieceCount = updatedGame?.used_pieces?.length || 0;
+            const expectedCount = expectedPieceCountRef.current || 0;
+            
+            if (incomingPieceCount < expectedCount) {
+              console.log('Real-time update ignored - stale data (piece count mismatch)', {
+                incomingPieceCount,
+                expectedCount
+              });
+              return;
+            }
+            
+            // Update arrived with expected or more pieces - clear the expected count
+            if (incomingPieceCount >= expectedCount) {
+              expectedPieceCountRef.current = null;
+            }
+          }
           
           // Check if it just became our turn (for notification)
           const wasMyTurn = gameSyncService.isPlayerTurn(game, userId);
@@ -407,6 +499,9 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
     console.log('handleConfirm: Confirming move', { piece: pendingMove.piece, row: pendingMove.row, col: pendingMove.col });
 
+    // Mark that we have a move in progress (to ignore stale real-time updates)
+    moveInProgressRef.current = true;
+    
     soundManager.playClickSound('confirm');
 
     // Calculate new board state
@@ -495,10 +590,29 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     if (moveError) {
       console.error('Move failed:', moveError);
       soundManager.playSound('invalid');
+      // Clear move tracking on error
+      moveInProgressRef.current = false;
+      expectedPieceCountRef.current = null;
       return;
     }
 
     console.log('handleConfirm: Move successful, applying optimistic update');
+    
+    // Record move for replay
+    const timeTaken = Math.floor((Date.now() - turnStartRef.current) / 1000);
+    replayService.recordMove(gameId, user.id, {
+      moveNumber: newUsedPieces.length,
+      pieceType: pendingMove.piece,
+      row: pendingMove.row,
+      col: pendingMove.col,
+      rotation,
+      flipped,
+      boardState: { board: newBoard, boardPieces: newBoardPieces },
+      timeTaken
+    }).catch(err => console.warn('Failed to record move for replay:', err));
+
+    // Set expected piece count so we ignore stale real-time updates
+    expectedPieceCountRef.current = newUsedPieces.length;
 
     // Apply optimistic update to local state immediately
     // (The real-time subscription will confirm/correct this)
@@ -512,6 +626,12 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     setPendingMove(null);
     setRotation(0);
     setFlipped(false);
+    
+    // Clear move in progress flag after a short delay
+    // This allows real-time updates with correct data to come through
+    setTimeout(() => {
+      moveInProgressRef.current = false;
+    }, 500);
     
     // If game is over, show game over modal
     if (gameOver) {
@@ -544,6 +664,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
         
         if (freshUsedCount >= expectedUsedCount) {
           console.log('handleConfirm: Fresh data looks valid, updating state');
+          // Clear expected piece count before updating
+          expectedPieceCountRef.current = null;
           updateGameState(freshData, user.id);
         } else {
           console.log('handleConfirm: Fresh data seems stale, keeping local state', {
@@ -756,15 +878,31 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
             </div>
           </div>
 
-          {/* Turn Indicator */}
-          <div className={`text-center py-2 mb-2 rounded-lg font-bold text-sm flex-shrink-0 ${
+          {/* Turn Indicator with Timer */}
+          <div className={`flex items-center justify-center gap-3 py-2 mb-2 rounded-lg font-bold text-sm flex-shrink-0 ${
             isMyTurn 
               ? `${theme.accentBg} ${theme.accent} border ${theme.accentBorder}` 
               : 'bg-slate-800/50 text-slate-400 border border-slate-700/50'
           }`}>
-            {game?.status === 'active' 
-              ? (isMyTurn ? "YOUR TURN" : "Waiting for opponent...")
-              : (game?.status === 'completed' ? "GAME OVER" : "Loading...")}
+            <span>
+              {game?.status === 'active' 
+                ? (isMyTurn ? "YOUR TURN" : "Waiting for opponent...")
+                : (game?.status === 'completed' ? "GAME OVER" : "Loading...")}
+            </span>
+            {/* Turn Timer */}
+            {game?.turn_timer_seconds && game?.status === 'active' && (
+              <TurnTimer
+                seconds={game.turn_timer_seconds}
+                turnStartedAt={game.turn_started_at || turnStartedAt}
+                isMyTurn={isMyTurn}
+                onTimeout={() => {
+                  // Auto-forfeit on timeout
+                  if (isMyTurn) {
+                    gameSyncService.forfeitGame(gameId, user.id);
+                  }
+                }}
+              />
+            )}
           </div>
 
           {/* Main Game Panel */}
@@ -776,6 +914,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
               opponent={opponent}
               isMyTurn={isMyTurn}
               gameStatus={game?.status}
+              userId={user?.id}
+              opponentId={opponent?.id}
             />
 
             {/* Game Board */}
@@ -857,6 +997,16 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           {needsScroll && <div className="h-8" />}
         </div>
       </div>
+
+      {/* Quick Chat - for emotes and quick messages */}
+      {game?.status === 'active' && user?.id && (
+        <QuickChat
+          gameId={gameId}
+          userId={user.id}
+          opponentName={opponent?.username || 'Opponent'}
+          disabled={game?.status !== 'active'}
+        />
+      )}
 
       {/* Game Over Modal */}
       {showGameOver && (

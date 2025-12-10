@@ -16,6 +16,8 @@ import MatchmakingScreen from './components/MatchmakingScreen';
 import OnlineGameScreen from './components/OnlineGameScreen';
 import UserProfile from './components/UserProfile';
 import Leaderboard from './components/Leaderboard';
+import SpectatorView from './components/SpectatorView';
+import GameReplay from './components/GameReplay';
 
 // PWA Install Prompt for iOS/Safari
 import IOSInstallPrompt from './components/IOSInstallPrompt';
@@ -27,6 +29,10 @@ function AppContent() {
   const [hasRedirectedAfterOAuth, setHasRedirectedAfterOAuth] = useState(false);
   const [pendingInviteCode, setPendingInviteCode] = useState(null);
   const [inviteInfo, setInviteInfo] = useState(null);
+  
+  // Spectating and replay state
+  const [spectatingGameId, setSpectatingGameId] = useState(null);
+  const [replayGameId, setReplayGameId] = useState(null);
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile } = useAuth();
 
@@ -141,6 +147,7 @@ function AppContent() {
     aiDifficulty,
     isGeneratingPuzzle,
     puzzleDifficulty,
+    aiAnimatingMove,
     
     // Actions
     setGameMode,
@@ -218,8 +225,8 @@ function AppContent() {
   };
 
   // Start AI game after difficulty selection
-  const handleStartAIGame = () => {
-    startNewGame('ai');
+  const handleStartAIGame = (aiGoesFirst = false) => {
+    startNewGame('ai', aiGoesFirst);
   };
 
   // Handle puzzle selection
@@ -248,6 +255,20 @@ function AppContent() {
     }
     setOnlineGameId(game.id);
     setGameMode('online-game');
+  };
+
+  // Handle spectate game
+  const handleSpectateGame = (gameId) => {
+    console.log('handleSpectateGame called:', gameId);
+    setSpectatingGameId(gameId);
+    setGameMode('spectate');
+  };
+
+  // Handle view replay
+  const handleViewReplay = (gameId) => {
+    console.log('handleViewReplay called:', gameId);
+    setReplayGameId(gameId);
+    setGameMode('replay');
   };
 
   // Fallback timeout for stuck loading state
@@ -342,6 +363,8 @@ function AppContent() {
         onViewProfile={() => setGameMode('profile')}
         onViewLeaderboard={() => setGameMode('leaderboard')}
         onResumeGame={handleResumeGame}
+        onSpectateGame={handleSpectateGame}
+        onViewReplay={handleViewReplay}
         onBack={() => setGameMode(null)}
       />
     );
@@ -368,6 +391,8 @@ function AppContent() {
           onViewProfile={() => setGameMode('profile')}
           onViewLeaderboard={() => setGameMode('leaderboard')}
           onResumeGame={handleResumeGame}
+          onSpectateGame={handleSpectateGame}
+          onViewReplay={handleViewReplay}
           onBack={() => setGameMode(null)}
         />
       );
@@ -398,6 +423,33 @@ function AppContent() {
     return (
       <Leaderboard
         onBack={() => setGameMode('online-menu')}
+      />
+    );
+  }
+
+  // Spectate Game
+  if (gameMode === 'spectate') {
+    return (
+      <SpectatorView
+        gameId={spectatingGameId}
+        userId={profile?.id}
+        onClose={() => {
+          setSpectatingGameId(null);
+          setGameMode('online-menu');
+        }}
+      />
+    );
+  }
+
+  // Game Replay
+  if (gameMode === 'replay') {
+    return (
+      <GameReplay
+        gameId={replayGameId}
+        onClose={() => {
+          setReplayGameId(null);
+          setGameMode('online-menu');
+        }}
       />
     );
   }
@@ -448,6 +500,7 @@ function AppContent() {
       aiDifficulty={aiDifficulty}
       isMobile={isMobile}
       isGeneratingPuzzle={isGeneratingPuzzle}
+      aiAnimatingMove={aiAnimatingMove}
       onCellClick={handleCellClick}
       onSelectPiece={selectPiece}
       onRotate={rotatePiece}

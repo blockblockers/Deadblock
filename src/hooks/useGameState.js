@@ -34,6 +34,7 @@ export const useGameState = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTY.AVERAGE);
   const [isGeneratingPuzzle, setIsGeneratingPuzzle] = useState(false);
+  const [aiAnimatingMove, setAiAnimatingMove] = useState(null); // For AI piece placement animation
   
   // Use ref to persist puzzle difficulty across resets
   const puzzleDifficultyRef = useRef(PUZZLE_DIFFICULTY.EASY);
@@ -192,13 +193,32 @@ export const useGameState = () => {
     
     try {
       const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 300)); // Shorter thinking delay
       
       if (move) {
+        // Start animation - show piece moving to position
+        setAiAnimatingMove({
+          piece: move.pieceType,
+          row: move.row,
+          col: move.col,
+          rot: move.rot,
+          flip: move.flip,
+          phase: 'placing' // Animation phase
+        });
+        
+        // Play sound for AI selecting piece
+        soundManager.playPieceSelect();
+        
+        // Wait for animation to play
+        await new Promise(r => setTimeout(r, 600));
+        
+        // Clear animation and commit the move
+        setAiAnimatingMove(null);
         commitMove(move.row, move.col, move.pieceType, move.rot, move.flip);
       }
     } catch (e) {
       console.error('AI move error:', e);
+      setAiAnimatingMove(null);
     }
     
     setIsAIThinking(false);
@@ -357,11 +377,12 @@ export const useGameState = () => {
   }, [gameMode, generateAndLoadPuzzle]);
 
   // Start new game
-  const startNewGame = useCallback((mode) => {
+  const startNewGame = useCallback((mode, aiGoesFirst = false) => {
     setGameMode(mode);
     setBoard(createEmptyBoard());
     setBoardPieces(createEmptyBoard());
-    setCurrentPlayer(1);
+    // If AI goes first in AI mode, set currentPlayer to 2
+    setCurrentPlayer(mode === 'ai' && aiGoesFirst ? 2 : 1);
     setSelectedPiece(null);
     setRotation(0);
     setFlipped(false);
@@ -419,6 +440,7 @@ export const useGameState = () => {
     aiDifficulty,
     isGeneratingPuzzle,
     puzzleDifficulty,
+    aiAnimatingMove,
     
     // Actions
     setGameMode,

@@ -111,12 +111,14 @@ const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking }) => {
         </div>
       )}
       
-      {/* Player 2 / AI */}
+      {/* Player 2 / A.I. */}
       <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
         player2Active 
           ? is2Player
             ? 'bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]'
-            : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'
+            : isAIThinking
+              ? 'bg-purple-500/30 border border-purple-400/70 shadow-[0_0_25px_rgba(168,85,247,0.6)]'
+              : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'
           : 'bg-slate-800/50 border border-slate-700/50'
       }`}>
         <span className={`text-sm font-bold tracking-wide ${
@@ -124,13 +126,15 @@ const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking }) => {
             ? is2Player ? 'text-pink-300' : 'text-purple-300'
             : 'text-slate-500'
         }`}>
-          {is2Player ? 'P2' : 'AI'}
+          {is2Player ? 'P2' : 'A.I.'}
         </span>
         <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
           player2Active 
             ? is2Player 
               ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse'
-              : 'bg-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-pulse'
+              : isAIThinking
+                ? 'bg-purple-300 shadow-[0_0_15px_rgba(168,85,247,1)]'
+                : 'bg-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-pulse'
             : 'bg-slate-600'
         }`} />
         {isAIThinking && player2Active && (
@@ -170,6 +174,7 @@ const GameScreen = ({
   aiDifficulty,
   isMobile,
   isGeneratingPuzzle,
+  aiAnimatingMove,
   onCellClick,
   onSelectPiece,
   onRotate,
@@ -291,6 +296,7 @@ const GameScreen = ({
                 gameMode={gameMode}
                 currentPlayer={currentPlayer}
                 onCellClick={onCellClick}
+                aiAnimatingMove={aiAnimatingMove}
               />
             </div>
 

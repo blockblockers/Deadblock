@@ -12,10 +12,10 @@ export const PUZZLE_DIFFICULTY = {
 
 export const getMovesForDifficulty = (difficulty) => {
   switch (difficulty) {
-    case PUZZLE_DIFFICULTY.EASY: return 3;
-    case PUZZLE_DIFFICULTY.MEDIUM: return 5;
-    case PUZZLE_DIFFICULTY.HARD: return 7;
-    default: return 3;
+    case PUZZLE_DIFFICULTY.EASY: return 1;
+    case PUZZLE_DIFFICULTY.MEDIUM: return 3;
+    case PUZZLE_DIFFICULTY.HARD: return 5;
+    default: return 1;
   }
 };
 
@@ -50,6 +50,60 @@ const getAllValidMoves = (board, usedPieces) => {
     }
   }
   return moves;
+};
+
+// Get unique pieces that can be played (ignoring position variations)
+const getUniquePieceOptions = (moves) => {
+  const pieceSet = new Set();
+  moves.forEach(m => pieceSet.add(m.pieceType));
+  return Array.from(pieceSet);
+};
+
+// Simulate a move and return the resulting board state
+const simulateMove = (board, boardPieces, usedPieces, move, player) => {
+  const newBoard = board.map(r => [...r]);
+  const newBoardPieces = boardPieces.map(r => [...r]);
+  
+  for (const [dx, dy] of move.coords) {
+    newBoard[move.row + dy][move.col + dx] = player;
+    newBoardPieces[move.row + dy][move.col + dx] = move.pieceType;
+  }
+  
+  return {
+    board: newBoard,
+    boardPieces: newBoardPieces,
+    usedPieces: [...usedPieces, move.pieceType]
+  };
+};
+
+// Check if a move leads to winning (opponent has no moves after)
+const isWinningMove = (board, boardPieces, usedPieces, move) => {
+  const result = simulateMove(board, boardPieces, usedPieces, move, 1);
+  const opponentMoves = getAllValidMoves(result.board, result.usedPieces);
+  return opponentMoves.length === 0;
+};
+
+// Check if a move leads to a trap (opponent can still play, then player loses)
+const isTrapMove = (board, boardPieces, usedPieces, move) => {
+  // After player makes this move...
+  const afterPlayer = simulateMove(board, boardPieces, usedPieces, move, 1);
+  const opponentMoves = getAllValidMoves(afterPlayer.board, afterPlayer.usedPieces);
+  
+  // If opponent has no moves, this is a winning move, not a trap
+  if (opponentMoves.length === 0) return false;
+  
+  // If opponent can play, check if there's any opponent move that leaves player with no moves
+  for (const oppMove of opponentMoves) {
+    const afterOpponent = simulateMove(afterPlayer.board, afterPlayer.boardPieces, afterPlayer.usedPieces, oppMove, 2);
+    const playerMovesAfter = getAllValidMoves(afterOpponent.board, afterOpponent.usedPieces);
+    
+    // If player has no moves after opponent plays, this is a trap
+    if (playerMovesAfter.length === 0) {
+      return true;
+    }
+  }
+  
+  return false;
 };
 
 // Play a complete AI vs AI game, recording all states
@@ -105,13 +159,84 @@ const playCompleteGame = () => {
   };
 };
 
+// Generate an EASY puzzle (1 move) with trap possibilities
+const generateEasyPuzzleWithTraps = (onProgress = null) => {
+  // Try multiple games to find one with good trap conditions
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (onProgress) onProgress(attempt + 1, 50);
+    
+    const game = playCompleteGame();
+    
+    // Need at least 2 moves (so we can back out 1 and have the player move)
+    if (game.totalMoves < 2) {
+      continue;
+    }
+    
+    // Get state from 1 move before end (player's turn)
+    const puzzleStateIndex = game.totalMoves - 1;
+    const puzzleState = game.history[puzzleStateIndex];
+    
+    if (!puzzleState) continue;
+    
+    // Get all valid moves from this state
+    const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
+    if (allMoves.length === 0) continue;
+    
+    // Find winning moves and trap moves
+    const winningMoves = [];
+    const trapMoves = [];
+    
+    for (const move of allMoves) {
+      if (isWinningMove(puzzleState.board, puzzleState.boardPieces, puzzleState.usedPieces, move)) {
+        winningMoves.push(move);
+      } else if (isTrapMove(puzzleState.board, puzzleState.boardPieces, puzzleState.usedPieces, move)) {
+        trapMoves.push(move);
+      }
+    }
+    
+    // For a good EASY puzzle, we want:
+    // - At least 1 winning move
+    // - At least 1 trap move (wrong choice that looks valid)
+    // - Multiple different pieces that can be played
+    const winningPieces = getUniquePieceOptions(winningMoves);
+    const trapPieces = getUniquePieceOptions(trapMoves);
+    const allPieces = getUniquePieceOptions(allMoves);
+    
+    // We want at least 2 different pieces playable, with at least one trap
+    if (winningMoves.length > 0 && trapMoves.length > 0 && allPieces.length >= 2) {
+      console.log(`EASY puzzle generated: ${winningPieces.length} winning pieces, ${trapPieces.length} trap pieces, ${allPieces.length} total options`);
+      
+      return {
+        id: `puzzle-easy-${Date.now()}`,
+        name: 'Easy Puzzle',
+        difficulty: PUZZLE_DIFFICULTY.EASY,
+        description: '1 move remaining - choose wisely!',
+        boardState: boardToString(puzzleState.boardPieces),
+        usedPieces: [...puzzleState.usedPieces],
+        movesRemaining: 1,
+        // Store hint data (not shown to player but useful for debugging)
+        _winningPieces: winningPieces,
+        _trapPieces: trapPieces
+      };
+    }
+  }
+  
+  console.error('Failed to generate EASY puzzle with traps after 50 attempts');
+  return null;
+};
+
 // Generate puzzle by playing game then backing out N moves
 export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress = null) => {
+  // Special handling for EASY puzzles with trap logic
+  if (difficulty === PUZZLE_DIFFICULTY.EASY) {
+    return generateEasyPuzzleWithTraps(onProgress);
+  }
+  
   const movesToBackOut = getMovesForDifficulty(difficulty);
   
   // Try multiple games to find one with enough moves
-  for (let attempt = 0; attempt < 20; attempt++) {
-    if (onProgress) onProgress(attempt + 1, 20);
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (onProgress) onProgress(attempt + 1, 30);
     
     const game = playCompleteGame();
     
@@ -154,18 +279,19 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
     }
   }
   
-  console.error(`Failed to generate ${difficulty} puzzle after 20 attempts`);
+  console.error(`Failed to generate ${difficulty} puzzle after 30 attempts`);
   return null;
 };
 
 // Async wrapper
-export const getRandomPuzzle = async (difficulty = PUZZLE_DIFFICULTY.EASY, useClaudeAI = false, onProgress = null) => {
+export const getRandomPuzzle = async (difficulty = PUZZLE_DIFFICULTY.EASY, useAI = false, onProgress = null) => {
   await new Promise(resolve => setTimeout(resolve, 50));
   
   const puzzle = generatePuzzle(difficulty, onProgress);
   
   if (puzzle && onProgress) {
-    onProgress(20, 20);
+    const maxProgress = difficulty === PUZZLE_DIFFICULTY.EASY ? 50 : 30;
+    onProgress(maxProgress, maxProgress);
   }
   
   await new Promise(resolve => setTimeout(resolve, 100));

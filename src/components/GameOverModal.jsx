@@ -255,7 +255,7 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
     if (isPuzzle) return isWin ? 'Puzzle solved successfully' : 'No moves remaining';
     if (is2Player) return winner === 1 ? 'Player 1 dominated the board' : 'Player 2 dominated the board';
     if (isOnline) return isWin ? `You defeated ${opponentName || 'your opponent'}` : `${opponentName || 'Opponent'} wins this round`;
-    return isWin ? 'You defeated the AI' : 'The AI wins this round';
+    return isWin ? 'You defeated the A.I.' : 'The A.I. wins this round';
   };
 
   // Colors
