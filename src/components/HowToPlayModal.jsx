@@ -1,5 +1,5 @@
 // How to Play Modal
-import { X, Target, Users, Trophy, Lightbulb } from 'lucide-react';
+import { X, Target, Users, Trophy, Lightbulb, Wifi } from 'lucide-react';
 
 const HowToPlayModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
@@ -66,6 +66,32 @@ const HowToPlayModal = ({ isOpen, onClose }) => {
             <p className="text-slate-300 text-sm leading-relaxed">
               The game ends when a player cannot place any remaining piece. The player who made the last successful move wins!
             </p>
+          </div>
+
+          {/* Online Play */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-orange-400">
+              <Wifi size={20} />
+              <h3 className="font-bold tracking-wide">ONLINE PLAY</h3>
+            </div>
+            <ul className="text-slate-300 text-sm space-y-2 leading-relaxed">
+              <li className="flex gap-2">
+                <span className="text-orange-400">•</span>
+                <span>Create an account or sign in with Google to play online.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-orange-400">•</span>
+                <span>Use "Find Match" for quick matchmaking with other players.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-orange-400">•</span>
+                <span>Invite friends using a shareable link.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-orange-400">•</span>
+                <span>Your rating changes based on wins and losses.</span>
+              </li>
+            </ul>
           </div>
 
           {/* Tips */}

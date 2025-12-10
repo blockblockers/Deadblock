@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle, RefreshCw } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle, RefreshCw, Pencil, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -138,7 +138,7 @@ const OnlineMenu = ({
   onViewReplay,
   onBack 
 }) => {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile, updateProfile, checkUsernameAvailable } = useAuth();
   // OnlineMenu has substantial content, so always enable scroll
   const { needsScroll: checkScroll, viewportHeight } = useResponsiveLayout(1200);
   // Force scroll for this menu due to amount of content
@@ -148,6 +148,20 @@ const OnlineMenu = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showActivePrompt, setShowActivePrompt] = useState(true);
+  
+  // Username editing state
+  const [showUsernameEdit, setShowUsernameEdit] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
+  
+  // Refresh profile on mount to ensure fresh data
+  useEffect(() => {
+    if (refreshProfile) {
+      refreshProfile();
+    }
+  }, [refreshProfile]);
   
   // Friend search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -177,6 +191,7 @@ const OnlineMenu = ({
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSpectateList, setShowSpectateList] = useState(false);
   const [showRecentGames, setShowRecentGames] = useState(false);
+  const [showActiveGames, setShowActiveGames] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
 
@@ -190,14 +205,15 @@ const OnlineMenu = ({
     initNotifications();
   }, []);
 
-  // Load friend request count
-  useEffect(() => {
+  // Load friend requests function
+  const loadFriendRequests = async () => {
     if (!profile?.id) return;
-    
-    const loadFriendRequests = async () => {
-      const { data } = await friendsService.getPendingRequests(profile.id);
-      setPendingFriendRequests(data?.length || 0);
-    };
+    const { data } = await friendsService.getPendingRequests(profile.id);
+    setPendingFriendRequests(data?.length || 0);
+  };
+
+  // Load friend request count on mount
+  useEffect(() => {
     loadFriendRequests();
   }, [profile?.id]);
 
@@ -334,6 +350,10 @@ const OnlineMenu = ({
     if (refreshing) return;
     setRefreshing(true);
     soundManager.playButtonClick();
+    // Refresh profile to get latest data
+    if (refreshProfile) {
+      await refreshProfile();
+    }
     await loadGames();
     await loadInvites();
     setRefreshing(false);
@@ -347,6 +367,61 @@ const OnlineMenu = ({
   const handleBack = () => {
     soundManager.playButtonClick();
     onBack();
+  };
+
+  // Username editing handlers
+  const handleOpenUsernameEdit = () => {
+    setNewUsername(profile?.username || '');
+    setUsernameError('');
+    setShowUsernameEdit(true);
+    soundManager.playButtonClick();
+  };
+
+  const handleUsernameChange = async (value) => {
+    setNewUsername(value);
+    setUsernameError('');
+    
+    // Validate format
+    if (value.length < 3) {
+      setUsernameError('Username must be at least 3 characters');
+      return;
+    }
+    if (value.length > 20) {
+      setUsernameError('Username must be 20 characters or less');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+      setUsernameError('Only letters, numbers, and underscores allowed');
+      return;
+    }
+    
+    // Check availability (debounced would be better, but keeping it simple)
+    if (value.toLowerCase() !== profile?.username?.toLowerCase()) {
+      setCheckingUsername(true);
+      const { available, error } = await checkUsernameAvailable(value);
+      setCheckingUsername(false);
+      
+      if (error) {
+        setUsernameError('Error checking username');
+      } else if (!available) {
+        setUsernameError('Username is already taken');
+      }
+    }
+  };
+
+  const handleSaveUsername = async () => {
+    if (usernameError || checkingUsername || !newUsername) return;
+    
+    setSavingUsername(true);
+    const { error } = await updateProfile({ username: newUsername });
+    setSavingUsername(false);
+    
+    if (error) {
+      setUsernameError(error.message || 'Failed to update username');
+    } else {
+      soundManager.playSound('success');
+      setShowUsernameEdit(false);
+    }
   };
 
   // Search for users
@@ -578,8 +653,12 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+      className="min-h-screen bg-slate-950 overflow-y-auto overflow-x-hidden"
+      style={{ 
+        WebkitOverflowScrolling: 'touch', 
+        touchAction: 'pan-y',
+        paddingBottom: 'env(safe-area-inset-bottom)'
+      }}
     >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
@@ -606,8 +685,8 @@ const OnlineMenu = ({
       )}
 
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
-        <div className={`w-full max-w-md ${needsScroll ? 'my-auto' : ''}`}>
+      <div className="relative min-h-screen flex flex-col items-center px-4 py-8">
+        <div className="w-full max-w-md">
           
           {/* Title - Centered and Large */}
           <div className="text-center mb-6">
@@ -625,7 +704,16 @@ const OnlineMenu = ({
                   {profile?.username?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-white font-bold text-lg">{profile?.username || 'Player'}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-white font-bold text-lg">{profile?.username || 'Player'}</h2>
+                    <button
+                      onClick={handleOpenUsernameEdit}
+                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
+                      title="Edit Username"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  </div>
                   <div className="flex items-center gap-4 text-sm">
                     <span className="text-amber-400 font-medium">⭐ {profile?.rating || 1000}</span>
                     <span className="text-slate-500">{profile?.games_played || 0} games</span>
@@ -1054,49 +1142,31 @@ const OnlineMenu = ({
               </button>
             </div>
 
-            {/* Active Games */}
+            {/* Active Games Button */}
             {activeGames.length > 0 && (
-              <div className="bg-amber-900/20 rounded-xl p-4 mb-4 border border-amber-500/30">
-                <h3 className="text-amber-400 font-bold text-sm mb-3 flex items-center gap-2">
-                  <Swords size={16} />
-                  ACTIVE GAMES ({activeGames.length})
-                </h3>
-                <div className="space-y-2">
-                  {activeGames.filter(g => g).map(game => {
-                    const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
-                    const opponentName = getOpponentName(game);
-                    return (
-                      <button
-                        key={game.id}
-                        onClick={() => {
-                          soundManager.playButtonClick();
-                          onResumeGame(game);
-                        }}
-                        className={`w-full p-3 rounded-lg flex items-center justify-between transition-all group ${
-                          isMyTurn 
-                            ? 'bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.2)]' 
-                            : 'bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                            {opponentName?.[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div className="text-left">
-                            <div className="text-white text-sm font-medium">vs {opponentName}</div>
-                            <div className={`text-xs ${isMyTurn ? 'text-amber-300 font-medium' : 'text-slate-500'}`}>
-                              {isMyTurn ? '🎮 Your turn!' : 'Waiting for opponent...'}
-                            </div>
-                          </div>
-                        </div>
-                        <ChevronRight size={18} className={`transition-colors ${
-                          isMyTurn ? 'text-amber-400' : 'text-slate-600 group-hover:text-amber-400'
-                        }`} />
-                      </button>
-                    );
-                  })}
+              <button
+                onClick={() => {
+                  soundManager.playButtonClick();
+                  setShowActiveGames(true);
+                }}
+                className="w-full p-4 mb-4 bg-amber-900/20 rounded-xl flex items-center justify-between border border-amber-500/30 hover:border-amber-400/50 transition-all group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:bg-amber-500/30 transition-colors">
+                    <Swords size={20} className="text-amber-400" />
+                  </div>
+                  <div className="text-left">
+                    <div className="text-amber-300 font-medium text-sm">Active Games</div>
+                    <div className="text-amber-400/70 text-xs">
+                      {activeGames.length} {activeGames.length === 1 ? 'game' : 'games'}
+                      {activeGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length > 0 && 
+                        ` • ${activeGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length} your turn`
+                      }
+                    </div>
+                  </div>
                 </div>
-              </div>
+                <ChevronRight size={20} className="text-amber-500/60 group-hover:text-amber-400 transition-colors" />
+              </button>
             )}
 
             {/* Recent Games Button */}
@@ -1130,7 +1200,8 @@ const OnlineMenu = ({
             </button>
           </div>
         </div>
-        {needsScroll && <div className="h-8 flex-shrink-0" />}
+        {/* Bottom padding for scroll */}
+        <div className="h-12 flex-shrink-0" />
       </div>
       
       {/* Notification Prompt */}
@@ -1163,6 +1234,144 @@ const OnlineMenu = ({
             }
           }}
         />
+      )}
+      
+      {/* Username Edit Modal */}
+      {showUsernameEdit && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 rounded-xl max-w-sm w-full overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+            {/* Header */}
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Pencil size={20} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-amber-300">Edit Username</h2>
+              </div>
+              <button
+                onClick={() => setShowUsernameEdit(false)}
+                className="p-1 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Form */}
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">New Username</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={newUsername}
+                    onChange={(e) => handleUsernameChange(e.target.value)}
+                    placeholder="Enter username"
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                    maxLength={20}
+                  />
+                  {checkingUsername && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader size={18} className="text-amber-400 animate-spin" />
+                    </div>
+                  )}
+                </div>
+                {usernameError && (
+                  <p className="mt-2 text-sm text-red-400">{usernameError}</p>
+                )}
+                <p className="mt-2 text-xs text-slate-500">
+                  3-20 characters. Letters, numbers, and underscores only.
+                </p>
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowUsernameEdit(false)}
+                  className="flex-1 py-3 rounded-lg font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveUsername}
+                  disabled={!!usernameError || checkingUsername || savingUsername || !newUsername || newUsername === profile?.username}
+                  className="flex-1 py-3 rounded-lg font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {savingUsername ? (
+                    <>
+                      <Loader size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Active Games Modal */}
+      {showActiveGames && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+            {/* Header */}
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Swords size={24} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-amber-300">Active Games</h2>
+              </div>
+              <button
+                onClick={() => setShowActiveGames(false)}
+                className="p-1 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Games List */}
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {activeGames.length === 0 ? (
+                <div className="text-center py-8">
+                  <Swords className="mx-auto text-slate-600 mb-2" size={40} />
+                  <p className="text-slate-400">No active games</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeGames.filter(g => g).map(game => {
+                    const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
+                    const opponentName = getOpponentName(game);
+                    return (
+                      <button
+                        key={game.id}
+                        onClick={() => {
+                          soundManager.playButtonClick();
+                          setShowActiveGames(false);
+                          onResumeGame(game);
+                        }}
+                        className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
+                          isMyTurn 
+                            ? 'bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]' 
+                            : 'bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">
+                            {opponentName?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div className="text-left">
+                            <div className="text-white font-medium">vs {opponentName}</div>
+                            <div className={`text-sm ${isMyTurn ? 'text-amber-300 font-medium' : 'text-slate-500'}`}>
+                              {isMyTurn ? '🎮 Your turn!' : 'Waiting for opponent...'}
+                            </div>
+                          </div>
+                        </div>
+                        <ChevronRight size={20} className={`${isMyTurn ? 'text-amber-400' : 'text-slate-600'}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Recent Games Modal */}

@@ -185,7 +185,8 @@ const GameScreen = ({
   onUndo,
   onReset,
   onRetryPuzzle,
-  onMenu
+  onMenu,
+  onDifficultySelect
 }) => {
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const { needsScroll } = useResponsiveLayout(750);
@@ -351,6 +352,7 @@ const GameScreen = ({
           onRetry={isPuzzle ? onRetryPuzzle : onReset}
           onNewGame={onReset}
           onMenu={onMenu}
+          onDifficultySelect={onDifficultySelect}
         />
       )}
     </div>

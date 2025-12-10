@@ -279,7 +279,7 @@ function AppContent() {
       const timeout = setTimeout(() => {
         console.log('Loading stuck timeout triggered');
         setLoadingStuck(true);
-      }, 15000); // 15 seconds
+      }, 5000); // 5 seconds (reduced from 15)
       
       return () => clearTimeout(timeout);
     } else {
@@ -512,6 +512,7 @@ function AppContent() {
       onReset={resetGame}
       onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}
+      onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'ai-select')}
     />
   );
 }

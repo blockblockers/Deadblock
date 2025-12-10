@@ -8,10 +8,10 @@ import { isSupabaseConfigured } from '../utils/supabase';
 
 // Custom pentomino shapes for buttons
 const buttonShapes = {
-  T: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]],
-  L: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]],
-  S: [[0, 1], [0, 2], [1, 0], [1, 1], [2, 0]],
-  W: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]], // W shape for online - stair pattern
+  X: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]], // X shape - cross pattern (Online)
+  V: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]], // V shape - corner pattern (VS AI)
+  W: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]], // W shape - stair pattern (2 Player)
+  P: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1]], // P shape - flag pattern (Puzzle)
 };
 
 // Pentomino shape component (no icons inside)
@@ -142,7 +142,7 @@ const MenuScreen = ({
               {showOnline && (
                 <PentominoButton
                   onClick={() => onStartGame('online')}
-                  shape="W"
+                  shape="X"
                   color="bg-gradient-to-br from-amber-500 to-orange-600"
                   glowColor="rgba(251,191,36,0.5)"
                   title="ONLINE"
@@ -154,7 +154,7 @@ const MenuScreen = ({
               
               <PentominoButton
                 onClick={() => onStartGame('ai')}
-                shape="T"
+                shape="V"
                 color="bg-gradient-to-br from-purple-500 to-pink-600"
                 glowColor="rgba(168,85,247,0.5)"
                 title="VS A.I."
@@ -165,7 +165,7 @@ const MenuScreen = ({
               
               <PentominoButton
                 onClick={() => onStartGame('2player')}
-                shape="L"
+                shape="W"
                 color="bg-gradient-to-br from-cyan-500 to-blue-600"
                 glowColor="rgba(34,211,238,0.5)"
                 title="2 PLAYER"
@@ -176,7 +176,7 @@ const MenuScreen = ({
               
               <PentominoButton
                 onClick={onPuzzleSelect}
-                shape="S"
+                shape="P"
                 color="bg-gradient-to-br from-green-500 to-emerald-600"
                 glowColor="rgba(34,197,94,0.5)"
                 title="PUZZLE"

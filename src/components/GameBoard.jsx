@@ -169,18 +169,18 @@ const GameBoard = ({
                     </div>
                   )}
                   
-                  {/* Cyberpunk scan line overlay for placed pieces */}
+                  {/* Slow shimmer overlay for placed pieces */}
                   {isPlacedPiece && (
-                    <div className="absolute inset-0 pointer-events-none">
-                      {/* Top highlight */}
-                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-                      {/* Scan line effect */}
-                      <div className="absolute inset-0 opacity-20 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.1)_2px,rgba(255,255,255,0.1)_4px)]" />
-                      {/* Corner accents */}
-                      <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-white/30" />
-                      <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-white/30" />
-                      <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-white/30" />
-                      <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-white/30" />
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                      {/* Slow shimmer effect */}
+                      <div className="absolute inset-0 animate-shimmer opacity-30" 
+                        style={{
+                          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+                          backgroundSize: '200% 100%'
+                        }}
+                      />
+                      {/* Subtle top highlight */}
+                      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
                     </div>
                   )}
                 </button>
@@ -341,6 +341,18 @@ const GameBoard = ({
         
         .bg-gradient-radial {
           background: radial-gradient(circle, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
+        }
+        
+        @keyframes shimmer {
+          0% {
+            background-position: 200% 0;
+          }
+          100% {
+            background-position: -200% 0;
+          }
+        }
+        .animate-shimmer {
+          animation: shimmer 4s ease-in-out infinite;
         }
       `}</style>
     </div>

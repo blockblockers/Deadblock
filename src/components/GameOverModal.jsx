@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Trophy, Skull, RotateCcw, RefreshCw, Home, X } from 'lucide-react';
+import { Trophy, Skull, RotateCcw, RefreshCw, Home, X, Sliders } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { pieces } from '../utils/pieces';
 
@@ -228,7 +228,7 @@ const GridShatter = () => {
 
 // ====== MAIN MODAL ======
 
-const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, onNewGame, onMenu, onRematch, opponentName }) => {
+const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, onNewGame, onMenu, onRematch, onDifficultySelect, opponentName, difficulty }) => {
   const [animationType, setAnimationType] = useState(0);
 
   useEffect(() => {
@@ -239,6 +239,7 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
   const handleNewGame = () => { soundManager.playButtonClick(); onClose(); onNewGame?.(); };
   const handleMenu = () => { soundManager.playButtonClick(); onClose(); onMenu?.(); };
   const handleRematch = () => { soundManager.playButtonClick(); onRematch?.(); };
+  const handleDifficulty = () => { soundManager.playButtonClick(); onClose(); onDifficultySelect?.(); };
 
   // Simple, clear messaging
   const is2Player = gameMode === '2player';
@@ -349,20 +350,50 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
                 ONLINE MENU
               </button>
             </>
-          ) : (
+          ) : isPuzzle ? (
             <>
               <button onClick={handleRetry}
                 className={`w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 transition-all ${colors.btn} text-white border border-white/10`}
               >
                 <RotateCcw size={16} />
-                {isPuzzle ? 'RETRY' : 'PLAY AGAIN'}
+                RETRY
               </button>
 
               <button onClick={handleNewGame}
                 className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
               >
                 <RefreshCw size={16} />
-                {isPuzzle ? 'NEW PUZZLE' : 'NEW GAME'}
+                NEW PUZZLE
+              </button>
+
+              <button onClick={handleDifficulty}
+                className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
+              >
+                <Sliders size={16} />
+                PUZZLE DIFFICULTY
+              </button>
+
+              <button onClick={handleMenu}
+                className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-all border border-slate-700"
+              >
+                <Home size={16} />
+                MAIN MENU
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={handleRetry}
+                className={`w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 transition-all ${colors.btn} text-white border border-white/10`}
+              >
+                <RotateCcw size={16} />
+                PLAY AGAIN
+              </button>
+
+              <button onClick={handleDifficulty}
+                className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
+              >
+                <Sliders size={16} />
+                A.I. DIFFICULTY
               </button>
 
               <button onClick={handleMenu}

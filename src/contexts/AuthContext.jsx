@@ -28,19 +28,28 @@ export const AuthProvider = ({ children }) => {
   const fetchProfile = useCallback(async (userId) => {
     if (!supabase) return null;
     
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (error) {
-      console.error('Error fetching profile:', error);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching profile:', error);
+        // Try to create profile if it doesn't exist
+        if (error.code === 'PGRST116') {
+          console.log('Profile not found, may need to create one');
+        }
+        return null;
+      }
+      
+      setProfile(data);
+      return data;
+    } catch (err) {
+      console.error('Profile fetch exception:', err);
       return null;
     }
-    
-    setProfile(data);
-    return data;
   }, []);
 
   useEffect(() => {
@@ -113,7 +122,7 @@ export const AuthProvider = ({ children }) => {
         const timeout = setTimeout(() => {
           console.log('Auth initialization timeout - forcing loading to complete');
           setLoading(false);
-        }, 10000); // 10 second timeout
+        }, 5000); // 5 second timeout (reduced from 10)
 
         // First handle any OAuth callback
         await handleOAuthCallback();
