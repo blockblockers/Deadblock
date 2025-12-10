@@ -170,8 +170,27 @@ class SoundManager {
     this.sfxVolume = Math.max(0, Math.min(1, vol));
   }
 
+  // Getter methods
+  isSoundEnabled() {
+    return this.sfxEnabled;
+  }
+
+  isMusicEnabled() {
+    return this.musicEnabled;
+  }
+
+  isVibrationEnabled() {
+    return this.vibrationEnabled;
+  }
+
+  setSoundEnabled(enabled) {
+    this.sfxEnabled = enabled;
+    this.saveSettings();
+  }
+
   setMusicEnabled(enabled) {
     this.musicEnabled = enabled;
+    this.saveSettings();
     if (!enabled) {
       this.stopMusic();
     } else if (this.hasInteracted && this.musicBuffer) {
@@ -181,10 +200,28 @@ class SoundManager {
 
   setSfxEnabled(enabled) {
     this.sfxEnabled = enabled;
+    this.saveSettings();
   }
 
   setVibrationEnabled(enabled) {
     this.vibrationEnabled = enabled;
+    this.saveSettings();
+  }
+
+  // Save settings to localStorage
+  saveSettings() {
+    try {
+      const settings = {
+        musicVolume: this.bgMusicVolume * 100,
+        sfxVolume: this.sfxVolume * 100,
+        musicEnabled: this.musicEnabled,
+        sfxEnabled: this.sfxEnabled,
+        vibrationEnabled: this.vibrationEnabled
+      };
+      localStorage.setItem('deadblock-settings', JSON.stringify(settings));
+    } catch (e) {
+      console.warn('Could not save settings:', e);
+    }
   }
 
   // Simple beep using AudioContext
