@@ -1,8 +1,9 @@
 // SpectatorView - Watch live games
 import { useState, useEffect, useRef } from 'react';
-import { Eye, X, Users, Clock, Trophy, Radio } from 'lucide-react';
+import { Eye, X, Users, Clock, Trophy, Radio, AlertTriangle } from 'lucide-react';
 import { spectatorService } from '../services/spectatorService';
 import { ratingService } from '../services/ratingService';
+import TierIcon from './TierIcon';
 import GameBoard from './GameBoard';
 import { BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
@@ -183,7 +184,7 @@ const SpectatorView = ({ gameId, userId, onClose }) => {
                 )}
               </div>
               <div className="text-xs flex items-center gap-1">
-                <span className={player1Tier.color}>{player1Tier.icon}</span>
+                <TierIcon shape={player1Tier.shape} glowColor={player1Tier.glowColor} size="small" />
                 <span className="text-slate-400">{game?.player1?.elo_rating || 1200}</span>
               </div>
             </div>
@@ -204,7 +205,7 @@ const SpectatorView = ({ gameId, userId, onClose }) => {
               </div>
               <div className="text-xs flex items-center gap-1 justify-end">
                 <span className="text-slate-400">{game?.player2?.elo_rating || 1200}</span>
-                <span className={player2Tier.color}>{player2Tier.icon}</span>
+                <TierIcon shape={player2Tier.shape} glowColor={player2Tier.glowColor} size="small" />
               </div>
             </div>
             <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
@@ -287,6 +288,7 @@ const SpectatorView = ({ gameId, userId, onClose }) => {
 export const SpectatableGamesList = ({ userId, onSpectate, onClose }) => {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadGames();
@@ -295,8 +297,15 @@ export const SpectatableGamesList = ({ userId, onSpectate, onClose }) => {
   }, []);
 
   const loadGames = async () => {
-    const { data } = await spectatorService.getSpectatableGames(20);
-    setGames(data || []);
+    try {
+      const { data, error: fetchError } = await spectatorService.getSpectatableGames(20);
+      if (fetchError) throw fetchError;
+      setGames(data || []);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading spectatable games:', err);
+      setError('Unable to load live games. This feature requires database setup.');
+    }
     setLoading(false);
   };
 
@@ -316,7 +325,19 @@ export const SpectatableGamesList = ({ userId, onSpectate, onClose }) => {
 
         {/* Games list */}
         <div className="p-4 overflow-y-auto max-h-[60vh]">
-          {loading ? (
+          {error ? (
+            <div className="text-center py-8">
+              <AlertTriangle className="mx-auto text-amber-400 mb-2" size={40} />
+              <p className="text-amber-300 font-medium mb-2">Feature Not Available</p>
+              <p className="text-slate-400 text-sm">{error}</p>
+              <button
+                onClick={onClose}
+                className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          ) : loading ? (
             <div className="text-center py-8">
               <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2" />
               <p className="text-slate-400 text-sm">Finding games...</p>

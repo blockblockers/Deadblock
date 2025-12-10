@@ -11,7 +11,8 @@ const GameBoard = ({
   gameMode,
   currentPlayer,
   onCellClick,
-  aiAnimatingMove
+  aiAnimatingMove,
+  playerAnimatingMove
 }) => {
   // Ensure board is valid before rendering
   const safeBoard = Array.isArray(board) && board.length === BOARD_SIZE 
@@ -72,6 +73,19 @@ const GameBoard = ({
     });
   }
 
+  // Calculate player animating piece cells
+  let playerAnimatingCells = [];
+  if (playerAnimatingMove) {
+    const pieceCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rot, playerAnimatingMove.flip);
+    pieceCoords.forEach(([dx, dy]) => {
+      const cellRow = playerAnimatingMove.row + dy;
+      const cellCol = playerAnimatingMove.col + dx;
+      if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+        playerAnimatingCells.push({ row: cellRow, col: cellCol });
+      }
+    });
+  }
+
   // Cell dimensions for positioning ghost cells
   // Mobile: 36px (w-9) + 2px gap, Desktop: 48px (sm:w-12) + 4px gap
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
@@ -100,6 +114,7 @@ const GameBoard = ({
               const hasOverlap = isInBoundsPendingCell && cell !== null;
               const hasOutOfBounds = outOfBoundsCells.length > 0;
               const isAiAnimatingCell = aiAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
+              const isPlayerAnimatingCell = playerAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
               
               // Determine background color
               let bgClass;
@@ -109,6 +124,10 @@ const GameBoard = ({
                 // AI is placing this piece - show with animation
                 bgClass = pieceColors[aiAnimatingMove.piece];
                 extraClass = 'animate-ai-place';
+              } else if (isPlayerAnimatingCell) {
+                // Player is placing this piece - show with animation
+                bgClass = pieceColors[playerAnimatingMove.piece];
+                extraClass = 'animate-player-place';
               } else if (isInBoundsPendingCell) {
                 if (hasOverlap) {
                   bgClass = pieceColors[pieceName];
@@ -129,6 +148,9 @@ const GameBoard = ({
               if (isAiAnimatingCell) {
                 // Enhanced purple glow for AI placing - more dramatic
                 ringClass = 'ring-2 ring-purple-300 shadow-[0_0_30px_rgba(168,85,247,1),0_0_60px_rgba(168,85,247,0.6),0_0_90px_rgba(168,85,247,0.3)]';
+              } else if (isPlayerAnimatingCell) {
+                // Cyan/green glow for player placing
+                ringClass = 'ring-2 ring-cyan-300 shadow-[0_0_30px_rgba(34,211,238,1),0_0_60px_rgba(34,211,238,0.6),0_0_90px_rgba(74,222,128,0.3)]';
               } else if (isInBoundsPendingCell) {
                 if (hasOverlap) {
                   ringClass = 'ring-2 ring-red-500 shadow-[0_0_25px_rgba(239,68,68,0.8)] animate-pulse';
@@ -141,7 +163,7 @@ const GameBoard = ({
               }
               
               // Determine if this is a placed piece (for shimmer effect)
-              const isPlacedPiece = cell !== null && pieceName && !isInBoundsPendingCell && !isAiAnimatingCell;
+              const isPlacedPiece = cell !== null && pieceName && !isInBoundsPendingCell && !isAiAnimatingCell && !isPlayerAnimatingCell;
               
               return (
                 <button
@@ -166,6 +188,26 @@ const GameBoard = ({
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-4 h-4 bg-white rounded-full animate-ai-flash" />
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Player placing effect - ripple wave overlay */}
+                  {isPlayerAnimatingCell && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* Ripple rings expanding outward */}
+                      <div className="absolute inset-0 animate-player-ripple-1 rounded-lg border-2 border-cyan-400/80" />
+                      <div className="absolute inset-0 animate-player-ripple-2 rounded-lg border-2 border-green-400/60" style={{ animationDelay: '100ms' }} />
+                      {/* Center pulse */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-3 h-3 bg-cyan-300 rounded-full animate-player-pulse" />
+                      </div>
+                      {/* Corner trails */}
+                      <div className="absolute top-0 left-1/2 w-1 h-3 bg-gradient-to-b from-cyan-400 to-transparent animate-player-trail" style={{ animationDelay: '0ms' }} />
+                      <div className="absolute bottom-0 left-1/2 w-1 h-3 bg-gradient-to-t from-cyan-400 to-transparent animate-player-trail" style={{ animationDelay: '50ms' }} />
+                      <div className="absolute left-0 top-1/2 h-1 w-3 bg-gradient-to-r from-cyan-400 to-transparent animate-player-trail" style={{ animationDelay: '100ms' }} />
+                      <div className="absolute right-0 top-1/2 h-1 w-3 bg-gradient-to-l from-cyan-400 to-transparent animate-player-trail" style={{ animationDelay: '150ms' }} />
+                      {/* Glow overlay */}
+                      <div className="absolute inset-0 animate-player-glow bg-gradient-radial from-cyan-400/40 via-green-400/20 to-transparent" />
                     </div>
                   )}
                   
@@ -355,6 +397,106 @@ const GameBoard = ({
         }
         .animate-shimmer-sweep {
           animation: shimmer-sweep 3s ease-in-out infinite;
+        }
+        
+        /* Player placement animations - smooth ripple effect */
+        @keyframes player-place {
+          0% {
+            transform: scale(0.8);
+            opacity: 0;
+            filter: brightness(1.5) saturate(1.5);
+          }
+          40% {
+            transform: scale(1.1);
+            opacity: 1;
+            filter: brightness(1.3) saturate(1.3);
+          }
+          70% {
+            transform: scale(0.95);
+            filter: brightness(1.15);
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+            filter: brightness(1) saturate(1);
+          }
+        }
+        .animate-player-place {
+          animation: player-place 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        
+        @keyframes player-ripple-1 {
+          0% {
+            transform: scale(0.5);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(1.5);
+            opacity: 0;
+          }
+        }
+        .animate-player-ripple-1 {
+          animation: player-ripple-1 0.4s ease-out forwards;
+        }
+        
+        @keyframes player-ripple-2 {
+          0% {
+            transform: scale(0.6);
+            opacity: 0.8;
+          }
+          100% {
+            transform: scale(1.8);
+            opacity: 0;
+          }
+        }
+        .animate-player-ripple-2 {
+          animation: player-ripple-2 0.5s ease-out forwards;
+        }
+        
+        @keyframes player-pulse {
+          0% {
+            transform: scale(0);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.5);
+            opacity: 0.8;
+          }
+          100% {
+            transform: scale(0);
+            opacity: 0;
+          }
+        }
+        .animate-player-pulse {
+          animation: player-pulse 0.35s ease-out forwards;
+        }
+        
+        @keyframes player-trail {
+          0% {
+            opacity: 1;
+            transform: scaleY(1);
+          }
+          100% {
+            opacity: 0;
+            transform: scaleY(0);
+          }
+        }
+        .animate-player-trail {
+          animation: player-trail 0.3s ease-out forwards;
+        }
+        
+        @keyframes player-glow {
+          0% {
+            opacity: 0.8;
+            transform: scale(0.8);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1.2);
+          }
+        }
+        .animate-player-glow {
+          animation: player-glow 0.4s ease-out forwards;
         }
       `}</style>
     </div>

@@ -208,9 +208,12 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
               })}
             </div>
 
-            {/* Turn order info */}
+            {/* Turn order info - Enhanced styling */}
             <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-              <div className="text-xs text-slate-400 mb-2 text-center">Turn Order</div>
+              {/* Styled header */}
+              <div className="text-center mb-3">
+                <span className="turn-order-title font-black tracking-[0.2em] text-xs">TURN ORDER</span>
+              </div>
               <div className="flex items-center justify-center gap-1 text-xs flex-wrap">
                 {Array.from({ length: selectedDiff.moves }).map((_, i) => (
                   <div key={i} className="flex items-center gap-1">
@@ -222,6 +225,41 @@ const PuzzleSelect = ({ onSelectPuzzle, onBack }) => {
                 ))}
               </div>
             </div>
+            
+            {/* Turn Order title styling */}
+            <style>{`
+              .turn-order-title {
+                font-family: system-ui, -apple-system, sans-serif;
+                color: #fff;
+                text-shadow:
+                  0 0 5px #fff,
+                  0 0 10px #fff,
+                  0 0 20px #a855f7,
+                  0 0 40px #a855f7,
+                  0 0 60px #ec4899;
+                animation: turn-order-pulse 3s ease-in-out infinite;
+              }
+              @keyframes turn-order-pulse {
+                0%, 100% {
+                  text-shadow:
+                    0 0 5px #fff,
+                    0 0 10px #fff,
+                    0 0 20px #a855f7,
+                    0 0 40px #a855f7,
+                    0 0 60px #ec4899;
+                  filter: brightness(1);
+                }
+                50% {
+                  text-shadow:
+                    0 0 5px #fff,
+                    0 0 15px #fff,
+                    0 0 30px #a855f7,
+                    0 0 50px #a855f7,
+                    0 0 70px #ec4899;
+                  filter: brightness(1.1);
+                }
+              }
+            `}</style>
 
             {/* Error message */}
             {error && (

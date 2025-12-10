@@ -9,6 +9,7 @@ import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
+import TierIcon from './TierIcon';
 import NotificationPrompt from './NotificationPrompt';
 import FriendsList from './FriendsList';
 import Achievements, { AchievementPopup } from './Achievements';
@@ -831,8 +832,8 @@ const OnlineMenu = ({
                 const tier = ratingService.getRatingTier(profile?.rating || 1000);
                 return (
                   <div className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2 border border-slate-700/30">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{tier.icon}</span>
+                    <div className="flex items-center gap-3">
+                      <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="large" />
                       <div>
                         <div className={`font-bold ${tier.color}`}>{tier.name}</div>
                         <div className="text-xs text-slate-500">Rating Tier</div>
@@ -950,7 +951,10 @@ const OnlineMenu = ({
                                   </div>
                                   <div>
                                     <div className="text-white text-sm font-medium">{user.username}</div>
-                                    <div className="text-amber-400/70 text-xs">⭐ {user.rating || 1000}</div>
+                                    <div className="text-amber-400/70 text-xs flex items-center gap-1">
+                                      <TierIcon shape={ratingService.getRatingTier(user.rating || 1000).shape} glowColor={ratingService.getRatingTier(user.rating || 1000).glowColor} size="small" />
+                                      <span>{user.rating || 1000}</span>
+                                    </div>
                                   </div>
                                 </div>
                                 <button
@@ -1401,17 +1405,17 @@ const OnlineMenu = ({
               <div className="space-y-2">
                 <h3 className="text-sm font-bold text-slate-300 mb-2">Rating Tiers</h3>
                 {[
-                  { min: 2200, name: 'Grandmaster', icon: '👑', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
-                  { min: 2000, name: 'Master', icon: '💎', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30' },
-                  { min: 1800, name: 'Expert', icon: '⭐', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
-                  { min: 1600, name: 'Advanced', icon: '🌟', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
-                  { min: 1400, name: 'Intermediate', icon: '📈', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/30' },
-                  { min: 1200, name: 'Beginner', icon: '🎮', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
-                  { min: 0, name: 'Novice', icon: '🌱', color: 'text-slate-500', bg: 'bg-slate-600/10 border-slate-600/30' },
+                  { min: 2200, name: 'Grandmaster', shape: 'X', color: 'text-amber-400', glowColor: '#f59e0b', bg: 'bg-amber-500/10 border-amber-500/30' },
+                  { min: 2000, name: 'Master', shape: 'W', color: 'text-purple-400', glowColor: '#a855f7', bg: 'bg-purple-500/10 border-purple-500/30' },
+                  { min: 1800, name: 'Expert', shape: 'T', color: 'text-blue-400', glowColor: '#3b82f6', bg: 'bg-blue-500/10 border-blue-500/30' },
+                  { min: 1600, name: 'Advanced', shape: 'Y', color: 'text-cyan-400', glowColor: '#22d3ee', bg: 'bg-cyan-500/10 border-cyan-500/30' },
+                  { min: 1400, name: 'Intermediate', shape: 'L', color: 'text-green-400', glowColor: '#22c55e', bg: 'bg-green-500/10 border-green-500/30' },
+                  { min: 1200, name: 'Beginner', shape: 'I', color: 'text-slate-400', glowColor: '#94a3b8', bg: 'bg-slate-500/10 border-slate-500/30' },
+                  { min: 0, name: 'Novice', shape: 'O', color: 'text-slate-500', glowColor: '#64748b', bg: 'bg-slate-600/10 border-slate-600/30' },
                 ].map((tier) => (
                   <div key={tier.name} className={`flex items-center justify-between p-2 rounded-lg border ${tier.bg}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{tier.icon}</span>
+                    <div className="flex items-center gap-3">
+                      <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="default" />
                       <span className={`font-bold ${tier.color}`}>{tier.name}</span>
                     </div>
                     <span className="text-xs text-slate-500">{tier.min}+</span>

@@ -1,10 +1,11 @@
 // FriendsList - View and manage friends
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, UserMinus, Search, Clock, Check, X, MessageCircle, Gamepad2, Eye, Circle } from 'lucide-react';
+import { Users, UserPlus, UserMinus, Search, Clock, Check, X, MessageCircle, Gamepad2, Eye, Circle, AlertTriangle } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { spectatorService } from '../services/spectatorService';
 import { soundManager } from '../utils/soundManager';
+import TierIcon from './TierIcon';
 
 const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
   const [activeTab, setActiveTab] = useState('friends'); // friends, requests, add
@@ -16,6 +17,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [friendGames, setFriendGames] = useState([]);
+  const [error, setError] = useState(null);
 
   // Load friends data
   useEffect(() => {
@@ -24,22 +26,29 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
 
   const loadFriendsData = async () => {
     setLoading(true);
+    setError(null);
     
-    const [friendsResult, requestsResult, sentResult] = await Promise.all([
-      friendsService.getFriends(userId),
-      friendsService.getPendingRequests(userId),
-      friendsService.getSentRequests(userId)
-    ]);
+    try {
+      const [friendsResult, requestsResult, sentResult] = await Promise.all([
+        friendsService.getFriends(userId),
+        friendsService.getPendingRequests(userId),
+        friendsService.getSentRequests(userId)
+      ]);
 
-    if (friendsResult.data) setFriends(friendsResult.data);
-    if (requestsResult.data) setPendingRequests(requestsResult.data);
-    if (sentResult.data) setSentRequests(sentResult.data);
+      if (friendsResult.error) throw new Error(friendsResult.error.message || 'Failed to load friends');
+      if (friendsResult.data) setFriends(friendsResult.data);
+      if (requestsResult.data) setPendingRequests(requestsResult.data);
+      if (sentResult.data) setSentRequests(sentResult.data);
 
-    // Load friend games for spectating
-    if (friendsResult.data?.length > 0) {
-      const friendIds = friendsResult.data.map(f => f.id);
-      const { data: games } = await spectatorService.getFriendGames(friendIds);
-      if (games) setFriendGames(games);
+      // Load friend games for spectating
+      if (friendsResult.data?.length > 0) {
+        const friendIds = friendsResult.data.map(f => f.id);
+        const { data: games } = await spectatorService.getFriendGames(friendIds);
+        if (games) setFriendGames(games);
+      }
+    } catch (err) {
+      console.error('Error loading friends data:', err);
+      setError('Social features require database migration. Please run the migration first.');
     }
 
     setLoading(false);
@@ -193,7 +202,19 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
 
         {/* Content */}
         <div className="p-4 overflow-y-auto max-h-[50vh]">
-          {loading ? (
+          {error ? (
+            <div className="text-center py-8">
+              <AlertTriangle className="mx-auto text-amber-400 mb-2" size={40} />
+              <p className="text-amber-300 font-medium mb-2">Feature Not Available</p>
+              <p className="text-slate-400 text-sm">{error}</p>
+              <button
+                onClick={onClose}
+                className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          ) : loading ? (
             <div className="text-center py-8">
               <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2" />
               <p className="text-slate-400 text-sm">Loading...</p>
@@ -233,7 +254,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
                         <div>
                           <p className="font-medium text-white">{friend.username}</p>
                           <div className="flex items-center gap-1 text-xs">
-                            <span className={tier.color}>{tier.icon}</span>
+                            <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
                             <span className="text-slate-400">{friend.elo_rating || 1200}</span>
                           </div>
                         </div>

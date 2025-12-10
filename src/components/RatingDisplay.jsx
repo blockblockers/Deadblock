@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus, ChevronRight, Trophy } from 'lucide-react';
 import { ratingService } from '../services/ratingService';
+import TierIcon from './TierIcon';
 
 const RatingDisplay = ({ userId, rating, showHistory = false, compact = false }) => {
   const [history, setHistory] = useState([]);
@@ -28,7 +29,7 @@ const RatingDisplay = ({ userId, rating, showHistory = false, compact = false })
   if (compact) {
     return (
       <div className="flex items-center gap-1.5">
-        <span className={`text-lg ${tier.color}`}>{tier.icon}</span>
+        <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
         <span className="font-bold text-white">{rating || 1200}</span>
       </div>
     );
@@ -44,10 +45,10 @@ const RatingDisplay = ({ userId, rating, showHistory = false, compact = false })
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className={`
-              w-12 h-12 rounded-xl flex items-center justify-center text-2xl
+              w-12 h-12 rounded-xl flex items-center justify-center
               bg-gradient-to-br ${getTierGradient(tier.name)}
             `}>
-              {tier.icon}
+              <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="large" />
             </div>
             <div>
               <div className="text-sm text-slate-400">{tier.name}</div>
@@ -177,13 +178,15 @@ export const RatingChange = ({ oldRating, newRating, result }) => {
       {/* Tier change notification */}
       {tierChanged && (
         <div className={`
-          mt-3 p-2 rounded-lg text-center text-sm font-medium
+          mt-3 p-2 rounded-lg text-center text-sm font-medium flex items-center justify-center gap-2
           ${newTier.name > oldTier.name 
             ? 'bg-green-500/20 text-green-400' 
             : 'bg-red-500/20 text-red-400'
           }
         `}>
-          {change > 0 ? '🎉 Promoted to' : '📉 Demoted to'} {newTier.icon} {newTier.name}!
+          {change > 0 ? '🎉 Promoted to' : '📉 Demoted to'} 
+          <TierIcon shape={newTier.shape} glowColor={newTier.glowColor} size="small" />
+          {newTier.name}!
         </div>
       )}
     </div>
@@ -199,14 +202,16 @@ export const RatingBadge = ({ rating, size = 'md' }) => {
     md: 'text-sm px-2 py-1',
     lg: 'text-base px-3 py-1.5'
   };
+  
+  const iconSize = size === 'lg' ? 'default' : 'small';
 
   return (
     <span className={`
-      inline-flex items-center gap-1 rounded-full font-medium
+      inline-flex items-center gap-1.5 rounded-full font-medium
       bg-slate-800 border border-slate-700
       ${sizeClasses[size]}
     `}>
-      <span className={tier.color}>{tier.icon}</span>
+      <TierIcon shape={tier.shape} glowColor={tier.glowColor} size={iconSize} />
       <span className="text-white">{rating || 1200}</span>
     </span>
   );

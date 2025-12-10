@@ -101,15 +101,17 @@ export const ratingService = {
     return Math.round(kFactor * (result - expected));
   },
 
-  // Get rating tier/rank name
+  // Get rating tier/rank name with pentomino shape identifier
   getRatingTier(rating) {
-    if (rating >= 2200) return { name: 'Grandmaster', icon: '👑', color: 'text-amber-400' };
-    if (rating >= 2000) return { name: 'Master', icon: '💎', color: 'text-purple-400' };
-    if (rating >= 1800) return { name: 'Expert', icon: '⭐', color: 'text-blue-400' };
-    if (rating >= 1600) return { name: 'Advanced', icon: '🌟', color: 'text-cyan-400' };
-    if (rating >= 1400) return { name: 'Intermediate', icon: '📈', color: 'text-green-400' };
-    if (rating >= 1200) return { name: 'Beginner', icon: '🎮', color: 'text-slate-400' };
-    return { name: 'Novice', icon: '🌱', color: 'text-slate-500' };
+    // Tiers use pentomino shapes: each tier is a different piece
+    // Colors follow cyberpunk neon theme
+    if (rating >= 2200) return { name: 'Grandmaster', shape: 'X', color: 'text-amber-400', glowColor: '#f59e0b' };
+    if (rating >= 2000) return { name: 'Master', shape: 'W', color: 'text-purple-400', glowColor: '#a855f7' };
+    if (rating >= 1800) return { name: 'Expert', shape: 'T', color: 'text-blue-400', glowColor: '#3b82f6' };
+    if (rating >= 1600) return { name: 'Advanced', shape: 'Y', color: 'text-cyan-400', glowColor: '#22d3ee' };
+    if (rating >= 1400) return { name: 'Intermediate', shape: 'L', color: 'text-green-400', glowColor: '#22c55e' };
+    if (rating >= 1200) return { name: 'Beginner', shape: 'I', color: 'text-slate-400', glowColor: '#94a3b8' };
+    return { name: 'Novice', shape: 'O', color: 'text-slate-500', glowColor: '#64748b' };
   },
 
   // Get rating change color

@@ -373,22 +373,58 @@
       console.log('[PWA]', msg);
     }
 
-    // Detect environments
+    // Detect environments - comprehensive standalone detection
     const isNativeApp = window.Capacitor !== undefined;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    
+    // Check multiple display modes for installed PWA
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                         window.matchMedia('(display-mode: fullscreen)').matches ||
+                         window.matchMedia('(display-mode: minimal-ui)').matches ||
+                         window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+                         window.navigator.standalone === true;
+    
     const isAndroid = /Android/i.test(navigator.userAgent);
     const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     const isChrome = /Chrome/i.test(navigator.userAgent) && !/Edge|Edg/i.test(navigator.userAgent);
     const isFirefox = /Firefox/i.test(navigator.userAgent);
     const isEdge = /Edge|Edg/i.test(navigator.userAgent);
     const isSamsung = /SamsungBrowser/i.test(navigator.userAgent);
+    const isDesktop = !isAndroid && !isIOS;
 
-    pwaLog('Environment: native=' + isNativeApp + ', standalone=' + isStandalone + ', android=' + isAndroid + ', iOS=' + isIOS);
+    // Check if app was previously installed (persisted across sessions)
+    let wasInstalled = false;
+    try {
+      wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
+    } catch (e) {}
+
+    pwaLog('Environment: native=' + isNativeApp + ', standalone=' + isStandalone + ', android=' + isAndroid + ', iOS=' + isIOS + ', desktop=' + isDesktop);
     pwaLog('Browser: chrome=' + isChrome + ', firefox=' + isFirefox + ', edge=' + isEdge + ', samsung=' + isSamsung);
+    pwaLog('Previously installed: ' + wasInstalled);
 
     // Track the deferred prompt
     let deferredPrompt = null;
     let promptShownViaEvent = false;
+    let appIsInstalled = wasInstalled; // Start with persisted state
+
+    // Check if app is installed using getInstalledRelatedApps API (Chrome 80+)
+    async function checkIfInstalled() {
+      if ('getInstalledRelatedApps' in navigator) {
+        try {
+          const relatedApps = await navigator.getInstalledRelatedApps();
+          pwaLog('Related apps check: ' + relatedApps.length + ' apps found');
+          if (relatedApps.length > 0) {
+            appIsInstalled = true;
+            try {
+              localStorage.setItem('pwa-was-installed', 'true');
+            } catch (e) {}
+            return true;
+          }
+        } catch (e) {
+          pwaLog('getInstalledRelatedApps error: ' + e);
+        }
+      }
+      return false;
+    }
 
     // Get DOM elements
     const installPrompt = document.getElementById('install-prompt');
@@ -399,8 +435,18 @@
 
     // Check if should show prompt
     function shouldShowPrompt() {
-      if (isNativeApp) return false;
-      if (isStandalone) return false;
+      if (isNativeApp) {
+        pwaLog('Not showing: native app');
+        return false;
+      }
+      if (isStandalone) {
+        pwaLog('Not showing: standalone mode');
+        return false;
+      }
+      if (appIsInstalled) {
+        pwaLog('Not showing: app is installed');
+        return false;
+      }
       
       const wasDismissed = localStorage.getItem('pwa-install-dismissed');
       if (wasDismissed) {
@@ -510,6 +556,12 @@
               deferredPrompt.prompt();
               const { outcome } = await deferredPrompt.userChoice;
               pwaLog('User choice: ' + outcome);
+              if (outcome === 'accepted') {
+                appIsInstalled = true;
+                try {
+                  localStorage.setItem('pwa-was-installed', 'true');
+                } catch (e) {}
+              }
               deferredPrompt = null;
             }
             installPrompt.classList.remove('show');
@@ -524,11 +576,17 @@
     });
 
     // Fallback: If beforeinstallprompt doesn't fire after 5 seconds, show manual instructions
+    // But first check if the app is already installed
     if (!isNativeApp && !isStandalone) {
-      setTimeout(() => {
-        if (!promptShownViaEvent && shouldShowPrompt()) {
+      setTimeout(async () => {
+        // First check if app is installed using the API
+        const installed = await checkIfInstalled();
+        
+        if (!installed && !promptShownViaEvent && shouldShowPrompt()) {
           pwaLog('beforeinstallprompt did not fire, showing manual instructions');
           showManualInstructions();
+        } else if (installed) {
+          pwaLog('App is installed, not showing prompt');
         }
       }, 5000);
     }
@@ -538,6 +596,8 @@
       dismissBtn.addEventListener('click', () => {
         pwaLog('Dismissed');
         installPrompt.classList.remove('show');
+        // Mark as permanently dismissed (treated same as installed)
+        localStorage.setItem('pwa-was-installed', 'true');
         localStorage.setItem('pwa-install-dismissed', Date.now().toString());
       });
     }
@@ -545,13 +605,20 @@
     // App installed
     window.addEventListener('appinstalled', () => {
       pwaLog('App installed!');
+      appIsInstalled = true;
       installPrompt.classList.remove('show');
       deferredPrompt = null;
+      // Persist installation state
+      try {
+        localStorage.setItem('pwa-was-installed', 'true');
+      } catch (e) {}
     });
 
     // Debug helpers
     window.showInstallPrompt = () => {
       localStorage.removeItem('pwa-install-dismissed');
+      localStorage.removeItem('pwa-was-installed');
+      appIsInstalled = false;
       if (deferredPrompt) {
         installPrompt.classList.add('show');
       } else {
@@ -565,7 +632,12 @@
       pwaLog('Hostname: ' + location.hostname);
       pwaLog('Native app: ' + isNativeApp);
       pwaLog('Standalone: ' + isStandalone);
+      pwaLog('App installed (tracked): ' + appIsInstalled);
       pwaLog('Deferred prompt: ' + (deferredPrompt ? 'YES' : 'NO'));
+      
+      // Check using getInstalledRelatedApps API
+      const apiInstalled = await checkIfInstalled();
+      pwaLog('App installed (API check): ' + apiInstalled);
       
       // Check manifest
       try {

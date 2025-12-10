@@ -35,6 +35,7 @@ export const useGameState = () => {
   const [aiDifficulty, setAiDifficulty] = useState(AI_DIFFICULTY.AVERAGE);
   const [isGeneratingPuzzle, setIsGeneratingPuzzle] = useState(false);
   const [aiAnimatingMove, setAiAnimatingMove] = useState(null); // For AI piece placement animation
+  const [playerAnimatingMove, setPlayerAnimatingMove] = useState(null); // For player piece placement animation
   
   // Use ref to persist puzzle difficulty across resets
   const puzzleDifficultyRef = useRef(PUZZLE_DIFFICULTY.EASY);
@@ -119,9 +120,23 @@ export const useGameState = () => {
   // Confirm pending move
   const confirmMove = useCallback(() => {
     if (!pendingMove) return;
+    
+    // Set player animating move before committing
+    setPlayerAnimatingMove({
+      piece: pendingMove.piece,
+      row: pendingMove.row,
+      col: pendingMove.col,
+      rot: rotation,
+      flip: flipped
+    });
+    
     const success = commitMove(pendingMove.row, pendingMove.col, pendingMove.piece, rotation, flipped);
     if (success) {
       soundManager.playConfirm();
+      // Clear animation after a short delay
+      setTimeout(() => setPlayerAnimatingMove(null), 500);
+    } else {
+      setPlayerAnimatingMove(null);
     }
   }, [pendingMove, rotation, flipped, commitMove]);
 
@@ -441,6 +456,7 @@ export const useGameState = () => {
     isGeneratingPuzzle,
     puzzleDifficulty,
     aiAnimatingMove,
+    playerAnimatingMove,
     
     // Actions
     setGameMode,

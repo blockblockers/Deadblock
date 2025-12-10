@@ -4,6 +4,7 @@ import { Gamepad2, X, Check, Clock, Users, Bell } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
+import TierIcon from './TierIcon';
 
 const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
   const [notifications, setNotifications] = useState([]);
@@ -213,7 +214,7 @@ const NotificationCard = ({ notification, onAccept, onDecline }) => {
             <div className="flex-1">
               <div className="font-bold text-white">{notification.inviter?.username}</div>
               <div className="text-xs text-slate-400 flex items-center gap-1">
-                <span className={tier.color}>{tier.icon}</span>
+                <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
                 {notification.inviter?.elo_rating || 1200}
                 {notification.timerSeconds && (
                   <>

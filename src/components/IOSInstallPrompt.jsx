@@ -30,10 +30,17 @@ const IOSInstallPrompt = () => {
                                       (window.location.search.includes('utm_source=homescreen')) ||
                                       (sessionStorage.getItem('pwa-launched') === 'true');
     
+    // Check if previously installed (shared with index.html)
+    let wasInstalled = false;
+    try {
+      wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
+    } catch (e) {}
+    
     // Mark as launched if standalone
     if (isStandalone) {
       try {
         sessionStorage.setItem('pwa-launched', 'true');
+        localStorage.setItem('pwa-was-installed', 'true');
       } catch (e) {}
     }
     
@@ -62,11 +69,12 @@ const IOSInstallPrompt = () => {
     }
 
     // Debug logging
-    console.log('[PWA Install Prompt]', {
+    console.log('[PWA Install Prompt - iOS/Safari]', {
       isIOS,
       isMacSafari,
       isStandalone,
       isLaunchedFromHomeScreen,
+      wasInstalled,
       isSafari,
       wasDismissed,
       ua: ua.substring(0, 100),
@@ -77,14 +85,14 @@ const IOSInstallPrompt = () => {
     // 1. iOS Safari users who haven't installed
     // 2. iOS non-Safari users (to tell them to use Safari)
     // 3. Mac Safari users (Safari on Mac also supports PWA)
-    // But NOT if already in standalone/installed mode
-    const isAlreadyInstalled = isStandalone || isLaunchedFromHomeScreen;
+    // But NOT if already in standalone/installed mode or previously installed
+    const isAlreadyInstalled = isStandalone || isLaunchedFromHomeScreen || wasInstalled;
     const shouldShow = ((isIOS || isMacSafari) && !isAlreadyInstalled && !wasDismissed);
 
     if (shouldShow) {
       // Delay showing for better UX
       const timer = setTimeout(() => {
-        console.log('[PWA Install Prompt] Showing prompt');
+        console.log('[PWA Install Prompt - iOS/Safari] Showing prompt');
         setShow(true);
       }, 3000); // 3 second delay
       return () => clearTimeout(timer);
@@ -94,6 +102,8 @@ const IOSInstallPrompt = () => {
   const dismiss = () => {
     setShow(false);
     try {
+      // Mark as permanently dismissed (treated same as installed)
+      localStorage.setItem('pwa-was-installed', 'true');
       localStorage.setItem('ios-pwa-dismissed', Date.now().toString());
     } catch (e) {}
   };
@@ -101,7 +111,8 @@ const IOSInstallPrompt = () => {
   const dismissForever = () => {
     setShow(false);
     try {
-      // Set to 10 years from now
+      // Mark as permanently dismissed
+      localStorage.setItem('pwa-was-installed', 'true');
       localStorage.setItem('ios-pwa-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
     } catch (e) {}
   };

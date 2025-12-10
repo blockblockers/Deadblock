@@ -12,6 +12,7 @@ import QuickChat from './QuickChat';
 import TurnTimer from './TurnTimer';
 import HeadToHead from './HeadToHead';
 import { RatingChange, RatingBadge } from './RatingDisplay';
+import TierIcon from './TierIcon';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { notificationService } from '../services/notificationService';
@@ -55,7 +56,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, oppo
           <span className={`text-sm font-bold tracking-wide ${isMyTurn ? 'text-amber-300' : 'text-slate-500'}`}>
             You
           </span>
-          <span className={`text-xs ${myTier.color}`}>{myTier.icon}</span>
+          <TierIcon shape={myTier.shape} glowColor={myTier.glowColor} size="small" />
           <span className="text-xs text-slate-600">{myRating}</span>
         </div>
         
@@ -71,7 +72,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, oppo
           <span className={`text-sm font-bold tracking-wide ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
             Opponent
           </span>
-          <span className={`text-xs ${oppTier.color}`}>{oppTier.icon}</span>
+          <TierIcon shape={oppTier.shape} glowColor={oppTier.glowColor} size="small" />
           <span className="text-xs text-slate-600">{oppRating}</span>
           <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
             !isMyTurn && gameStatus === 'active' ? 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse' : 'bg-slate-600'
