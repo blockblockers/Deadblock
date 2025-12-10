@@ -228,29 +228,33 @@ const GridShatter = () => {
 
 // ====== MAIN MODAL ======
 
-const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, onNewGame, onMenu }) => {
+const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, onNewGame, onMenu, onRematch, opponentName }) => {
   const [animationType, setAnimationType] = useState(0);
 
   useEffect(() => {
     setAnimationType(Math.floor(Math.random() * 3));
   }, []);
 
-  const handleRetry = () => { soundManager.playButtonClick(); onClose(); onRetry(); };
-  const handleNewGame = () => { soundManager.playButtonClick(); onClose(); onNewGame(); };
-  const handleMenu = () => { soundManager.playButtonClick(); onClose(); onMenu(); };
+  const handleRetry = () => { soundManager.playButtonClick(); onClose(); onRetry?.(); };
+  const handleNewGame = () => { soundManager.playButtonClick(); onClose(); onNewGame?.(); };
+  const handleMenu = () => { soundManager.playButtonClick(); onClose(); onMenu?.(); };
+  const handleRematch = () => { soundManager.playButtonClick(); onRematch?.(); };
 
   // Simple, clear messaging
   const is2Player = gameMode === '2player';
+  const isOnline = gameMode === 'online';
   
   const getTitle = () => {
     if (isPuzzle) return isWin ? 'COMPLETE!' : 'FAILED';
     if (is2Player) return winner === 1 ? 'PLAYER 1 WINS!' : 'PLAYER 2 WINS!';
+    if (isOnline) return isWin ? 'VICTORY!' : 'DEFEAT';
     return isWin ? 'YOU WIN!' : 'YOU LOSE';
   };
 
   const getSubtitle = () => {
     if (isPuzzle) return isWin ? 'Puzzle solved successfully' : 'No moves remaining';
     if (is2Player) return winner === 1 ? 'Player 1 dominated the board' : 'Player 2 dominated the board';
+    if (isOnline) return isWin ? `You defeated ${opponentName || 'your opponent'}` : `${opponentName || 'Opponent'} wins this round`;
     return isWin ? 'You defeated the AI' : 'The AI wins this round';
   };
 
@@ -328,26 +332,47 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
 
         {/* Buttons */}
         <div className="space-y-2">
-          <button onClick={handleRetry}
-            className={`w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 transition-all ${colors.btn} text-white border border-white/10`}
-          >
-            <RotateCcw size={16} />
-            {isPuzzle ? 'RETRY' : 'PLAY AGAIN'}
-          </button>
+          {isOnline ? (
+            <>
+              {onRematch && (
+                <button onClick={handleRematch}
+                  className={`w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 transition-all ${colors.btn} text-white border border-white/10`}
+                >
+                  <RefreshCw size={16} />
+                  PLAY AGAIN
+                </button>
+              )}
+              <button onClick={handleMenu}
+                className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
+              >
+                <Home size={16} />
+                ONLINE MENU
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={handleRetry}
+                className={`w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 transition-all ${colors.btn} text-white border border-white/10`}
+              >
+                <RotateCcw size={16} />
+                {isPuzzle ? 'RETRY' : 'PLAY AGAIN'}
+              </button>
 
-          <button onClick={handleNewGame}
-            className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
-          >
-            <RefreshCw size={16} />
-            {isPuzzle ? 'NEW PUZZLE' : 'NEW GAME'}
-          </button>
+              <button onClick={handleNewGame}
+                className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
+              >
+                <RefreshCw size={16} />
+                {isPuzzle ? 'NEW PUZZLE' : 'NEW GAME'}
+              </button>
 
-          <button onClick={handleMenu}
-            className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-all border border-slate-700"
-          >
-            <Home size={16} />
-            MAIN MENU
-          </button>
+              <button onClick={handleMenu}
+                className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-all border border-slate-700"
+              >
+                <Home size={16} />
+                MAIN MENU
+              </button>
+            </>
+          )}
         </div>
       </div>
 

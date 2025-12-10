@@ -245,6 +245,34 @@ export const AuthProvider = ({ children }) => {
     return { data, error };
   };
 
+  // Check if username is available
+  const checkUsernameAvailable = async (username) => {
+    if (!supabase) return { available: false, error: { message: 'Not configured' } };
+    
+    // Don't check if it's the current user's username
+    if (profile?.username?.toLowerCase() === username.toLowerCase()) {
+      return { available: true, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('username', username)
+      .single();
+
+    // If no data found (PGRST116 = no rows), username is available
+    if (error?.code === 'PGRST116') {
+      return { available: true, error: null };
+    }
+    
+    if (error) {
+      return { available: false, error };
+    }
+
+    // Data found = username taken
+    return { available: false, error: null };
+  };
+
   const clearOAuthCallback = () => {
     setIsOAuthCallback(false);
   };
@@ -262,6 +290,7 @@ export const AuthProvider = ({ children }) => {
       signInWithGoogle,
       signOut,
       updateProfile,
+      checkUsernameAvailable,
       refreshProfile: () => user && fetchProfile(user.id),
       clearOAuthCallback,
     }}>

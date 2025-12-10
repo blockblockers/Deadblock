@@ -10,6 +10,7 @@ import DPad from './DPad';
 import GameOverModal from './GameOverModal';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
+import { notificationService } from '../services/notificationService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Orange/Amber theme for online mode
@@ -256,7 +257,20 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       (updatedGame) => {
         if (mounted) {
           console.log('Real-time update received');
+          
+          // Check if it just became our turn (for notification)
+          const wasMyTurn = gameSyncService.isPlayerTurn(game, userId);
+          const isNowMyTurn = gameSyncService.isPlayerTurn(updatedGame, userId);
+          
           updateGameState(updatedGame, userId);
+          
+          // Send notification if it just became our turn
+          if (!wasMyTurn && isNowMyTurn && document.visibilityState === 'hidden') {
+            const opponentName = updatedGame.player1_id === userId 
+              ? updatedGame.player2?.username 
+              : updatedGame.player1?.username;
+            notificationService.notifyYourTurn(opponentName || 'Opponent', gameId);
+          }
         }
       },
       (err) => {
@@ -562,6 +576,50 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     onGameEnd?.(gameResult);
   };
 
+  // Handle rematch - send invite to opponent
+  const handleRematch = async () => {
+    if (!user || !game) return;
+    
+    const opponentId = game.player1_id === user.id ? game.player2_id : game.player1_id;
+    
+    try {
+      // Import invite service dynamically to avoid circular deps
+      const { inviteService } = await import('../services/inviteService');
+      const { data, error } = await inviteService.sendInvite(user.id, opponentId);
+      
+      if (error) {
+        if (error.message === 'Invite already sent') {
+          alert('Invite already sent! Waiting for opponent to accept.');
+        } else {
+          alert('Could not send rematch invite: ' + error.message);
+        }
+        return;
+      }
+      
+      // If both players invited each other, a game is created
+      if (data?.game) {
+        setShowGameOver(false);
+        onGameEnd?.({ ...gameResult, rematchGameId: data.game.id });
+      } else {
+        alert('Rematch invite sent! The game will start when your opponent accepts.');
+        setShowGameOver(false);
+        onGameEnd?.(gameResult);
+      }
+    } catch (err) {
+      console.error('Rematch error:', err);
+      alert('Failed to send rematch invite');
+    }
+  };
+
+  // Get opponent name
+  const getOpponentName = () => {
+    if (!game || !user) return 'Opponent';
+    if (game.player1_id === user.id) {
+      return game.player2?.username || game.player2?.display_name || 'Opponent';
+    }
+    return game.player1?.username || game.player1?.display_name || 'Opponent';
+  };
+
   // Handle leave
   const handleLeave = () => {
     soundManager.playButtonClick();
@@ -807,8 +865,10 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           isPuzzle={false}
           gameMode="online"
           winner={gameResult?.isWin ? myPlayerNumber : (myPlayerNumber === 1 ? 2 : 1)}
+          opponentName={getOpponentName()}
           onClose={handleCloseGameOver}
           onMenu={handleCloseGameOver}
+          onRematch={handleRematch}
         />
       )}
     </div>

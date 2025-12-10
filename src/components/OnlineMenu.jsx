@@ -1,10 +1,13 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
+import { notificationService } from '../services/notificationService';
 import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
+import NotificationPrompt from './NotificationPrompt';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -146,6 +149,20 @@ const OnlineMenu = ({
   const [sentInvites, setSentInvites] = useState([]);
   const [sendingInvite, setSendingInvite] = useState(null);
   const [processingInvite, setProcessingInvite] = useState(null);
+  
+  // Notification state
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
+  // Initialize notifications
+  useEffect(() => {
+    const initNotifications = async () => {
+      await notificationService.init();
+      setNotificationsEnabled(notificationService.isEnabled());
+      setShowNotificationPrompt(notificationService.shouldPrompt());
+    };
+    initNotifications();
+  }, []);
 
   // Load games and invites
   useEffect(() => {
@@ -160,9 +177,19 @@ const OnlineMenu = ({
     const subscription = inviteService.subscribeToInvites(
       profile.id,
       // On new invite received
-      async () => {
+      async (newInvite) => {
         await loadInvites();
         soundManager.playButtonClick();
+        
+        // Send notification for new invite
+        if (notificationService.isEnabled() && newInvite?.from_user_id) {
+          // Get inviter info
+          const { data: invites } = await inviteService.getReceivedInvites(profile.id);
+          const invite = invites?.find(i => i.id === newInvite.id);
+          if (invite?.from_user?.username) {
+            notificationService.notifyGameInvite(invite.from_user.username, newInvite.id);
+          }
+        }
       },
       // On invite updated
       async (updatedInvite) => {
@@ -170,6 +197,17 @@ const OnlineMenu = ({
         // If an invite was accepted and created a game, refresh games
         if (updatedInvite.status === 'accepted' && updatedInvite.game_id) {
           await loadGames();
+          
+          // Notify that invite was accepted (if we sent it)
+          if (notificationService.isEnabled() && updatedInvite.from_user_id === profile.id) {
+            const { data: game } = await gameSyncService.getGame(updatedInvite.game_id);
+            if (game) {
+              const opponentName = game.player1_id === profile.id 
+                ? game.player2?.username 
+                : game.player1?.username;
+              notificationService.notifyInviteAccepted(opponentName || 'Opponent', updatedInvite.game_id);
+            }
+          }
         }
       }
     );
@@ -389,7 +427,7 @@ const OnlineMenu = ({
           {/* Title - Centered and Large */}
           <div className="text-center mb-6">
             <NeonTitle size="large" />
-            <p className="text-amber-400/80 text-sm mt-2 font-medium">Online Multiplayer</p>
+            <NeonSubtitle text="ONLINE" size="default" className="mt-1" />
           </div>
 
           {/* Main Card */}
@@ -723,6 +761,11 @@ const OnlineMenu = ({
         </div>
         {needsScroll && <div className="h-8 flex-shrink-0" />}
       </div>
+      
+      {/* Notification Prompt */}
+      {showNotificationPrompt && (
+        <NotificationPrompt onDismiss={() => setShowNotificationPrompt(false)} />
+      )}
     </div>
   );
 };
