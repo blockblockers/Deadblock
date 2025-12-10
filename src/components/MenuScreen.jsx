@@ -9,8 +9,8 @@ import { isSupabaseConfigured } from '../utils/supabase';
 // Custom pentomino shapes for buttons
 const buttonShapes = {
   X: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]], // X shape - cross pattern (Online)
-  V: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]], // V shape - corner pattern (VS AI)
-  W: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]], // W shape - stair pattern (2 Player)
+  V: [[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]], // V shape - bottom-left to up-right (VS AI)
+  W: [[0, 2], [1, 1], [1, 2], [2, 0], [2, 1]], // W shape - stair bottom-left to up-right (2 Player)
   P: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1]], // P shape - flag pattern (Puzzle)
 };
 
@@ -114,15 +114,42 @@ const MenuScreen = ({
         touchAction: 'pan-y',
       } : {}}
     >
-      {/* Grid background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
+      {/* Grid background with subtle drift animation */}
+      <div className="fixed inset-0 opacity-30 pointer-events-none animate-grid-drift" style={{
         backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Glow effects */}
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
+      {/* Animated glow orbs */}
+      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none animate-orb-1" />
+      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none animate-orb-2" />
+      <div className="fixed top-1/2 right-1/3 w-48 h-48 bg-purple-500/15 rounded-full blur-3xl pointer-events-none animate-orb-3" />
+      
+      {/* Background animation keyframes */}
+      <style>{`
+        @keyframes grid-drift {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(10px, 10px); }
+        }
+        @keyframes orb-1 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.2; }
+          33% { transform: translate(30px, -20px) scale(1.1); opacity: 0.3; }
+          66% { transform: translate(-20px, 30px) scale(0.9); opacity: 0.15; }
+        }
+        @keyframes orb-2 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.2; }
+          33% { transform: translate(-25px, 25px) scale(0.95); opacity: 0.25; }
+          66% { transform: translate(35px, -15px) scale(1.05); opacity: 0.18; }
+        }
+        @keyframes orb-3 {
+          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
+          50% { transform: translate(-15px, -25px) scale(1.15); opacity: 0.22; }
+        }
+        .animate-grid-drift { animation: grid-drift 20s ease-in-out infinite; }
+        .animate-orb-1 { animation: orb-1 15s ease-in-out infinite; }
+        .animate-orb-2 { animation: orb-2 18s ease-in-out infinite; }
+        .animate-orb-3 { animation: orb-3 12s ease-in-out infinite; }
+      `}</style>
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>

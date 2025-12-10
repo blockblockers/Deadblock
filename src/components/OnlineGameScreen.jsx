@@ -34,8 +34,11 @@ const theme = {
 
 // Player indicator bar for online games
 const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, opponentId }) => {
-  const myTier = ratingService.getRatingTier(profile?.elo_rating || profile?.rating || 1200);
-  const oppTier = ratingService.getRatingTier(opponent?.elo_rating || opponent?.rating || 1200);
+  // Use rating field consistently (the profiles table uses 'rating')
+  const myRating = profile?.rating || 1000;
+  const oppRating = opponent?.rating || 1000;
+  const myTier = ratingService.getRatingTier(myRating);
+  const oppTier = ratingService.getRatingTier(oppRating);
   
   return (
     <div className="mb-3">
@@ -53,7 +56,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, oppo
             You
           </span>
           <span className={`text-xs ${myTier.color}`}>{myTier.icon}</span>
-          <span className="text-xs text-slate-600">{profile?.elo_rating || profile?.rating || 1200}</span>
+          <span className="text-xs text-slate-600">{myRating}</span>
         </div>
         
         {/* VS */}
@@ -69,7 +72,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, oppo
             Opponent
           </span>
           <span className={`text-xs ${oppTier.color}`}>{oppTier.icon}</span>
-          <span className="text-xs text-slate-600">{opponent?.elo_rating || opponent?.rating || 1200}</span>
+          <span className="text-xs text-slate-600">{oppRating}</span>
           <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
             !isMyTurn && gameStatus === 'active' ? 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse' : 'bg-slate-600'
           }`} />
@@ -839,13 +842,12 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? {
-        overflowY: 'auto',
-        overflowX: 'hidden',
+      className="min-h-screen bg-slate-950 overflow-y-auto overflow-x-hidden"
+      style={{
         WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-y',
-      } : {}}
+        paddingBottom: 'env(safe-area-inset-bottom)'
+      }}
     >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-25 pointer-events-none" style={{
@@ -858,8 +860,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       <div className={`fixed bottom-1/4 right-1/4 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full flex flex-col'} p-2 sm:p-4`}>
-        <div className={`max-w-lg mx-auto w-full ${needsScroll ? '' : 'flex-1 flex flex-col'}`}>
+      <div className="relative min-h-screen p-2 sm:p-4">
+        <div className="max-w-lg mx-auto w-full">
           
           {/* Header - Centered Title with ONLINE subtitle */}
           <div className="flex items-center justify-between mb-3 flex-shrink-0">
@@ -886,9 +888,18 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
               ? `${theme.accentBg} ${theme.accent} border ${theme.accentBorder}` 
               : 'bg-slate-800/50 text-slate-400 border border-slate-700/50'
           }`}>
-            <span>
+            <span className={!isMyTurn && game?.status === 'active' ? 'animate-pulse' : ''}>
               {game?.status === 'active' 
-                ? (isMyTurn ? "YOUR TURN" : "Waiting for opponent...")
+                ? (isMyTurn ? "YOUR TURN" : (
+                    <span className="flex items-center gap-2">
+                      <span className="flex gap-1">
+                        <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                      <span className="text-orange-300">Waiting for opponent</span>
+                    </span>
+                  ))
                 : (game?.status === 'completed' ? "GAME OVER" : "Loading...")}
             </span>
             {/* Turn Timer */}
@@ -908,7 +919,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           </div>
 
           {/* Main Game Panel */}
-          <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border ${theme.panelBorder} ${theme.panelShadow} ${needsScroll ? '' : 'flex-shrink-0'}`}>
+          <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border ${theme.panelBorder} ${theme.panelShadow}`}>
             
             {/* Player Bar */}
             <OnlinePlayerBar 
@@ -983,7 +994,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           </div>
 
           {/* Piece Tray */}
-          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
+          <div>
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
@@ -996,7 +1007,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
             />
           </div>
           
-          {needsScroll && <div className="h-8" />}
+          {/* Bottom padding for scroll */}
+          <div className="h-16" />
         </div>
       </div>
 

@@ -128,18 +128,42 @@ export const AuthProvider = ({ children }) => {
         await handleOAuthCallback();
         
         // Then get the current session
+        console.log('Auth init: Getting session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         clearTimeout(timeout);
         
         if (error) {
           console.error('Error getting session:', error);
+          setLoading(false);
+          return;
         }
         
+        console.log('Auth init: Session result', { 
+          hasSession: !!session, 
+          userId: session?.user?.id,
+          email: session?.user?.email 
+        });
+        
         setUser(session?.user ?? null);
+        
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          console.log('Auth init: Fetching profile for', session.user.id);
+          const profileResult = await fetchProfile(session.user.id);
+          console.log('Auth init: Profile fetch result', { 
+            hasProfile: !!profileResult,
+            username: profileResult?.username 
+          });
+          
+          // If profile fetch failed, try once more after a delay
+          if (!profileResult) {
+            console.log('Auth init: Profile not found, retrying in 500ms...');
+            await new Promise(r => setTimeout(r, 500));
+            const retryResult = await fetchProfile(session.user.id);
+            console.log('Auth init: Retry result', { hasProfile: !!retryResult });
+          }
         }
+        
         setLoading(false);
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -300,7 +324,12 @@ export const AuthProvider = ({ children }) => {
       signOut,
       updateProfile,
       checkUsernameAvailable,
-      refreshProfile: () => user && fetchProfile(user.id),
+      refreshProfile: async () => {
+        if (user) {
+          return await fetchProfile(user.id);
+        }
+        return null;
+      },
       clearOAuthCallback,
     }}>
       {children}

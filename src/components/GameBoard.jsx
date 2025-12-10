@@ -169,18 +169,20 @@ const GameBoard = ({
                     </div>
                   )}
                   
-                  {/* Slow shimmer overlay for placed pieces */}
+                  {/* Shimmer overlay for placed pieces - sweeping light effect */}
                   {isPlacedPiece && (
-                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                      {/* Slow shimmer effect */}
-                      <div className="absolute inset-0 animate-shimmer opacity-30" 
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-md">
+                      {/* Diagonal sweeping shimmer */}
+                      <div className="absolute inset-0 animate-shimmer-sweep" 
                         style={{
-                          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
-                          backgroundSize: '200% 100%'
+                          background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.6) 50%, transparent 60%)',
+                          backgroundSize: '300% 300%'
                         }}
                       />
-                      {/* Subtle top highlight */}
-                      <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+                      {/* Top edge highlight */}
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+                      {/* Left edge highlight */}
+                      <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-white/40 via-transparent to-transparent" />
                     </div>
                   )}
                 </button>
@@ -343,16 +345,16 @@ const GameBoard = ({
           background: radial-gradient(circle, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
         }
         
-        @keyframes shimmer {
+        @keyframes shimmer-sweep {
           0% {
-            background-position: 200% 0;
+            background-position: 150% 150%;
           }
           100% {
-            background-position: -200% 0;
+            background-position: -50% -50%;
           }
         }
-        .animate-shimmer {
-          animation: shimmer 4s ease-in-out infinite;
+        .animate-shimmer-sweep {
+          animation: shimmer-sweep 3s ease-in-out infinite;
         }
       `}</style>
     </div>

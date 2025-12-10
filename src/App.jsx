@@ -8,6 +8,7 @@ import MenuScreen from './components/MenuScreen';
 import PuzzleSelect from './components/PuzzleSelect';
 import GameScreen from './components/GameScreen';
 import DifficultySelector from './components/DifficultySelector';
+import NeonTitle from './components/NeonTitle';
 
 // Online components (lazy loaded if needed)
 import AuthScreen from './components/AuthScreen';
@@ -291,12 +292,24 @@ function AppContent() {
   if (isOnlineEnabled && (authLoading || isOAuthCallback)) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-amber-300 text-sm">
-          {isOAuthCallback ? 'Signing you in...' : 'Loading...'}
+        {/* Grid background */}
+        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        
+        {/* Title */}
+        <div className="relative z-10 mb-8">
+          <NeonTitle size="large" />
+        </div>
+        
+        {/* Spinner */}
+        <div className="relative z-10 w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="relative z-10 text-amber-300 text-sm font-medium tracking-wider">
+          {isOAuthCallback ? 'SIGNING YOU IN...' : 'LOADING...'}
         </p>
         {loadingStuck && (
-          <div className="mt-6 text-center">
+          <div className="relative z-10 mt-6 text-center">
             <p className="text-slate-400 text-xs mb-3">Taking longer than expected...</p>
             <button
               onClick={() => {
@@ -508,7 +521,6 @@ function AppContent() {
       onConfirm={confirmMove}
       onCancel={cancelMove}
       onMovePiece={movePendingPiece}
-      onUndo={undoMove}
       onReset={resetGame}
       onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}

@@ -1,4 +1,4 @@
-import { RotateCw, FlipHorizontal, Undo, RefreshCw, Check, X, Loader, RotateCcw } from 'lucide-react';
+import { RotateCw, FlipHorizontal, RefreshCw, Check, X, Loader, RotateCcw } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 const ControlButtons = ({
@@ -8,24 +8,17 @@ const ControlButtons = ({
   gameOver,
   gameMode,
   currentPlayer,
-  moveHistoryLength,
   isGeneratingPuzzle,
   onRotate,
   onFlip,
   onConfirm,
   onCancel,
-  onUndo,
   onReset,
   onRetryPuzzle
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
   const isPuzzleMode = gameMode === 'puzzle';
-
-  const handleUndo = () => {
-    soundManager.playButtonClick();
-    onUndo();
-  };
 
   const handleReset = () => {
     soundManager.playButtonClick();
@@ -77,7 +70,7 @@ const ControlButtons = ({
         </>
       )}
 
-      {/* Cancel only when pending move is invalid, or Undo/Reset when no pending */}
+      {/* Cancel only when pending move is invalid, or Reset when no pending */}
       {(!pendingMove || !canConfirm) && !isGeneratingPuzzle && (
         <>
           {pendingMove && (
@@ -90,14 +83,6 @@ const ControlButtons = ({
           )}
           {!pendingMove && (
             <>
-              <button
-                onClick={handleUndo}
-                className="flex-1 px-1.5 py-1.5 bg-orange-600/70 hover:bg-orange-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-orange-400/30 shadow-[0_0_10px_rgba(251,146,60,0.4)]"
-                disabled={moveHistoryLength === 0 || gameOver || !isPlayerTurn}
-              >
-                <Undo size={12} />
-              </button>
-              
               {/* Puzzle mode: Show RETRY and NEW buttons */}
               {isPuzzleMode ? (
                 <>

@@ -17,9 +17,25 @@ const IOSInstallPrompt = () => {
     // Check for Safari on Mac (also show for Mac Safari users)
     const isMacSafari = /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua);
     
-    // Detect if already installed (standalone mode)
-    const isStandalone = window.navigator.standalone === true || 
-                         window.matchMedia('(display-mode: standalone)').matches;
+    // Detect if already installed (standalone mode) - multiple detection methods
+    const isStandalone = window.navigator.standalone === true || // iOS Safari
+                         window.matchMedia('(display-mode: standalone)').matches || // Standard PWA
+                         window.matchMedia('(display-mode: fullscreen)').matches || // Fullscreen mode
+                         window.matchMedia('(display-mode: minimal-ui)').matches || // Minimal UI mode
+                         document.referrer.includes('android-app://') || // Android TWA
+                         (window.matchMedia('(display-mode: window-controls-overlay)').matches); // Desktop PWA with overlay
+    
+    // Also check if launched from home screen on desktop (URL will be different)
+    const isLaunchedFromHomeScreen = window.navigator.standalone || 
+                                      (window.location.search.includes('utm_source=homescreen')) ||
+                                      (sessionStorage.getItem('pwa-launched') === 'true');
+    
+    // Mark as launched if standalone
+    if (isStandalone) {
+      try {
+        sessionStorage.setItem('pwa-launched', 'true');
+      } catch (e) {}
+    }
     
     // Detect Safari browser
     // Safari has "Safari" in UA but Chrome/Firefox/Edge on iOS have their own identifiers
@@ -50,6 +66,7 @@ const IOSInstallPrompt = () => {
       isIOS,
       isMacSafari,
       isStandalone,
+      isLaunchedFromHomeScreen,
       isSafari,
       wasDismissed,
       ua: ua.substring(0, 100),
@@ -60,7 +77,9 @@ const IOSInstallPrompt = () => {
     // 1. iOS Safari users who haven't installed
     // 2. iOS non-Safari users (to tell them to use Safari)
     // 3. Mac Safari users (Safari on Mac also supports PWA)
-    const shouldShow = ((isIOS || isMacSafari) && !isStandalone && !wasDismissed);
+    // But NOT if already in standalone/installed mode
+    const isAlreadyInstalled = isStandalone || isLaunchedFromHomeScreen;
+    const shouldShow = ((isIOS || isMacSafari) && !isAlreadyInstalled && !wasDismissed);
 
     if (shouldShow) {
       // Delay showing for better UX

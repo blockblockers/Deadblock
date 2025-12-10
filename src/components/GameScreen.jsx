@@ -182,7 +182,6 @@ const GameScreen = ({
   onConfirm,
   onCancel,
   onMovePiece,
-  onUndo,
   onReset,
   onRetryPuzzle,
   onMenu,
@@ -310,13 +309,11 @@ const GameScreen = ({
               gameOver={gameOver}
               gameMode={gameMode}
               currentPlayer={currentPlayer}
-              moveHistoryLength={moveHistory.length}
               isGeneratingPuzzle={isGeneratingPuzzle}
               onRotate={onRotate}
               onFlip={onFlip}
               onConfirm={onConfirm}
               onCancel={onCancel}
-              onUndo={onUndo}
               onReset={onReset}
               onRetryPuzzle={onRetryPuzzle}
             />

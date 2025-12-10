@@ -1,11 +1,12 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle, RefreshCw, Pencil, Loader } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
 import { notificationService } from '../services/notificationService';
 import { friendsService } from '../services/friendsService';
+import { ratingService } from '../services/ratingService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import NotificationPrompt from './NotificationPrompt';
@@ -138,7 +139,7 @@ const OnlineMenu = ({
   onViewReplay,
   onBack 
 }) => {
-  const { profile, signOut, refreshProfile, updateProfile, checkUsernameAvailable } = useAuth();
+  const { user, profile, signOut, refreshProfile, updateProfile, checkUsernameAvailable } = useAuth();
   // OnlineMenu has substantial content, so always enable scroll
   const { needsScroll: checkScroll, viewportHeight } = useResponsiveLayout(1200);
   // Force scroll for this menu due to amount of content
@@ -148,6 +149,7 @@ const OnlineMenu = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showActivePrompt, setShowActivePrompt] = useState(true);
+  const [profileError, setProfileError] = useState(false);
   
   // Username editing state
   const [showUsernameEdit, setShowUsernameEdit] = useState(false);
@@ -158,10 +160,36 @@ const OnlineMenu = ({
   
   // Refresh profile on mount to ensure fresh data
   useEffect(() => {
-    if (refreshProfile) {
-      refreshProfile();
-    }
-  }, [refreshProfile]);
+    const loadProfile = async () => {
+      if (refreshProfile) {
+        console.log('OnlineMenu: Refreshing profile on mount');
+        setProfileError(false);
+        
+        try {
+          const result = await refreshProfile();
+          console.log('OnlineMenu: Profile refresh result', { hasProfile: !!result });
+          
+          // If profile is still null after refresh and we have a user, retry
+          if (!result && user) {
+            console.log('OnlineMenu: Profile still null, will retry...');
+            // Wait and retry once more
+            await new Promise(r => setTimeout(r, 1000));
+            const retryResult = await refreshProfile();
+            console.log('OnlineMenu: Profile retry result', { hasProfile: !!retryResult });
+            
+            if (!retryResult) {
+              console.error('OnlineMenu: Failed to load profile after retry');
+              setProfileError(true);
+            }
+          }
+        } catch (err) {
+          console.error('OnlineMenu: Profile load error', err);
+          setProfileError(true);
+        }
+      }
+    };
+    loadProfile();
+  }, [refreshProfile, user]);
   
   // Friend search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -192,6 +220,7 @@ const OnlineMenu = ({
   const [showSpectateList, setShowSpectateList] = useState(false);
   const [showRecentGames, setShowRecentGames] = useState(false);
   const [showActiveGames, setShowActiveGames] = useState(false);
+  const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
 
@@ -342,7 +371,15 @@ const OnlineMenu = ({
 
   const handleSignOut = async () => {
     soundManager.playButtonClick();
-    await signOut();
+    try {
+      const { error } = await signOut();
+      if (error) {
+        console.error('Sign out error:', error);
+        // Still navigate back even on error - user may be partially signed out
+      }
+    } catch (err) {
+      console.error('Sign out exception:', err);
+    }
     onBack();
   };
 
@@ -688,18 +725,64 @@ const OnlineMenu = ({
       <div className="relative min-h-screen flex flex-col items-center px-4 py-8">
         <div className="w-full max-w-md">
           
-          {/* Title - Centered and Large */}
-          <div className="text-center mb-6">
-            <NeonTitle size="large" />
-            <NeonSubtitle text="ONLINE" size="default" className="mt-1" />
+          {/* Title - Centered and Enlarged */}
+          <div className="text-center mb-8">
+            <NeonTitle size="xlarge" />
+            <NeonSubtitle text="ONLINE" size="large" className="mt-2" />
           </div>
 
-          {/* Main Card */}
-          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}>
+          {/* Profile Loading/Error State */}
+          {(profileError || (!profile && user)) && (
+            <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} mb-4`}>
+              <div className="text-center py-8">
+                {profileError ? (
+                  <>
+                    <div className="text-red-400 mb-4">
+                      <X size={48} className="mx-auto mb-2" />
+                      <p className="text-lg font-bold">Failed to load profile</p>
+                      <p className="text-sm text-slate-400 mt-1">There was an issue connecting to the server</p>
+                    </div>
+                    <div className="flex gap-3 justify-center">
+                      <button
+                        onClick={async () => {
+                          setProfileError(false);
+                          setRefreshing(true);
+                          const result = await refreshProfile();
+                          if (!result) setProfileError(true);
+                          setRefreshing(false);
+                        }}
+                        disabled={refreshing}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold flex items-center gap-2"
+                      >
+                        <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                        Retry
+                      </button>
+                      <button
+                        onClick={handleBack}
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold"
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-10 h-10 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-amber-300 font-medium">Loading profile...</p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Main Card - Only show when profile is loaded */}
+          {profile && (
+            <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}>
             
-            {/* User Stats Card */}
+            {/* User Stats Card with Tier Info */}
             <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-              <div className="flex items-center gap-4">
+              {/* Top row: Avatar and actions */}
+              <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
                   {profile?.username?.[0]?.toUpperCase() || '?'}
                 </div>
@@ -714,8 +797,7 @@ const OnlineMenu = ({
                       <Pencil size={14} />
                     </button>
                   </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-amber-400 font-medium">⭐ {profile?.rating || 1000}</span>
+                  <div className="flex items-center gap-3 text-sm">
                     <span className="text-slate-500">{profile?.games_played || 0} games</span>
                     <span className="text-green-400">{profile?.games_won || 0} wins</span>
                   </div>
@@ -738,6 +820,36 @@ const OnlineMenu = ({
                   </button>
                 </div>
               </div>
+              
+              {/* Rating/Tier display */}
+              {(() => {
+                const tier = ratingService.getRatingTier(profile?.rating || 1000);
+                return (
+                  <div className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2 border border-slate-700/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{tier.icon}</span>
+                      <div>
+                        <div className={`font-bold ${tier.color}`}>{tier.name}</div>
+                        <div className="text-xs text-slate-500">Rating Tier</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xl font-bold text-amber-400">{profile?.rating || 1000}</div>
+                      <div className="text-xs text-slate-500">ELO</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        soundManager.playButtonClick();
+                        setShowRatingInfo(true);
+                      }}
+                      className="p-2 text-slate-500 hover:text-amber-400 transition-colors"
+                      title="How Ratings Work"
+                    >
+                      <HelpCircle size={18} />
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Find Match - Primary CTA */}
@@ -1143,31 +1255,40 @@ const OnlineMenu = ({
             </div>
 
             {/* Active Games Button */}
-            {activeGames.length > 0 && (
-              <button
-                onClick={() => {
-                  soundManager.playButtonClick();
-                  setShowActiveGames(true);
-                }}
-                className="w-full p-4 mb-4 bg-amber-900/20 rounded-xl flex items-center justify-between border border-amber-500/30 hover:border-amber-400/50 transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:bg-amber-500/30 transition-colors">
-                    <Swords size={20} className="text-amber-400" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-amber-300 font-medium text-sm">Active Games</div>
-                    <div className="text-amber-400/70 text-xs">
-                      {activeGames.length} {activeGames.length === 1 ? 'game' : 'games'}
-                      {activeGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length > 0 && 
-                        ` • ${activeGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length} your turn`
-                      }
+            {activeGames.length > 0 && (() => {
+              const myTurnCount = activeGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length;
+              const waitingCount = activeGames.length - myTurnCount;
+              return (
+                <button
+                  onClick={() => {
+                    soundManager.playButtonClick();
+                    setShowActiveGames(true);
+                  }}
+                  className="w-full p-4 mb-4 bg-amber-900/20 rounded-xl flex items-center justify-between border border-amber-500/30 hover:border-amber-400/50 transition-all group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:bg-amber-500/30 transition-colors">
+                      <Swords size={20} className="text-amber-400" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-amber-300 font-medium text-sm">Active Games ({activeGames.length})</div>
+                      <div className="text-xs flex items-center gap-2">
+                        {myTurnCount > 0 && (
+                          <span className="text-green-400 font-medium">{myTurnCount} your turn</span>
+                        )}
+                        {myTurnCount > 0 && waitingCount > 0 && (
+                          <span className="text-slate-600">•</span>
+                        )}
+                        {waitingCount > 0 && (
+                          <span className="text-slate-500">{waitingCount} waiting</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <ChevronRight size={20} className="text-amber-500/60 group-hover:text-amber-400 transition-colors" />
-              </button>
-            )}
+                  <ChevronRight size={20} className="text-amber-500/60 group-hover:text-amber-400 transition-colors" />
+                </button>
+              );
+            })()}
 
             {/* Recent Games Button */}
             {recentGames.length > 0 && (
@@ -1191,14 +1312,27 @@ const OnlineMenu = ({
               </button>
             )}
 
-            {/* Back button */}
+            {/* Back button - Themed */}
             <button
               onClick={handleBack}
-              className="w-full mt-4 py-2.5 text-slate-400 hover:text-slate-200 text-sm transition-colors"
+              className="w-full mt-4 py-3 px-4 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
             >
-              ← Back to Menu
+              <ArrowLeft size={18} />
+              BACK TO MENU
             </button>
           </div>
+          )}
+          
+          {/* Back button when profile error */}
+          {(profileError || (!profile && user)) && (
+            <button
+              onClick={handleBack}
+              className="w-full mt-4 py-3 px-4 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
+            >
+              <ArrowLeft size={18} />
+              BACK TO MENU
+            </button>
+          )}
         </div>
         {/* Bottom padding for scroll */}
         <div className="h-12 flex-shrink-0" />
@@ -1234,6 +1368,72 @@ const OnlineMenu = ({
             }
           }}
         />
+      )}
+      
+      {/* Rating Info Modal */}
+      {showRatingInfo && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 rounded-xl max-w-sm w-full overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+            {/* Header */}
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Trophy size={20} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-amber-300">Rating System</h2>
+              </div>
+              <button
+                onClick={() => setShowRatingInfo(false)}
+                className="p-1 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <p className="text-sm text-slate-400">
+                Your ELO rating changes based on match results. Beat higher-rated players to gain more points!
+              </p>
+              
+              {/* Tier List */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-bold text-slate-300 mb-2">Rating Tiers</h3>
+                {[
+                  { min: 2200, name: 'Grandmaster', icon: '👑', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+                  { min: 2000, name: 'Master', icon: '💎', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/30' },
+                  { min: 1800, name: 'Expert', icon: '⭐', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
+                  { min: 1600, name: 'Advanced', icon: '🌟', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
+                  { min: 1400, name: 'Intermediate', icon: '📈', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/30' },
+                  { min: 1200, name: 'Beginner', icon: '🎮', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+                  { min: 0, name: 'Novice', icon: '🌱', color: 'text-slate-500', bg: 'bg-slate-600/10 border-slate-600/30' },
+                ].map((tier) => (
+                  <div key={tier.name} className={`flex items-center justify-between p-2 rounded-lg border ${tier.bg}`}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{tier.icon}</span>
+                      <span className={`font-bold ${tier.color}`}>{tier.name}</span>
+                    </div>
+                    <span className="text-xs text-slate-500">{tier.min}+</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/30">
+                <p className="text-xs text-slate-500">
+                  New players start at 1000 ELO. Win against stronger opponents for bigger gains, lose against weaker opponents for bigger losses.
+                </p>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div className="p-4 border-t border-amber-500/20">
+              <button
+                onClick={() => setShowRatingInfo(false)}
+                className="w-full py-2.5 rounded-lg font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 transition-all"
+              >
+                Got It!
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Username Edit Modal */}

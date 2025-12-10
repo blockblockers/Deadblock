@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
@@ -132,7 +134,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
           {/* Title - Centered and Large */}
           <div className="text-center mb-6">
             <NeonTitle size="large" />
-            <p className="text-slate-400 text-sm mt-2">VS A.I. - Choose Difficulty</p>
+            <NeonSubtitle text="VS A.I. MODE" size="default" className="mt-2" />
           </div>
 
           {/* Card with dramatic theme */}
@@ -271,12 +273,13 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
               START {selectedDiff.name} GAME
             </button>
             
-            {/* Back button */}
+            {/* Back button - Themed */}
             <button 
               onClick={handleBack}
-              className="w-full mt-3 py-2.5 text-slate-400 hover:text-slate-200 text-sm transition-colors"
+              className="w-full mt-4 py-3 px-4 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
             >
-              ← Back to Menu
+              <ArrowLeft size={18} />
+              BACK TO MENU
             </button>
           </div>
         </div>
