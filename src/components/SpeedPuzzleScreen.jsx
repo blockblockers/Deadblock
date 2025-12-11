@@ -791,14 +791,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'pb-safe min-h-full' : 'h-full'} flex flex-col items-center px-2 py-2`}>
-        {/* Compact Header with title + back button */}
+        {/* Compact Header with back button, title, and reset */}
         <div className="w-full max-w-md mb-1 flex-shrink-0">
           <div className="flex items-center justify-between">
             <button
               onClick={handleMenu}
-              className="p-2 text-slate-400 hover:text-white transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600 transition-all"
             >
-              <Home size={20} />
+              <Home size={16} />
+              <span className="text-xs font-medium">Menu</span>
             </button>
             
             <div className="text-center">
@@ -807,7 +808,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               </div>
             </div>
             
-            <div className="w-9" />
+            {/* Reset/New Puzzle button */}
+            <button
+              onClick={handlePlayAgain}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 text-slate-400 hover:text-orange-400 hover:border-orange-500/50 transition-all"
+              title="New Puzzle"
+            >
+              <RotateCcw size={16} />
+              <span className="text-xs font-medium">New</span>
+            </button>
           </div>
         </div>
         

@@ -1,7 +1,7 @@
 // Entry Authentication Screen - First screen after app load
 // Offers: Google Sign In, Email/Password, or Offline Mode
 import { useState } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, Globe, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, Trophy, BarChart3 } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
@@ -185,13 +185,13 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false })
 
   // Selection screen - choose auth method
   const renderSelectMode = () => (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Sign In Options */}
-      <div className="space-y-3">
+      <div className="space-y-2">
         {/* Google Sign In */}
         <button
           onClick={handleGoogleSignIn}
-          className="w-full py-4 bg-white text-gray-800 font-semibold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.15)] active:scale-[0.98]"
+          className="w-full py-3 bg-white text-gray-800 font-semibold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98]"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -205,41 +205,32 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false })
         {/* Email Sign In */}
         <button
           onClick={() => switchMode('login')}
-          className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(34,211,238,0.4)] active:scale-[0.98]"
+          className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(34,211,238,0.3)] active:scale-[0.98]"
         >
-          <Mail size={20} />
+          <Mail size={18} />
           Sign In with Email
         </button>
 
         {/* Create Account */}
         <button
           onClick={() => switchMode('signup')}
-          className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(168,85,247,0.4)] active:scale-[0.98]"
+          className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(168,85,247,0.3)] active:scale-[0.98]"
         >
-          <UserPlus2 size={20} />
+          <UserPlus2 size={18} />
           Create Account
         </button>
       </div>
 
-      {/* Benefits of signing in */}
-      <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/50">
-        <div className="flex items-center gap-2 mb-3">
-          <Wifi size={16} className="text-cyan-400" />
-          <span className="text-cyan-400 text-sm font-bold">SIGN IN BENEFITS</span>
+      {/* Benefits of signing in - Updated styling to match other menus */}
+      <div className="bg-slate-900/80 backdrop-blur-md rounded-xl p-4 border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.15)]">
+        <div className="flex items-center gap-2 mb-2">
+          <Wifi size={14} className="text-cyan-400" />
+          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Sign In Benefits</span>
         </div>
-        <div className="space-y-2 text-sm text-slate-300">
-          <div className="flex items-center gap-2">
-            <Trophy size={14} className="text-amber-400" />
-            <span>Track your stats & achievements</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <BarChart3 size={14} className="text-purple-400" />
-            <span>Compete on global leaderboards</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Globe size={14} className="text-green-400" />
-            <span>Play ranked matches online</span>
-          </div>
+        <div className="text-sm text-slate-300 space-y-1">
+          <p>• Track your stats & achievements</p>
+          <p>• Compete on global leaderboards</p>
+          <p>• Play ranked matches online</p>
         </div>
       </div>
 
@@ -254,14 +245,14 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false })
 
           <button
             onClick={handleOfflineMode}
-            className="w-full py-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-3 border border-slate-600/50 hover:border-slate-500/50"
+            className="w-full py-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/50 hover:border-slate-500/50"
           >
-            <WifiOff size={18} />
+            <WifiOff size={16} />
             Continue Offline
           </button>
 
           <p className="text-center text-slate-500 text-xs">
-            Play without an account. Stats won't be saved and online features will be unavailable.
+            Stats won't be saved. Online features unavailable.
           </p>
         </>
       )}
@@ -655,11 +646,11 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false })
       <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-6">
         <div className="w-full max-w-sm">
           {/* Title */}
-          <div className="text-center mb-6">
-            <NeonTitle size="xlarge" />
-            <p className="text-slate-400 text-sm mt-3">
-              Strategic Pentomino Puzzle Game
-            </p>
+          <div className="text-center mb-5">
+            <NeonTitle size="large" />
+            <div className="entry-subtitle font-black tracking-[0.15em] text-sm mt-2">
+              STRATEGIC PUZZLE GAME
+            </div>
           </div>
 
           {/* Render based on mode */}
@@ -680,6 +671,13 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false })
           © 2024 Deadblock
         </p>
       </div>
+      
+      {/* Subtitle styling to match other screens */}
+      <style>{`
+        .entry-subtitle {
+          color: #94a3b8;
+        }
+      `}</style>
     </div>
   );
 };

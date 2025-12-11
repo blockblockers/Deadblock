@@ -39,22 +39,35 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
   const loadChallengeData = async () => {
     setLoading(true);
     
-    // Get current challenge
-    const { data: challengeData } = await weeklyChallengeService.getCurrentChallenge();
-    if (challengeData) {
-      setChallenge(challengeData);
+    try {
+      // Get current challenge
+      const { data: challengeData, error } = await weeklyChallengeService.getCurrentChallenge();
       
-      // Get user's result
-      const { data: resultData } = await weeklyChallengeService.getUserResult(challengeData.id);
-      setUserResult(resultData);
+      if (error) {
+        console.error('[WeeklyChallengeMenu] Error getting challenge:', error);
+        setLoading(false);
+        return;
+      }
       
-      // Get user's rank
-      const { rank } = await weeklyChallengeService.getUserRank(challengeData.id);
-      setUserRank(rank);
-      
-      // Get top 3 for preview
-      const { data: leaderboardData } = await weeklyChallengeService.getLeaderboard(challengeData.id, 3);
-      setTopPlayers(leaderboardData);
+      if (challengeData) {
+        setChallenge(challengeData);
+        
+        // Get user's result
+        const { data: resultData } = await weeklyChallengeService.getUserResult(challengeData.id);
+        setUserResult(resultData);
+        
+        // Get user's rank
+        const { rank } = await weeklyChallengeService.getUserRank(challengeData.id);
+        setUserRank(rank);
+        
+        // Get top 3 for preview
+        const { data: leaderboardData } = await weeklyChallengeService.getLeaderboard(challengeData.id, 3);
+        setTopPlayers(leaderboardData || []);
+      } else {
+        console.log('[WeeklyChallengeMenu] No challenge data returned');
+      }
+    } catch (err) {
+      console.error('[WeeklyChallengeMenu] Error loading challenge:', err);
     }
     
     setLoading(false);
@@ -121,6 +134,20 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
               <div className="text-center py-8">
                 <Loader className="w-8 h-8 animate-spin text-red-400 mx-auto mb-3" />
                 <p className="text-slate-400">Loading challenge...</p>
+              </div>
+            ) : !challenge ? (
+              <div className="text-center py-8">
+                <Calendar size={48} className="mx-auto text-slate-500 mb-3" />
+                <h3 className="text-lg font-bold text-white mb-2">No Challenge Available</h3>
+                <p className="text-slate-400 text-sm mb-4">
+                  The weekly challenge couldn't be loaded. Please try again later.
+                </p>
+                <button 
+                  onClick={loadChallengeData}
+                  className="px-4 py-2 rounded-lg bg-red-500/20 text-red-300 border border-red-500/50 hover:bg-red-500/30 transition-all"
+                >
+                  Retry
+                </button>
               </div>
             ) : (
               <>

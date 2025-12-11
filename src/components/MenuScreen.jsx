@@ -14,9 +14,9 @@ import { useAuth } from '../contexts/AuthContext';
 const buttonShapes = {
   X: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]], // X shape - cross pattern (Online)
   V: [[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]], // V shape - bottom-left to up-right (VS AI)
-  W: [[0, 2], [1, 1], [1, 2], [2, 0], [2, 1]], // W shape - stair bottom-left to up-right (2 Player)
+  Z: [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]], // Z shape (was W) - for 2 Player
   P: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1]], // P shape - flag pattern (Puzzle)
-  Z: [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]], // Z shape - diagonal pattern (Weekly)
+  W: [[0, 2], [1, 1], [1, 2], [2, 0], [2, 1]], // W shape (was Z) - for Weekly
 };
 
 // Floating pentomino piece for background animation
@@ -98,8 +98,8 @@ const FloatingPiecesBackground = () => {
   );
 };
 
-// Pentomino shape component (no icons inside)
-const PentominoShape = ({ shape, color, glowColor, cellSize = 24, gap = 2 }) => {
+// Pentomino shape component (no icons inside) - reduced size for compact menu
+const PentominoShape = ({ shape, color, glowColor, cellSize = 18, gap = 2 }) => {
   const coords = buttonShapes[shape] || buttonShapes.T;
   
   const minX = Math.min(...coords.map(([x]) => x));
@@ -122,13 +122,13 @@ const PentominoShape = ({ shape, color, glowColor, cellSize = 24, gap = 2 }) => 
       {normalizedCoords.map(([x, y], idx) => (
         <div
           key={idx}
-          className={`absolute ${color} rounded-md border border-white/20`}
+          className={`absolute ${color} rounded-sm border border-white/20`}
           style={{
             width: cellSize,
             height: cellSize,
             left: x * (cellSize + gap),
             top: y * (cellSize + gap),
-            boxShadow: `0 0 12px ${glowColor}`,
+            boxShadow: `0 0 8px ${glowColor}`,
           }}
         />
       ))}
@@ -136,7 +136,7 @@ const PentominoShape = ({ shape, color, glowColor, cellSize = 24, gap = 2 }) => 
   );
 };
 
-// Button with pentomino shape and themed colors
+// Button with pentomino shape and themed colors - compact version
 const PentominoButton = ({ onClick, shape, color, glowColor, title, subtitle, textColor, hoverTextColor }) => {
   const handleClick = () => {
     soundManager.playButtonClick();
@@ -145,28 +145,28 @@ const PentominoButton = ({ onClick, shape, color, glowColor, title, subtitle, te
   
   return (
     <button onClick={handleClick} className="w-full group">
-      <div className="flex items-center gap-4 p-3 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/80 hover:border-slate-500/50 transition-all duration-200 group-active:scale-[0.98]">
-        {/* Fixed width container for pentomino alignment */}
+      <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/80 hover:border-slate-500/50 transition-all duration-200 group-active:scale-[0.98]">
+        {/* Fixed width container for pentomino alignment - reduced */}
         <div 
           className="flex-shrink-0 flex items-center justify-center transition-transform duration-200 group-hover:scale-110"
-          style={{ width: 80, height: 80 }}
+          style={{ width: 60, height: 60 }}
         >
           <PentominoShape shape={shape} color={color} glowColor={glowColor} />
         </div>
         
         {/* Text - left aligned */}
         <div className="flex-1 text-left">
-          <div className={`font-bold text-base tracking-wide transition-colors ${textColor} ${hoverTextColor}`}>
+          <div className={`font-bold text-sm tracking-wide transition-colors ${textColor} ${hoverTextColor}`}>
             {title}
           </div>
-          <div className="text-slate-500 text-sm group-hover:text-slate-400 transition-colors">
+          <div className="text-slate-500 text-xs group-hover:text-slate-400 transition-colors">
             {subtitle}
           </div>
         </div>
         
         {/* Arrow */}
         <div className="text-slate-600 group-hover:text-slate-400 group-hover:translate-x-1 transition-all duration-200 flex-shrink-0">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </div>
@@ -289,10 +289,10 @@ const MenuScreen = ({
           </div>
           
           {/* Menu Box */}
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-4 sm:p-5 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
+          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-3 sm:p-4 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
             
             {/* Player Profile Card - Inside menu at top */}
-            <div className="mb-4 relative">
+            <div className="mb-3 relative">
               <PlayerProfileCard 
                 onClick={onShowProfile} 
                 isOffline={isOfflineMode}
@@ -311,10 +311,10 @@ const MenuScreen = ({
             </div>
             
             {/* Divider */}
-            <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent mb-4" />
+            <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent mb-3" />
             
             {/* Game Mode Buttons */}
-            <div className="space-y-3 mb-4">
+            <div className="space-y-2 mb-3">
               {/* Online Button - Show if Supabase is configured */}
               {showOnline && (
                 <PentominoButton
@@ -342,7 +342,7 @@ const MenuScreen = ({
               
               <PentominoButton
                 onClick={() => onStartGame('2player')}
-                shape="W"
+                shape="Z"
                 color="bg-gradient-to-br from-cyan-500 to-blue-600"
                 glowColor="rgba(34,211,238,0.5)"
                 title="2 PLAYER"
@@ -366,7 +366,7 @@ const MenuScreen = ({
               {showOnline && (
                 <PentominoButton
                   onClick={onWeeklyChallenge}
-                  shape="Z"
+                  shape="W"
                   color="bg-gradient-to-br from-red-500 to-rose-600"
                   glowColor="rgba(239,68,68,0.5)"
                   title="WEEKLY"

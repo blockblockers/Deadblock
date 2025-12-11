@@ -1,16 +1,17 @@
 // Settings Modal
 import { useState } from 'react';
-import { X, Volume2, VolumeX, Vibrate, RotateCcw, Trash2, AlertTriangle, Music } from 'lucide-react';
+import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../utils/supabase';
 
 const SettingsModal = ({ isOpen, onClose }) => {
-  const { profile, signOut, isAuthenticated } = useAuth();
+  const { profile, isAuthenticated } = useAuth();
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
   const [musicEnabled, setMusicEnabled] = useState(soundManager.isMusicEnabled());
   const [vibrationEnabled, setVibrationEnabled] = useState(soundManager.isVibrationEnabled());
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetting, setResetting] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   if (!isOpen) return null;
 
@@ -40,20 +41,25 @@ const SettingsModal = ({ isOpen, onClose }) => {
     soundManager.playButtonClick();
   };
 
-  const handleResetProfile = async () => {
-    if (!isAuthenticated) return;
-    
-    setResetting(true);
+  const handleSignOut = async () => {
+    setSigningOut(true);
     try {
-      // Sign out to reset the session
-      await signOut();
-      // Clear any local storage
+      // Clear local storage first
       localStorage.removeItem('deadblock_settings');
-      // Reload the page to get a fresh start
-      window.location.reload();
+      
+      // Sign out from Supabase
+      await supabase.auth.signOut();
+      
+      // Small delay then reload
+      setTimeout(() => {
+        window.location.replace('/');
+      }, 300);
     } catch (error) {
-      console.error('Error resetting profile:', error);
-      setResetting(false);
+      console.error('Error signing out:', error);
+      // Force reload even on error
+      setTimeout(() => {
+        window.location.replace('/');
+      }, 500);
     }
   };
 
@@ -165,17 +171,17 @@ const SettingsModal = ({ isOpen, onClose }) => {
               </div>
             </button>
 
-            {/* Reset Online Profile - Only show if authenticated */}
+            {/* Sign Out - Only show if authenticated */}
             {isAuthenticated && (
               <button
-                onClick={() => setShowResetConfirm(true)}
+                onClick={() => setShowSignOutConfirm(true)}
                 className="w-full mt-2 flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-red-500/50 hover:bg-slate-800 transition-all group"
               >
                 <div className="flex items-center gap-3">
-                  <Trash2 size={20} className="text-red-400" />
+                  <LogOut size={20} className="text-red-400" />
                   <div className="text-left">
-                    <div className="text-white font-medium text-sm group-hover:text-red-300 transition-colors">Reset Online Profile</div>
-                    <div className="text-slate-500 text-xs">Sign out and clear account link</div>
+                    <div className="text-white font-medium text-sm group-hover:text-red-300 transition-colors">Sign Out</div>
+                    <div className="text-slate-500 text-xs">Log out of your account</div>
                   </div>
                 </div>
               </button>
@@ -194,36 +200,36 @@ const SettingsModal = ({ isOpen, onClose }) => {
         </div>
       </div>
 
-      {/* Reset Confirmation Modal */}
-      {showResetConfirm && (
+      {/* Sign Out Confirmation Modal */}
+      {showSignOutConfirm && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-60 p-4">
           <div className="bg-slate-900 rounded-xl max-w-xs w-full overflow-hidden border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)]">
             <div className="p-5 text-center">
               <AlertTriangle size={48} className="mx-auto text-red-400 mb-3" />
-              <h3 className="text-lg font-bold text-white mb-2">Reset Profile?</h3>
+              <h3 className="text-lg font-bold text-white mb-2">Sign Out?</h3>
               <p className="text-slate-400 text-sm mb-5">
-                This will sign you out and clear your account link. You'll need to sign in again to access online features.
+                You'll need to sign in again to access online features and your stats.
               </p>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowResetConfirm(false)}
+                  onClick={() => setShowSignOutConfirm(false)}
                   className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-colors"
-                  disabled={resetting}
+                  disabled={signingOut}
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleResetProfile}
+                  onClick={handleSignOut}
                   className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                  disabled={resetting}
+                  disabled={signingOut}
                 >
-                  {resetting ? (
+                  {signingOut ? (
                     <>
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Resetting...</span>
+                      <span>Signing out...</span>
                     </>
                   ) : (
-                    'Reset'
+                    'Sign Out'
                   )}
                 </button>
               </div>

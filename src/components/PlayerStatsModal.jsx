@@ -121,11 +121,11 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       onClick={onClose}
     >
       <div 
-        className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden border border-slate-700/50 shadow-2xl"
+        className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden border border-slate-700/50 shadow-2xl flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800 to-slate-900">
+        <div className="p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800 to-slate-900 flex-shrink-0">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               {/* Avatar */}
@@ -199,8 +199,17 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
           </div>
         </div>
         
-        {/* Stats Content */}
-        <div className="p-4 overflow-y-auto max-h-[calc(85vh-120px)] space-y-3">
+        {/* Stats Content - Scrollable */}
+        <div 
+          className="flex-1 p-4 space-y-3"
+          style={{
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-y',
+            overscrollBehavior: 'contain',
+          }}
+        >
           {isOffline ? (
             <div className="text-center py-8">
               <Gamepad2 size={48} className="mx-auto text-slate-600 mb-3" />
