@@ -62,24 +62,6 @@ function AppContent() {
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile } = useAuth();
 
-  // Check if user was already authenticated (skip entry screen)
-  // But NOT during OAuth callback - let the OAuth handler decide where to go
-  useEffect(() => {
-    if (!authLoading && isAuthenticated && !hasPassedEntryAuth && !isOAuthCallback) {
-      console.log('App: User already authenticated, skipping entry screen');
-      setHasPassedEntryAuth(true);
-      
-      // If there was a pending online intent, clear it and go to online menu
-      if (pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true') {
-        console.log('App: Found pending online intent, going to online menu');
-        localStorage.removeItem('deadblock_pending_online_intent');
-        setPendingOnlineIntent(false);
-        setIsOfflineMode(false);
-        setGameMode('online-menu');
-      }
-    }
-  }, [authLoading, isAuthenticated, hasPassedEntryAuth, isOAuthCallback, pendingOnlineIntent, setGameMode]);
-
   // Check for invite code in URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -212,6 +194,24 @@ function AppContent() {
     flipPiece,
     resetCurrentPuzzle,
   } = useGameState();
+
+  // Check if user was already authenticated (skip entry screen)
+  // But NOT during OAuth callback - let the OAuth handler decide where to go
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !hasPassedEntryAuth && !isOAuthCallback) {
+      console.log('App: User already authenticated, skipping entry screen');
+      setHasPassedEntryAuth(true);
+      
+      // If there was a pending online intent, clear it and go to online menu
+      if (pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true') {
+        console.log('App: Found pending online intent, going to online menu');
+        localStorage.removeItem('deadblock_pending_online_intent');
+        setPendingOnlineIntent(false);
+        setIsOfflineMode(false);
+        setGameMode('online-menu');
+      }
+    }
+  }, [authLoading, isAuthenticated, hasPassedEntryAuth, isOAuthCallback, pendingOnlineIntent, setGameMode]);
 
   // Effect to accept pending invite after login (needs setGameMode from useGameState)
   useEffect(() => {
