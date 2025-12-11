@@ -319,14 +319,37 @@ export const AuthProvider = ({ children }) => {
   const signInWithGoogle = async () => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+    console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: false, // Ensure redirect happens
+        }
+      });
+      
+      console.log('[AuthContext] Google OAuth result:', { data, error });
+      
+      if (error) {
+        console.error('[AuthContext] Google OAuth error:', error);
+        return { data, error };
       }
-    });
-
-    return { data, error };
+      
+      // If we get here without redirect, there might be an issue
+      // The browser should be redirecting, so wait a moment
+      if (data?.url) {
+        console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
+        // Manually redirect if the auto-redirect didn't work
+        window.location.href = data.url;
+      }
+      
+      return { data, error };
+    } catch (err) {
+      console.error('[AuthContext] Google OAuth exception:', err);
+      return { data: null, error: { message: err.message || 'Failed to start Google Sign In' } };
+    }
   };
 
   const signOut = async () => {

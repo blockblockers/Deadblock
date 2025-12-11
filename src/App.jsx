@@ -48,6 +48,11 @@ function AppContent() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showOnlineAuthPrompt, setShowOnlineAuthPrompt] = useState(false);
   
+  // Check for pending online intent (set before OAuth redirect)
+  const [pendingOnlineIntent, setPendingOnlineIntent] = useState(() => {
+    return localStorage.getItem('deadblock_pending_online_intent') === 'true';
+  });
+  
   // Spectating and replay state
   const [spectatingGameId, setSpectatingGameId] = useState(null);
   const [replayGameId, setReplayGameId] = useState(null);
@@ -63,8 +68,17 @@ function AppContent() {
     if (!authLoading && isAuthenticated && !hasPassedEntryAuth && !isOAuthCallback) {
       console.log('App: User already authenticated, skipping entry screen');
       setHasPassedEntryAuth(true);
+      
+      // If there was a pending online intent, clear it and go to online menu
+      if (pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true') {
+        console.log('App: Found pending online intent, going to online menu');
+        localStorage.removeItem('deadblock_pending_online_intent');
+        setPendingOnlineIntent(false);
+        setIsOfflineMode(false);
+        setGameMode('online-menu');
+      }
     }
-  }, [authLoading, isAuthenticated, hasPassedEntryAuth, isOAuthCallback]);
+  }, [authLoading, isAuthenticated, hasPassedEntryAuth, isOAuthCallback, pendingOnlineIntent, setGameMode]);
 
   // Check for invite code in URL
   useEffect(() => {
@@ -216,22 +230,31 @@ function AppContent() {
 
   // Redirect after OAuth completes - go to game menu from entry screen
   useEffect(() => {
-    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, hasProfile: !!profile });
+    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, hasProfile: !!profile, pendingOnlineIntent });
     if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
       // Wait a moment for profile to load
       const doRedirect = () => {
         setHasRedirectedAfterOAuth(true);
         clearOAuthCallback?.(); // Clear the flag after handling
         
-        // If user was already past entry screen (trying to access online features), go to online menu
-        // Otherwise (signing in from entry screen), just go to game menu
-        if (hasPassedEntryAuth) {
-          console.log('OAuth complete, user was past entry - going to online menu');
+        // Clear pending online intent
+        const hadOnlineIntent = pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true';
+        localStorage.removeItem('deadblock_pending_online_intent');
+        setPendingOnlineIntent(false);
+        
+        // Always pass entry auth and clear offline mode after successful OAuth
+        setHasPassedEntryAuth(true);
+        setIsOfflineMode(false);
+        setShowOnlineAuthPrompt(false);
+        
+        // If user had pending online intent (was trying to access online features), go to online menu
+        // Otherwise if they were already past entry, go to online menu
+        // Otherwise go to main menu
+        if (hadOnlineIntent || hasPassedEntryAuth) {
+          console.log('OAuth complete with online intent - going to online menu');
           setGameMode('online-menu');
         } else {
           console.log('OAuth complete from entry screen - going to game menu');
-          setHasPassedEntryAuth(true);
-          setIsOfflineMode(false);
           setGameMode(null); // Game menu
         }
       };
@@ -244,7 +267,7 @@ function AppContent() {
         doRedirect();
       }
     }
-  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, profile, setGameMode, clearOAuthCallback]);
+  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, profile, pendingOnlineIntent, setGameMode, clearOAuthCallback]);
   
   // Detect mobile device
   useEffect(() => {
@@ -268,6 +291,9 @@ function AppContent() {
       }
       // If user is in offline mode, show auth prompt
       if (isOfflineMode && !isAuthenticated) {
+        // Set intent before showing auth - this persists through OAuth redirect
+        localStorage.setItem('deadblock_pending_online_intent', 'true');
+        setPendingOnlineIntent(true);
         setShowOnlineAuthPrompt(true);
         return;
       }
@@ -295,6 +321,9 @@ function AppContent() {
 
   // Handle online auth from offline mode
   const handleOnlineAuthSuccess = () => {
+    // Clear pending online intent
+    localStorage.removeItem('deadblock_pending_online_intent');
+    setPendingOnlineIntent(false);
     setShowOnlineAuthPrompt(false);
     setIsOfflineMode(false);
     setGameMode('online-menu');
@@ -308,6 +337,9 @@ function AppContent() {
       return;
     }
     if (isOfflineMode && !isAuthenticated) {
+      // Set intent before showing auth - this persists through OAuth redirect
+      localStorage.setItem('deadblock_pending_online_intent', 'true');
+      setPendingOnlineIntent(true);
       setShowOnlineAuthPrompt(true);
       return;
     }
@@ -400,6 +432,16 @@ function AppContent() {
         if (!hasPassedEntryAuth && isAuthenticated) {
           setHasPassedEntryAuth(true);
         }
+        // If there was pending online intent, go to online menu
+        if (pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true') {
+          console.log('Force timeout: handling pending online intent');
+          localStorage.removeItem('deadblock_pending_online_intent');
+          setPendingOnlineIntent(false);
+          setIsOfflineMode(false);
+          if (isAuthenticated) {
+            setGameMode('online-menu');
+          }
+        }
       }, 10000);
       
       return () => {
@@ -409,7 +451,7 @@ function AppContent() {
     } else {
       setLoadingStuck(false);
     }
-  }, [shouldShowLoading, clearOAuthCallback, hasPassedEntryAuth, isAuthenticated]);
+  }, [shouldShowLoading, clearOAuthCallback, hasPassedEntryAuth, isAuthenticated, pendingOnlineIntent, setGameMode]);
 
   // Show loading while auth is initializing or processing OAuth callback
   // Don't show loading if we're already authenticated with a profile
@@ -445,6 +487,8 @@ function AppContent() {
                     localStorage.removeItem(key);
                   }
                 });
+                // Clear pending online intent
+                localStorage.removeItem('deadblock_pending_online_intent');
                 // Clear session storage too
                 sessionStorage.clear();
                 // Force reload to root
@@ -479,7 +523,12 @@ function AppContent() {
     return (
       <EntryAuthScreen
         onComplete={handleOnlineAuthSuccess}
-        onOfflineMode={() => setShowOnlineAuthPrompt(false)}
+        onOfflineMode={() => {
+          // Clear pending online intent when user cancels
+          localStorage.removeItem('deadblock_pending_online_intent');
+          setPendingOnlineIntent(false);
+          setShowOnlineAuthPrompt(false);
+        }}
         forceOnlineOnly={true}
       />
     );
