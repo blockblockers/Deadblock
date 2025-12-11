@@ -3,10 +3,9 @@ import { useState } from 'react';
 import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../utils/supabase';
 
 const SettingsModal = ({ isOpen, onClose }) => {
-  const { profile, isAuthenticated } = useAuth();
+  const { profile, isAuthenticated, signOut } = useAuth();
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
   const [musicEnabled, setMusicEnabled] = useState(soundManager.isMusicEnabled());
   const [vibrationEnabled, setVibrationEnabled] = useState(soundManager.isVibrationEnabled());
@@ -47,19 +46,27 @@ const SettingsModal = ({ isOpen, onClose }) => {
       // Clear local storage first
       localStorage.removeItem('deadblock_settings');
       
-      // Sign out from Supabase
-      await supabase.auth.signOut();
+      // Also clear Supabase auth data
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('sb-') || key.includes('supabase')) {
+          localStorage.removeItem(key);
+        }
+      });
       
-      // Small delay then reload
-      setTimeout(() => {
-        window.location.replace('/');
-      }, 300);
+      // Sign out using context method
+      const result = await signOut();
+      
+      if (result?.error) {
+        console.error('Sign out error:', result.error);
+      }
+      
+      // Force a full page reload after signing out
+      // Use replace to prevent back button issues
+      window.location.replace('/');
     } catch (error) {
       console.error('Error signing out:', error);
       // Force reload even on error
-      setTimeout(() => {
-        window.location.replace('/');
-      }, 500);
+      window.location.replace('/');
     }
   };
 

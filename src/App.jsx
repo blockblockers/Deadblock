@@ -216,24 +216,35 @@ function AppContent() {
 
   // Redirect after OAuth completes - go to game menu from entry screen
   useEffect(() => {
-    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth });
+    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, hasProfile: !!profile });
     if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
-      setHasRedirectedAfterOAuth(true);
-      clearOAuthCallback?.(); // Clear the flag after handling
+      // Wait a moment for profile to load
+      const doRedirect = () => {
+        setHasRedirectedAfterOAuth(true);
+        clearOAuthCallback?.(); // Clear the flag after handling
+        
+        // If user was already past entry screen (trying to access online features), go to online menu
+        // Otherwise (signing in from entry screen), just go to game menu
+        if (hasPassedEntryAuth) {
+          console.log('OAuth complete, user was past entry - going to online menu');
+          setGameMode('online-menu');
+        } else {
+          console.log('OAuth complete from entry screen - going to game menu');
+          setHasPassedEntryAuth(true);
+          setIsOfflineMode(false);
+          setGameMode(null); // Game menu
+        }
+      };
       
-      // If user was already past entry screen (trying to access online features), go to online menu
-      // Otherwise (signing in from entry screen), just go to game menu
-      if (hasPassedEntryAuth) {
-        console.log('OAuth complete, user was past entry - going to online menu');
-        setGameMode('online-menu');
+      // If profile isn't loaded yet, wait a moment
+      if (!profile) {
+        console.log('OAuth complete but waiting for profile...');
+        setTimeout(doRedirect, 500);
       } else {
-        console.log('OAuth complete from entry screen - going to game menu');
-        setHasPassedEntryAuth(true);
-        setIsOfflineMode(false);
-        setGameMode(null); // Game menu
+        doRedirect();
       }
     }
-  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, setGameMode, clearOAuthCallback]);
+  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, profile, setGameMode, clearOAuthCallback]);
   
   // Detect mobile device
   useEffect(() => {
@@ -369,21 +380,42 @@ function AppContent() {
   // Fallback timeout for stuck loading state
   const [loadingStuck, setLoadingStuck] = useState(false);
   
+  // Check if we should be showing loading screen
+  const shouldShowLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !profile));
+  
   useEffect(() => {
-    if (isOnlineEnabled && (authLoading || isOAuthCallback)) {
+    if (shouldShowLoading) {
       const timeout = setTimeout(() => {
         console.log('Loading stuck timeout triggered');
         setLoadingStuck(true);
-      }, 5000); // 5 seconds (reduced from 15)
+      }, 5000); // 5 seconds
       
-      return () => clearTimeout(timeout);
+      // If we're stuck for too long (10 seconds), force clear the OAuth callback
+      const forceTimeout = setTimeout(() => {
+        console.log('Force clearing stuck OAuth state');
+        if (clearOAuthCallback) {
+          clearOAuthCallback();
+        }
+        // Also force pass entry auth if we're stuck
+        if (!hasPassedEntryAuth && isAuthenticated) {
+          setHasPassedEntryAuth(true);
+        }
+      }, 10000);
+      
+      return () => {
+        clearTimeout(timeout);
+        clearTimeout(forceTimeout);
+      };
     } else {
       setLoadingStuck(false);
     }
-  }, [isOnlineEnabled, authLoading, isOAuthCallback]);
+  }, [shouldShowLoading, clearOAuthCallback, hasPassedEntryAuth, isAuthenticated]);
 
   // Show loading while auth is initializing or processing OAuth callback
-  if (isOnlineEnabled && (authLoading || isOAuthCallback)) {
+  // Don't show loading if we're already authenticated with a profile
+  const showAuthLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !profile));
+  
+  if (showAuthLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
         {/* Grid background */}

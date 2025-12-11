@@ -25,8 +25,10 @@ export const AuthProvider = ({ children }) => {
 
   const isOnlineEnabled = isSupabaseConfigured();
 
-  const fetchProfile = useCallback(async (userId) => {
+  const fetchProfile = useCallback(async (userId, retryCount = 0) => {
     if (!supabase) return null;
+    
+    const maxRetries = 3;
     
     try {
       const { data, error } = await supabase
@@ -40,6 +42,12 @@ export const AuthProvider = ({ children }) => {
         // Try to create profile if it doesn't exist
         if (error.code === 'PGRST116') {
           console.log('Profile not found, may need to create one');
+          // Retry a few times in case of race condition
+          if (retryCount < maxRetries) {
+            console.log(`Profile retry ${retryCount + 1}/${maxRetries}...`);
+            await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
+            return fetchProfile(userId, retryCount + 1);
+          }
         }
         return null;
       }
@@ -48,6 +56,10 @@ export const AuthProvider = ({ children }) => {
       return data;
     } catch (err) {
       console.error('Profile fetch exception:', err);
+      if (retryCount < maxRetries) {
+        await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
+        return fetchProfile(userId, retryCount + 1);
+      }
       return null;
     }
   }, []);

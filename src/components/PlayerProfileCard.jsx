@@ -218,15 +218,47 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
 };
 
 const PlayerProfileCard = ({ onClick, isOffline = false }) => {
-  const { profile, isAuthenticated, updateProfile } = useAuth();
+  const { profile, isAuthenticated, updateProfile, refreshProfile } = useAuth();
   const [imageError, setImageError] = useState(false);
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [showUsernameEdit, setShowUsernameEdit] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
+  const [profileRetried, setProfileRetried] = useState(false);
   
   // Get rank info for authenticated users
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
+  
+  // Retry profile fetch if authenticated but no profile
+  useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const attemptFetch = async () => {
+      if (isAuthenticated && !profile && retryCount < maxRetries && refreshProfile) {
+        retryCount++;
+        console.log(`[PlayerProfileCard] Profile missing, retry attempt ${retryCount}/${maxRetries}...`);
+        try {
+          const result = await refreshProfile();
+          console.log('[PlayerProfileCard] Profile retry result:', !!result);
+          if (!result && retryCount < maxRetries) {
+            // Wait and try again
+            setTimeout(attemptFetch, 1000 * retryCount);
+          }
+        } catch (err) {
+          console.error('[PlayerProfileCard] Profile retry failed:', err);
+          if (retryCount < maxRetries) {
+            setTimeout(attemptFetch, 1000 * retryCount);
+          }
+        }
+      }
+    };
+    
+    if (isAuthenticated && !profile && !profileRetried) {
+      setProfileRetried(true);
+      attemptFetch();
+    }
+  }, [isAuthenticated, profile, profileRetried, refreshProfile]);
   
   // Load achievement count
   useEffect(() => {
@@ -292,22 +324,26 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     );
   }
   
-  // Loading state
+  // Loading state - clickable to retry
   if (!profile) {
     return (
-      <div 
-        className="w-full flex items-center gap-3 p-3 rounded-xl border"
+      <button 
+        onClick={() => {
+          console.log('[PlayerProfileCard] Manual refresh triggered');
+          if (refreshProfile) refreshProfile();
+        }}
+        className="w-full flex items-center gap-3 p-3 rounded-xl border hover:bg-slate-800/50 transition-colors cursor-pointer"
         style={{
           background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.8) 0%, rgba(30, 41, 59, 0.9) 100%)',
           borderColor: 'rgba(34, 211, 238, 0.3)',
         }}
       >
         <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse" />
-        <div className="flex-1">
+        <div className="flex-1 text-left">
           <div className="h-4 w-24 bg-slate-700 rounded animate-pulse mb-1.5" />
-          <div className="h-3 w-16 bg-slate-700 rounded animate-pulse" />
+          <div className="text-xs text-slate-500">Loading profile... tap to retry</div>
         </div>
-      </div>
+      </button>
     );
   }
   
