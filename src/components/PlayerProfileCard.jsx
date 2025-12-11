@@ -353,27 +353,55 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     );
   }
   
-  const displayName = profile.display_name || profile.username || 'Player';
+  const displayName = profile.username || profile.display_name || 'Player';
+  
+  // Get contrasting background color for tier icon circle based on tier color
+  const getTierIconBackground = () => {
+    if (!rankInfo?.color) return 'rgba(15, 23, 42, 0.9)';
+    
+    // Map tier glow colors to contrasting dark backgrounds
+    const contrastBackgrounds = {
+      '#f59e0b': 'rgba(30, 20, 60, 0.95)',   // Grandmaster amber → dark purple
+      '#a855f7': 'rgba(20, 40, 40, 0.95)',   // Master purple → dark teal
+      '#3b82f6': 'rgba(40, 25, 20, 0.95)',   // Expert blue → dark orange-brown
+      '#22d3ee': 'rgba(40, 20, 40, 0.95)',   // Advanced cyan → dark magenta
+      '#22c55e': 'rgba(40, 20, 35, 0.95)',   // Intermediate green → dark rose
+      '#94a3b8': 'rgba(20, 25, 40, 0.95)',   // Beginner slate → dark blue
+      '#64748b': 'rgba(20, 25, 40, 0.95)',   // Novice gray → dark blue
+    };
+    return contrastBackgrounds[rankInfo.color] || 'rgba(15, 23, 42, 0.95)';
+  };
   
   return (
     <>
       <button 
         onClick={onClick}
-        className="w-full rounded-xl border transition-all overflow-hidden group"
+        className="w-full rounded-xl border transition-all overflow-hidden group backdrop-blur-sm"
         style={{
-          background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${rankInfo?.color}15 50%, rgba(15, 23, 42, 0.95) 100%)`,
+          background: `linear-gradient(135deg, 
+            rgba(15, 23, 42, 0.85) 0%, 
+            ${rankInfo?.color}10 25%,
+            rgba(30, 41, 59, 0.75) 50%, 
+            ${rankInfo?.color}08 75%,
+            rgba(15, 23, 42, 0.85) 100%)`,
           borderColor: `${rankInfo?.color}40` || 'rgba(34, 211, 238, 0.3)',
-          boxShadow: `0 0 20px ${rankInfo?.color}20, inset 0 1px 0 rgba(255,255,255,0.05)`
+          boxShadow: `0 0 25px ${rankInfo?.color}20, 
+                      inset 0 1px 0 rgba(255,255,255,0.1),
+                      inset 0 0 30px ${rankInfo?.color}05`
         }}
       >
-        <div className="flex items-center gap-2.5 p-2.5">
-          {/* Tier Icon Circle - compact */}
+        <div className="flex items-center gap-3 p-3">
+          {/* Tier Icon Circle with contrasting background */}
           <div 
-            className="relative w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 border-2"
+            className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 border-2"
             style={{ 
-              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              background: `radial-gradient(circle at 30% 30%, 
+                ${getTierIconBackground()}, 
+                rgba(10, 15, 25, 0.98))`,
               borderColor: `${rankInfo?.color}50`,
-              boxShadow: `0 0 12px ${rankInfo?.color}30, inset 0 0 8px ${rankInfo?.color}15`
+              boxShadow: `0 0 20px ${rankInfo?.color}35, 
+                          inset 0 0 15px ${rankInfo?.color}15,
+                          inset 0 2px 4px rgba(255,255,255,0.1)`
             }}
           >
             {rankInfo && (
@@ -381,37 +409,37 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
             )}
           </div>
           
-          {/* Player info - compact */}
+          {/* Player info */}
           <div className="flex-1 text-left min-w-0">
             <div 
-              className="font-bold text-sm tracking-wide truncate"
+              className="font-black text-base tracking-wide truncate"
               style={{ 
-                color: rankInfo?.color || '#e2e8f0',
-                textShadow: `0 0 8px ${rankInfo?.color}40` 
+                color: '#f1f5f9',
+                textShadow: `0 0 12px ${rankInfo?.color}40, 0 0 4px rgba(0,0,0,0.8)` 
               }}
             >
               {displayName}
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {rankInfo && (
                 <span 
-                  className="text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: `${rankInfo.color}cc` }}
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: rankInfo.color, textShadow: `0 0 10px ${rankInfo.color}50` }}
                 >
                   {rankInfo.name}
                 </span>
               )}
-              <span className="text-slate-500 text-xs">
-                • {profile.rating || 1000}
+              <span className="text-slate-400 text-xs font-medium">
+                {profile.rating || 1000} ELO
               </span>
             </div>
           </div>
           
           {/* Arrow */}
           <ChevronRight 
-            size={18} 
-            className="group-hover:translate-x-0.5 transition-all flex-shrink-0 opacity-60" 
-            style={{ color: rankInfo?.color || '#64748b' }} 
+            size={20} 
+            className="group-hover:translate-x-0.5 transition-all flex-shrink-0" 
+            style={{ color: rankInfo?.color || '#64748b', opacity: 0.7 }} 
           />
         </div>
       </button>

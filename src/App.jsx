@@ -15,6 +15,7 @@ import { LazyWrapper, LazyInline, preloadOnlineComponents, preloadPuzzleComponen
 // Entry and Profile components (loaded on app start)
 import EntryAuthScreen from './components/EntryAuthScreen';
 import PlayerProfileCard from './components/PlayerProfileCard';
+import WelcomeModal from './components/WelcomeModal';
 
 // =============================================================================
 // LAZY LOADED COMPONENTS
@@ -86,7 +87,18 @@ function AppContent() {
   // Weekly challenge state
   const [currentWeeklyChallenge, setCurrentWeeklyChallenge] = useState(null);
   
-  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile } = useAuth();
+  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser } = useAuth();
+  
+  // State for welcome modal
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  
+  // Show welcome modal when new user is detected
+  useEffect(() => {
+    if (isNewUser && profile && !showWelcomeModal) {
+      console.log('[App] New user detected, showing welcome modal');
+      setShowWelcomeModal(true);
+    }
+  }, [isNewUser, profile, showWelcomeModal]);
 
   // Check for invite code in URL
   useEffect(() => {
@@ -683,6 +695,22 @@ function AppContent() {
             isOffline={isOfflineMode}
           />
         </LazyInline>
+        
+        {/* Welcome modal for new users */}
+        {showWelcomeModal && profile && (
+          <WelcomeModal
+            username={profile.username || profile.display_name || 'Player'}
+            onClose={() => {
+              setShowWelcomeModal(false);
+              clearNewUser();
+            }}
+            onEditUsername={() => {
+              setShowWelcomeModal(false);
+              clearNewUser();
+              setShowProfileModal(true);
+            }}
+          />
+        )}
       </>
     );
   }

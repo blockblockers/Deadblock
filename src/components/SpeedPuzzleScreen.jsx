@@ -680,13 +680,18 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setTimeout(() => setPlayerAnimatingMove(null), 500);
     
     // Check if puzzle is solved (player wins = correct answer)
-    // In easy puzzles with 1 move, if we placed a piece and AI can't play, we win
+    // In easy puzzles with 1 move, if we placed a piece and AI can't play any remaining piece, we win
     setTimeout(() => {
-      const aiPieces = Object.keys(pieces).filter(p => !newUsedPieces.includes(p));
-      const aiCanPlay = canAnyPieceBePlaced(newBoard, aiPieces);
+      console.log('[SpeedPuzzle] Checking victory condition...');
+      console.log('[SpeedPuzzle] Used pieces:', newUsedPieces);
+      
+      // canAnyPieceBePlaced expects the list of USED pieces, and it will check if any UNUSED piece can be placed
+      const aiCanPlay = canAnyPieceBePlaced(newBoard, newUsedPieces);
+      console.log('[SpeedPuzzle] AI can play:', aiCanPlay);
       
       if (!aiCanPlay) {
         // Success! Puzzle solved
+        console.log('[SpeedPuzzle] Victory! Setting gameState to success');
         soundManager.playWin();
         
         const newStreak = streak + 1;

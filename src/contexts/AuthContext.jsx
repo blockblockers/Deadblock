@@ -9,12 +9,14 @@ const AuthContext = createContext({
   isAuthenticated: false,
   isOnlineEnabled: false,
   isOAuthCallback: false,
+  isNewUser: false,
   signUp: async () => {},
   signIn: async () => {},
   signInWithGoogle: async () => {},
   signOut: async () => {},
   updateProfile: async () => {},
   clearOAuthCallback: () => {},
+  clearNewUser: () => {},
 });
 
 export const AuthProvider = ({ children }) => {
@@ -22,13 +24,23 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
 
   const isOnlineEnabled = isSupabaseConfigured();
 
   const fetchProfile = useCallback(async (userId, retryCount = 0) => {
-    if (!supabase) return null;
+    if (!supabase) {
+      console.log('[AuthContext] fetchProfile: supabase not configured');
+      return null;
+    }
+    
+    if (!userId) {
+      console.log('[AuthContext] fetchProfile: no userId provided');
+      return null;
+    }
     
     const maxRetries = 3;
+    console.log(`[AuthContext] fetchProfile: fetching for ${userId}, attempt ${retryCount + 1}`);
     
     try {
       const { data, error } = await supabase
@@ -38,13 +50,13 @@ export const AuthProvider = ({ children }) => {
         .single();
       
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.error('[AuthContext] fetchProfile error:', error);
         // Try to create profile if it doesn't exist
         if (error.code === 'PGRST116') {
-          console.log('Profile not found, may need to create one');
+          console.log('[AuthContext] Profile not found, may need to create one');
           // Retry a few times in case of race condition
           if (retryCount < maxRetries) {
-            console.log(`Profile retry ${retryCount + 1}/${maxRetries}...`);
+            console.log(`[AuthContext] Profile retry ${retryCount + 1}/${maxRetries}...`);
             await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
             return fetchProfile(userId, retryCount + 1);
           }
@@ -52,10 +64,11 @@ export const AuthProvider = ({ children }) => {
         return null;
       }
       
+      console.log('[AuthContext] fetchProfile success:', { username: data?.username, id: data?.id });
       setProfile(data);
       return data;
     } catch (err) {
-      console.error('Profile fetch exception:', err);
+      console.error('[AuthContext] fetchProfile exception:', err);
       if (retryCount < maxRetries) {
         await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
         return fetchProfile(userId, retryCount + 1);
@@ -129,6 +142,17 @@ export const AuthProvider = ({ children }) => {
               console.log('OAuth: Fetching profile...');
               const profileResult = await fetchProfile(data.session.user.id);
               console.log('OAuth: Profile result:', { hasProfile: !!profileResult });
+              
+              // Check if this is a new user (profile created within last 60 seconds)
+              if (profileResult?.created_at) {
+                const createdAt = new Date(profileResult.created_at);
+                const now = new Date();
+                const diffSeconds = (now - createdAt) / 1000;
+                if (diffSeconds < 60) {
+                  console.log('OAuth: New user detected (profile created', diffSeconds, 'seconds ago)');
+                  setIsNewUser(true);
+                }
+              }
             } catch (profileError) {
               console.error('OAuth: Profile fetch failed:', profileError);
               // Don't fail the OAuth - profile will be retried later
@@ -220,10 +244,11 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth event:', event, session?.user?.email);
+        console.log('[AuthContext] Auth event:', event, session?.user?.email);
         setUser(session?.user ?? null);
         
         if (event === 'SIGNED_IN' && session?.user) {
+          console.log('[AuthContext] SIGNED_IN - fetching profile');
           await fetchProfile(session.user.id);
           // Don't set isOAuthCallback to false here - let App.jsx handle it after redirect
           
@@ -231,6 +256,20 @@ export const AuthProvider = ({ children }) => {
           const currentPath = window.location.pathname;
           if (currentPath.includes('/auth/callback') || window.location.hash || window.location.search) {
             window.history.replaceState({}, document.title, '/');
+          }
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          // Token was refreshed (e.g., on app reopen) - ensure profile is loaded
+          console.log('[AuthContext] TOKEN_REFRESHED - checking profile');
+          if (!profile) {
+            console.log('[AuthContext] Profile not loaded, fetching...');
+            await fetchProfile(session.user.id);
+          }
+        } else if (event === 'INITIAL_SESSION' && session?.user) {
+          // Initial session restored from storage
+          console.log('[AuthContext] INITIAL_SESSION - checking profile');
+          if (!profile) {
+            console.log('[AuthContext] Profile not loaded, fetching...');
+            await fetchProfile(session.user.id);
           }
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
@@ -240,7 +279,7 @@ export const AuthProvider = ({ children }) => {
     );
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile]);
+  }, [fetchProfile, profile]);
 
   const signUp = async (email, password, username) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
@@ -310,10 +349,14 @@ export const AuthProvider = ({ children }) => {
       // If session exists, user is auto-confirmed
       const needsEmailConfirmation = !data.session;
       
+      // Mark as new user to show welcome modal
+      setIsNewUser(true);
+      
       return { 
         data, 
         error: null, 
-        needsEmailConfirmation 
+        needsEmailConfirmation,
+        isNewUser: true
       };
     }
 
@@ -492,6 +535,10 @@ export const AuthProvider = ({ children }) => {
   const clearOAuthCallback = () => {
     setIsOAuthCallback(false);
   };
+  
+  const clearNewUser = () => {
+    setIsNewUser(false);
+  };
 
   return (
     <AuthContext.Provider value={{
@@ -501,6 +548,7 @@ export const AuthProvider = ({ children }) => {
       isAuthenticated: !!user,
       isOnlineEnabled,
       isOAuthCallback,
+      isNewUser,
       signUp,
       signIn,
       signInWithGoogle,
@@ -518,6 +566,7 @@ export const AuthProvider = ({ children }) => {
         return null;
       },
       clearOAuthCallback,
+      clearNewUser,
     }}>
       {children}
     </AuthContext.Provider>
