@@ -39,13 +39,15 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || 'Unknown';
+      return game.player2?.display_name || game.player2?.username || 'Unknown';
     }
-    return game.player1?.username || 'Unknown';
+    return game.player1?.display_name || game.player1?.username || 'Unknown';
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
+
+  const displayName = profile?.display_name || profile?.username;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -75,7 +77,7 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
             <div className="flex items-center justify-center gap-4">
               <div className="text-center">
                 <div className="w-12 h-12 mx-auto rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold mb-1">
-                  {profile?.username?.[0]?.toUpperCase() || '?'}
+                  {displayName?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="text-white text-xs font-medium">You</div>
               </div>
@@ -451,7 +453,11 @@ const OnlineMenu = ({
     if (usernameError || checkingUsername || !newUsername) return;
     
     setSavingUsername(true);
-    const { error } = await updateProfile({ username: newUsername });
+    // Update both username (lowercased for uniqueness) and display_name (preserves casing)
+    const { error } = await updateProfile({ 
+      username: newUsername.toLowerCase(), 
+      display_name: newUsername 
+    });
     setSavingUsername(false);
     
     if (error) {
@@ -790,11 +796,11 @@ const OnlineMenu = ({
               {/* Top row: Avatar and actions */}
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {profile?.username?.[0]?.toUpperCase() || '?'}
+                  {(profile?.display_name || profile?.username)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.username || 'Player'}</h2>
+                    <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
                       className="p-1 text-slate-500 hover:text-amber-400 transition-colors"

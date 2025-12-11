@@ -237,7 +237,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                           {isSpeedMode ? (
                             <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${isSelected ? 'bg-white/20 text-white' : 'bg-red-500/30 text-red-300'}`}>
                               <Timer size={10} />
-                              7s
+                              10s
                             </span>
                           ) : (
                             <span className={`text-xs px-2 py-0.5 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-700/50 text-slate-400'}`}>

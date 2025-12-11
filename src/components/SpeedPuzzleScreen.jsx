@@ -615,9 +615,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     if (!selectedPiece || gameState !== 'playing') return;
     
     const coords = getPieceCoords(selectedPiece, rotation, flipped);
+    
+    // Always set pending move to show ghost piece (so player can rotate/flip)
+    setPendingMove({ row, col, coords, piece: selectedPiece });
+    
     if (canPlacePiece(board, row, col, coords)) {
       soundManager.playClickSound('place');
-      setPendingMove({ row, col, coords, piece: selectedPiece });
     } else {
       soundManager.playInvalidMove();
     }
@@ -655,9 +658,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const newBoard = board.map(row => [...row]);
     const newBoardPieces = boardPieces.map(row => [...row]);
     
-    for (const [dr, dc] of pendingMove.coords) {
-      const r = pendingMove.row + dr;
-      const c = pendingMove.col + dc;
+    // Coords are in [dx, dy] format where dx=col offset, dy=row offset
+    for (const [dx, dy] of pendingMove.coords) {
+      const r = pendingMove.row + dy;
+      const c = pendingMove.col + dx;
       newBoard[r][c] = 1; // Player is always 1
       newBoardPieces[r][c] = selectedPiece;
     }

@@ -355,121 +355,66 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   
   const displayName = profile.display_name || profile.username || 'Player';
   
-  // Get contrasting background color for tier icon circle
-  const getTierCircleBackground = () => {
-    if (!rankInfo) return 'rgba(30, 41, 59, 0.9)';
-    // Use a darker, contrasting shade
-    const contrastColors = {
-      '#f59e0b': 'rgba(30, 20, 10, 0.95)', // amber -> dark brown
-      '#a855f7': 'rgba(20, 10, 30, 0.95)', // purple -> dark purple
-      '#3b82f6': 'rgba(10, 15, 30, 0.95)', // blue -> dark blue
-      '#22d3ee': 'rgba(10, 25, 30, 0.95)', // cyan -> dark teal
-      '#22c55e': 'rgba(10, 25, 15, 0.95)', // green -> dark green
-      '#94a3b8': 'rgba(20, 25, 35, 0.95)', // slate -> dark slate
-      '#64748b': 'rgba(15, 20, 30, 0.95)', // gray -> dark gray
-    };
-    return contrastColors[rankInfo.color] || 'rgba(15, 23, 42, 0.95)';
-  };
-  
   return (
     <>
-      <div 
-        className="w-full rounded-xl border transition-all overflow-hidden"
+      <button 
+        onClick={onClick}
+        className="w-full rounded-xl border transition-all overflow-hidden group"
         style={{
-          background: `linear-gradient(135deg, ${rankInfo?.color}15 0%, rgba(15, 23, 42, 0.95) 50%, ${rankInfo?.color}10 100%)`,
-          borderColor: `${rankInfo?.color}50` || 'rgba(34, 211, 238, 0.3)',
-          boxShadow: `0 0 25px ${rankInfo?.color}30, inset 0 1px 0 rgba(255,255,255,0.05), inset 0 0 20px ${rankInfo?.color}10`
+          background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${rankInfo?.color}15 50%, rgba(15, 23, 42, 0.95) 100%)`,
+          borderColor: `${rankInfo?.color}40` || 'rgba(34, 211, 238, 0.3)',
+          boxShadow: `0 0 20px ${rankInfo?.color}20, inset 0 1px 0 rgba(255,255,255,0.05)`
         }}
       >
-        {/* Main clickable area */}
-        <button
-          onClick={onClick}
-          className="w-full flex items-center gap-3 p-3 group"
-        >
-          {/* Tier Icon Circle */}
+        <div className="flex items-center gap-2.5 p-2.5">
+          {/* Tier Icon Circle - compact */}
           <div 
-            className="relative w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 border-2"
+            className="relative w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 border-2"
             style={{ 
-              backgroundColor: getTierCircleBackground(),
-              borderColor: `${rankInfo?.color}60`,
-              boxShadow: `0 0 15px ${rankInfo?.color}40, inset 0 0 10px ${rankInfo?.color}20`
+              backgroundColor: 'rgba(15, 23, 42, 0.95)',
+              borderColor: `${rankInfo?.color}50`,
+              boxShadow: `0 0 12px ${rankInfo?.color}30, inset 0 0 8px ${rankInfo?.color}15`
             }}
           >
             {rankInfo && (
-              <TierIcon shape={rankInfo.shape} glowColor={rankInfo.color} size="large" />
+              <TierIcon shape={rankInfo.shape} glowColor={rankInfo.color} size="medium" />
             )}
           </div>
           
-          {/* Player info */}
+          {/* Player info - compact */}
           <div className="flex-1 text-left min-w-0">
             <div 
-              className="text-white font-black text-base tracking-wide truncate"
-              style={{ textShadow: `0 0 10px ${rankInfo?.color}60` }}
+              className="font-bold text-sm tracking-wide truncate"
+              style={{ 
+                color: rankInfo?.color || '#e2e8f0',
+                textShadow: `0 0 8px ${rankInfo?.color}40` 
+              }}
             >
               {displayName}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               {rankInfo && (
                 <span 
-                  className="text-xs font-bold uppercase tracking-wider"
-                  style={{ color: rankInfo.color, textShadow: `0 0 8px ${rankInfo.color}50` }}
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: `${rankInfo.color}cc` }}
                 >
                   {rankInfo.name}
                 </span>
               )}
-              <span className="text-slate-400 text-xs font-medium">
-                {profile.rating || 1000} ELO
+              <span className="text-slate-500 text-xs">
+                • {profile.rating || 1000}
               </span>
             </div>
           </div>
           
           {/* Arrow */}
           <ChevronRight 
-            size={22} 
-            className="group-hover:translate-x-1 transition-all flex-shrink-0" 
+            size={18} 
+            className="group-hover:translate-x-0.5 transition-all flex-shrink-0 opacity-60" 
             style={{ color: rankInfo?.color || '#64748b' }} 
           />
-        </button>
-        
-        {/* Action buttons row */}
-        <div className="flex items-center gap-2 px-3 pb-3">
-          {/* Edit Username */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowUsernameEdit(true);
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all bg-slate-700/60 text-slate-400 border border-slate-600/50 hover:bg-slate-600/80 hover:text-white"
-          >
-            <Pencil size={12} />
-            Edit
-          </button>
-          
-          {/* Achievements */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowAchievements(true);
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20"
-          >
-            <Trophy size={12} />
-            {achievementCount.unlocked}/{achievementCount.total || '?'}
-          </button>
-          
-          {/* Rating Info */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowRatingInfo(true);
-            }}
-            className="ml-auto flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20"
-          >
-            <HelpCircle size={12} />
-            Tiers
-          </button>
         </div>
-      </div>
+      </button>
       
       {/* Modals */}
       {showRatingInfo && (
