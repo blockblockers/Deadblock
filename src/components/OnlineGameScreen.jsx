@@ -18,7 +18,7 @@ import { soundManager } from '../utils/soundManager';
 import { notificationService } from '../services/notificationService';
 import { replayService } from '../services/replayService';
 import { ratingService } from '../services/ratingService';
-import { achievementService } from '../services/achievementService';
+import achievementService from '../services/achievementService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Orange/Amber theme for online mode

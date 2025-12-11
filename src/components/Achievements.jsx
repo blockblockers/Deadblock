@@ -1,12 +1,13 @@
 // Achievements - View and track achievements
 import { useState, useEffect } from 'react';
-import { Trophy, Lock, Star, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { achievementService, RARITY_COLORS } from '../services/achievementService';
+import { Trophy, Lock, Star, X, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import achievementService, { RARITY_COLORS } from '../services/achievementService';
 
 const Achievements = ({ userId, onClose }) => {
   const [achievements, setAchievements] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
 
@@ -16,14 +17,21 @@ const Achievements = ({ userId, onClose }) => {
 
   const loadAchievements = async () => {
     setLoading(true);
+    setError(null);
     
-    const [achResult, statsResult] = await Promise.all([
-      achievementService.getAchievementsWithStatus(userId),
-      achievementService.getAchievementStats(userId)
-    ]);
+    try {
+      const [achResult, statsResult] = await Promise.all([
+        achievementService.getAchievementsWithStatus(userId),
+        achievementService.getAchievementStats(userId)
+      ]);
 
-    if (achResult.data) setAchievements(achResult.data);
-    if (statsResult.data) setStats(statsResult.data);
+      if (achResult.error) throw new Error(achResult.error.message || 'Failed to load achievements');
+      if (achResult.data) setAchievements(achResult.data);
+      if (statsResult.data) setStats(statsResult.data);
+    } catch (err) {
+      console.error('Error loading achievements:', err);
+      setError('Achievements require database migration. Please run the migration first.');
+    }
     
     setLoading(false);
   };
@@ -114,7 +122,19 @@ const Achievements = ({ userId, onClose }) => {
 
         {/* Achievements List */}
         <div className="p-4 overflow-y-auto max-h-[50vh]">
-          {loading ? (
+          {error ? (
+            <div className="text-center py-8">
+              <AlertTriangle className="mx-auto text-amber-400 mb-2" size={40} />
+              <p className="text-amber-300 font-medium mb-2">Feature Not Available</p>
+              <p className="text-slate-400 text-sm">{error}</p>
+              <button
+                onClick={onClose}
+                className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          ) : loading ? (
             <div className="text-center py-8">
               <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2" />
               <p className="text-slate-400 text-sm">Loading achievements...</p>
