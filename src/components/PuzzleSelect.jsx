@@ -96,7 +96,7 @@ const difficulties = [
     id: 'speed', 
     name: 'SPEED', 
     moves: null, // Special - timed mode
-    description: 'Beat the clock! 7 seconds per puzzle.', 
+    description: 'Beat the clock! 10 seconds per puzzle.', 
     theme: 'speed',
     isSpeed: true,
     colors: {
@@ -296,7 +296,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                   <span className="speed-info-title font-black tracking-[0.2em] text-xs">HOW IT WORKS</span>
                   <div className="mt-2 text-sm text-slate-400 space-y-1">
                     <p>Solve easy puzzles as fast as you can!</p>
-                    <p className="text-red-300">⏱ 7 seconds per puzzle</p>
+                    <p className="text-red-300">⏱ 10 seconds per puzzle</p>
                     <p>Build your streak - how far can you go?</p>
                   </div>
                 </div>

@@ -12,7 +12,7 @@ import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { statsService } from '../utils/statsService';
 
-const TIMER_DURATION = 7; // 7 seconds per puzzle
+const TIMER_DURATION = 10; // 10 seconds per puzzle
 
 // Speed theme - Electric red/orange for urgency
 const theme = {
