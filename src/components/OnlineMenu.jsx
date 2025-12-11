@@ -1381,18 +1381,18 @@ const OnlineMenu = ({
       {showRatingInfo && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-slate-900 rounded-xl max-w-sm w-full overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
-            {/* Header */}
-            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
-              <div className="flex items-center gap-2">
+            {/* Header - Centered */}
+            <div className="p-4 border-b border-amber-500/20">
+              <div className="flex items-center justify-center gap-2 relative">
                 <Trophy size={20} className="text-amber-400" />
                 <h2 className="text-lg font-bold text-amber-300">Rating System</h2>
+                <button
+                  onClick={() => setShowRatingInfo(false)}
+                  className="absolute right-0 p-1 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X size={24} />
+                </button>
               </div>
-              <button
-                onClick={() => setShowRatingInfo(false)}
-                className="p-1 text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={24} />
-              </button>
             </div>
             
             {/* Content */}

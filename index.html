@@ -474,6 +474,8 @@
           installBtn.textContent = 'GOT IT';
           installBtn.onclick = () => {
             installPrompt.classList.remove('show');
+            localStorage.setItem('pwa-was-installed', 'true');
+            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
           };
         }
       } else if (isAndroid) {
@@ -494,6 +496,8 @@
           installBtn.textContent = 'GOT IT';
           installBtn.onclick = () => {
             installPrompt.classList.remove('show');
+            localStorage.setItem('pwa-was-installed', 'true');
+            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
           };
         }
       } else {
@@ -512,6 +516,8 @@
           installBtn.textContent = 'GOT IT';
           installBtn.onclick = () => {
             installPrompt.classList.remove('show');
+            localStorage.setItem('pwa-was-installed', 'true');
+            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
           };
         }
       }

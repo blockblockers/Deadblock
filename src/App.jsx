@@ -58,12 +58,13 @@ function AppContent() {
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile } = useAuth();
 
   // Check if user was already authenticated (skip entry screen)
+  // But NOT during OAuth callback - let the OAuth handler decide where to go
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !hasPassedEntryAuth) {
+    if (!authLoading && isAuthenticated && !hasPassedEntryAuth && !isOAuthCallback) {
       console.log('App: User already authenticated, skipping entry screen');
       setHasPassedEntryAuth(true);
     }
-  }, [authLoading, isAuthenticated, hasPassedEntryAuth]);
+  }, [authLoading, isAuthenticated, hasPassedEntryAuth, isOAuthCallback]);
 
   // Check for invite code in URL
   useEffect(() => {
@@ -213,16 +214,26 @@ function AppContent() {
     }
   }, [inviteInfo, isAuthenticated, authLoading, isOnlineEnabled, gameMode, setGameMode]);
 
-  // Redirect to online menu after OAuth completes
+  // Redirect after OAuth completes - go to game menu from entry screen
   useEffect(() => {
-    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth });
+    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth });
     if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
-      console.log('OAuth complete, redirecting to online menu');
       setHasRedirectedAfterOAuth(true);
       clearOAuthCallback?.(); // Clear the flag after handling
-      setGameMode('online-menu');
+      
+      // If user was already past entry screen (trying to access online features), go to online menu
+      // Otherwise (signing in from entry screen), just go to game menu
+      if (hasPassedEntryAuth) {
+        console.log('OAuth complete, user was past entry - going to online menu');
+        setGameMode('online-menu');
+      } else {
+        console.log('OAuth complete from entry screen - going to game menu');
+        setHasPassedEntryAuth(true);
+        setIsOfflineMode(false);
+        setGameMode(null); // Game menu
+      }
     }
-  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, setGameMode, clearOAuthCallback]);
+  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, setGameMode, clearOAuthCallback]);
   
   // Detect mobile device
   useEffect(() => {

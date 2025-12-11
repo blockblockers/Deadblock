@@ -263,12 +263,19 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                 <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
                   <div className="text-center">
                     <span className="weekly-info-title font-black tracking-[0.2em] text-xs">HOW IT WORKS</span>
-                    <div className="mt-2 text-sm text-slate-400 space-y-1">
+                    <div className="mt-2 text-sm text-slate-400 space-y-1.5">
                       <p>Same puzzle for everyone, all week long!</p>
                       <p className="text-red-300">🧩 Hard difficulty - 5 moves to solve</p>
-                      <p className="text-cyan-300">⚡ Your FIRST attempt is your ranked time!</p>
-                      <p>Practice runs don't affect your rank</p>
+                      <p className="text-cyan-300">⚡ Your FIRST completion is your ranked time</p>
                     </div>
+                    <div className="mt-3 p-2 bg-amber-900/30 rounded-lg border border-amber-500/30">
+                      <p className="text-amber-300 text-xs font-medium">
+                        ⏱️ If AI blocks you, hit retry - timer continues!
+                        <br/>
+                        <span className="text-amber-400/80">Total time until first success = your score</span>
+                      </p>
+                    </div>
+                    <p className="mt-2 text-slate-500 text-xs">Practice runs after completing don't affect rank</p>
                   </div>
                 </div>
                 

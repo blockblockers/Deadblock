@@ -1,5 +1,9 @@
+import { useState, useEffect, useCallback } from 'react';
 import { pieceColors } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
+
+// Animation types for ambient effects
+const AMBIENT_EFFECTS = ['shimmer', 'edgeGlow', 'trace', 'breathe'];
 
 const GameBoard = ({ 
   board, 
@@ -14,6 +18,64 @@ const GameBoard = ({
   aiAnimatingMove,
   playerAnimatingMove
 }) => {
+  // Track active ambient animations per cell: { "row,col": "effectType" }
+  const [activeEffects, setActiveEffects] = useState({});
+  
+  // Get list of placed piece cells
+  const getPlacedCells = useCallback(() => {
+    const cells = [];
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const pieceName = Array.isArray(boardPieces) 
+          ? boardPieces[row]?.[col] 
+          : boardPieces[`${row},${col}`];
+        if (board[row]?.[col] !== null && pieceName) {
+          cells.push(`${row},${col}`);
+        }
+      }
+    }
+    return cells;
+  }, [board, boardPieces]);
+  
+  // Randomly trigger ambient effects on placed pieces
+  useEffect(() => {
+    const triggerRandomEffect = () => {
+      const placedCells = getPlacedCells();
+      if (placedCells.length === 0) return;
+      
+      // 25% chance to trigger an effect every 2 seconds (~8s average between effects)
+      if (Math.random() < 0.25) {
+        const randomCell = placedCells[Math.floor(Math.random() * placedCells.length)];
+        const randomEffect = AMBIENT_EFFECTS[Math.floor(Math.random() * AMBIENT_EFFECTS.length)];
+        
+        setActiveEffects(prev => ({ ...prev, [randomCell]: randomEffect }));
+        
+        // Clear the effect after animation completes
+        const duration = randomEffect === 'trace' ? 2000 : randomEffect === 'breathe' ? 1500 : 800;
+        setTimeout(() => {
+          setActiveEffects(prev => {
+            const next = { ...prev };
+            if (next[randomCell] === randomEffect) {
+              delete next[randomCell];
+            }
+            return next;
+          });
+        }, duration);
+      }
+    };
+    
+    // Run effect check every 2 seconds
+    const interval = setInterval(triggerRandomEffect, 2000);
+    
+    // Initial trigger after short delay
+    const initialTimeout = setTimeout(triggerRandomEffect, 1000);
+    
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initialTimeout);
+    };
+  }, [getPlacedCells]);
+  
   // Ensure board is valid before rendering
   const safeBoard = Array.isArray(board) && board.length === BOARD_SIZE 
     ? board.map(row => Array.isArray(row) ? row : Array(BOARD_SIZE).fill(null))
@@ -162,14 +224,18 @@ const GameBoard = ({
                 }
               }
               
-              // Determine if this is a placed piece (for shimmer effect)
+              // Determine if this is a placed piece (for ambient effects)
               const isPlacedPiece = cell !== null && pieceName && !isInBoundsPendingCell && !isAiAnimatingCell && !isPlayerAnimatingCell;
+              
+              // Check for active ambient effect on this cell
+              const cellKey = `${rowIdx},${colIdx}`;
+              const activeEffect = isPlacedPiece ? activeEffects[cellKey] : null;
               
               return (
                 <button
                   key={colIdx}
                   onClick={() => onCellClick(rowIdx, colIdx)}
-                  className={`w-9 h-9 sm:w-12 sm:h-12 rounded-lg transition-all relative overflow-hidden ${bgClass} ${ringClass} ${extraClass}`}
+                  className={`w-9 h-9 sm:w-12 sm:h-12 rounded-lg transition-all relative overflow-hidden ${bgClass} ${ringClass} ${extraClass} ${activeEffect === 'breathe' ? 'animate-random-breathe' : ''}`}
                   disabled={isDisabled}
                 >
                   {/* AI placing effect - energy burst overlay */}
@@ -211,20 +277,42 @@ const GameBoard = ({
                     </div>
                   )}
                   
-                  {/* Shimmer overlay for placed pieces - sweeping light effect */}
-                  {isPlacedPiece && (
+                  {/* Random ambient effects for placed pieces - state driven */}
+                  {isPlacedPiece && activeEffect && (
                     <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-md">
-                      {/* Diagonal sweeping shimmer */}
-                      <div className="absolute inset-0 animate-shimmer-sweep" 
-                        style={{
-                          background: 'linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.6) 50%, transparent 60%)',
-                          backgroundSize: '300% 300%'
-                        }}
-                      />
-                      {/* Top edge highlight */}
-                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-white/50 to-transparent" />
-                      {/* Left edge highlight */}
-                      <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-white/40 via-transparent to-transparent" />
+                      {/* Shimmer - diagonal light sweep */}
+                      {activeEffect === 'shimmer' && (
+                        <div 
+                          className="absolute inset-0 animate-random-shimmer"
+                          style={{
+                            background: 'linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)',
+                            backgroundSize: '300% 300%',
+                          }}
+                        />
+                      )}
+                      {/* Edge glow - inner highlight pulse */}
+                      {activeEffect === 'edgeGlow' && (
+                        <div 
+                          className="absolute inset-0 rounded-md animate-random-edge-glow"
+                          style={{
+                            boxShadow: 'inset 0 0 12px rgba(255,255,255,0.3), inset 0 0 4px rgba(34,211,238,0.2)',
+                          }}
+                        />
+                      )}
+                      {/* Circuit trace - light traveling around edge */}
+                      {activeEffect === 'trace' && (
+                        <div className="absolute inset-0">
+                          <div 
+                            className="absolute animate-random-trace"
+                            style={{
+                              width: '4px',
+                              height: '4px',
+                              background: 'radial-gradient(circle, rgba(34,211,238,0.9) 0%, rgba(255,255,255,0.6) 40%, transparent 70%)',
+                              boxShadow: '0 0 6px rgba(34,211,238,0.8)',
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </button>
@@ -387,17 +475,107 @@ const GameBoard = ({
           background: radial-gradient(circle, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
         }
         
-        @keyframes shimmer-sweep {
+        /* ===== RANDOM AMBIENT ANIMATIONS (ONE-SHOT, TRIGGERED BY STATE) ===== */
+        
+        /* Random shimmer - diagonal light sweep, plays once */
+        @keyframes random-shimmer {
           0% {
+            opacity: 0;
             background-position: 150% 150%;
           }
+          20% {
+            opacity: 1;
+          }
+          80% {
+            opacity: 1;
+          }
           100% {
+            opacity: 0;
             background-position: -50% -50%;
           }
         }
-        .animate-shimmer-sweep {
-          animation: shimmer-sweep 3s ease-in-out infinite;
+        .animate-random-shimmer {
+          animation: random-shimmer 0.8s ease-in-out forwards;
         }
+        
+        /* Random edge glow - inner highlight pulse, plays once */
+        @keyframes random-edge-glow {
+          0% {
+            opacity: 0;
+          }
+          30% {
+            opacity: 1;
+          }
+          70% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+          }
+        }
+        .animate-random-edge-glow {
+          animation: random-edge-glow 0.8s ease-in-out forwards;
+        }
+        
+        /* Random circuit trace - light traveling around edge, plays once */
+        @keyframes random-trace {
+          0% {
+            opacity: 0;
+            top: 0;
+            left: 0;
+          }
+          5% {
+            opacity: 1;
+            top: 0;
+            left: 0;
+          }
+          25% {
+            opacity: 1;
+            top: 0;
+            left: calc(100% - 4px);
+          }
+          50% {
+            opacity: 1;
+            top: calc(100% - 4px);
+            left: calc(100% - 4px);
+          }
+          75% {
+            opacity: 1;
+            top: calc(100% - 4px);
+            left: 0;
+          }
+          95% {
+            opacity: 1;
+            top: 0;
+            left: 0;
+          }
+          100% {
+            opacity: 0;
+            top: 0;
+            left: 0;
+          }
+        }
+        .animate-random-trace {
+          animation: random-trace 2s linear forwards;
+        }
+        
+        /* Random breathe - brightness pulse, plays once */
+        @keyframes random-breathe {
+          0% {
+            filter: brightness(1) saturate(1);
+          }
+          50% {
+            filter: brightness(1.15) saturate(1.1);
+          }
+          100% {
+            filter: brightness(1) saturate(1);
+          }
+        }
+        .animate-random-breathe {
+          animation: random-breathe 1.5s ease-in-out forwards;
+        }
+        
+        /* ===== END RANDOM AMBIENT ANIMATIONS ===== */
         
         /* Player placement animations - smooth ripple effect */
         @keyframes player-place {

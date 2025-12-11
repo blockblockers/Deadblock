@@ -45,8 +45,8 @@ export const pieceColors = {
   // W - Scarlet Red - "Combat Mode" style (warm red, distinct from magenta)
   W: 'bg-gradient-to-br from-red-200 via-red-500 to-red-800 shadow-[0_0_12px_rgba(239,68,68,0.8),0_0_25px_rgba(239,68,68,0.4),inset_0_1px_2px_rgba(255,255,255,0.5),inset_0_-1px_2px_rgba(0,0,0,0.6)] border border-red-200/80 ring-1 ring-red-400/40',
   
-  // X - Pure White - "Overload" style with reduced glow
-  X: 'bg-gradient-to-br from-white via-gray-50 to-gray-300 shadow-[0_0_8px_rgba(255,255,255,0.6),0_0_15px_rgba(200,200,255,0.25),inset_0_2px_3px_rgba(255,255,255,1),inset_0_-2px_3px_rgba(0,0,0,0.2)] border border-white/90 ring-1 ring-white/40',
+  // X - Pure White - "Overload" style with minimal glow for sharp appearance
+  X: 'bg-gradient-to-br from-white via-gray-100 to-gray-300 shadow-[0_0_4px_rgba(255,255,255,0.4),inset_0_2px_3px_rgba(255,255,255,1),inset_0_-2px_3px_rgba(100,100,120,0.25)] border-2 border-gray-200/90 ring-1 ring-white/30',
   
   // Y - Super Electric Pink - "Laser Beam" style (hot pink neon)
   Y: 'bg-gradient-to-br from-pink-200 via-pink-500 to-rose-700 shadow-[0_0_15px_rgba(236,72,153,0.9),0_0_30px_rgba(244,114,182,0.5),inset_0_1px_2px_rgba(255,255,255,0.7),inset_0_-1px_2px_rgba(0,0,0,0.4)] border border-pink-200/80 ring-1 ring-pink-400/50',

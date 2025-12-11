@@ -11,6 +11,7 @@ import {
 import { selectAIMove, getAllPossibleMoves, AI_DIFFICULTY } from '../utils/aiLogic';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
+import { statsService } from '../utils/statsService';
 
 export const useGameState = () => {
   // Core game state
@@ -245,6 +246,45 @@ export const useGameState = () => {
       makeAIMove();
     }
   }, [currentPlayer, gameMode, gameOver, isAIThinking, makeAIMove]);
+
+  // Record stats when AI game ends
+  useEffect(() => {
+    if (gameOver && winner !== null) {
+      // Player 1 is human, Player 2 is AI
+      const playerWon = winner === 1;
+      
+      if (gameMode === 'ai') {
+        // Map AI difficulty to string for stats
+        const difficultyMap = {
+          [AI_DIFFICULTY.EASY]: 'easy',
+          [AI_DIFFICULTY.AVERAGE]: 'medium',
+          [AI_DIFFICULTY.HARD]: 'hard',
+        };
+        const difficultyString = difficultyMap[aiDifficulty] || 'medium';
+        
+        console.log('[Stats] Recording AI game result:', difficultyString, playerWon ? 'win' : 'loss');
+        statsService.recordAIGameResult(difficultyString, playerWon);
+      } else if (gameMode === 'puzzle' && currentPuzzle) {
+        // Record puzzle attempt
+        const difficultyMap = {
+          [PUZZLE_DIFFICULTY.EASY]: 'easy',
+          [PUZZLE_DIFFICULTY.MEDIUM]: 'medium',
+          [PUZZLE_DIFFICULTY.HARD]: 'hard',
+        };
+        const difficultyString = difficultyMap[puzzleDifficulty] || 'easy';
+        
+        console.log('[Stats] Recording puzzle result:', difficultyString, playerWon ? 'solved' : 'failed');
+        statsService.recordPuzzleAttempt(difficultyString);
+        if (playerWon) {
+          statsService.recordPuzzleSolved(difficultyString);
+        }
+      } else if (gameMode === '2player') {
+        // Record local multiplayer game
+        console.log('[Stats] Recording local game');
+        statsService.recordLocalGame();
+      }
+    }
+  }, [gameOver, gameMode, winner, aiDifficulty, currentPuzzle, puzzleDifficulty]);
 
   // Load puzzle from data
   const loadPuzzleInternal = useCallback((puzzle) => {

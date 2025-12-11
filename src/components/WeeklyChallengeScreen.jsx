@@ -149,6 +149,68 @@ const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAt
   );
 };
 
+// Lose overlay when AI wins - RED THEME
+const LoseOverlay = ({ elapsedMs, attemptCount, isFirstAttempt, onRetry, onMenu }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" 
+         style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
+      <div className="bg-gradient-to-br from-slate-900 via-red-950/50 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.4)]">
+        {/* Lose Icon */}
+        <div className="text-center mb-4">
+          <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-3">
+            <X size={40} className="text-red-400" />
+          </div>
+          <h2 className="text-2xl font-black text-red-300">AI BLOCKED YOU!</h2>
+          <p className="text-slate-400 text-sm mt-2">The AI made a move - puzzle failed</p>
+        </div>
+        
+        {/* Current Time */}
+        <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
+          <div className="text-center">
+            <div className="text-slate-400 text-sm mb-1">Time So Far</div>
+            <div className="text-3xl font-mono font-black text-red-300">
+              {weeklyChallengeService.formatTime(elapsedMs)}
+            </div>
+            {attemptCount > 0 && (
+              <div className="text-amber-400 text-xs mt-2">
+                Attempt #{attemptCount + 1}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Info about retry */}
+        {isFirstAttempt && (
+          <div className="bg-amber-900/30 rounded-lg p-3 mb-4 border border-amber-500/30">
+            <p className="text-amber-300 text-sm text-center">
+              ⏱️ Timer continues on retry! Your first completion time counts for the leaderboard.
+            </p>
+          </div>
+        )}
+        
+        {/* Buttons */}
+        <div className="space-y-2">
+          <button
+            onClick={onRetry}
+            className="w-full p-3 rounded-xl font-bold bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+          >
+            <RotateCcw size={18} />
+            RETRY (TIMER CONTINUES)
+          </button>
+          
+          <button
+            onClick={onMenu}
+            className="w-full p-3 rounded-xl font-bold bg-slate-800/50 text-slate-400 hover:text-slate-300 transition-all flex items-center justify-center gap-2"
+          >
+            <ArrowLeft size={18} />
+            GIVE UP
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   const { profile } = useAuth();
   const { needsScroll, isMobile } = useResponsiveLayout(650);
@@ -158,13 +220,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   const [loading, setLoading] = useState(true);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameComplete, setGameComplete] = useState(false);
+  const [gameLost, setGameLost] = useState(false); // Player lost (AI won)
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [accumulatedMs, setAccumulatedMs] = useState(0); // Time accumulated across retries
   const [completionTime, setCompletionTime] = useState(null);
   const [firstAttemptTime, setFirstAttemptTime] = useState(null);
   const [bestTime, setBestTime] = useState(null);
   const [isFirstAttempt, setIsFirstAttempt] = useState(true);
   const [wasFirstAttempt, setWasFirstAttempt] = useState(false);
   const [currentRank, setCurrentRank] = useState(null);
+  const [attemptCount, setAttemptCount] = useState(0); // Track retry count for first attempt
   
   // Refs
   const timerRef = useRef(null);
@@ -224,22 +289,34 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     loadWeeklyPuzzle();
   }, [challenge]);
   
-  // Start the timer
+  // Start the timer (accounts for accumulated time from retries)
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
-      setElapsedMs(Date.now() - startTimeRef.current);
+      setElapsedMs(accumulatedMs + (Date.now() - startTimeRef.current));
     }, 10);
-  }, []);
+  }, [accumulatedMs]);
   
-  // Stop the timer
+  // Stop the timer and return total elapsed time
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    return Date.now() - startTimeRef.current;
-  }, []);
+    const sessionTime = Date.now() - startTimeRef.current;
+    return accumulatedMs + sessionTime;
+  }, [accumulatedMs]);
+  
+  // Pause the timer (for when player loses but may retry)
+  const pauseTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    const sessionTime = Date.now() - startTimeRef.current;
+    setAccumulatedMs(prev => prev + sessionTime);
+    return accumulatedMs + sessionTime;
+  }, [accumulatedMs]);
   
   // Start the game
   const handleStartGame = useCallback(() => {
@@ -251,17 +328,26 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     }
   }, [puzzle, loadPuzzle, startTimer]);
   
-  // Check for puzzle completion
+  // Check for puzzle completion (win or loss)
   useEffect(() => {
-    if (gameStarted && gameOver && winner === 1) {
-      const finalTime = stopTimer();
-      setCompletionTime(finalTime);
-      setWasFirstAttempt(isFirstAttempt);
-      setGameComplete(true);
-      soundManager.playPuzzleSolvedSound();
-      submitResult(finalTime);
+    if (gameStarted && gameOver) {
+      if (winner === 1) {
+        // Player wins!
+        const finalTime = stopTimer();
+        setCompletionTime(finalTime);
+        setWasFirstAttempt(isFirstAttempt);
+        setGameComplete(true);
+        soundManager.playPuzzleSolvedSound();
+        submitResult(finalTime);
+      } else if (winner === 2) {
+        // AI wins - player loses
+        pauseTimer();
+        setGameLost(true);
+        setAttemptCount(prev => prev + 1);
+        soundManager.playGameOver();
+      }
     }
-  }, [gameOver, winner, gameStarted, stopTimer, isFirstAttempt]);
+  }, [gameOver, winner, gameStarted, stopTimer, pauseTimer, isFirstAttempt]);
   
   // Submit result to database
   const submitResult = async (timeMs) => {
@@ -288,13 +374,25 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     }
   };
   
-  // Restart the puzzle
+  // Retry after loss (continue accumulated time)
+  const handleRetryAfterLoss = useCallback(() => {
+    resetCurrentPuzzle();
+    setGameLost(false);
+    // Don't reset accumulated time - continue from where we left off
+    startTimer();
+    soundManager.playClickSound('success');
+  }, [resetCurrentPuzzle, startTimer]);
+  
+  // Full restart the puzzle (reset everything)
   const handleRestart = useCallback(() => {
     resetCurrentPuzzle();
     setGameComplete(false);
+    setGameLost(false);
     setCompletionTime(null);
     setWasFirstAttempt(false);
     setElapsedMs(0);
+    setAccumulatedMs(0);
+    setAttemptCount(0);
     setGameStarted(false);
   }, [resetCurrentPuzzle]);
   
@@ -500,6 +598,17 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
           rank={currentRank}
           onViewLeaderboard={handleViewLeaderboard}
           onPlayAgain={handleRestart}
+          onMenu={onMenu}
+        />
+      )}
+      
+      {/* Lose Overlay */}
+      {gameLost && (
+        <LoseOverlay
+          elapsedMs={elapsedMs}
+          attemptCount={attemptCount}
+          isFirstAttempt={isFirstAttempt}
+          onRetry={handleRetryAfterLoss}
           onMenu={onMenu}
         />
       )}

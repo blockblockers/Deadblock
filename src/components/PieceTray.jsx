@@ -58,7 +58,6 @@ const PieceTray = ({
     gameOver || 
     safeUsedPieces.includes(pieceName) || 
     ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) ||
-    (!!pendingMove && isMobile) ||
     isGeneratingPuzzle;
 
   return (
@@ -76,7 +75,7 @@ const PieceTray = ({
           return (
             <button
               key={name}
-              onClick={() => !isUsed && !pendingMove && !isGeneratingPuzzle && onSelectPiece(name)}
+              onClick={() => !isUsed && !isGeneratingPuzzle && onSelectPiece(name)}
               className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden ${
                 isUsed
                   ? 'bg-slate-800/30 opacity-25 cursor-not-allowed border border-slate-700/30'

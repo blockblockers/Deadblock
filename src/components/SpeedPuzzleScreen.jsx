@@ -1,6 +1,6 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Zap, Trophy, Play, Home, RotateCcw, Timer, Flame } from 'lucide-react';
+import { Zap, Trophy, Play, RotateCcw, Timer, Flame } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
@@ -441,13 +441,22 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     // Only trigger game over if we're still playing
     if (gameStateRef.current === 'playing') {
+      console.log('[SpeedPuzzle] Setting game state to gameover');
+      
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
       
       soundManager.playGameOver();
-      setGameState('gameover');
+      
+      // Force state update
+      setGameState(prev => {
+        console.log('[SpeedPuzzle] State transition from', prev, 'to gameover');
+        return 'gameover';
+      });
+    } else {
+      console.log('[SpeedPuzzle] Timer expired but not in playing state, ignoring');
     }
   }, []);
 
@@ -796,27 +805,19 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
           <div className="flex items-center justify-between">
             <button
               onClick={handleMenu}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600 transition-all"
+              className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs sm:text-sm border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
             >
-              <Home size={16} />
-              <span className="text-xs font-medium">Menu</span>
+              MENU
             </button>
             
-            <div className="text-center">
+            <div className="text-center flex-1">
               <div className="speed-subtitle font-black tracking-[0.15em] text-xs">
                 SPEED MODE
               </div>
             </div>
             
-            {/* Reset/New Puzzle button */}
-            <button
-              onClick={handlePlayAgain}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 text-slate-400 hover:text-orange-400 hover:border-orange-500/50 transition-all"
-              title="New Puzzle"
-            >
-              <RotateCcw size={16} />
-              <span className="text-xs font-medium">New</span>
-            </button>
+            {/* Spacer to balance layout */}
+            <div className="w-[52px]"></div>
           </div>
         </div>
         

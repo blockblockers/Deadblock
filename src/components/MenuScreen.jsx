@@ -1,4 +1,4 @@
-import { Settings, HelpCircle, Globe, LogOut } from 'lucide-react';
+import { Settings, HelpCircle, Globe } from 'lucide-react';
 import { useMemo } from 'react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
@@ -6,9 +6,8 @@ import SettingsModal from './SettingsModal';
 import PlayerProfileCard from './PlayerProfileCard';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { isSupabaseConfigured, supabase } from '../utils/supabase';
+import { isSupabaseConfigured } from '../utils/supabase';
 import { pieces } from '../utils/pieces';
-import { useAuth } from '../contexts/AuthContext';
 
 // Custom pentomino shapes for buttons
 const buttonShapes = {
@@ -190,16 +189,6 @@ const MenuScreen = ({
 }) => {
   const { needsScroll } = useResponsiveLayout(700);
   const showOnline = isSupabaseConfigured();
-  const { isAuthenticated: authStatus } = useAuth();
-  
-  const handleSignOut = async () => {
-    soundManager.playButtonClick();
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Sign out error:', err);
-    }
-  };
 
   return (
     <div 
@@ -292,22 +281,11 @@ const MenuScreen = ({
           <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-3 sm:p-4 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
             
             {/* Player Profile Card - Inside menu at top */}
-            <div className="mb-3 relative">
+            <div className="mb-3">
               <PlayerProfileCard 
                 onClick={onShowProfile} 
                 isOffline={isOfflineMode}
               />
-              
-              {/* Sign Out Button - Only show if authenticated */}
-              {authStatus && !isOfflineMode && (
-                <button
-                  onClick={handleSignOut}
-                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-700/80 hover:bg-red-500/30 border border-slate-600/50 hover:border-red-500/50 text-slate-400 hover:text-red-400 transition-all group"
-                  title="Sign Out"
-                >
-                  <LogOut size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                </button>
-              )}
             </div>
             
             {/* Divider */}
