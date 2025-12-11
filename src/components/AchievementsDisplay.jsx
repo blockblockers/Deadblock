@@ -1,7 +1,8 @@
 // Achievements Display - Shows user achievements in profile
 import { useState, useEffect } from 'react';
 import { Crown, Medal, Calendar, Flame, Zap, Target, Award, Trophy, Bot, Gamepad2, User, Lock, ChevronDown, ChevronUp } from 'lucide-react';
-import { achievementsService } from '../services/achievementsService';
+import { achievementService } from '../services/achievementService';
+import { useAuth } from '../contexts/AuthContext';
 import { soundManager } from '../utils/soundManager';
 
 // Icon mapping
@@ -136,21 +137,26 @@ const AchievementCategory = ({ title, achievements, earnedIds, expanded, onToggl
 
 // Main achievements display
 const AchievementsDisplay = ({ compact = false }) => {
+  const { profile } = useAuth();
   const [userAchievements, setUserAchievements] = useState([]);
   const [allAchievements, setAllAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
   
   useEffect(() => {
-    loadAchievements();
-  }, []);
+    if (profile?.id) {
+      loadAchievements();
+    }
+  }, [profile?.id]);
   
   const loadAchievements = async () => {
+    if (!profile?.id) return;
+    
     setLoading(true);
     
     const [userResult, allResult] = await Promise.all([
-      achievementsService.getUserAchievements(),
-      achievementsService.getAllAchievements()
+      achievementService.getUserAchievements(profile.id),
+      achievementService.getAllAchievements()
     ]);
     
     setUserAchievements(userResult.data || []);
@@ -171,8 +177,8 @@ const AchievementsDisplay = ({ compact = false }) => {
     );
   }
   
-  // Create set of earned achievement IDs
-  const earnedIds = new Set(userAchievements.map(a => a.achievement_id));
+  // Create set of earned achievement IDs (old service has nested achievement object)
+  const earnedIds = new Set(userAchievements.map(a => a.achievement?.id).filter(Boolean));
   
   // Group achievements by category
   const categories = {};
@@ -185,8 +191,7 @@ const AchievementsDisplay = ({ compact = false }) => {
   
   // Calculate total points
   const totalPoints = userAchievements.reduce((sum, a) => {
-    const def = allAchievements.find(d => d.id === a.achievement_id);
-    return sum + (def?.points || 0);
+    return sum + (a.achievement?.points || 0);
   }, 0);
   
   // Compact view - just show summary and recent achievements
@@ -212,12 +217,12 @@ const AchievementsDisplay = ({ compact = false }) => {
         {recentAchievements.length > 0 ? (
           <div className="space-y-2">
             {recentAchievements.map(ua => {
-              const achievement = allAchievements.find(a => a.id === ua.achievement_id);
+              const achievement = ua.achievement;
               if (!achievement) return null;
               return (
                 <AchievementBadge
-                  key={ua.achievement_id}
-                  achievement={{ ...achievement, earned_at: ua.earned_at }}
+                  key={achievement.id}
+                  achievement={{ ...achievement, earned_at: ua.unlocked_at }}
                   earned={true}
                   showDetails={false}
                 />

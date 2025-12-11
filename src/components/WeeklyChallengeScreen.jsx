@@ -7,7 +7,6 @@ import ControlButtons from './ControlButtons';
 import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
-import { achievementsService } from '../services/achievementsService';
 import { useAuth } from '../contexts/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
@@ -249,10 +248,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
         const { rank } = await weeklyChallengeService.getUserRank(challenge.id);
         setCurrentRank(rank);
         
-        // Check for achievements
-        if (rank) {
-          await achievementsService.checkWeeklyAchievements(rank, challenge.id);
-        }
+        // TODO: Add achievement checking once achievementsService is integrated
       }
     } catch (err) {
       console.error('Error submitting result:', err);
