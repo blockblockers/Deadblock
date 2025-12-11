@@ -1,7 +1,16 @@
 // Achievements - View and track achievements
 import { useState, useEffect } from 'react';
 import { Trophy, Lock, Star, X, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
-import achievementService, { RARITY_COLORS } from '../services/achievementService';
+import achievementService from '../services/achievementService';
+
+// Rarity colors for achievements
+const RARITY_COLORS = {
+  common: { bg: 'bg-slate-600', text: 'text-slate-300', border: 'border-slate-500' },
+  uncommon: { bg: 'bg-green-600', text: 'text-green-300', border: 'border-green-500' },
+  rare: { bg: 'bg-blue-600', text: 'text-blue-300', border: 'border-blue-500' },
+  epic: { bg: 'bg-purple-600', text: 'text-purple-300', border: 'border-purple-500' },
+  legendary: { bg: 'bg-amber-600', text: 'text-amber-300', border: 'border-amber-500' },
+};
 
 const Achievements = ({ userId, onClose }) => {
   const [achievements, setAchievements] = useState([]);
