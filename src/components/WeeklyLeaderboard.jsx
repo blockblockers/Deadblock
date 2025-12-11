@@ -71,25 +71,30 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
   };
   
   const getRankBg = (rank, isCurrentUser) => {
-    if (isCurrentUser) return 'bg-gradient-to-r from-lime-900/50 to-green-900/50 border-lime-500/50';
+    if (isCurrentUser) return 'bg-gradient-to-r from-red-900/50 to-rose-900/50 border-red-500/50';
     if (rank === 1) return 'bg-gradient-to-r from-amber-900/40 to-yellow-900/40 border-amber-500/40';
     if (rank === 2) return 'bg-gradient-to-r from-slate-700/40 to-slate-600/40 border-slate-400/40';
     if (rank === 3) return 'bg-gradient-to-r from-amber-800/30 to-orange-900/30 border-amber-600/30';
     return 'bg-slate-800/40 border-slate-700/30';
   };
   
+  // Get the time to display (first attempt for ranking)
+  const getDisplayTime = (entry) => {
+    return entry.first_attempt_time_ms || entry.completion_time_ms;
+  };
+  
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+      className="min-h-screen bg-slate-950"
+      style={{ overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
     >
-      {/* Background */}
+      {/* Background - RED THEME */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(163,230,53,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(163,230,53,0.3) 1px, transparent 1px)',
+        backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-lime-500/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-green-500/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-red-500/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-rose-500/15 rounded-full blur-3xl pointer-events-none" />
       
       {/* Content */}
       <div className="relative min-h-screen px-4 py-6">
@@ -99,12 +104,12 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleBack}
-                className="p-2 text-slate-400 hover:text-lime-300 transition-colors"
+                className="p-2 text-slate-400 hover:text-red-300 transition-colors"
               >
                 <ArrowLeft size={24} />
               </button>
               <div>
-                <h1 className="text-xl font-black text-lime-300 flex items-center gap-2">
+                <h1 className="text-xl font-black text-red-300 flex items-center gap-2">
                   <Trophy size={24} />
                   WEEKLY LEADERBOARD
                 </h1>
@@ -118,24 +123,34 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="p-2 text-slate-400 hover:text-lime-300 transition-colors disabled:opacity-50"
+              className="p-2 text-slate-400 hover:text-red-300 transition-colors disabled:opacity-50"
             >
               <RefreshCw size={20} className={refreshing ? 'animate-spin' : ''} />
             </button>
           </div>
           
+          {/* Info about ranking */}
+          <div className="mb-4 p-2 bg-cyan-900/30 rounded-lg border border-cyan-500/30 text-center">
+            <span className="text-cyan-300 text-xs">Rankings based on FIRST ATTEMPT time</span>
+          </div>
+          
           {/* User's Position (if not in top list) */}
           {userResult && userRank && userRank > 10 && (
-            <div className="mb-4 p-3 bg-gradient-to-r from-lime-900/40 to-green-900/40 rounded-xl border border-lime-500/40">
+            <div className="mb-4 p-3 bg-gradient-to-r from-red-900/40 to-rose-900/40 rounded-xl border border-red-500/40">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-lime-500/20 flex items-center justify-center text-lime-300 font-bold text-sm">
+                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-300 font-bold text-sm">
                     #{userRank}
                   </div>
                   <div>
                     <div className="text-white font-medium">Your Position</div>
                     <div className="text-slate-400 text-sm">
-                      {weeklyChallengeService.formatTime(userResult.completion_time_ms)}
+                      First: {weeklyChallengeService.formatTime(userResult.first_attempt_time_ms || userResult.completion_time_ms)}
+                      {userResult.best_time_ms && userResult.best_time_ms < (userResult.first_attempt_time_ms || userResult.completion_time_ms) && (
+                        <span className="text-amber-400 ml-2">
+                          Best: {weeklyChallengeService.formatTime(userResult.best_time_ms)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -144,20 +159,20 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
           )}
           
           {/* Leaderboard */}
-          <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-lime-500/30 overflow-hidden shadow-[0_0_30px_rgba(163,230,53,0.2)]">
+          <div className="bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-red-500/30 overflow-hidden shadow-[0_0_30px_rgba(239,68,68,0.2)]">
             {/* Column Headers */}
             <div className="flex items-center px-4 py-3 bg-slate-800/50 border-b border-slate-700/50 text-slate-500 text-xs uppercase tracking-wider">
               <div className="w-12 text-center">Rank</div>
               <div className="flex-1">Player</div>
               <div className="w-24 text-right flex items-center justify-end gap-1">
                 <Clock size={12} />
-                Time
+                1st Attempt
               </div>
             </div>
             
             {loading ? (
               <div className="text-center py-12">
-                <div className="w-8 h-8 border-2 border-lime-500/30 border-t-lime-500 rounded-full animate-spin mx-auto mb-3" />
+                <div className="w-8 h-8 border-2 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto mb-3" />
                 <p className="text-slate-400">Loading leaderboard...</p>
               </div>
             ) : leaderboard.length === 0 ? (
@@ -176,7 +191,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
                     <div 
                       key={entry.user_id}
                       className={`flex items-center px-4 py-3 transition-colors ${getRankBg(rank, isCurrentUser)} border-l-2 ${
-                        isCurrentUser ? 'border-l-lime-500' : 'border-l-transparent'
+                        isCurrentUser ? 'border-l-red-500' : 'border-l-transparent'
                       }`}
                     >
                       {/* Rank */}
@@ -204,20 +219,20 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <div className={`font-medium truncate ${isCurrentUser ? 'text-lime-300' : 'text-white'}`}>
+                          <div className={`font-medium truncate ${isCurrentUser ? 'text-red-300' : 'text-white'}`}>
                             {entry.display_name || entry.username || 'Player'}
-                            {isCurrentUser && <span className="text-lime-500 text-xs ml-1">(you)</span>}
+                            {isCurrentUser && <span className="text-red-500 text-xs ml-1">(you)</span>}
                           </div>
                         </div>
                       </div>
                       
-                      {/* Time */}
+                      {/* Time - show first attempt */}
                       <div className={`w-24 text-right font-mono font-bold ${
                         rank === 1 ? 'text-amber-300' :
                         rank <= 3 ? 'text-slate-300' :
                         'text-slate-400'
                       }`}>
-                        {weeklyChallengeService.formatTime(entry.completion_time_ms)}
+                        {weeklyChallengeService.formatTime(getDisplayTime(entry))}
                       </div>
                     </div>
                   );
@@ -236,7 +251,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
           </button>
         </div>
         
-        {needsScroll && <div className="h-8" />}
+        <div className="h-8" />
       </div>
     </div>
   );

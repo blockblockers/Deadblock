@@ -1,4 +1,4 @@
-import { Settings, HelpCircle, Globe } from 'lucide-react';
+import { Settings, HelpCircle, Globe, LogOut } from 'lucide-react';
 import { useMemo } from 'react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
@@ -6,8 +6,9 @@ import SettingsModal from './SettingsModal';
 import PlayerProfileCard from './PlayerProfileCard';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { isSupabaseConfigured } from '../utils/supabase';
+import { isSupabaseConfigured, supabase } from '../utils/supabase';
 import { pieces } from '../utils/pieces';
+import { useAuth } from '../contexts/AuthContext';
 
 // Custom pentomino shapes for buttons
 const buttonShapes = {
@@ -189,6 +190,16 @@ const MenuScreen = ({
 }) => {
   const { needsScroll } = useResponsiveLayout(700);
   const showOnline = isSupabaseConfigured();
+  const { isAuthenticated: authStatus } = useAuth();
+  
+  const handleSignOut = async () => {
+    soundManager.playButtonClick();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
+  };
 
   return (
     <div 
@@ -272,14 +283,6 @@ const MenuScreen = ({
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-sm">
           
-          {/* Player Profile Card - At top */}
-          <div className="mb-4">
-            <PlayerProfileCard 
-              onClick={onShowProfile} 
-              isOffline={isOfflineMode}
-            />
-          </div>
-          
           {/* TITLE - Above the box */}
           <div className="text-center mb-4">
             <NeonTitle size="large" />
@@ -287,6 +290,28 @@ const MenuScreen = ({
           
           {/* Menu Box */}
           <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-4 sm:p-5 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
+            
+            {/* Player Profile Card - Inside menu at top */}
+            <div className="mb-4 relative">
+              <PlayerProfileCard 
+                onClick={onShowProfile} 
+                isOffline={isOfflineMode}
+              />
+              
+              {/* Sign Out Button - Only show if authenticated */}
+              {authStatus && !isOfflineMode && (
+                <button
+                  onClick={handleSignOut}
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-slate-700/80 hover:bg-red-500/30 border border-slate-600/50 hover:border-red-500/50 text-slate-400 hover:text-red-400 transition-all group"
+                  title="Sign Out"
+                >
+                  <LogOut size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              )}
+            </div>
+            
+            {/* Divider */}
+            <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent mb-4" />
             
             {/* Game Mode Buttons */}
             <div className="space-y-3 mb-4">
@@ -297,7 +322,7 @@ const MenuScreen = ({
                   shape="X"
                   color="bg-gradient-to-br from-amber-500 to-orange-600"
                   glowColor="rgba(251,191,36,0.5)"
-                  title="ONLINE"
+                  title="ONLINE MULTIPLAYER"
                   subtitle={isOfflineMode ? "Sign in for ranked play" : (isAuthenticated ? "Ranked matches vs humans" : "Sign in to play")}
                   textColor="text-amber-300"
                   hoverTextColor="group-hover:text-amber-200"
@@ -342,12 +367,12 @@ const MenuScreen = ({
                 <PentominoButton
                   onClick={onWeeklyChallenge}
                   shape="Z"
-                  color="bg-gradient-to-br from-lime-500 to-green-600"
-                  glowColor="rgba(163,230,53,0.5)"
+                  color="bg-gradient-to-br from-red-500 to-rose-600"
+                  glowColor="rgba(239,68,68,0.5)"
                   title="WEEKLY"
                   subtitle="Compete for best time"
-                  textColor="text-lime-300"
-                  hoverTextColor="group-hover:text-lime-200"
+                  textColor="text-red-300"
+                  hoverTextColor="group-hover:text-red-200"
                 />
               )}
             </div>

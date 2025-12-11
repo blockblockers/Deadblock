@@ -4,6 +4,7 @@ import { Zap, Trophy, Play, Home, RotateCcw, Timer, Flame } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
+import ControlButtons from './ControlButtons';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, createEmptyBoard, BOARD_SIZE } from '../utils/gameLogic';
 import { getSpeedPuzzle } from '../utils/puzzleGenerator';
@@ -243,9 +244,46 @@ const GameOverOverlay = ({ streak, bestStreak, onPlayAgain, onMenu }) => {
   );
 };
 
+// Error overlay
+const ErrorOverlay = ({ message, onRetry, onMenu }) => (
+  <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
+    <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border border-amber-500/50 shadow-[0_0_60px_rgba(251,191,36,0.3)]">
+      <div className="text-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+          <RotateCcw size={32} className="text-white" />
+        </div>
+        <h2 className="text-2xl font-black text-amber-400 mb-2">OOPS!</h2>
+        <p className="text-slate-400 mb-6">{message || 'Something went wrong. Please try again.'}</p>
+        
+        <div className="space-y-3">
+          <button
+            onClick={onRetry}
+            className="w-full py-4 rounded-xl font-black tracking-wider text-lg bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:from-amber-400 hover:to-orange-500 transition-all shadow-[0_0_30px_rgba(251,191,36,0.5)] active:scale-[0.98]"
+          >
+            <div className="flex items-center justify-center gap-2">
+              <RotateCcw size={22} />
+              TRY AGAIN
+            </div>
+          </button>
+          
+          <button
+            onClick={onMenu}
+            className="w-full py-3 rounded-xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-all border border-slate-600"
+          >
+            <div className="flex items-center justify-center gap-2">
+              <Home size={18} />
+              Back to Menu
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // Game state
-  const [gameState, setGameState] = useState('loading'); // loading, playing, success, gameover
+  const [gameState, setGameState] = useState('loading'); // loading, playing, success, gameover, error
   const [streak, setStreak] = useState(0);
   const [bestStreak, setBestStreak] = useState(() => {
     try {
@@ -255,21 +293,26 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     }
   });
   const [dbBestStreak, setDbBestStreak] = useState(0); // Best streak from database
+  const [errorMessage, setErrorMessage] = useState('');
   
   // Load database best streak on mount (if logged in)
   useEffect(() => {
     if (!isOfflineMode) {
       const loadDbStats = async () => {
-        const stats = await statsService.getStats();
-        if (stats?.speed_best_streak) {
-          setDbBestStreak(stats.speed_best_streak);
-          // If database has higher streak, update local
-          if (stats.speed_best_streak > bestStreak) {
-            setBestStreak(stats.speed_best_streak);
-            try {
-              localStorage.setItem('speed-puzzle-best', stats.speed_best_streak.toString());
-            } catch {}
+        try {
+          const stats = await statsService.getStats();
+          if (stats?.speed_best_streak) {
+            setDbBestStreak(stats.speed_best_streak);
+            // If database has higher streak, update local
+            if (stats.speed_best_streak > bestStreak) {
+              setBestStreak(stats.speed_best_streak);
+              try {
+                localStorage.setItem('speed-puzzle-best', stats.speed_best_streak.toString());
+              } catch {}
+            }
           }
+        } catch (err) {
+          console.error('[SpeedPuzzle] Failed to load db stats:', err);
         }
       };
       loadDbStats();
@@ -288,6 +331,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
   const timerRef = useRef(null);
   const lastTickRef = useRef(Date.now());
+  const gameStateRef = useRef(gameState); // Track gameState in ref for timer callback
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
   
   // Puzzle state
   const [board, setBoard] = useState(() => createEmptyBoard());
@@ -309,7 +358,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const maxRetries = 5;
   
   const loadNewPuzzle = useCallback(async () => {
+    console.log('[SpeedPuzzle] loadNewPuzzle called');
     setGameState('loading');
+    setErrorMessage('');
+    
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     
     try {
       console.log('[SpeedPuzzle] Generating puzzle, attempt:', retryCountRef.current + 1);
@@ -347,29 +404,50 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         // Start playing
         setTimeLeft(TIMER_DURATION);
         lastTickRef.current = Date.now();
-        setGameState('playing');
+        
+        // Small delay before setting playing state to ensure UI updates
+        setTimeout(() => {
+          setGameState('playing');
+        }, 50);
       } else {
         console.error('[SpeedPuzzle] Invalid puzzle data:', puzzle);
         retryCountRef.current++;
         if (retryCountRef.current < maxRetries) {
-          setTimeout(() => loadNewPuzzle(), 300);
+          setTimeout(() => loadNewPuzzle(), 500);
         } else {
           console.error('[SpeedPuzzle] Max retries reached');
           retryCountRef.current = 0;
-          // Still try once more after a longer delay
-          setTimeout(() => loadNewPuzzle(), 1000);
+          setErrorMessage('Failed to generate puzzle. Please try again.');
+          setGameState('error');
         }
       }
     } catch (err) {
       console.error('[SpeedPuzzle] Failed to load puzzle:', err);
       retryCountRef.current++;
       if (retryCountRef.current < maxRetries) {
-        setTimeout(() => loadNewPuzzle(), 300);
+        setTimeout(() => loadNewPuzzle(), 500);
       } else {
         console.error('[SpeedPuzzle] Max retries reached after error');
         retryCountRef.current = 0;
-        setTimeout(() => loadNewPuzzle(), 1000);
+        setErrorMessage('Failed to load puzzle: ' + err.message);
+        setGameState('error');
       }
+    }
+  }, []);
+
+  // Handle game over from timer
+  const handleTimerExpired = useCallback(() => {
+    console.log('[SpeedPuzzle] handleTimerExpired called, current state:', gameStateRef.current);
+    
+    // Only trigger game over if we're still playing
+    if (gameStateRef.current === 'playing') {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
+      soundManager.playGameOver();
+      setGameState('gameover');
     }
   }, []);
 
@@ -386,15 +464,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         
         setTimeLeft(prev => {
           const newTime = Math.max(0, prev - delta);
+          
           if (newTime <= 0 && prev > 0) {
-            console.log('[SpeedPuzzle] Timer expired! Setting gameover state');
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-            soundManager.playGameOver();
-            // Use setTimeout to ensure state update happens after this render
-            setTimeout(() => {
-              setGameState('gameover');
-            }, 0);
+            console.log('[SpeedPuzzle] Timer reached zero');
+            // Call handleTimerExpired on next tick to avoid state updates during render
+            setTimeout(() => handleTimerExpired(), 0);
             return 0;
           }
           return newTime;
@@ -409,68 +483,139 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         }
       };
     }
-  }, [gameState]);
+  }, [gameState, handleTimerExpired]);
 
   // Initial load
   useEffect(() => {
     loadNewPuzzle();
+    
+    // Cleanup on unmount
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, []);
 
-  // Handle piece selection
-  const selectPiece = (pieceType) => {
+  // Handle piece selection - automatically find a valid placement
+  const selectPiece = useCallback((pieceType) => {
     if (gameState !== 'playing') return;
+    
     soundManager.playClickSound('select');
     setSelectedPiece(pieceType);
     setRotation(0);
     setFlipped(false);
+    
+    // Try to auto-place the piece at a valid position
+    const coords = getPieceCoords(pieceType, 0, false);
+    
+    // Find the first valid position for this piece
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        if (canPlacePiece(board, row, col, coords)) {
+          setPendingMove({ row, col, coords, piece: pieceType });
+          return;
+        }
+      }
+    }
+    
+    // No valid position found with default orientation, just select the piece
     setPendingMove(null);
-  };
+  }, [gameState, board]);
 
   // Handle rotation
-  const rotatePiece = () => {
+  const rotatePiece = useCallback(() => {
     if (!selectedPiece || gameState !== 'playing') return;
     soundManager.playClickSound('rotate');
-    setRotation((r) => (r + 1) % 4);
+    
+    const newRotation = (rotation + 1) % 4;
+    setRotation(newRotation);
+    
+    const newCoords = getPieceCoords(selectedPiece, newRotation, flipped);
     
     if (pendingMove) {
-      const newRotation = (rotation + 1) % 4;
-      const newCoords = getPieceCoords(selectedPiece, newRotation, flipped);
+      // Check if current position is still valid
       if (canPlacePiece(board, pendingMove.row, pendingMove.col, newCoords)) {
         setPendingMove({ ...pendingMove, coords: newCoords });
+      } else {
+        // Find a new valid position
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          for (let col = 0; col < BOARD_SIZE; col++) {
+            if (canPlacePiece(board, row, col, newCoords)) {
+              setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
+              return;
+            }
+          }
+        }
+        setPendingMove(null);
+      }
+    } else {
+      // Try to find a valid position with new rotation
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (canPlacePiece(board, row, col, newCoords)) {
+            setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
+            return;
+          }
+        }
       }
     }
-  };
+  }, [selectedPiece, gameState, rotation, flipped, pendingMove, board]);
 
   // Handle flip
-  const flipPiece = () => {
+  const flipPiece = useCallback(() => {
     if (!selectedPiece || gameState !== 'playing') return;
     soundManager.playClickSound('flip');
-    setFlipped((f) => !f);
+    
+    const newFlipped = !flipped;
+    setFlipped(newFlipped);
+    
+    const newCoords = getPieceCoords(selectedPiece, rotation, newFlipped);
     
     if (pendingMove) {
-      const newFlipped = !flipped;
-      const newCoords = getPieceCoords(selectedPiece, rotation, newFlipped);
       if (canPlacePiece(board, pendingMove.row, pendingMove.col, newCoords)) {
         setPendingMove({ ...pendingMove, coords: newCoords });
+      } else {
+        // Find a new valid position
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          for (let col = 0; col < BOARD_SIZE; col++) {
+            if (canPlacePiece(board, row, col, newCoords)) {
+              setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
+              return;
+            }
+          }
+        }
+        setPendingMove(null);
+      }
+    } else {
+      // Try to find a valid position with new flip
+      for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+          if (canPlacePiece(board, row, col, newCoords)) {
+            setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
+            return;
+          }
+        }
       }
     }
-  };
+  }, [selectedPiece, gameState, rotation, flipped, pendingMove, board]);
 
   // Handle cell click
-  const handleCellClick = (row, col) => {
+  const handleCellClick = useCallback((row, col) => {
     if (!selectedPiece || gameState !== 'playing') return;
     
     const coords = getPieceCoords(selectedPiece, rotation, flipped);
     if (canPlacePiece(board, row, col, coords)) {
       soundManager.playClickSound('place');
-      setPendingMove({ row, col, coords });
+      setPendingMove({ row, col, coords, piece: selectedPiece });
     } else {
       soundManager.playInvalidMove();
     }
-  };
+  }, [selectedPiece, gameState, rotation, flipped, board]);
 
   // Handle move with D-pad
-  const movePendingPiece = (direction) => {
+  const movePendingPiece = useCallback((direction) => {
     if (!pendingMove || gameState !== 'playing') return;
     
     const deltas = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
@@ -482,11 +627,17 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       soundManager.playClickSound('move');
       setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     }
-  };
+  }, [pendingMove, gameState, board]);
 
   // Confirm move
-  const confirmMove = () => {
+  const confirmMove = useCallback(() => {
     if (!pendingMove || !selectedPiece || gameState !== 'playing') return;
+    
+    // Stop timer immediately
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     
     // Set animation state
     setPlayerAnimatingMove({ ...pendingMove, pieceType: selectedPiece });
@@ -502,9 +653,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       newBoardPieces[r][c] = selectedPiece;
     }
     
+    const newUsedPieces = [...usedPieces, selectedPiece];
+    
     setBoard(newBoard);
     setBoardPieces(newBoardPieces);
-    setUsedPieces([...usedPieces, selectedPiece]);
+    setUsedPieces(newUsedPieces);
     setSelectedPiece(null);
     setPendingMove(null);
     
@@ -516,13 +669,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     // Check if puzzle is solved (player wins = correct answer)
     // In easy puzzles with 1 move, if we placed a piece and AI can't play, we win
     setTimeout(() => {
-      const aiPieces = Object.keys(pieces).filter(p => ![...usedPieces, selectedPiece].includes(p));
+      const aiPieces = Object.keys(pieces).filter(p => !newUsedPieces.includes(p));
       const aiCanPlay = canAnyPieceBePlaced(newBoard, aiPieces);
       
       if (!aiCanPlay) {
         // Success! Puzzle solved
         soundManager.playWin();
-        clearInterval(timerRef.current);
         
         const newStreak = streak + 1;
         setStreak(newStreak);
@@ -548,28 +700,30 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         
         setGameState('success');
       } else {
-        // Wrong move - time penalty or instant fail?
-        // For now, just continue - they wasted a move
+        // Wrong move - restart timer and continue
         soundManager.playInvalidMove();
+        setTimeLeft(TIMER_DURATION);
+        lastTickRef.current = Date.now();
+        setGameState('playing'); // This will restart the timer via useEffect
       }
     }, 100);
-  };
+  }, [pendingMove, selectedPiece, gameState, board, boardPieces, usedPieces, streak, effectiveBestStreak, isOfflineMode]);
 
   // Cancel move
-  const cancelMove = () => {
+  const cancelMove = useCallback(() => {
     if (gameState !== 'playing') return;
     soundManager.playClickSound('cancel');
     setPendingMove(null);
-  };
+  }, [gameState]);
 
   // Continue to next puzzle
-  const handleContinue = () => {
+  const handleContinue = useCallback(() => {
     soundManager.playButtonClick();
     loadNewPuzzle();
-  };
+  }, [loadNewPuzzle]);
 
   // Play again
-  const handlePlayAgain = () => {
+  const handlePlayAgain = useCallback(() => {
     soundManager.playButtonClick();
     
     // Record session completion with final streak
@@ -579,12 +733,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     setStreak(0);
     loadNewPuzzle();
-  };
+  }, [isOfflineMode, streak, loadNewPuzzle]);
 
   // Back to menu
-  const handleMenu = () => {
+  const handleMenu = useCallback(() => {
     soundManager.playButtonClick();
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
     
     // Record session completion with final streak if any
     if (!isOfflineMode && streak > 0) {
@@ -592,7 +749,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     }
     
     onMenu();
-  };
+  }, [isOfflineMode, streak, onMenu]);
+
+  // Retry after error
+  const handleRetry = useCallback(() => {
+    soundManager.playButtonClick();
+    retryCountRef.current = 0;
+    loadNewPuzzle();
+  }, [loadNewPuzzle]);
 
   const isNewRecord = streak > 0 && streak >= effectiveBestStreak;
 
@@ -690,24 +854,37 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
-              onSelectPiece={selectPiece}
+              pendingMove={pendingMove}
+              gameOver={false}
+              gameMode="puzzle"
               currentPlayer={1}
-              disabled={false}
+              onSelectPiece={selectPiece}
             />
           </div>
         )}
         
-        {/* Controls */}
+        {/* D-Pad for moving pieces */}
         {gameState === 'playing' && pendingMove && (
-          <div className="mt-3 w-full max-w-md flex-shrink-0">
-            <DPad
-              onMove={movePendingPiece}
+          <div className="flex justify-center mt-2 flex-shrink-0">
+            <DPad onMove={movePendingPiece} />
+          </div>
+        )}
+        
+        {/* Control Buttons */}
+        {gameState === 'playing' && (
+          <div className="mt-2 w-full max-w-md flex-shrink-0">
+            <ControlButtons
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              canConfirm={!!pendingMove}
+              gameOver={false}
+              gameMode="puzzle"
+              currentPlayer={1}
+              isGeneratingPuzzle={false}
               onRotate={rotatePiece}
               onFlip={flipPiece}
               onConfirm={confirmMove}
               onCancel={cancelMove}
-              canConfirm={true}
-              canCancel={true}
             />
           </div>
         )}
@@ -727,6 +904,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
           streak={streak}
           bestStreak={effectiveBestStreak}
           onPlayAgain={handlePlayAgain}
+          onMenu={handleMenu}
+        />
+      )}
+      
+      {/* Error overlay */}
+      {gameState === 'error' && (
+        <ErrorOverlay
+          message={errorMessage}
+          onRetry={handleRetry}
           onMenu={handleMenu}
         />
       )}

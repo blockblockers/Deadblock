@@ -79,20 +79,20 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
     onBack();
   };
   
-  // Theme colors for weekly challenge (lime/green like Z piece)
+  // Theme colors for weekly challenge - RED THEME
   const theme = {
-    gridColor: 'rgba(163,230,53,0.5)',
-    primary: 'lime',
-    gradient: 'from-lime-500 to-green-600',
-    glow: 'rgba(163,230,53,0.6)',
-    text: 'text-lime-300',
-    border: 'border-lime-500/50',
+    gridColor: 'rgba(239,68,68,0.5)',
+    primary: 'red',
+    gradient: 'from-red-500 to-rose-600',
+    glow: 'rgba(239,68,68,0.6)',
+    text: 'text-red-300',
+    border: 'border-red-500/50',
   };
   
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+      className="min-h-screen bg-slate-950"
+      style={{ overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
     >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
@@ -101,50 +101,61 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
       }} />
       
       {/* Glow orbs */}
-      <div className="fixed top-20 left-10 w-80 h-80 bg-lime-500/30 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-32 right-10 w-72 h-72 bg-green-400/25 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed top-1/2 left-1/2 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed top-20 left-10 w-80 h-80 bg-red-500/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-32 right-10 w-72 h-72 bg-rose-400/25 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed top-1/2 left-1/2 w-64 h-64 bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
       
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
+      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">
           {/* Title */}
           <div className="text-center mb-6">
             <NeonTitle size="large" />
-            <NeonSubtitle text="WEEKLY CHALLENGE" size="default" className="mt-2" color="lime" />
+            <NeonSubtitle text="WEEKLY CHALLENGE" size="default" className="mt-2" color="red" />
           </div>
           
           {/* Main Card */}
-          <div className={`bg-gradient-to-br from-slate-900/95 via-lime-950/30 to-slate-900/95 backdrop-blur-md rounded-2xl p-5 border ${theme.border} shadow-[0_0_60px_rgba(163,230,53,0.3),inset_0_0_30px_rgba(163,230,53,0.1)]`}>
+          <div className={`bg-gradient-to-br from-slate-900/95 via-red-950/30 to-slate-900/95 backdrop-blur-md rounded-2xl p-5 border ${theme.border} shadow-[0_0_60px_rgba(239,68,68,0.3),inset_0_0_30px_rgba(239,68,68,0.1)]`}>
             
             {loading ? (
               <div className="text-center py-8">
-                <Loader className="w-8 h-8 animate-spin text-lime-400 mx-auto mb-3" />
+                <Loader className="w-8 h-8 animate-spin text-red-400 mx-auto mb-3" />
                 <p className="text-slate-400">Loading challenge...</p>
               </div>
             ) : (
               <>
                 {/* Time Remaining */}
                 <div className="flex items-center justify-center gap-2 mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                  <Clock size={18} className="text-lime-400" />
+                  <Clock size={18} className="text-red-400" />
                   <span className="text-slate-400 text-sm">Time remaining:</span>
                   {timeRemaining && !timeRemaining.expired ? (
-                    <span className="text-lime-300 font-bold">
+                    <span className="text-red-300 font-bold">
                       {timeRemaining.days > 0 && `${timeRemaining.days}d `}
                       {timeRemaining.hours}h {timeRemaining.minutes}m
                     </span>
                   ) : (
-                    <span className="text-red-400 font-bold">Challenge ended</span>
+                    <span className="text-amber-400 font-bold">Challenge ended</span>
                   )}
                 </div>
                 
-                {/* Your Result */}
+                {/* Your Result - shows first attempt and best time */}
                 {userResult ? (
-                  <div className="mb-5 p-4 bg-gradient-to-r from-lime-900/40 to-green-900/40 rounded-xl border border-lime-500/30">
+                  <div className="mb-5 p-4 bg-gradient-to-r from-red-900/40 to-rose-900/40 rounded-xl border border-red-500/30">
                     <div className="text-center">
-                      <div className="text-slate-400 text-sm mb-1">Your Best Time</div>
-                      <div className="text-3xl font-black text-lime-300">
-                        {weeklyChallengeService.formatTime(userResult.completion_time_ms)}
+                      <div className="grid grid-cols-2 gap-3 mb-2">
+                        <div className="bg-slate-800/50 rounded-lg p-2 border border-cyan-500/30">
+                          <div className="text-cyan-400 text-xs mb-1">First Attempt</div>
+                          <div className="text-lg font-mono font-black text-cyan-300">
+                            {weeklyChallengeService.formatTime(userResult.first_attempt_time_ms || userResult.completion_time_ms)}
+                          </div>
+                          <div className="text-cyan-500 text-xs">(Ranked)</div>
+                        </div>
+                        <div className="bg-slate-800/50 rounded-lg p-2 border border-amber-500/30">
+                          <div className="text-amber-400 text-xs mb-1">Best Time</div>
+                          <div className="text-lg font-mono font-black text-amber-300">
+                            {weeklyChallengeService.formatTime(userResult.best_time_ms || userResult.completion_time_ms)}
+                          </div>
+                        </div>
                       </div>
                       {userRank && (
                         <div className="flex items-center justify-center gap-2 mt-2">
@@ -160,7 +171,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                   <div className="mb-5 p-4 bg-slate-800/50 rounded-xl border border-slate-700/50 text-center">
                     <Calendar size={24} className="mx-auto text-slate-500 mb-2" />
                     <div className="text-slate-400 text-sm">You haven't completed this week's challenge yet</div>
-                    <div className="text-lime-300 text-xs mt-1">Complete the puzzle to appear on the leaderboard!</div>
+                    <div className="text-red-300 text-xs mt-1">Your FIRST attempt will count for ranking!</div>
                   </div>
                 )}
                 
@@ -171,7 +182,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                       <span className="text-slate-400 text-sm font-medium">Top Players</span>
                       <button 
                         onClick={handleLeaderboard}
-                        className="text-lime-400 text-xs hover:text-lime-300 flex items-center gap-1"
+                        className="text-red-400 text-xs hover:text-red-300 flex items-center gap-1"
                       >
                         View all <ChevronRight size={14} />
                       </button>
@@ -209,11 +220,11 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                             {player.display_name || player.username || 'Player'}
                           </div>
                           
-                          {/* Time */}
+                          {/* Time - show first attempt for ranking */}
                           <div className={`font-mono text-sm ${
                             index === 0 ? 'text-amber-300' : 'text-slate-400'
                           }`}>
-                            {weeklyChallengeService.formatTime(player.completion_time_ms)}
+                            {weeklyChallengeService.formatTime(player.first_attempt_time_ms || player.completion_time_ms)}
                           </div>
                         </div>
                       ))}
@@ -227,8 +238,9 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                     <span className="weekly-info-title font-black tracking-[0.2em] text-xs">HOW IT WORKS</span>
                     <div className="mt-2 text-sm text-slate-400 space-y-1">
                       <p>Same puzzle for everyone, all week long!</p>
-                      <p className="text-lime-300">🧩 Hard difficulty - 5 moves to solve</p>
-                      <p>Fastest time wins - can you top the leaderboard?</p>
+                      <p className="text-red-300">🧩 Hard difficulty - 5 moves to solve</p>
+                      <p className="text-cyan-300">⚡ Your FIRST attempt is your ranked time!</p>
+                      <p>Practice runs don't affect your rank</p>
                     </div>
                   </div>
                 </div>
@@ -245,13 +257,13 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                   style={!timeRemaining?.expired ? { boxShadow: `0 0 30px ${theme.glow}` } : {}}
                 >
                   <Play size={22} />
-                  {userResult ? 'IMPROVE YOUR TIME' : 'START CHALLENGE'}
+                  {userResult ? 'PRACTICE RUN' : 'START CHALLENGE'}
                 </button>
                 
                 {/* Leaderboard Button */}
                 <button 
                   onClick={handleLeaderboard}
-                  className="w-full mt-3 p-3 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 bg-slate-800/70 hover:bg-slate-700/70 border border-lime-500/30 text-lime-300 hover:text-lime-200"
+                  className="w-full mt-3 p-3 rounded-xl font-bold text-base transition-all flex items-center justify-center gap-2 bg-slate-800/70 hover:bg-slate-700/70 border border-red-500/30 text-red-300 hover:text-red-200"
                 >
                   <Trophy size={18} />
                   VIEW LEADERBOARD
@@ -269,7 +281,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
             )}
           </div>
         </div>
-        {needsScroll && <div className="h-8 flex-shrink-0" />}
+        <div className="h-8 flex-shrink-0" />
       </div>
       
       {/* Title styling */}
@@ -280,9 +292,9 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
           text-shadow:
             0 0 5px #fff,
             0 0 10px #fff,
-            0 0 20px #84cc16,
-            0 0 40px #84cc16,
-            0 0 60px #22c55e;
+            0 0 20px #ef4444,
+            0 0 40px #ef4444,
+            0 0 60px #f43f5e;
         }
       `}</style>
     </div>

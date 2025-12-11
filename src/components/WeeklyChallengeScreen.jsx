@@ -4,6 +4,7 @@ import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X } from 'lucid
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import ControlButtons from './ControlButtons';
+import DPad from './DPad';
 import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
@@ -12,7 +13,7 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 
-// Timer display component
+// Timer display component - RED THEME
 const TimerDisplay = ({ elapsedMs, isPaused }) => {
   const formatTime = (ms) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -22,10 +23,10 @@ const TimerDisplay = ({ elapsedMs, isPaused }) => {
     
     return (
       <div className="flex items-baseline gap-1">
-        <span className="text-4xl font-mono font-black text-lime-300">
+        <span className="text-4xl font-mono font-black text-red-300">
           {minutes}:{seconds.toString().padStart(2, '0')}
         </span>
-        <span className="text-xl font-mono text-lime-400/70">
+        <span className="text-xl font-mono text-red-400/70">
           .{hundredths.toString().padStart(2, '0')}
         </span>
       </div>
@@ -35,7 +36,7 @@ const TimerDisplay = ({ elapsedMs, isPaused }) => {
   return (
     <div className="text-center">
       <div className="flex items-center justify-center gap-2 mb-1">
-        <Clock size={20} className={`${isPaused ? 'text-amber-400' : 'text-lime-400'}`} />
+        <Clock size={20} className={`${isPaused ? 'text-amber-400' : 'text-red-400'}`} />
         <span className="text-slate-400 text-sm uppercase tracking-wider">
           {isPaused ? 'Paused' : 'Time'}
         </span>
@@ -45,44 +46,64 @@ const TimerDisplay = ({ elapsedMs, isPaused }) => {
   );
 };
 
-// Success overlay when puzzle is completed
-const SuccessOverlay = ({ completionTime, previousBest, rank, onViewLeaderboard, onPlayAgain, onMenu }) => {
-  const isNewRecord = !previousBest || completionTime < previousBest;
+// Success overlay when puzzle is completed - RED THEME
+const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAttempt, rank, onViewLeaderboard, onPlayAgain, onMenu }) => {
+  const isNewBest = !bestTime || completionTime < bestTime;
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" 
          style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
-      <div className="bg-gradient-to-br from-slate-900 via-lime-950/50 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-lime-500/50 shadow-[0_0_60px_rgba(163,230,53,0.4)]">
+      <div className="bg-gradient-to-br from-slate-900 via-red-950/50 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.4)]">
         {/* Success Icon */}
         <div className="text-center mb-4">
-          <div className="w-16 h-16 mx-auto rounded-full bg-lime-500/20 flex items-center justify-center mb-3 animate-pulse">
-            <CheckCircle size={40} className="text-lime-400" />
+          <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-3 animate-pulse">
+            <CheckCircle size={40} className="text-red-400" />
           </div>
-          <h2 className="text-2xl font-black text-lime-300">CHALLENGE COMPLETE!</h2>
+          <h2 className="text-2xl font-black text-red-300">CHALLENGE COMPLETE!</h2>
         </div>
         
         {/* Time */}
         <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
           <div className="text-center">
             <div className="text-slate-400 text-sm mb-1">Your Time</div>
-            <div className="text-3xl font-mono font-black text-lime-300">
+            <div className="text-3xl font-mono font-black text-red-300">
               {weeklyChallengeService.formatTime(completionTime)}
             </div>
             
-            {isNewRecord && (
+            {wasFirstAttempt && (
+              <div className="mt-2 px-3 py-1 bg-cyan-500/20 rounded-full inline-flex items-center gap-1">
+                <Trophy size={14} className="text-cyan-400" />
+                <span className="text-cyan-300 text-sm font-bold">FIRST ATTEMPT - COUNTS FOR RANKING!</span>
+              </div>
+            )}
+            
+            {!wasFirstAttempt && isNewBest && (
               <div className="mt-2 px-3 py-1 bg-amber-500/20 rounded-full inline-flex items-center gap-1">
                 <Trophy size={14} className="text-amber-400" />
                 <span className="text-amber-300 text-sm font-bold">NEW PERSONAL BEST!</span>
               </div>
             )}
-            
-            {previousBest && !isNewRecord && (
-              <div className="text-slate-500 text-sm mt-2">
-                Previous best: {weeklyChallengeService.formatTime(previousBest)}
-              </div>
-            )}
           </div>
         </div>
+        
+        {/* First Attempt vs Best Time Info */}
+        {firstAttemptTime && !wasFirstAttempt && (
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <div className="bg-slate-800/50 rounded-lg p-2 border border-cyan-500/30 text-center">
+              <div className="text-cyan-400 text-xs mb-1">First Attempt</div>
+              <div className="text-cyan-300 font-mono font-bold text-sm">
+                {weeklyChallengeService.formatTime(firstAttemptTime)}
+              </div>
+              <div className="text-cyan-500 text-xs">(Ranked)</div>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-2 border border-amber-500/30 text-center">
+              <div className="text-amber-400 text-xs mb-1">Best Time</div>
+              <div className="text-amber-300 font-mono font-bold text-sm">
+                {weeklyChallengeService.formatTime(isNewBest ? completionTime : bestTime)}
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Rank */}
         {rank && (
@@ -93,6 +114,7 @@ const SuccessOverlay = ({ completionTime, previousBest, rank, onViewLeaderboard,
                 Current Rank: #{rank}
               </span>
             </div>
+            <div className="text-amber-500/70 text-xs mt-1">Based on first attempt time</div>
           </div>
         )}
         
@@ -100,7 +122,7 @@ const SuccessOverlay = ({ completionTime, previousBest, rank, onViewLeaderboard,
         <div className="space-y-2">
           <button
             onClick={onViewLeaderboard}
-            className="w-full p-3 rounded-xl font-bold bg-gradient-to-r from-lime-500 to-green-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="w-full p-3 rounded-xl font-bold bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <Trophy size={18} />
             VIEW LEADERBOARD
@@ -108,10 +130,10 @@ const SuccessOverlay = ({ completionTime, previousBest, rank, onViewLeaderboard,
           
           <button
             onClick={onPlayAgain}
-            className="w-full p-3 rounded-xl font-bold bg-slate-800 text-lime-300 border border-lime-500/30 hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
+            className="w-full p-3 rounded-xl font-bold bg-slate-800 text-red-300 border border-red-500/30 hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
           >
             <RotateCcw size={18} />
-            TRY AGAIN
+            {wasFirstAttempt ? 'PLAY AGAIN (PRACTICE)' : 'TRY AGAIN'}
           </button>
           
           <button
@@ -129,7 +151,7 @@ const SuccessOverlay = ({ completionTime, previousBest, rank, onViewLeaderboard,
 
 const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   const { profile } = useAuth();
-  const { needsScroll, isMobile } = useResponsiveLayout(700);
+  const { needsScroll, isMobile } = useResponsiveLayout(650);
   
   // Game state
   const [puzzle, setPuzzle] = useState(null);
@@ -138,7 +160,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   const [gameComplete, setGameComplete] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [completionTime, setCompletionTime] = useState(null);
-  const [previousBest, setPreviousBest] = useState(null);
+  const [firstAttemptTime, setFirstAttemptTime] = useState(null);
+  const [bestTime, setBestTime] = useState(null);
+  const [isFirstAttempt, setIsFirstAttempt] = useState(true);
+  const [wasFirstAttempt, setWasFirstAttempt] = useState(false);
   const [currentRank, setCurrentRank] = useState(null);
   
   // Refs
@@ -182,10 +207,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
           setPuzzle(puzzleData);
         }
         
-        // Get user's previous best
+        // Get user's existing results
         const { data: existingResult } = await weeklyChallengeService.getUserResult(challenge.id);
         if (existingResult) {
-          setPreviousBest(existingResult.completion_time_ms);
+          setFirstAttemptTime(existingResult.first_attempt_time_ms);
+          setBestTime(existingResult.best_time_ms || existingResult.completion_time_ms);
+          setIsFirstAttempt(false);
         }
       } catch (err) {
         console.error('Error loading weekly puzzle:', err);
@@ -202,7 +229,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
       setElapsedMs(Date.now() - startTimeRef.current);
-    }, 10); // Update every 10ms for smooth display
+    }, 10);
   }, []);
   
   // Stop the timer
@@ -227,28 +254,34 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   // Check for puzzle completion
   useEffect(() => {
     if (gameStarted && gameOver && winner === 1) {
-      // Player won!
       const finalTime = stopTimer();
       setCompletionTime(finalTime);
+      setWasFirstAttempt(isFirstAttempt);
       setGameComplete(true);
       soundManager.playPuzzleSolvedSound();
-      
-      // Submit result
       submitResult(finalTime);
     }
-  }, [gameOver, winner, gameStarted, stopTimer]);
+  }, [gameOver, winner, gameStarted, stopTimer, isFirstAttempt]);
   
   // Submit result to database
   const submitResult = async (timeMs) => {
     try {
-      const { data } = await weeklyChallengeService.submitResult(challenge.id, timeMs);
+      const { data } = await weeklyChallengeService.submitResult(challenge.id, timeMs, isFirstAttempt);
       
-      if (data?.is_improvement) {
-        // Get updated rank
+      if (data) {
+        if (isFirstAttempt) {
+          setFirstAttemptTime(timeMs);
+          setIsFirstAttempt(false);
+        }
+        
+        // Update best time if improved
+        if (!bestTime || timeMs < bestTime) {
+          setBestTime(timeMs);
+        }
+        
+        // Get rank (based on first attempt)
         const { rank } = await weeklyChallengeService.getUserRank(challenge.id);
         setCurrentRank(rank);
-        
-        // TODO: Add achievement checking once achievementsService is integrated
       }
     } catch (err) {
       console.error('Error submitting result:', err);
@@ -260,6 +293,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     resetCurrentPuzzle();
     setGameComplete(false);
     setCompletionTime(null);
+    setWasFirstAttempt(false);
     setElapsedMs(0);
     setGameStarted(false);
   }, [resetCurrentPuzzle]);
@@ -279,59 +313,75 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     };
   }, []);
   
-  // Loading state
+  // Loading state - RED THEME
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-lime-500/30 border-t-lime-500 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-lime-300">Loading weekly challenge...</p>
+          <div className="w-12 h-12 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-red-300">Loading weekly challenge...</p>
         </div>
       </div>
     );
   }
   
-  // Pre-game state (ready to start)
+  // Pre-game state (ready to start) - RED THEME
   if (!gameStarted) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
         {/* Background */}
         <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(163,230,53,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(163,230,53,0.4) 1px, transparent 1px)',
+          backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }} />
-        <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-lime-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-green-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-red-500/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative bg-slate-900/90 rounded-2xl p-6 max-w-sm w-full border border-lime-500/50 shadow-[0_0_40px_rgba(163,230,53,0.3)] text-center">
-          <h2 className="text-2xl font-black text-lime-300 mb-2">WEEKLY CHALLENGE</h2>
+        <div className="relative bg-slate-900/90 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)] text-center">
+          <h2 className="text-2xl font-black text-red-300 mb-2">WEEKLY CHALLENGE</h2>
           <p className="text-slate-400 mb-6">Week {challenge.week_number}, {challenge.year}</p>
           
-          {previousBest && (
-            <div className="bg-slate-800/50 rounded-xl p-3 mb-4 border border-slate-700/50">
-              <div className="text-slate-400 text-sm">Your Best Time</div>
-              <div className="text-xl font-mono font-bold text-lime-300">
-                {weeklyChallengeService.formatTime(previousBest)}
+          {/* Show existing times if not first attempt */}
+          {firstAttemptTime && (
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="bg-slate-800/50 rounded-xl p-3 border border-cyan-500/30">
+                <div className="text-cyan-400 text-xs mb-1">First Attempt</div>
+                <div className="text-lg font-mono font-bold text-cyan-300">
+                  {weeklyChallengeService.formatTime(firstAttemptTime)}
+                </div>
+                <div className="text-cyan-500 text-xs">(Ranked)</div>
+              </div>
+              <div className="bg-slate-800/50 rounded-xl p-3 border border-amber-500/30">
+                <div className="text-amber-400 text-xs mb-1">Best Time</div>
+                <div className="text-lg font-mono font-bold text-amber-300">
+                  {weeklyChallengeService.formatTime(bestTime)}
+                </div>
               </div>
             </div>
           )}
           
           <div className="bg-slate-800/50 rounded-xl p-4 mb-6 border border-slate-700/50">
-            <Clock size={32} className="mx-auto text-lime-400 mb-2" />
+            <Clock size={32} className="mx-auto text-red-400 mb-2" />
             <p className="text-slate-300 text-sm">
               Timer starts when you press START
             </p>
-            <p className="text-slate-500 text-xs mt-1">
-              Solve the puzzle as fast as you can!
-            </p>
+            {isFirstAttempt ? (
+              <p className="text-red-300 text-xs mt-1 font-bold">
+                ⚡ Your FIRST attempt time will be used for ranking!
+              </p>
+            ) : (
+              <p className="text-slate-500 text-xs mt-1">
+                Practice mode - try to beat your best time!
+              </p>
+            )}
           </div>
           
           <button
             onClick={handleStartGame}
-            className="w-full p-4 rounded-xl font-black text-lg bg-gradient-to-r from-lime-500 to-green-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(163,230,53,0.5)]"
+            className="w-full p-4 rounded-xl font-black text-lg bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(239,68,68,0.5)]"
           >
             <Play size={24} />
-            START
+            {isFirstAttempt ? 'START CHALLENGE' : 'PRACTICE RUN'}
           </button>
           
           <button
@@ -346,20 +396,25 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     );
   }
   
-  // Game in progress
+  // Game in progress - RED THEME with proper scrolling
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+      className="min-h-screen bg-slate-950"
+      style={{ 
+        overflowY: 'auto', 
+        overflowX: 'hidden', 
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain'
+      }}
     >
       {/* Background */}
       <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(163,230,53,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(163,230,53,0.3) 1px, transparent 1px)',
+        backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
       
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-2 py-4`}>
+      <div className="relative min-h-screen flex flex-col items-center px-2 py-4">
         <div className="w-full max-w-lg">
           
           {/* Header with Timer */}
@@ -375,35 +430,44 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             
             <button
               onClick={handleRestart}
-              className="p-2 text-slate-400 hover:text-lime-300 transition-colors"
+              className="p-2 text-slate-400 hover:text-red-300 transition-colors"
             >
               <RotateCcw size={20} />
             </button>
           </div>
           
-          {/* Game Board */}
-          <div className="flex justify-center mb-4">
+          {/* Game Board - with rotation/flipped for ghost preview */}
+          <div className="flex justify-center mb-3">
             <GameBoard
               board={board}
               boardPieces={boardPieces}
+              selectedPiece={selectedPiece}
               pendingMove={pendingMove}
+              rotation={rotation}
+              flipped={flipped}
               onCellClick={handleCellClick}
-              onMovePiece={movePendingPiece}
               currentPlayer={currentPlayer}
               gameOver={gameOver}
-              isMobile={isMobile}
+              gameMode="puzzle"
             />
           </div>
           
+          {/* D-Pad for moving pieces */}
+          {pendingMove && (
+            <div className="flex justify-center mb-3">
+              <DPad onMove={movePendingPiece} />
+            </div>
+          )}
+          
           {/* Piece Tray */}
           <PieceTray
-            selectedPiece={selectedPiece}
             usedPieces={usedPieces}
-            onSelectPiece={selectPiece}
-            currentPlayer={currentPlayer}
-            rotation={rotation}
-            flipped={flipped}
+            selectedPiece={selectedPiece}
+            pendingMove={pendingMove}
+            gameOver={gameOver}
             gameMode="puzzle"
+            currentPlayer={currentPlayer}
+            onSelectPiece={selectPiece}
           />
           
           {/* Controls */}
@@ -421,13 +485,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             onCancel={cancelMove}
           />
         </div>
+        
+        {/* Bottom padding for scroll */}
+        <div className="h-8 flex-shrink-0" />
       </div>
       
       {/* Success Overlay */}
       {gameComplete && (
         <SuccessOverlay
           completionTime={completionTime}
-          previousBest={previousBest}
+          firstAttemptTime={firstAttemptTime}
+          bestTime={bestTime}
+          wasFirstAttempt={wasFirstAttempt}
           rank={currentRank}
           onViewLeaderboard={handleViewLeaderboard}
           onPlayAgain={handleRestart}
