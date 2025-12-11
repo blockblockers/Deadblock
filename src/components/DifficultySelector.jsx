@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { pieces } from '../utils/pieces';
 
 // Dramatically different themes for each difficulty
 const themes = {
@@ -16,6 +17,11 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-green-950/50 to-slate-900/95',
     cardBorder: 'border-green-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(34,197,94,0.4),inset_0_0_30px_rgba(34,197,94,0.1)]',
+    floatingColors: [
+      { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },
+      { color: '#10b981', glow: 'rgba(16,185,129,0.6)' },
+      { color: '#84cc16', glow: 'rgba(132,204,22,0.6)' },
+    ],
   },
   intermediate: {
     gridColor: 'rgba(251,191,36,0.5)',
@@ -25,6 +31,11 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/50 to-slate-900/95',
     cardBorder: 'border-amber-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(251,191,36,0.4),inset_0_0_30px_rgba(251,191,36,0.1)]',
+    floatingColors: [
+      { color: '#f59e0b', glow: 'rgba(245,158,11,0.6)' },
+      { color: '#f97316', glow: 'rgba(249,115,22,0.6)' },
+      { color: '#fbbf24', glow: 'rgba(251,191,36,0.6)' },
+    ],
   },
   expert: {
     gridColor: 'rgba(168,85,247,0.5)',
@@ -34,6 +45,11 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-purple-950/50 to-slate-900/95',
     cardBorder: 'border-purple-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(168,85,247,0.4),inset_0_0_30px_rgba(168,85,247,0.1)]',
+    floatingColors: [
+      { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },
+      { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },
+      { color: '#8b5cf6', glow: 'rgba(139,92,246,0.6)' },
+    ],
   },
 };
 
@@ -85,6 +101,82 @@ const difficulties = [
   }
 ];
 
+// Floating pentomino piece component
+const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColor, size, rotation }) => {
+  const coords = pieces[piece] || pieces.T;
+  const minX = Math.min(...coords.map(([x]) => x));
+  const minY = Math.min(...coords.map(([, y]) => y));
+  
+  return (
+    <div
+      className="absolute pointer-events-none animate-float-piece"
+      style={{
+        left: `${startX}%`,
+        top: `${startY}%`,
+        animationDelay: `${delay}s`,
+        animationDuration: `${duration}s`,
+        transform: `rotate(${rotation}deg)`,
+        '--float-x': `${(Math.random() - 0.5) * 100}px`,
+        '--float-y': `${(Math.random() - 0.5) * 100}px`,
+      }}
+    >
+      <div className="relative" style={{ transform: `scale(${size})` }}>
+        {coords.map(([x, y], idx) => (
+          <div
+            key={idx}
+            className="absolute rounded-sm animate-sparkle"
+            style={{
+              width: 8,
+              height: 8,
+              left: (x - minX) * 10,
+              top: (y - minY) * 10,
+              backgroundColor: color,
+              boxShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}50`,
+              animationDelay: `${delay + idx * 0.1}s`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Floating pieces background - themed based on selected difficulty
+const FloatingPiecesBackground = ({ colorSet }) => {
+  const floatingPieces = useMemo(() => {
+    const pieceNames = Object.keys(pieces);
+    const colors = colorSet || [
+      { color: '#22d3ee', glow: 'rgba(34,211,238,0.6)' },
+      { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },
+      { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },
+    ];
+    
+    return Array.from({ length: 10 }).map((_, i) => {
+      const colorChoice = colors[i % colors.length];
+      return {
+        id: i,
+        piece: pieceNames[Math.floor(Math.random() * pieceNames.length)],
+        startX: Math.random() * 100,
+        startY: Math.random() * 100,
+        delay: Math.random() * 8,
+        duration: 15 + Math.random() * 10,
+        color: colorChoice.color,
+        glowColor: colorChoice.glow,
+        size: 0.6 + Math.random() * 0.6,
+        rotation: Math.random() * 360,
+      };
+    });
+  }, [colorSet]);
+
+  return (
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      {floatingPieces.map((p) => (
+        <FloatingPiece key={p.id} {...p} />
+      ))}
+    </div>
+  );
+};
+
 const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGame, onBack }) => {
   const { needsScroll } = useResponsiveLayout(700);
   const [aiGoesFirst, setAiGoesFirst] = useState(false);
@@ -115,7 +207,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
   return (
     <div 
       className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' } : {}}
     >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
@@ -127,6 +219,45 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      
+      {/* Floating pentomino pieces - themed */}
+      <FloatingPiecesBackground colorSet={theme.floatingColors} />
+      
+      {/* Animation keyframes */}
+      <style>{`
+        @keyframes float-piece {
+          0% { 
+            transform: translate(0, 0) rotate(0deg); 
+            opacity: 0;
+          }
+          10% { opacity: 0.6; }
+          50% { 
+            transform: translate(var(--float-x), var(--float-y)) rotate(180deg);
+            opacity: 0.8;
+          }
+          90% { opacity: 0.6; }
+          100% { 
+            transform: translate(calc(var(--float-x) * 2), calc(var(--float-y) * 2)) rotate(360deg);
+            opacity: 0;
+          }
+        }
+        @keyframes sparkle {
+          0%, 100% { 
+            opacity: 0.4; 
+            box-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
+          }
+          50% { 
+            opacity: 1; 
+            box-shadow: 0 0 16px currentColor, 0 0 32px currentColor, 0 0 48px currentColor;
+          }
+        }
+        .animate-float-piece { 
+          animation: float-piece var(--duration, 20s) ease-in-out infinite; 
+        }
+        .animate-sparkle { 
+          animation: sparkle 2s ease-in-out infinite; 
+        }
+      `}</style>
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>

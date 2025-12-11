@@ -1,5 +1,7 @@
 // Player Stats Modal - Comprehensive stats display
-import { useState, useEffect } from 'react';
+// FIXES: Scroll behavior on mobile - users can now scroll back up after scrolling down
+
+import { useState, useEffect, useRef } from 'react';
 import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { statsService } from '../utils/statsService';
@@ -14,6 +16,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const [editingName, setEditingName] = useState(false);
   const [newDisplayName, setNewDisplayName] = useState('');
   const [expandedSection, setExpandedSection] = useState('overview');
+  const scrollContainerRef = useRef(null);
   
   useEffect(() => {
     if (isOpen && !isOffline) {
@@ -26,6 +29,13 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       setNewDisplayName(profile.display_name || profile.username || '');
     }
   }, [profile]);
+  
+  // Reset scroll position when modal opens
+  useEffect(() => {
+    if (isOpen && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+  }, [isOpen]);
   
   const loadStats = async () => {
     setLoading(true);
@@ -114,6 +124,12 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
     );
   };
   
+  // Handle touch events to prevent modal close on scroll
+  const handleTouchMove = (e) => {
+    // Allow scrolling within the scroll container
+    e.stopPropagation();
+  };
+  
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -121,16 +137,17 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       onClick={onClose}
     >
       <div 
-        className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden border border-slate-700/50 shadow-2xl flex flex-col"
+        className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[85vh] border border-slate-700/50 shadow-2xl flex flex-col"
         onClick={e => e.stopPropagation()}
+        style={{ minHeight: 0 }} // Critical for flex scroll to work
       >
-        {/* Header */}
-        <div className="p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800 to-slate-900 flex-shrink-0">
+        {/* Header - Fixed */}
+        <div className="p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800 to-slate-900 flex-shrink-0 rounded-t-2xl">
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
               {/* Avatar */}
               <div 
-                className="w-16 h-16 rounded-full overflow-hidden border-2 flex items-center justify-center"
+                className="w-16 h-16 rounded-full overflow-hidden border-2 flex items-center justify-center flex-shrink-0"
                 style={{ 
                   borderColor: rankInfo?.color || '#64748b',
                   backgroundColor: rankInfo?.color + '20' || '#475569'
@@ -144,7 +161,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
               </div>
               
               {/* Name and rank */}
-              <div>
+              <div className="min-w-0 flex-1">
                 {editingName ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -161,9 +178,9 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-bold text-lg">{displayName}</span>
+                    <span className="text-white font-bold text-lg truncate">{displayName}</span>
                     {!isOffline && (
-                      <button onClick={() => setEditingName(true)} className="text-slate-500 hover:text-slate-300">
+                      <button onClick={() => setEditingName(true)} className="text-slate-500 hover:text-slate-300 flex-shrink-0">
                         <Edit2 size={14} />
                       </button>
                     )}
@@ -192,7 +209,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
             
             <button 
               onClick={onClose}
-              className="text-slate-400 hover:text-white transition-colors"
+              className="text-slate-400 hover:text-white transition-colors flex-shrink-0"
             >
               <X size={20} />
             </button>
@@ -201,13 +218,16 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         
         {/* Stats Content - Scrollable */}
         <div 
+          ref={scrollContainerRef}
           className="flex-1 p-4 space-y-3"
+          onTouchMove={handleTouchMove}
           style={{
             overflowY: 'auto',
             overflowX: 'hidden',
             WebkitOverflowScrolling: 'touch',
-            touchAction: 'pan-y',
-            overscrollBehavior: 'contain',
+            overscrollBehaviorY: 'contain',
+            minHeight: 0, // Critical for flex scroll
+            // Remove touchAction to allow natural scrolling
           }}
         >
           {isOffline ? (
@@ -278,94 +298,104 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                       <div className="text-slate-500 text-xs">Win Rate</div>
                     </div>
                   </div>
-                  <div className="text-center text-slate-400 text-sm">
-                    {stats?.games_played || 0} total ranked matches
+                  
+                  <div className="bg-slate-800/50 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock size={14} className="text-slate-400" />
+                      <span className="text-slate-400 text-xs">Total Games</span>
+                    </div>
+                    <div className="text-white font-bold text-xl">{stats?.games_played || 0}</div>
                   </div>
                 </div>
               </Section>
               
-              {/* Puzzle Mode Stats */}
-              <Section id="puzzles" title="Puzzle Mode" icon={Target} color="green">
-                <div className="space-y-3">
-                  <WinRateBar 
-                    wins={stats?.puzzles_easy_solved || 0} 
-                    total={stats?.puzzles_easy_attempted || 0} 
-                    label="Easy"
-                  />
-                  <WinRateBar 
-                    wins={stats?.puzzles_medium_solved || 0} 
-                    total={stats?.puzzles_medium_attempted || 0} 
-                    label="Medium"
-                  />
-                  <WinRateBar 
-                    wins={stats?.puzzles_hard_solved || 0} 
-                    total={stats?.puzzles_hard_attempted || 0} 
-                    label="Hard"
-                  />
-                  <div className="text-center text-slate-400 text-sm pt-2 border-t border-slate-700/50">
-                    {stats?.puzzleTotalSolved || 0} puzzles solved total
-                  </div>
-                </div>
-              </Section>
-              
-              {/* Speed Puzzle Stats */}
-              <Section id="speed" title="Speed Puzzle" icon={Zap} color="orange">
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-slate-800/50 rounded-lg p-3">
-                    <Flame size={20} className="mx-auto text-orange-400 mb-1" />
-                    <div className="text-orange-400 font-bold text-xl">{stats?.speed_best_streak || 0}</div>
-                    <div className="text-slate-500 text-xs">Best Streak</div>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-3">
-                    <Target size={20} className="mx-auto text-cyan-400 mb-1" />
-                    <div className="text-cyan-400 font-bold text-xl">{stats?.speed_total_puzzles || 0}</div>
-                    <div className="text-slate-500 text-xs">Total Solved</div>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-3">
-                    <TrendingUp size={20} className="mx-auto text-green-400 mb-1" />
-                    <div className="text-green-400 font-bold text-xl">{stats?.speedAvgStreak || 0}</div>
-                    <div className="text-slate-500 text-xs">Avg Streak</div>
-                  </div>
-                </div>
-                <div className="text-center text-slate-400 text-sm mt-3">
-                  {stats?.speed_total_sessions || 0} sessions played
-                </div>
-              </Section>
-              
-              {/* VS AI Stats */}
+              {/* AI Stats */}
               <Section id="ai" title="VS AI" icon={Bot} color="purple">
                 <div className="space-y-3">
                   <WinRateBar 
-                    wins={stats?.ai_easy_wins || 0} 
-                    total={(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)} 
-                    label="Easy AI"
+                    wins={stats?.ai_beginner_wins || 0} 
+                    total={stats?.ai_beginner_games || 0} 
+                    label="Beginner AI"
                   />
                   <WinRateBar 
-                    wins={stats?.ai_medium_wins || 0} 
-                    total={(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)} 
-                    label="Medium AI"
+                    wins={stats?.ai_intermediate_wins || 0} 
+                    total={stats?.ai_intermediate_games || 0} 
+                    label="Intermediate AI"
                   />
                   <WinRateBar 
-                    wins={stats?.ai_hard_wins || 0} 
-                    total={(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)} 
-                    label="Hard AI"
+                    wins={stats?.ai_expert_wins || 0} 
+                    total={stats?.ai_expert_games || 0} 
+                    label="Expert AI"
                   />
-                  <div className="text-center text-slate-400 text-sm pt-2 border-t border-slate-700/50">
-                    {stats?.aiTotalWins || 0} wins out of {stats?.aiTotalGames || 0} games
+                </div>
+              </Section>
+              
+              {/* Puzzle Stats */}
+              <Section id="puzzles" title="Puzzles" icon={Target} color="green">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="bg-slate-800/50 rounded-lg p-2">
+                      <div className="text-green-400 font-bold">{stats?.puzzles_easy_solved || 0}</div>
+                      <div className="text-slate-500 text-xs">Easy</div>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg p-2">
+                      <div className="text-amber-400 font-bold">{stats?.puzzles_medium_solved || 0}</div>
+                      <div className="text-slate-500 text-xs">Medium</div>
+                    </div>
+                    <div className="bg-slate-800/50 rounded-lg p-2">
+                      <div className="text-purple-400 font-bold">{stats?.puzzles_hard_solved || 0}</div>
+                      <div className="text-slate-500 text-xs">Hard</div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-slate-800/50 rounded-lg p-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Zap size={14} className="text-orange-400" />
+                      <span className="text-slate-400 text-xs">Speed Puzzle</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <div className="text-slate-500 text-xs">Completed</div>
+                        <div className="text-white font-bold">{stats?.speed_puzzles_completed || 0}</div>
+                      </div>
+                      <div className="h-8 w-px bg-slate-700" />
+                      <div>
+                        <div className="text-slate-500 text-xs">Best Streak</div>
+                        <div className="text-orange-400 font-bold">{stats?.speed_best_streak || 0}</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </Section>
               
-              {/* Local Games */}
-              <Section id="local" title="Local Multiplayer" icon={Users} color="pink">
-                <div className="text-center py-4">
-                  <Users size={32} className="mx-auto text-pink-400 mb-2" />
-                  <div className="text-white font-bold text-2xl">{stats?.local_games_played || 0}</div>
-                  <div className="text-slate-400 text-sm">games played locally</div>
+              {/* Local Stats */}
+              <Section id="local" title="Local 2P" icon={Users} color="pink">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                    <div className="text-cyan-400 font-bold text-lg">{stats?.local_player1_wins || 0}</div>
+                    <div className="text-slate-500 text-xs">Player 1 Wins</div>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-3 text-center">
+                    <div className="text-pink-400 font-bold text-lg">{stats?.local_player2_wins || 0}</div>
+                    <div className="text-slate-500 text-xs">Player 2 Wins</div>
+                  </div>
                 </div>
               </Section>
+              
+              {/* Bottom padding for scroll */}
+              <div className="h-4" />
             </>
           )}
+        </div>
+        
+        {/* Footer with close button - Fixed */}
+        <div className="p-3 border-t border-slate-700/50 bg-slate-800/50 flex-shrink-0 rounded-b-2xl">
+          <button
+            onClick={onClose}
+            className="w-full py-2.5 rounded-lg font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 transition-all"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
