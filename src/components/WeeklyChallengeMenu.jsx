@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
-  const { profile } = useAuth();
+  const { profile, isAuthenticated, loading: authLoading, refreshProfile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
   const [challenge, setChallenge] = useState(null);
@@ -19,9 +19,28 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(null);
   
+  // Load data when component mounts and when auth state changes
   useEffect(() => {
+    // Wait for auth to be ready before loading
+    if (authLoading) return;
+    
     loadChallengeData();
-  }, []);
+  }, [authLoading, isAuthenticated]);
+  
+  // Also reload user-specific data when profile becomes available
+  useEffect(() => {
+    if (profile && challenge && !userResult) {
+      loadUserData(challenge.id);
+    }
+  }, [profile, challenge]);
+  
+  // Try to refresh profile if authenticated but profile is missing
+  useEffect(() => {
+    if (isAuthenticated && !profile && !authLoading && refreshProfile) {
+      console.log('[WeeklyChallengeMenu] Profile missing, refreshing...');
+      refreshProfile();
+    }
+  }, [isAuthenticated, profile, authLoading, refreshProfile]);
   
   useEffect(() => {
     if (!challenge) return;
@@ -35,6 +54,20 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
     const interval = setInterval(updateTime, 60000);
     return () => clearInterval(interval);
   }, [challenge]);
+  
+  const loadUserData = async (challengeId) => {
+    try {
+      // Get user's result
+      const { data: resultData } = await weeklyChallengeService.getUserResult(challengeId);
+      setUserResult(resultData);
+      
+      // Get user's rank
+      const { rank } = await weeklyChallengeService.getUserRank(challengeId);
+      setUserRank(rank);
+    } catch (err) {
+      console.error('[WeeklyChallengeMenu] Error loading user data:', err);
+    }
+  };
   
   const loadChallengeData = async () => {
     setLoading(true);
@@ -52,13 +85,8 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
       if (challengeData) {
         setChallenge(challengeData);
         
-        // Get user's result
-        const { data: resultData } = await weeklyChallengeService.getUserResult(challengeData.id);
-        setUserResult(resultData);
-        
-        // Get user's rank
-        const { rank } = await weeklyChallengeService.getUserRank(challengeData.id);
-        setUserRank(rank);
+        // Load user-specific data
+        await loadUserData(challengeData.id);
         
         // Get top 3 for preview
         const { data: leaderboardData } = await weeklyChallengeService.getLeaderboard(challengeData.id, 3);

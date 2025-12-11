@@ -1,35 +1,48 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isSupabaseConfigured } from './utils/supabase';
 
-// Screens
+// Core screens (always loaded - used frequently)
 import MenuScreen from './components/MenuScreen';
-import PuzzleSelect from './components/PuzzleSelect';
-import SpeedPuzzleScreen from './components/SpeedPuzzleScreen';
 import GameScreen from './components/GameScreen';
-import DifficultySelector from './components/DifficultySelector';
 import NeonTitle from './components/NeonTitle';
 
-// Weekly Challenge components
-import WeeklyChallengeMenu from './components/WeeklyChallengeMenu';
-import WeeklyChallengeScreen from './components/WeeklyChallengeScreen';
-import WeeklyLeaderboard from './components/WeeklyLeaderboard';
+// Loading screen for Suspense fallback
+import LoadingScreen from './components/LoadingScreen';
+import { LazyWrapper, LazyInline, preloadOnlineComponents, preloadPuzzleComponents, preloadWeeklyComponents } from './components/LazyWrapper';
 
-// Entry and Profile components
+// Entry and Profile components (loaded on app start)
 import EntryAuthScreen from './components/EntryAuthScreen';
 import PlayerProfileCard from './components/PlayerProfileCard';
-import PlayerStatsModal from './components/PlayerStatsModal';
 
-// Online components (lazy loaded if needed)
-import AuthScreen from './components/AuthScreen';
-import OnlineMenu from './components/OnlineMenu';
-import MatchmakingScreen from './components/MatchmakingScreen';
-import OnlineGameScreen from './components/OnlineGameScreen';
-import UserProfile from './components/UserProfile';
-import Leaderboard from './components/Leaderboard';
-import SpectatorView from './components/SpectatorView';
-import GameReplay from './components/GameReplay';
+// =============================================================================
+// LAZY LOADED COMPONENTS
+// These components are loaded on-demand to reduce initial bundle size
+// =============================================================================
+
+// Puzzle components (loaded when entering puzzle mode)
+const PuzzleSelect = lazy(() => import('./components/PuzzleSelect'));
+const SpeedPuzzleScreen = lazy(() => import('./components/SpeedPuzzleScreen'));
+const DifficultySelector = lazy(() => import('./components/DifficultySelector'));
+
+// Weekly Challenge components (loaded when entering weekly challenge)
+const WeeklyChallengeMenu = lazy(() => import('./components/WeeklyChallengeMenu'));
+const WeeklyChallengeScreen = lazy(() => import('./components/WeeklyChallengeScreen'));
+const WeeklyLeaderboard = lazy(() => import('./components/WeeklyLeaderboard'));
+
+// Profile/Stats modal (loaded on demand)
+const PlayerStatsModal = lazy(() => import('./components/PlayerStatsModal'));
+
+// Online components (loaded when entering online features)
+const AuthScreen = lazy(() => import('./components/AuthScreen'));
+const OnlineMenu = lazy(() => import('./components/OnlineMenu'));
+const MatchmakingScreen = lazy(() => import('./components/MatchmakingScreen'));
+const OnlineGameScreen = lazy(() => import('./components/OnlineGameScreen'));
+const UserProfile = lazy(() => import('./components/UserProfile'));
+const Leaderboard = lazy(() => import('./components/Leaderboard'));
+const SpectatorView = lazy(() => import('./components/SpectatorView'));
+const GameReplay = lazy(() => import('./components/GameReplay'));
 
 // PWA Install Prompt for iOS/Safari
 import IOSInstallPrompt from './components/IOSInstallPrompt';
@@ -47,6 +60,20 @@ function AppContent() {
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showOnlineAuthPrompt, setShowOnlineAuthPrompt] = useState(false);
+  
+  // Persist entry auth state to localStorage so it survives page refresh
+  const [hasPassedEntryAuth, setHasPassedEntryAuth] = useState(() => {
+    // Check if already authenticated - if so, they've already passed entry auth
+    // This handles the case where the user refreshes the page after signing in
+    return localStorage.getItem('deadblock_entry_auth_passed') === 'true';
+  });
+  
+  // Update localStorage when hasPassedEntryAuth changes
+  useEffect(() => {
+    if (hasPassedEntryAuth) {
+      localStorage.setItem('deadblock_entry_auth_passed', 'true');
+    }
+  }, [hasPassedEntryAuth]);
   
   // Check for pending online intent (set before OAuth redirect)
   const [pendingOnlineIntent, setPendingOnlineIntent] = useState(() => {
@@ -454,8 +481,9 @@ function AppContent() {
   }, [shouldShowLoading, clearOAuthCallback, hasPassedEntryAuth, isAuthenticated, pendingOnlineIntent, setGameMode]);
 
   // Show loading while auth is initializing or processing OAuth callback
-  // Don't show loading if we're already authenticated with a profile
-  const showAuthLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !profile));
+  // Only show loading during actual auth initialization, not profile loading
+  // Profile loading happens in background and shouldn't block the UI
+  const showAuthLoading = isOnlineEnabled && authLoading;
   
   if (showAuthLoading) {
     return (
@@ -550,62 +578,43 @@ function AppContent() {
           isAuthenticated={isAuthenticated}
           isOfflineMode={isOfflineMode}
           onShowProfile={() => setShowProfileModal(true)}
+          // Preload components on hover for better UX
+          onPuzzleHover={preloadPuzzleComponents}
+          onOnlineHover={preloadOnlineComponents}
+          onWeeklyHover={preloadWeeklyComponents}
         />
-        <PlayerStatsModal
-          isOpen={showProfileModal}
-          onClose={() => setShowProfileModal(false)}
-          isOffline={isOfflineMode}
-        />
+        <LazyInline>
+          <PlayerStatsModal
+            isOpen={showProfileModal}
+            onClose={() => setShowProfileModal(false)}
+            isOffline={isOfflineMode}
+          />
+        </LazyInline>
       </>
     );
   }
 
   // =====================================================
-  // ONLINE MODES
+  // ONLINE MODES (Lazy loaded with Suspense)
   // =====================================================
 
   // Auth Screen (Login/Signup)
   if (gameMode === 'auth') {
     return (
-      <AuthScreen
-        onBack={() => setGameMode(null)}
-        onSuccess={() => setGameMode('online-menu')}
-        inviteInfo={inviteInfo}
-      />
+      <LazyWrapper message="Loading authentication...">
+        <AuthScreen
+          onBack={() => setGameMode(null)}
+          onSuccess={() => setGameMode('online-menu')}
+          inviteInfo={inviteInfo}
+        />
+      </LazyWrapper>
     );
   }
 
   // Online Menu/Lobby
   if (gameMode === 'online-menu') {
     return (
-      <OnlineMenu
-        onFindMatch={() => setGameMode('matchmaking')}
-        onViewProfile={() => setGameMode('profile')}
-        onViewLeaderboard={() => setGameMode('leaderboard')}
-        onResumeGame={handleResumeGame}
-        onSpectateGame={handleSpectateGame}
-        onViewReplay={handleViewReplay}
-        onBack={() => setGameMode(null)}
-      />
-    );
-  }
-
-  // Matchmaking Screen
-  if (gameMode === 'matchmaking') {
-    return (
-      <MatchmakingScreen
-        onMatchFound={handleMatchFound}
-        onCancel={() => setGameMode('online-menu')}
-      />
-    );
-  }
-
-  // Online Game
-  if (gameMode === 'online-game') {
-    if (!onlineGameId) {
-      console.error('online-game mode but no gameId, redirecting to menu');
-      // Reset to online menu if we somehow got here without a game ID
-      return (
+      <LazyWrapper message="Loading online lobby...">
         <OnlineMenu
           onFindMatch={() => setGameMode('matchmaking')}
           onViewProfile={() => setGameMode('profile')}
@@ -615,135 +624,192 @@ function AppContent() {
           onViewReplay={handleViewReplay}
           onBack={() => setGameMode(null)}
         />
+      </LazyWrapper>
+    );
+  }
+
+  // Matchmaking Screen
+  if (gameMode === 'matchmaking') {
+    return (
+      <LazyWrapper message="Finding opponents...">
+        <MatchmakingScreen
+          onMatchFound={handleMatchFound}
+          onCancel={() => setGameMode('online-menu')}
+        />
+      </LazyWrapper>
+    );
+  }
+
+  // Online Game
+  if (gameMode === 'online-game') {
+    if (!onlineGameId) {
+      console.error('online-game mode but no gameId, redirecting to menu');
+      // Reset to online menu if we somehow got here without a game ID
+      return (
+        <LazyWrapper message="Loading online lobby...">
+          <OnlineMenu
+            onFindMatch={() => setGameMode('matchmaking')}
+            onViewProfile={() => setGameMode('profile')}
+            onViewLeaderboard={() => setGameMode('leaderboard')}
+            onResumeGame={handleResumeGame}
+            onSpectateGame={handleSpectateGame}
+            onViewReplay={handleViewReplay}
+            onBack={() => setGameMode(null)}
+          />
+        </LazyWrapper>
       );
     }
     return (
-      <OnlineGameScreen
-        gameId={onlineGameId}
-        onGameEnd={handleOnlineGameEnd}
-        onLeave={() => {
-          setOnlineGameId(null);
-          setGameMode('online-menu');
-        }}
-      />
+      <LazyWrapper message="Loading game...">
+        <OnlineGameScreen
+          gameId={onlineGameId}
+          onGameEnd={handleOnlineGameEnd}
+          onLeave={() => {
+            setOnlineGameId(null);
+            setGameMode('online-menu');
+          }}
+        />
+      </LazyWrapper>
     );
   }
 
   // User Profile
   if (gameMode === 'profile') {
     return (
-      <UserProfile
-        onBack={() => setGameMode('online-menu')}
-      />
+      <LazyWrapper message="Loading profile...">
+        <UserProfile
+          onBack={() => setGameMode('online-menu')}
+        />
+      </LazyWrapper>
     );
   }
 
   // Leaderboard
   if (gameMode === 'leaderboard') {
     return (
-      <Leaderboard
-        onBack={() => setGameMode('online-menu')}
-      />
+      <LazyWrapper message="Loading leaderboard...">
+        <Leaderboard
+          onBack={() => setGameMode('online-menu')}
+        />
+      </LazyWrapper>
     );
   }
 
   // Spectate Game
   if (gameMode === 'spectate') {
     return (
-      <SpectatorView
-        gameId={spectatingGameId}
-        userId={profile?.id}
-        onClose={() => {
-          setSpectatingGameId(null);
-          setGameMode('online-menu');
-        }}
-      />
+      <LazyWrapper message="Loading spectator view...">
+        <SpectatorView
+          gameId={spectatingGameId}
+          userId={profile?.id}
+          onClose={() => {
+            setSpectatingGameId(null);
+            setGameMode('online-menu');
+          }}
+        />
+      </LazyWrapper>
     );
   }
 
   // Game Replay
   if (gameMode === 'replay') {
     return (
-      <GameReplay
-        gameId={replayGameId}
-        onClose={() => {
-          setReplayGameId(null);
-          setGameMode('online-menu');
-        }}
-      />
+      <LazyWrapper message="Loading replay...">
+        <GameReplay
+        <LazyWrapper message="Loading replay...">
+        <GameReplay
+          gameId={replayGameId}
+          onClose={() => {
+            setReplayGameId(null);
+            setGameMode('online-menu');
+          }}
+        />
+      </LazyWrapper>
     );
   }
 
   // =====================================================
-  // OFFLINE MODES
+  // OFFLINE MODES (Lazy loaded with Suspense)
   // =====================================================
 
   // Render Difficulty Selector for AI
   if (gameMode === 'difficulty-select') {
     return (
-      <DifficultySelector
-        selectedDifficulty={aiDifficulty}
-        onSelectDifficulty={setAiDifficulty}
-        onStartGame={handleStartAIGame}
-        onBack={() => setGameMode(null)}
-      />
+      <LazyWrapper message="Loading difficulty selector...">
+        <DifficultySelector
+          selectedDifficulty={aiDifficulty}
+          onSelectDifficulty={setAiDifficulty}
+          onStartGame={handleStartAIGame}
+          onBack={() => setGameMode(null)}
+        />
+      </LazyWrapper>
     );
   }
 
   // Render Puzzle Difficulty Select Screen
   if (gameMode === 'puzzle-select') {
     return (
-      <PuzzleSelect
-        onSelectPuzzle={handlePuzzleSelect}
-        onSpeedMode={() => setGameMode('speed-puzzle')}
-        onBack={() => setGameMode(null)}
-      />
+      <LazyWrapper message="Loading puzzle mode...">
+        <PuzzleSelect
+          onSelectPuzzle={handlePuzzleSelect}
+          onSpeedMode={() => setGameMode('speed-puzzle')}
+          onBack={() => setGameMode(null)}
+        />
+      </LazyWrapper>
     );
   }
   
   // Render Speed Puzzle Screen
   if (gameMode === 'speed-puzzle') {
     return (
-      <SpeedPuzzleScreen
-        onMenu={() => setGameMode('puzzle-select')}
-        isOfflineMode={isOfflineMode}
-      />
+      <LazyWrapper message="Loading speed puzzle...">
+        <SpeedPuzzleScreen
+          onMenu={() => setGameMode('puzzle-select')}
+          isOfflineMode={isOfflineMode}
+        />
+      </LazyWrapper>
     );
   }
 
   // =====================================================
-  // WEEKLY CHALLENGE MODES
+  // WEEKLY CHALLENGE MODES (Lazy loaded with Suspense)
   // =====================================================
 
   // Weekly Challenge Menu
   if (gameMode === 'weekly-menu') {
     return (
-      <WeeklyChallengeMenu
-        onPlay={handlePlayWeeklyChallenge}
-        onLeaderboard={handleWeeklyLeaderboard}
-        onBack={() => setGameMode(null)}
-      />
+      <LazyWrapper message="Loading weekly challenge...">
+        <WeeklyChallengeMenu
+          onPlay={handlePlayWeeklyChallenge}
+          onLeaderboard={handleWeeklyLeaderboard}
+          onBack={() => setGameMode(null)}
+        />
+      </LazyWrapper>
     );
   }
 
   // Weekly Challenge Game
   if (gameMode === 'weekly-game') {
     return (
-      <WeeklyChallengeScreen
-        challenge={currentWeeklyChallenge}
-        onMenu={() => setGameMode('weekly-menu')}
-        onLeaderboard={handleWeeklyLeaderboard}
-      />
+      <LazyWrapper message="Starting challenge...">
+        <WeeklyChallengeScreen
+          challenge={currentWeeklyChallenge}
+          onMenu={() => setGameMode('weekly-menu')}
+          onLeaderboard={handleWeeklyLeaderboard}
+        />
+      </LazyWrapper>
     );
   }
 
   // Weekly Leaderboard
   if (gameMode === 'weekly-leaderboard') {
     return (
-      <WeeklyLeaderboard
-        challenge={currentWeeklyChallenge}
-        onBack={() => setGameMode('weekly-menu')}
-      />
+      <LazyWrapper message="Loading leaderboard...">
+        <WeeklyLeaderboard
+          challenge={currentWeeklyChallenge}
+          onBack={() => setGameMode('weekly-menu')}
+        />
+      </LazyWrapper>
     );
   }
 

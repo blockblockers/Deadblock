@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { pieceColors } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
+import { GamePropTypes, CallbackPropTypes } from '../utils/propTypes';
 
 // Animation types for ambient effects
 const AMBIENT_EFFECTS = ['shimmer', 'edgeGlow', 'trace', 'breathe'];
@@ -679,6 +681,53 @@ const GameBoard = ({
       `}</style>
     </div>
   );
+};
+
+/**
+ * @component GameBoard
+ * @description Main game board component displaying the 8x8 grid with placed pieces,
+ * pending moves, and ambient visual effects. Handles cell clicks and displays
+ * game state including valid/invalid move indicators.
+ */
+GameBoard.propTypes = {
+  /** Current board state - 8x8 grid of player numbers or null */
+  board: GamePropTypes.board.isRequired,
+  /** Map of piece positions to piece names */
+  boardPieces: PropTypes.oneOfType([
+    PropTypes.object,
+    PropTypes.arrayOf(PropTypes.array),
+  ]),
+  /** Currently pending move awaiting confirmation */
+  pendingMove: GamePropTypes.pendingMove,
+  /** Current piece rotation (0, 90, 180, 270) */
+  rotation: PropTypes.number,
+  /** Whether current piece is flipped */
+  flipped: PropTypes.bool,
+  /** Whether the game has ended */
+  gameOver: PropTypes.bool,
+  /** Current game mode */
+  gameMode: GamePropTypes.gameMode,
+  /** Current player's turn (1 or 2) */
+  currentPlayer: GamePropTypes.player,
+  /** Callback when a cell is clicked */
+  onCellClick: CallbackPropTypes.onClick,
+  /** Whether AI is currently animating a move */
+  aiAnimatingMove: PropTypes.bool,
+  /** Whether player's move is being animated */
+  playerAnimatingMove: PropTypes.bool,
+};
+
+GameBoard.defaultProps = {
+  boardPieces: {},
+  pendingMove: null,
+  rotation: 0,
+  flipped: false,
+  gameOver: false,
+  gameMode: null,
+  currentPlayer: 1,
+  onCellClick: () => {},
+  aiAnimatingMove: false,
+  playerAnimatingMove: false,
 };
 
 export default GameBoard;

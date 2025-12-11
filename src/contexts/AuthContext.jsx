@@ -111,7 +111,19 @@ export const AuthProvider = ({ children }) => {
           } else if (data?.session) {
             console.log('Session established from OAuth callback');
             setUser(data.session.user);
-            await fetchProfile(data.session.user.id);
+            
+            // Try to fetch profile, but don't block on it
+            try {
+              await fetchProfile(data.session.user.id);
+            } catch (profileError) {
+              console.error('Profile fetch failed during OAuth callback:', profileError);
+              // Don't fail the OAuth - profile will be retried later
+            }
+            
+            // Clear OAuth callback flag after successful session - profile loading continues in background
+            // This prevents the blank screen issue
+            console.log('OAuth callback processed, clearing flag');
+            setIsOAuthCallback(false);
           } else {
             console.log('No session in OAuth callback response');
             setIsOAuthCallback(false);
@@ -359,6 +371,8 @@ export const AuthProvider = ({ children }) => {
     if (!error) {
       setUser(null);
       setProfile(null);
+      // Clear entry auth flag so user sees auth screen on next visit
+      localStorage.removeItem('deadblock_entry_auth_passed');
     }
     return { error };
   };
