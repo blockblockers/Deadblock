@@ -1,7 +1,7 @@
 // Achievements Display - Shows user achievements in profile
 import { useState, useEffect } from 'react';
 import { Crown, Medal, Calendar, Flame, Zap, Target, Award, Trophy, Bot, Gamepad2, User, Lock, ChevronDown, ChevronUp } from 'lucide-react';
-import { achievementService } from '../services/achievementService';
+import achievementService from '../services/achievementService';
 import { useAuth } from '../contexts/AuthContext';
 import { soundManager } from '../utils/soundManager';
 
