@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
-import GameControls from './GameControls';
+import ControlButtons from './ControlButtons';
 import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
@@ -411,16 +411,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
           />
           
           {/* Controls */}
-          <GameControls
-            rotation={rotation}
-            flipped={flipped}
+          <ControlButtons
+            selectedPiece={selectedPiece}
+            pendingMove={pendingMove}
+            canConfirm={!!pendingMove}
+            gameOver={gameOver}
+            gameMode="puzzle"
+            currentPlayer={currentPlayer}
+            isGeneratingPuzzle={false}
             onRotate={rotatePiece}
             onFlip={flipPiece}
             onConfirm={confirmMove}
             onCancel={cancelMove}
-            canConfirm={!!pendingMove}
-            gameMode="puzzle"
-            isPuzzle={true}
           />
         </div>
       </div>
