@@ -263,16 +263,22 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   // Load achievement count
   useEffect(() => {
     if (profile?.id) {
-      achievementService.getAchievementStats(profile.id).then(result => {
-        if (result.data) {
-          setAchievementCount({
-            unlocked: result.data.unlockedCount || 0,
-            total: result.data.totalAchievements || 0
-          });
-        }
-      }).catch(() => {
-        // Achievements may not be available
-      });
+      // Check if getAchievementStats exists before calling
+      if (typeof achievementService?.getAchievementStats === 'function') {
+        achievementService.getAchievementStats(profile.id).then(result => {
+          if (result.data) {
+            setAchievementCount({
+              unlocked: result.data.unlockedCount || 0,
+              total: result.data.totalAchievements || 0
+            });
+          }
+        }).catch((err) => {
+          console.warn('[PlayerProfileCard] Achievement stats error:', err);
+          // Achievements may not be available
+        });
+      } else {
+        console.warn('[PlayerProfileCard] achievementService.getAchievementStats is not available');
+      }
     }
   }, [profile?.id]);
   

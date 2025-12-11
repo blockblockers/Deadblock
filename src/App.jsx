@@ -307,16 +307,20 @@ function AppContent() {
 
   // Handle starting a game (with difficulty selection for AI mode)
   const handleStartGame = (mode) => {
+    console.log('handleStartGame called:', { mode, isOnlineEnabled, isOfflineMode, isAuthenticated });
+    
     if (mode === 'ai') {
       setGameMode('difficulty-select');
     } else if (mode === 'online') {
       // Check if online is enabled and user is authenticated
       if (!isOnlineEnabled) {
+        console.log('Online not enabled - showing alert');
         alert('Online features are not configured. Please set up Supabase.');
         return;
       }
       // If user is in offline mode, show auth prompt
       if (isOfflineMode && !isAuthenticated) {
+        console.log('Offline mode, not authenticated - showing auth prompt');
         // Set intent before showing auth - this persists through OAuth redirect
         localStorage.setItem('deadblock_pending_online_intent', 'true');
         setPendingOnlineIntent(true);
@@ -324,8 +328,10 @@ function AppContent() {
         return;
       }
       if (!isAuthenticated) {
+        console.log('Not authenticated - going to auth screen');
         setGameMode('auth');
       } else {
+        console.log('Authenticated - going to online-menu');
         setGameMode('online-menu');
       }
     } else {
@@ -357,12 +363,16 @@ function AppContent() {
 
   // Handle weekly challenge button click
   const handleWeeklyChallenge = () => {
+    console.log('handleWeeklyChallenge called:', { isOnlineEnabled, isOfflineMode, isAuthenticated });
+    
     // Weekly challenge requires authentication
     if (!isOnlineEnabled) {
+      console.log('Online not enabled - showing alert');
       alert('Online features are not configured. Please set up Supabase.');
       return;
     }
     if (isOfflineMode && !isAuthenticated) {
+      console.log('Offline mode, not authenticated - showing auth prompt');
       // Set intent before showing auth - this persists through OAuth redirect
       localStorage.setItem('deadblock_pending_online_intent', 'true');
       setPendingOnlineIntent(true);
@@ -370,9 +380,11 @@ function AppContent() {
       return;
     }
     if (!isAuthenticated) {
+      console.log('Not authenticated - going to auth screen');
       setGameMode('auth');
       return;
     }
+    console.log('Authenticated - going to weekly-menu');
     setGameMode('weekly-menu');
   };
 
@@ -637,6 +649,8 @@ function AppContent() {
   // Changed from !gameMode to explicit null check plus fallback
   if (gameMode === null || gameMode === undefined) {
     console.log('Rendering: MenuScreen (gameMode is null/undefined)');
+    console.log('MenuScreen props:', { isOnlineEnabled, isAuthenticated, isOfflineMode, hasProfile: !!profile });
+    
     // If user just authenticated but hasPassedEntryAuth not set yet, set it now
     if (isAuthenticated && !hasPassedEntryAuth) {
       console.log('Setting hasPassedEntryAuth from render');

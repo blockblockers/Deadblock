@@ -29,14 +29,21 @@ const Achievements = ({ userId, onClose }) => {
     setError(null);
     
     try {
-      const [achResult, statsResult] = await Promise.all([
-        achievementService.getAchievementsWithStatus(userId),
-        achievementService.getAchievementStats(userId)
-      ]);
-
+      // Check if functions exist before calling
+      if (typeof achievementService?.getAchievementsWithStatus !== 'function') {
+        throw new Error('Achievement service not properly configured');
+      }
+      
+      const achResult = await achievementService.getAchievementsWithStatus(userId);
+      
       if (achResult.error) throw new Error(achResult.error.message || 'Failed to load achievements');
       if (achResult.data) setAchievements(achResult.data);
-      if (statsResult.data) setStats(statsResult.data);
+      
+      // Stats are optional - don't fail if not available
+      if (typeof achievementService?.getAchievementStats === 'function') {
+        const statsResult = await achievementService.getAchievementStats(userId);
+        if (statsResult.data) setStats(statsResult.data);
+      }
     } catch (err) {
       console.error('Error loading achievements:', err);
       setError('Achievements require database migration. Please run the migration first.');
