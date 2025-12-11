@@ -222,10 +222,10 @@ function AppContent() {
   } = useGameState();
 
   // Check if user was already authenticated (skip entry screen)
-  // But NOT during OAuth callback - let the OAuth handler decide where to go
+  // This handles page refresh, OAuth return, and any other case where user is authenticated
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !hasPassedEntryAuth && !isOAuthCallback) {
-      console.log('App: User already authenticated, skipping entry screen');
+    if (!authLoading && isAuthenticated && !hasPassedEntryAuth) {
+      console.log('App: User authenticated, marking entry auth as passed');
       setHasPassedEntryAuth(true);
       
       // If there was a pending online intent, clear it and go to online menu
@@ -237,7 +237,7 @@ function AppContent() {
         setGameMode('online-menu');
       }
     }
-  }, [authLoading, isAuthenticated, hasPassedEntryAuth, isOAuthCallback, pendingOnlineIntent, setGameMode]);
+  }, [authLoading, isAuthenticated, hasPassedEntryAuth, pendingOnlineIntent, setGameMode]);
 
   // Effect to accept pending invite after login (needs setGameMode from useGameState)
   useEffect(() => {
@@ -535,8 +535,12 @@ function AppContent() {
   console.log('App render:', { gameMode, onlineGameId, isAuthenticated, authLoading, isOAuthCallback, hasPassedEntryAuth, isOfflineMode });
 
   // Show Entry Auth Screen first (before anything else)
-  // Skip if already authenticated or has passed entry screen
-  if (!hasPassedEntryAuth && !authLoading && !isOAuthCallback) {
+  // Skip if:
+  // 1. Already passed entry screen
+  // 2. Auth is still loading
+  // 3. OAuth callback in progress  
+  // 4. User is already authenticated (effect will set hasPassedEntryAuth)
+  if (!hasPassedEntryAuth && !authLoading && !isOAuthCallback && !isAuthenticated) {
     return (
       <EntryAuthScreen
         onComplete={handleEntryAuthComplete}
