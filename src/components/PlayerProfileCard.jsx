@@ -224,7 +224,6 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   const [showUsernameEdit, setShowUsernameEdit] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
-  const [profileRetried, setProfileRetried] = useState(false);
   
   // Get rank info for authenticated users
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
@@ -232,33 +231,48 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   // Retry profile fetch if authenticated but no profile
   useEffect(() => {
     let retryCount = 0;
-    const maxRetries = 3;
+    const maxRetries = 5;
+    let mounted = true;
     
     const attemptFetch = async () => {
+      if (!mounted) return;
+      
       if (isAuthenticated && !profile && retryCount < maxRetries && refreshProfile) {
         retryCount++;
         console.log(`[PlayerProfileCard] Profile missing, retry attempt ${retryCount}/${maxRetries}...`);
         try {
           const result = await refreshProfile();
           console.log('[PlayerProfileCard] Profile retry result:', !!result);
-          if (!result && retryCount < maxRetries) {
-            // Wait and try again
-            setTimeout(attemptFetch, 1000 * retryCount);
+          if (!result && retryCount < maxRetries && mounted) {
+            // Wait and try again with exponential backoff
+            setTimeout(attemptFetch, 500 * retryCount);
           }
         } catch (err) {
           console.error('[PlayerProfileCard] Profile retry failed:', err);
-          if (retryCount < maxRetries) {
-            setTimeout(attemptFetch, 1000 * retryCount);
+          if (retryCount < maxRetries && mounted) {
+            setTimeout(attemptFetch, 500 * retryCount);
           }
         }
       }
     };
     
-    if (isAuthenticated && !profile && !profileRetried) {
-      setProfileRetried(true);
-      attemptFetch();
+    // Only start retrying if authenticated but no profile
+    if (isAuthenticated && !profile) {
+      // Small delay to let AuthContext finish its initialization
+      const startDelay = setTimeout(() => {
+        attemptFetch();
+      }, 300);
+      
+      return () => {
+        mounted = false;
+        clearTimeout(startDelay);
+      };
     }
-  }, [isAuthenticated, profile, profileRetried, refreshProfile]);
+    
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthenticated, profile, refreshProfile]);
   
   // Load achievement count
   useEffect(() => {

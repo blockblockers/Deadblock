@@ -1,6 +1,6 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Zap, Trophy, Play, RotateCcw, Timer, Flame } from 'lucide-react';
+import { Zap, Trophy, Play, RotateCcw, Timer, Flame, Home } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
@@ -183,9 +183,6 @@ const SuccessOverlay = ({ streak, onContinue }) => (
 
 // Game over overlay
 const GameOverOverlay = ({ streak, bestStreak, onPlayAgain, onMenu }) => {
-  // Log when rendered
-  console.log('[SpeedPuzzle] Rendering GameOverOverlay, streak:', streak, 'bestStreak:', bestStreak);
-  
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
       <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.3)]">
@@ -577,7 +574,16 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
 
   // Confirm move
   const confirmMove = useCallback(() => {
-    if (!pendingMove || !selectedPiece || gameState !== 'playing') return;
+    if (!pendingMove || !selectedPiece || gameState !== 'playing') {
+      return;
+    }
+    
+    // Validate the move is actually valid before placing
+    if (!canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords)) {
+      console.log('[SpeedPuzzle] Invalid placement attempted');
+      soundManager.playInvalidMove();
+      return;
+    }
     
     // Stop timer immediately
     if (timerRef.current) {
@@ -585,8 +591,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       timerRef.current = null;
     }
     
+    // Prevent game over from being triggered while we process
+    gameOverHandledRef.current = true;
+    
     // Set animation state
-    setPlayerAnimatingMove({ ...pendingMove, pieceType: selectedPiece });
+    setPlayerAnimatingMove({ ...pendingMove, pieceType: selectedPiece, rot: rotation, flip: flipped });
     
     // Place the piece
     const newBoard = board.map(row => [...row]);
@@ -616,16 +625,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     // Check if puzzle is solved (player wins = correct answer)
     // In easy puzzles with 1 move, if we placed a piece and AI can't play any remaining piece, we win
     setTimeout(() => {
-      console.log('[SpeedPuzzle] Checking victory condition...');
-      console.log('[SpeedPuzzle] Used pieces:', newUsedPieces);
-      
       // canAnyPieceBePlaced expects the list of USED pieces, and it will check if any UNUSED piece can be placed
       const aiCanPlay = canAnyPieceBePlaced(newBoard, newUsedPieces);
-      console.log('[SpeedPuzzle] AI can play:', aiCanPlay);
       
       if (!aiCanPlay) {
         // Success! Puzzle solved
-        console.log('[SpeedPuzzle] Victory! Setting gameState to success');
+        console.log('[SpeedPuzzle] Victory! AI has no valid moves');
         soundManager.playWin();
         
         const newStreak = streak + 1;
@@ -653,13 +658,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         setGameState('success');
       } else {
         // Wrong move - restart timer and continue
+        console.log('[SpeedPuzzle] Wrong move - AI can still play');
         soundManager.playInvalidMove();
+        gameOverHandledRef.current = false; // Allow game over again
         setTimeLeft(TIMER_DURATION);
         lastTickRef.current = Date.now();
         setGameState('playing'); // This will restart the timer via useEffect
       }
     }, 100);
-  }, [pendingMove, selectedPiece, gameState, board, boardPieces, usedPieces, streak, effectiveBestStreak, isOfflineMode]);
+  }, [pendingMove, selectedPiece, gameState, board, boardPieces, usedPieces, streak, effectiveBestStreak, isOfflineMode, rotation, flipped]);
 
   // Cancel move
   const cancelMove = useCallback(() => {

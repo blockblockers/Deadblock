@@ -2,7 +2,7 @@
 // This guarantees exactly N moves remain and they are playable
 
 import { pieces } from './pieces';
-import { getPieceCoords, canPlacePiece, BOARD_SIZE, createEmptyBoard } from './gameLogic';
+import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE, createEmptyBoard } from './gameLogic';
 
 export const PUZZLE_DIFFICULTY = {
   EASY: 'easy',
@@ -285,8 +285,8 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
 
 // Simple 1-move puzzle for speed mode (less strict requirements)
 export const generateSpeedPuzzle = () => {
-  // Try to generate a simple 1-move puzzle
-  for (let attempt = 0; attempt < 30; attempt++) {
+  // Try to generate a simple 1-move puzzle where placing the correct piece blocks all remaining pieces
+  for (let attempt = 0; attempt < 50; attempt++) {
     const game = playCompleteGame();
     
     // Need at least 2 moves (so we can back out 1)
@@ -303,9 +303,33 @@ export const generateSpeedPuzzle = () => {
     // Get all valid moves from this state
     const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
     
-    // Just need at least 1 valid move
-    if (allMoves.length > 0) {
-      console.log(`Speed puzzle generated: ${allMoves.length} possible moves`);
+    if (allMoves.length === 0) continue;
+    
+    // Check each possible move to see if any leads to a winning state
+    // (i.e., after placing the piece, no other piece can be placed)
+    const winningMoves = [];
+    
+    for (const move of allMoves) {
+      // Simulate placing this piece
+      const testBoard = puzzleState.board.map(r => [...r]);
+      const testUsedPieces = [...puzzleState.usedPieces, move.pieceType];
+      
+      for (const [dx, dy] of move.coords) {
+        testBoard[move.row + dy][move.col + dx] = 1;
+      }
+      
+      // Check if ANY unused piece can be placed after this move
+      const opponentCanPlay = canAnyPieceBePlaced(testBoard, testUsedPieces);
+      
+      if (!opponentCanPlay) {
+        // This is a winning move!
+        winningMoves.push(move);
+      }
+    }
+    
+    // If we found at least one winning move, this is a valid puzzle
+    if (winningMoves.length > 0) {
+      console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves`);
       
       return {
         id: `speed-puzzle-${Date.now()}`,
@@ -314,12 +338,14 @@ export const generateSpeedPuzzle = () => {
         description: '1 move to win!',
         boardState: boardToString(puzzleState.boardPieces),
         usedPieces: [...puzzleState.usedPieces],
-        movesRemaining: 1
+        movesRemaining: 1,
+        // Store winning moves for debugging (not used in game)
+        _winningMoveCount: winningMoves.length
       };
     }
   }
   
-  console.error('Failed to generate speed puzzle after 30 attempts');
+  console.error('Failed to generate winning speed puzzle after 50 attempts');
   return null;
 };
 
