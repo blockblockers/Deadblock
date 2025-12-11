@@ -325,21 +325,29 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     return (
       <button
         onClick={onClick}
-        className="w-full flex items-center gap-3 p-3 rounded-xl border transition-all group"
+        className="w-full flex items-center gap-3 p-3 transition-all group"
         style={{
-          background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.8) 0%, rgba(30, 41, 59, 0.9) 100%)',
-          borderColor: 'rgba(100, 116, 139, 0.4)',
-          boxShadow: '0 0 20px rgba(100, 116, 139, 0.2), inset 0 1px 0 rgba(255,255,255,0.05)'
+          background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
+          border: '2px solid rgba(100, 116, 139, 0.5)',
+          borderRadius: '12px',
+          boxShadow: '0 0 25px rgba(100, 116, 139, 0.25), 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)'
         }}
       >
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center border-2 border-slate-500/50 shadow-[0_0_10px_rgba(100,116,139,0.3)]">
-          <WifiOff size={20} className="text-slate-400" />
+        <div 
+          className="w-12 h-12 rounded-full flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, rgb(71, 85, 105) 0%, rgb(51, 65, 85) 100%)',
+            border: '2px solid rgba(100, 116, 139, 0.5)',
+            boxShadow: '0 0 15px rgba(100, 116, 139, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
+          }}
+        >
+          <WifiOff size={20} style={{ color: '#94a3b8' }} />
         </div>
         <div className="flex-1 text-left">
-          <div className="text-white font-black text-sm tracking-wide" style={{ textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>OFFLINE MODE</div>
-          <div className="text-slate-500 text-xs">Stats not tracked</div>
+          <div style={{ color: 'white', fontWeight: '900', fontSize: '14px', letterSpacing: '0.05em', textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>OFFLINE MODE</div>
+          <div style={{ color: '#64748b', fontSize: '12px' }}>Stats not tracked</div>
         </div>
-        <ChevronRight size={20} className="text-slate-500 group-hover:text-slate-400 group-hover:translate-x-1 transition-all" />
+        <ChevronRight size={20} style={{ color: '#64748b' }} className="group-hover:translate-x-1 transition-all" />
       </button>
     );
   }
@@ -352,16 +360,18 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
           console.log('[PlayerProfileCard] Manual refresh triggered');
           if (refreshProfile) refreshProfile();
         }}
-        className="w-full flex items-center gap-3 p-3 rounded-xl border hover:bg-slate-800/50 transition-colors cursor-pointer"
+        className="w-full flex items-center gap-3 p-3 transition-colors cursor-pointer"
         style={{
-          background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.8) 0%, rgba(30, 41, 59, 0.9) 100%)',
-          borderColor: 'rgba(34, 211, 238, 0.3)',
+          background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
+          border: '2px solid rgba(34, 211, 238, 0.3)',
+          borderRadius: '12px',
+          boxShadow: '0 0 20px rgba(34, 211, 238, 0.15), inset 0 1px 0 rgba(255,255,255,0.05)'
         }}
       >
         <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse" />
         <div className="flex-1 text-left">
           <div className="h-4 w-24 bg-slate-700 rounded animate-pulse mb-1.5" />
-          <div className="text-xs text-slate-500">Loading profile... tap to retry</div>
+          <div style={{ fontSize: '12px', color: '#64748b' }}>Loading profile... tap to retry</div>
         </div>
       </button>
     );
@@ -386,35 +396,42 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     return contrastBackgrounds[rankInfo.color] || 'rgba(15, 23, 42, 0.95)';
   };
   
+  // Get the border color - ensure it's always valid
+  const borderColor = rankInfo?.color ? `${rankInfo.color}60` : 'rgba(34, 211, 238, 0.4)';
+  const glowColor = rankInfo?.color || '#22d3ee';
+  
   return (
     <>
       <button 
         onClick={onClick}
-        className="w-full rounded-xl border transition-all overflow-hidden group backdrop-blur-sm"
+        className="w-full transition-all overflow-hidden group"
         style={{
           background: `linear-gradient(135deg, 
-            rgba(15, 23, 42, 0.85) 0%, 
-            ${rankInfo?.color}10 25%,
-            rgba(30, 41, 59, 0.75) 50%, 
-            ${rankInfo?.color}08 75%,
-            rgba(15, 23, 42, 0.85) 100%)`,
-          borderColor: `${rankInfo?.color}40` || 'rgba(34, 211, 238, 0.3)',
-          boxShadow: `0 0 25px ${rankInfo?.color}20, 
+            rgba(15, 23, 42, 0.95) 0%, 
+            ${glowColor}15 25%,
+            rgba(30, 41, 59, 0.85) 50%, 
+            ${glowColor}10 75%,
+            rgba(15, 23, 42, 0.95) 100%)`,
+          border: `2px solid ${borderColor}`,
+          borderRadius: '12px',
+          boxShadow: `0 0 30px ${glowColor}25, 
+                      0 4px 20px rgba(0,0,0,0.4),
                       inset 0 1px 0 rgba(255,255,255,0.1),
-                      inset 0 0 30px ${rankInfo?.color}05`
+                      inset 0 0 40px ${glowColor}08`,
+          backdropFilter: 'blur(8px)',
         }}
       >
         <div className="flex items-center gap-3 p-3">
           {/* Tier Icon Circle with contrasting background */}
           <div 
-            className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 border-2"
+            className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
             style={{ 
               background: `radial-gradient(circle at 30% 30%, 
                 ${getTierIconBackground()}, 
                 rgba(10, 15, 25, 0.98))`,
-              borderColor: `${rankInfo?.color}50`,
-              boxShadow: `0 0 20px ${rankInfo?.color}35, 
-                          inset 0 0 15px ${rankInfo?.color}15,
+              border: `2px solid ${glowColor}50`,
+              boxShadow: `0 0 20px ${glowColor}35, 
+                          inset 0 0 15px ${glowColor}15,
                           inset 0 2px 4px rgba(255,255,255,0.1)`
             }}
           >
@@ -429,7 +446,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
               className="font-black text-base tracking-wide truncate"
               style={{ 
                 color: '#f1f5f9',
-                textShadow: `0 0 12px ${rankInfo?.color}40, 0 0 4px rgba(0,0,0,0.8)` 
+                textShadow: `0 0 12px ${glowColor}40, 0 0 4px rgba(0,0,0,0.8)` 
               }}
             >
               {displayName}
@@ -438,12 +455,12 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
               {rankInfo && (
                 <span 
                   className="text-xs font-bold uppercase tracking-wider"
-                  style={{ color: rankInfo.color, textShadow: `0 0 10px ${rankInfo.color}50` }}
+                  style={{ color: glowColor, textShadow: `0 0 10px ${glowColor}50` }}
                 >
                   {rankInfo.name}
                 </span>
               )}
-              <span className="text-slate-400 text-xs font-medium">
+              <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
                 {profile.rating || 1000} ELO
               </span>
             </div>
@@ -453,7 +470,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
           <ChevronRight 
             size={20} 
             className="group-hover:translate-x-0.5 transition-all flex-shrink-0" 
-            style={{ color: rankInfo?.color || '#64748b', opacity: 0.7 }} 
+            style={{ color: glowColor, opacity: 0.7 }} 
           />
         </div>
       </button>

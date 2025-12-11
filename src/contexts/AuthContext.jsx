@@ -180,13 +180,24 @@ export const AuthProvider = ({ children }) => {
     // Get initial session
     const initAuth = async () => {
       console.log('=== Auth Init Started ===');
-      try {
-        // Set a timeout to ensure loading completes even if there's an issue
-        const timeout = setTimeout(() => {
-          console.log('Auth init: TIMEOUT - forcing loading to complete');
+      let timeoutCleared = false;
+      
+      // Set a longer timeout and make it smarter
+      const timeout = setTimeout(() => {
+        if (!timeoutCleared) {
+          console.log('Auth init: TIMEOUT - checking if we should force complete');
+          // Only force complete if we don't have an active fetch in progress
+          // The auth listener may still be fetching profile
           setLoading(false);
-        }, 5000); // 5 second timeout (reduced from 10)
-
+        }
+      }, 8000); // Increased to 8 seconds
+      
+      const clearTimeoutSafe = () => {
+        timeoutCleared = true;
+        clearTimeout(timeout);
+      };
+      
+      try {
         // First handle any OAuth callback
         console.log('Auth init: Handling OAuth callback (if any)...');
         await handleOAuthCallback();
@@ -196,10 +207,9 @@ export const AuthProvider = ({ children }) => {
         console.log('Auth init: Getting current session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        clearTimeout(timeout);
-        
         if (error) {
           console.error('Auth init: Error getting session:', error);
+          clearTimeoutSafe();
           setLoading(false);
           return;
         }
@@ -221,20 +231,25 @@ export const AuthProvider = ({ children }) => {
             username: profileResult?.username 
           });
           
-          // If profile fetch failed, try once more after a delay
+          // If profile fetch failed, try more aggressively
           if (!profileResult) {
-            console.log('Auth init: Profile not found, retrying in 500ms...');
-            await new Promise(r => setTimeout(r, 500));
-            const retryResult = await fetchProfile(session.user.id);
-            console.log('Auth init: Retry result', { hasProfile: !!retryResult });
+            console.log('Auth init: Profile not found, starting aggressive retry...');
+            for (let i = 0; i < 5; i++) {
+              await new Promise(r => setTimeout(r, 800 * (i + 1)));
+              const retryResult = await fetchProfile(session.user.id);
+              console.log(`Auth init: Retry ${i + 1} result:`, { hasProfile: !!retryResult });
+              if (retryResult) break;
+            }
           }
         }
         
+        clearTimeoutSafe();
         console.log('Auth init: Setting loading to false');
         setLoading(false);
         console.log('=== Auth Init Complete ===');
       } catch (err) {
         console.error('Auth init: Error:', err);
+        clearTimeoutSafe();
         setLoading(false);
       }
     };
@@ -259,12 +274,42 @@ export const AuthProvider = ({ children }) => {
           }
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
           // Token was refreshed (e.g., on app reopen) - always fetch profile to ensure it's loaded
-          console.log('[AuthContext] TOKEN_REFRESHED - fetching profile');
-          await fetchProfile(session.user.id);
+          console.log('[AuthContext] TOKEN_REFRESHED - fetching profile for', session.user.id);
+          const result = await fetchProfile(session.user.id);
+          console.log('[AuthContext] TOKEN_REFRESHED - profile fetch result:', { 
+            hasProfile: !!result, 
+            username: result?.username 
+          });
+          
+          // If profile fetch failed, retry a few times
+          if (!result) {
+            console.log('[AuthContext] TOKEN_REFRESHED - profile not found, retrying...');
+            for (let i = 0; i < 3; i++) {
+              await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+              const retryResult = await fetchProfile(session.user.id);
+              console.log(`[AuthContext] TOKEN_REFRESHED - retry ${i + 1}:`, { hasProfile: !!retryResult });
+              if (retryResult) break;
+            }
+          }
         } else if (event === 'INITIAL_SESSION' && session?.user) {
           // Initial session restored from storage - always fetch profile
-          console.log('[AuthContext] INITIAL_SESSION - fetching profile');
-          await fetchProfile(session.user.id);
+          console.log('[AuthContext] INITIAL_SESSION - fetching profile for', session.user.id);
+          const result = await fetchProfile(session.user.id);
+          console.log('[AuthContext] INITIAL_SESSION - profile fetch result:', { 
+            hasProfile: !!result, 
+            username: result?.username 
+          });
+          
+          // If profile fetch failed, retry
+          if (!result) {
+            console.log('[AuthContext] INITIAL_SESSION - profile not found, retrying...');
+            for (let i = 0; i < 3; i++) {
+              await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+              const retryResult = await fetchProfile(session.user.id);
+              console.log(`[AuthContext] INITIAL_SESSION - retry ${i + 1}:`, { hasProfile: !!retryResult });
+              if (retryResult) break;
+            }
+          }
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
           setIsOAuthCallback(false);

@@ -324,62 +324,156 @@ SuccessOverlay.propTypes = {
 /**
  * Game over overlay - shown when timer expires
  */
-const GameOverOverlay = memo(({ streak, bestStreak, onPlayAgain, onMenu }) => (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}>
-    <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.3)]">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center">
-          <Timer size={32} className="text-white" />
-        </div>
-        <h2 className="text-2xl font-black text-red-400 mb-4">TIME'S UP!</h2>
-        
-        <div className="bg-slate-800/50 rounded-xl p-4 mb-6">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Final Streak</div>
-              <div className="text-3xl font-black text-white">{streak}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">Best Ever</div>
-              <div className={`text-3xl font-black ${streak >= bestStreak && streak > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
-                {Math.max(streak, bestStreak)}
-              </div>
-            </div>
+const GameOverOverlay = memo(({ streak, bestStreak, onPlayAgain, onMenu }) => {
+  // Log when this component renders for debugging
+  console.log('[GameOverOverlay] Rendering with:', { streak, bestStreak });
+  
+  return (
+    <div 
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.9)'
+      }}
+    >
+      <div 
+        style={{
+          background: 'linear-gradient(135deg, rgb(15, 23, 42) 0%, rgb(30, 41, 59) 100%)',
+          borderRadius: '16px',
+          padding: '24px',
+          maxWidth: '380px',
+          width: '100%',
+          margin: '0 16px',
+          border: '2px solid rgba(239, 68, 68, 0.5)',
+          boxShadow: '0 0 60px rgba(239, 68, 68, 0.4)'
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          {/* Icon */}
+          <div 
+            style={{
+              width: '64px',
+              height: '64px',
+              margin: '0 auto 16px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgb(239, 68, 68), rgb(234, 88, 12))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Timer size={32} style={{ color: 'white' }} />
           </div>
           
-          {streak >= bestStreak && streak > 0 && (
-            <div className="mt-3 flex items-center justify-center gap-2 text-amber-400">
-              <Trophy size={18} />
-              <span className="font-bold text-sm">New Personal Best!</span>
-            </div>
-          )}
-        </div>
-        
-        <div className="space-y-3">
-          <button
-            onClick={onPlayAgain}
-            className="w-full py-4 rounded-xl font-black tracking-wider text-lg bg-gradient-to-r from-red-500 to-orange-600 text-white hover:from-red-400 hover:to-orange-500 transition-all shadow-[0_0_30px_rgba(239,68,68,0.5)] active:scale-[0.98]"
+          {/* Title */}
+          <h2 
+            style={{ 
+              fontSize: '28px', 
+              fontWeight: '900', 
+              color: '#f87171', 
+              marginBottom: '16px',
+              textShadow: '0 0 20px rgba(239, 68, 68, 0.5)'
+            }}
           >
-            <div className="flex items-center justify-center gap-2">
+            TIME'S UP!
+          </h2>
+          
+          {/* Stats Box */}
+          <div 
+            style={{
+              background: 'rgba(30, 41, 59, 0.8)',
+              borderRadius: '12px',
+              padding: '16px',
+              marginBottom: '24px',
+              border: '1px solid rgba(71, 85, 105, 0.5)'
+            }}
+          >
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Final Streak</div>
+                <div style={{ fontSize: '32px', fontWeight: '900', color: 'white' }}>{streak}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Best Ever</div>
+                <div style={{ fontSize: '32px', fontWeight: '900', color: streak >= bestStreak && streak > 0 ? '#fbbf24' : '#94a3b8' }}>
+                  {Math.max(streak, bestStreak)}
+                </div>
+              </div>
+            </div>
+            
+            {streak >= bestStreak && streak > 0 && (
+              <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#fbbf24' }}>
+                <Trophy size={18} />
+                <span style={{ fontWeight: '700', fontSize: '14px' }}>New Personal Best!</span>
+              </div>
+            )}
+          </div>
+          
+          {/* Buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <button
+              onClick={() => {
+                console.log('[GameOverOverlay] Play Again clicked');
+                onPlayAgain();
+              }}
+              style={{
+                width: '100%',
+                padding: '16px',
+                borderRadius: '12px',
+                fontWeight: '900',
+                letterSpacing: '0.05em',
+                fontSize: '18px',
+                background: 'linear-gradient(90deg, rgb(239, 68, 68), rgb(234, 88, 12))',
+                color: 'white',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 0 30px rgba(239, 68, 68, 0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
               <RotateCcw size={22} />
               PLAY AGAIN
-            </div>
-          </button>
-          
-          <button
-            onClick={onMenu}
-            className="w-full py-3 rounded-xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 transition-all border border-slate-600"
-          >
-            <div className="flex items-center justify-center gap-2">
+            </button>
+            
+            <button
+              onClick={() => {
+                console.log('[GameOverOverlay] Menu clicked');
+                onMenu();
+              }}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '12px',
+                fontWeight: '700',
+                color: '#cbd5e1',
+                background: 'rgb(30, 41, 59)',
+                border: '1px solid rgb(71, 85, 105)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+            >
               <Home size={18} />
               Back to Menu
-            </div>
-          </button>
+            </button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-));
+  );
+});
 
 GameOverOverlay.displayName = 'GameOverOverlay';
 GameOverOverlay.propTypes = {
@@ -559,15 +653,39 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   }, [clearTimer]);
 
   // -------------------------------------------------------------------------
+  // EFFECT: Log gameState changes (debug)
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    console.log('[SpeedPuzzle] gameState changed to:', gameState);
+  }, [gameState]);
+
+  // -------------------------------------------------------------------------
   // GAME OVER HANDLER
   // -------------------------------------------------------------------------
   const triggerGameOver = useCallback(() => {
-    if (gameOverHandledRef.current) return;
+    console.log('[SpeedPuzzle] triggerGameOver called, current handled status:', gameOverHandledRef.current);
     
+    if (gameOverHandledRef.current) {
+      console.log('[SpeedPuzzle] Game over already handled, skipping');
+      return;
+    }
+    
+    console.log('[SpeedPuzzle] Setting game over state');
     gameOverHandledRef.current = true;
     clearTimer();
-    soundManager.playGameOver();
-    setGameState(GAME_STATES.GAMEOVER);
+    
+    // Play sound
+    try {
+      soundManager.playGameOver();
+    } catch (e) {
+      console.error('[SpeedPuzzle] Error playing game over sound:', e);
+    }
+    
+    // Set state - use functional update to ensure we get latest state
+    setGameState((prevState) => {
+      console.log('[SpeedPuzzle] Changing state from', prevState, 'to', GAME_STATES.GAMEOVER);
+      return GAME_STATES.GAMEOVER;
+    });
   }, [clearTimer]);
 
   // -------------------------------------------------------------------------
@@ -648,10 +766,31 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // EFFECT: Check for timer expiration
   // -------------------------------------------------------------------------
   useEffect(() => {
+    // Log every time timeLeft changes near zero for debugging
+    if (timeLeft <= 1) {
+      console.log('[SpeedPuzzle] Timer low:', { 
+        timeLeft, 
+        gameState, 
+        gameOverHandled: gameOverHandledRef.current,
+        shouldTrigger: gameState === GAME_STATES.PLAYING && timeLeft <= 0 && !gameOverHandledRef.current
+      });
+    }
+    
     if (gameState === GAME_STATES.PLAYING && timeLeft <= 0 && !gameOverHandledRef.current) {
+      console.log('[SpeedPuzzle] *** TIMER EXPIRED - TRIGGERING GAME OVER ***');
       triggerGameOver();
     }
   }, [timeLeft, gameState, triggerGameOver]);
+  
+  // -------------------------------------------------------------------------
+  // EFFECT: Debug - Log gameState changes
+  // -------------------------------------------------------------------------
+  useEffect(() => {
+    console.log('[SpeedPuzzle] >>> gameState is now:', gameState);
+    if (gameState === GAME_STATES.GAMEOVER) {
+      console.log('[SpeedPuzzle] >>> GAMEOVER STATE ACTIVE - overlay should be visible');
+    }
+  }, [gameState]);
 
   // -------------------------------------------------------------------------
   // EFFECT: Initial puzzle load
@@ -670,8 +809,41 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setSelectedPiece(pieceType);
     setRotation(0);
     setFlipped(false);
-    setPendingMove(null);
-  }, [gameState]);
+    
+    // Auto-find a valid position for the piece so d-pad works immediately
+    const coords = getPieceCoords(pieceType, 0, false);
+    
+    // Find center of board or first valid position
+    let foundPosition = null;
+    
+    // Try center first
+    const centerRow = Math.floor(BOARD_SIZE / 2);
+    const centerCol = Math.floor(BOARD_SIZE / 2);
+    
+    if (canPlacePiece(board, centerRow, centerCol, coords)) {
+      foundPosition = { row: centerRow, col: centerCol };
+    } else {
+      // Search for any valid position
+      for (let row = 0; row < BOARD_SIZE && !foundPosition; row++) {
+        for (let col = 0; col < BOARD_SIZE && !foundPosition; col++) {
+          if (canPlacePiece(board, row, col, coords)) {
+            foundPosition = { row, col };
+          }
+        }
+      }
+    }
+    
+    if (foundPosition) {
+      setPendingMove({ 
+        row: foundPosition.row, 
+        col: foundPosition.col, 
+        coords, 
+        piece: pieceType 
+      });
+    } else {
+      setPendingMove(null);
+    }
+  }, [gameState, board]);
 
   const rotatePiece = useCallback(() => {
     if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;
@@ -995,6 +1167,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         <SuccessOverlay streak={streak} onContinue={handleContinue} />
       )}
       
+      {/* Game Over Overlay */}
       {gameState === GAME_STATES.GAMEOVER && (
         <GameOverOverlay
           streak={streak}
