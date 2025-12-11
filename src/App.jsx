@@ -56,7 +56,6 @@ function AppContent() {
   const [inviteInfo, setInviteInfo] = useState(null);
   
   // Entry auth and offline mode state
-  const [hasPassedEntryAuth, setHasPassedEntryAuth] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showOnlineAuthPrompt, setShowOnlineAuthPrompt] = useState(false);
@@ -715,8 +714,6 @@ function AppContent() {
   if (gameMode === 'replay') {
     return (
       <LazyWrapper message="Loading replay...">
-        <GameReplay
-        <LazyWrapper message="Loading replay...">
         <GameReplay
           gameId={replayGameId}
           onClose={() => {
