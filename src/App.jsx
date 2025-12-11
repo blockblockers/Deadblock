@@ -483,6 +483,59 @@ function AppContent() {
   // Keep showing during OAuth callback until redirect effect handles it
   const showAuthLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !hasRedirectedAfterOAuth));
   
+  // DEBUG: Always log current state (even before loading check)
+  console.log('=== App Render Debug ===', {
+    showAuthLoading,
+    authLoading,
+    isOAuthCallback,
+    hasRedirectedAfterOAuth,
+    isAuthenticated,
+    hasPassedEntryAuth,
+    isOnlineEnabled,
+    gameMode,
+    hasProfile: !!profile,
+  });
+  
+  // INLINE OAuth completion handling - if we're in OAuth callback but user is authenticated,
+  // trigger the redirect immediately instead of waiting for effect
+  if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
+    console.log('=== INLINE OAuth completion - triggering redirect ===');
+    // Use setTimeout to avoid state update during render
+    setTimeout(() => {
+      setHasRedirectedAfterOAuth(true);
+      clearOAuthCallback?.();
+      setHasPassedEntryAuth(true);
+      setIsOfflineMode(false);
+      
+      const hadOnlineIntent = pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true';
+      localStorage.removeItem('deadblock_pending_online_intent');
+      setPendingOnlineIntent(false);
+      
+      if (hadOnlineIntent) {
+        console.log('OAuth complete - going to online menu');
+        setGameMode('online-menu');
+      } else {
+        console.log('OAuth complete - going to main menu');
+        setGameMode(null);
+      }
+    }, 0);
+    
+    // Show brief loading while redirect processes
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
+        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        <div className="relative z-10 mb-8">
+          <NeonTitle size="large" />
+        </div>
+        <div className="relative z-10 w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="relative z-10 text-amber-300 text-sm font-medium tracking-wider">WELCOME BACK...</p>
+      </div>
+    );
+  }
+  
   if (showAuthLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">

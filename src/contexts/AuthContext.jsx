@@ -94,6 +94,7 @@ export const AuthProvider = ({ children }) => {
     // Handle OAuth callback - extract session from URL
     const handleOAuthCallback = async () => {
       if (hasAuthData) {
+        console.log('=== OAuth Callback Processing Started ===');
         try {
           // Set a timeout for OAuth processing
           const timeoutPromise = new Promise((_, reject) => 
@@ -101,63 +102,80 @@ export const AuthProvider = ({ children }) => {
           );
           
           // This extracts the session from the URL hash/params
+          console.log('OAuth: Getting session from Supabase...');
           const sessionPromise = supabase.auth.getSession();
           
           const { data, error } = await Promise.race([sessionPromise, timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))]);
           
+          console.log('OAuth: Session response:', { 
+            hasData: !!data, 
+            hasSession: !!data?.session,
+            hasUser: !!data?.session?.user,
+            error: error?.message 
+          });
+          
           if (error) {
-            console.error('Error getting session from callback:', error);
+            console.error('OAuth: Error getting session:', error);
             setIsOAuthCallback(false); // Clear flag on error only
           } else if (data?.session) {
-            console.log('Session established from OAuth callback');
+            console.log('OAuth: Session established successfully', {
+              userId: data.session.user?.id,
+              email: data.session.user?.email
+            });
             setUser(data.session.user);
             
             // Try to fetch profile, but don't block on it
             try {
-              await fetchProfile(data.session.user.id);
+              console.log('OAuth: Fetching profile...');
+              const profileResult = await fetchProfile(data.session.user.id);
+              console.log('OAuth: Profile result:', { hasProfile: !!profileResult });
             } catch (profileError) {
-              console.error('Profile fetch failed during OAuth callback:', profileError);
+              console.error('OAuth: Profile fetch failed:', profileError);
               // Don't fail the OAuth - profile will be retried later
             }
             
             // DON'T clear isOAuthCallback here - let App.jsx handle it after redirect
-            // This allows App.jsx to detect the OAuth completion and redirect appropriately
-            console.log('OAuth callback processed successfully, App.jsx will clear flag after redirect');
+            console.log('OAuth: Callback processed successfully, waiting for App.jsx to handle redirect');
           } else {
-            console.log('No session in OAuth callback response');
+            console.log('OAuth: No session in response');
             setIsOAuthCallback(false); // Clear flag when no session
           }
           
           // Clean up URL after processing
+          console.log('OAuth: Cleaning up URL');
           window.history.replaceState({}, document.title, '/');
         } catch (err) {
-          console.error('OAuth callback error:', err);
+          console.error('OAuth: Callback error:', err);
           setIsOAuthCallback(false); // Clear flag on error
           window.history.replaceState({}, document.title, '/');
         }
+        console.log('=== OAuth Callback Processing Finished ===');
       }
     };
 
     // Get initial session
     const initAuth = async () => {
+      console.log('=== Auth Init Started ===');
       try {
         // Set a timeout to ensure loading completes even if there's an issue
         const timeout = setTimeout(() => {
-          console.log('Auth initialization timeout - forcing loading to complete');
+          console.log('Auth init: TIMEOUT - forcing loading to complete');
           setLoading(false);
         }, 5000); // 5 second timeout (reduced from 10)
 
         // First handle any OAuth callback
+        console.log('Auth init: Handling OAuth callback (if any)...');
         await handleOAuthCallback();
+        console.log('Auth init: OAuth callback handling complete');
         
         // Then get the current session
-        console.log('Auth init: Getting session...');
+        console.log('Auth init: Getting current session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         clearTimeout(timeout);
         
         if (error) {
-          console.error('Error getting session:', error);
+          console.error('Auth init: Error getting session:', error);
           setLoading(false);
           return;
         }
@@ -169,6 +187,7 @@ export const AuthProvider = ({ children }) => {
         });
         
         setUser(session?.user ?? null);
+        console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user);
         
         if (session?.user) {
           console.log('Auth init: Fetching profile for', session.user.id);
@@ -187,9 +206,11 @@ export const AuthProvider = ({ children }) => {
           }
         }
         
+        console.log('Auth init: Setting loading to false');
         setLoading(false);
+        console.log('=== Auth Init Complete ===');
       } catch (err) {
-        console.error('Auth initialization error:', err);
+        console.error('Auth init: Error:', err);
         setLoading(false);
       }
     };
