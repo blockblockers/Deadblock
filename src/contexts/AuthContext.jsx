@@ -107,7 +107,7 @@ export const AuthProvider = ({ children }) => {
           
           if (error) {
             console.error('Error getting session from callback:', error);
-            setIsOAuthCallback(false); // Clear flag on error
+            setIsOAuthCallback(false); // Clear flag on error only
           } else if (data?.session) {
             console.log('Session established from OAuth callback');
             setUser(data.session.user);
@@ -120,13 +120,12 @@ export const AuthProvider = ({ children }) => {
               // Don't fail the OAuth - profile will be retried later
             }
             
-            // Clear OAuth callback flag after successful session - profile loading continues in background
-            // This prevents the blank screen issue
-            console.log('OAuth callback processed, clearing flag');
-            setIsOAuthCallback(false);
+            // DON'T clear isOAuthCallback here - let App.jsx handle it after redirect
+            // This allows App.jsx to detect the OAuth completion and redirect appropriately
+            console.log('OAuth callback processed successfully, App.jsx will clear flag after redirect');
           } else {
             console.log('No session in OAuth callback response');
-            setIsOAuthCallback(false);
+            setIsOAuthCallback(false); // Clear flag when no session
           }
           
           // Clean up URL after processing

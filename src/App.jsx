@@ -480,9 +480,8 @@ function AppContent() {
   }, [shouldShowLoading, clearOAuthCallback, hasPassedEntryAuth, isAuthenticated, pendingOnlineIntent, setGameMode]);
 
   // Show loading while auth is initializing or processing OAuth callback
-  // Only show loading during actual auth initialization, not profile loading
-  // Profile loading happens in background and shouldn't block the UI
-  const showAuthLoading = isOnlineEnabled && authLoading;
+  // Keep showing during OAuth callback until redirect effect handles it
+  const showAuthLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !hasRedirectedAfterOAuth));
   
   if (showAuthLoading) {
     return (
@@ -531,8 +530,19 @@ function AppContent() {
     );
   }
 
-  // Debug logging
-  console.log('App render:', { gameMode, onlineGameId, isAuthenticated, authLoading, isOAuthCallback, hasPassedEntryAuth, isOfflineMode });
+  // Debug logging - comprehensive state dump
+  console.log('App render state:', { 
+    gameMode, 
+    onlineGameId, 
+    isAuthenticated, 
+    authLoading, 
+    isOAuthCallback, 
+    hasPassedEntryAuth, 
+    isOfflineMode,
+    showOnlineAuthPrompt,
+    isOnlineEnabled,
+    hasProfile: !!profile
+  });
 
   // Show Entry Auth Screen first (before anything else)
   // Skip if:
@@ -540,7 +550,11 @@ function AppContent() {
   // 2. Auth is still loading
   // 3. OAuth callback in progress  
   // 4. User is already authenticated (effect will set hasPassedEntryAuth)
-  if (!hasPassedEntryAuth && !authLoading && !isOAuthCallback && !isAuthenticated) {
+  const shouldShowEntryAuth = !hasPassedEntryAuth && !authLoading && !isOAuthCallback && !isAuthenticated;
+  console.log('Entry auth check:', { shouldShowEntryAuth, hasPassedEntryAuth, authLoading, isOAuthCallback, isAuthenticated });
+  
+  if (shouldShowEntryAuth) {
+    console.log('Rendering: EntryAuthScreen');
     return (
       <EntryAuthScreen
         onComplete={handleEntryAuthComplete}
@@ -551,6 +565,7 @@ function AppContent() {
 
   // Online Auth Prompt (for offline users trying to go online)
   if (showOnlineAuthPrompt) {
+    console.log('Rendering: Online Auth Prompt');
     return (
       <EntryAuthScreen
         onComplete={handleOnlineAuthSuccess}
@@ -565,8 +580,16 @@ function AppContent() {
     );
   }
 
-  // Render Menu Screen
-  if (!gameMode) {
+  // Render Menu Screen - this should be the default after auth
+  // Changed from !gameMode to explicit null check plus fallback
+  if (gameMode === null || gameMode === undefined) {
+    console.log('Rendering: MenuScreen (gameMode is null/undefined)');
+    // If user just authenticated but hasPassedEntryAuth not set yet, set it now
+    if (isAuthenticated && !hasPassedEntryAuth) {
+      console.log('Setting hasPassedEntryAuth from render');
+      // Schedule for next tick to avoid state update during render
+      setTimeout(() => setHasPassedEntryAuth(true), 0);
+    }
     return (
       <>
         <MenuScreen
