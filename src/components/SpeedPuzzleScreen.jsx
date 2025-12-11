@@ -331,12 +331,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const [timeLeft, setTimeLeft] = useState(TIMER_DURATION);
   const timerRef = useRef(null);
   const lastTickRef = useRef(Date.now());
-  const gameStateRef = useRef(gameState); // Track gameState in ref for timer callback
   
-  // Keep ref in sync with state
-  useEffect(() => {
-    gameStateRef.current = gameState;
-  }, [gameState]);
+  // Use a ref to track if we've handled game over to prevent double-triggers
+  const gameOverHandledRef = useRef(false);
   
   // Puzzle state
   const [board, setBoard] = useState(() => createEmptyBoard());
@@ -361,6 +358,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     console.log('[SpeedPuzzle] loadNewPuzzle called');
     setGameState('loading');
     setErrorMessage('');
+    gameOverHandledRef.current = false; // Reset game over flag
     
     // Clear any existing timer
     if (timerRef.current) {
@@ -435,36 +433,33 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     }
   }, []);
 
-  // Handle game over from timer
-  const handleTimerExpired = useCallback(() => {
-    console.log('[SpeedPuzzle] handleTimerExpired called, current state:', gameStateRef.current);
-    
-    // Only trigger game over if we're still playing
-    if (gameStateRef.current === 'playing') {
-      console.log('[SpeedPuzzle] Setting game state to gameover');
-      
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      
-      soundManager.playGameOver();
-      
-      // Force state update
-      setGameState(prev => {
-        console.log('[SpeedPuzzle] State transition from', prev, 'to gameover');
-        return 'gameover';
-      });
-    } else {
-      console.log('[SpeedPuzzle] Timer expired but not in playing state, ignoring');
+  // Handle game over from timer - called directly, not via callback
+  const triggerGameOver = () => {
+    // Prevent double-trigger
+    if (gameOverHandledRef.current) {
+      console.log('[SpeedPuzzle] Game over already handled, ignoring');
+      return;
     }
-  }, []);
+    
+    console.log('[SpeedPuzzle] triggerGameOver called, setting gameover state');
+    gameOverHandledRef.current = true;
+    
+    // Clear timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    soundManager.playGameOver();
+    setGameState('gameover');
+  };
 
   // Start timer when playing
   useEffect(() => {
     if (gameState === 'playing') {
-      console.log('[SpeedPuzzle] Starting timer');
+      console.log('[SpeedPuzzle] Starting timer, timeLeft:', timeLeft);
       lastTickRef.current = Date.now();
+      gameOverHandledRef.current = false;
       
       timerRef.current = setInterval(() => {
         const now = Date.now();
@@ -473,13 +468,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         
         setTimeLeft(prev => {
           const newTime = Math.max(0, prev - delta);
-          
-          if (newTime <= 0 && prev > 0) {
-            console.log('[SpeedPuzzle] Timer reached zero');
-            // Call handleTimerExpired on next tick to avoid state updates during render
-            setTimeout(() => handleTimerExpired(), 0);
-            return 0;
-          }
           return newTime;
         });
       }, 50);
@@ -492,7 +480,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         }
       };
     }
-  }, [gameState, handleTimerExpired]);
+  }, [gameState]);
+  
+  // Separate effect to check for timer expiration
+  useEffect(() => {
+    if (gameState === 'playing' && timeLeft <= 0 && !gameOverHandledRef.current) {
+      console.log('[SpeedPuzzle] Timer reached zero, triggering game over');
+      triggerGameOver();
+    }
+  }, [timeLeft, gameState]);
 
   // Initial load
   useEffect(() => {
@@ -507,7 +503,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     };
   }, []);
 
-  // Handle piece selection - automatically find a valid placement
+  // Handle piece selection - just select the piece, user will click board to place
   const selectPiece = useCallback((pieceType) => {
     if (gameState !== 'playing') return;
     
@@ -515,23 +511,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setSelectedPiece(pieceType);
     setRotation(0);
     setFlipped(false);
-    
-    // Try to auto-place the piece at a valid position
-    const coords = getPieceCoords(pieceType, 0, false);
-    
-    // Find the first valid position for this piece
-    for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE; col++) {
-        if (canPlacePiece(board, row, col, coords)) {
-          setPendingMove({ row, col, coords, piece: pieceType });
-          return;
-        }
-      }
-    }
-    
-    // No valid position found with default orientation, just select the piece
-    setPendingMove(null);
-  }, [gameState, board]);
+    setPendingMove(null); // Clear any existing pending move, let user click board
+  }, [gameState]);
 
   // Handle rotation
   const rotatePiece = useCallback(() => {
@@ -541,36 +522,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const newRotation = (rotation + 1) % 4;
     setRotation(newRotation);
     
-    const newCoords = getPieceCoords(selectedPiece, newRotation, flipped);
-    
+    // If there's a pending move, update its coords with new rotation
     if (pendingMove) {
-      // Check if current position is still valid
-      if (canPlacePiece(board, pendingMove.row, pendingMove.col, newCoords)) {
-        setPendingMove({ ...pendingMove, coords: newCoords });
-      } else {
-        // Find a new valid position
-        for (let row = 0; row < BOARD_SIZE; row++) {
-          for (let col = 0; col < BOARD_SIZE; col++) {
-            if (canPlacePiece(board, row, col, newCoords)) {
-              setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
-              return;
-            }
-          }
-        }
-        setPendingMove(null);
-      }
-    } else {
-      // Try to find a valid position with new rotation
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-          if (canPlacePiece(board, row, col, newCoords)) {
-            setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
-            return;
-          }
-        }
-      }
+      const newCoords = getPieceCoords(selectedPiece, newRotation, flipped);
+      setPendingMove({ ...pendingMove, coords: newCoords });
     }
-  }, [selectedPiece, gameState, rotation, flipped, pendingMove, board]);
+  }, [selectedPiece, gameState, rotation, flipped, pendingMove]);
 
   // Handle flip
   const flipPiece = useCallback(() => {
@@ -580,35 +537,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const newFlipped = !flipped;
     setFlipped(newFlipped);
     
-    const newCoords = getPieceCoords(selectedPiece, rotation, newFlipped);
-    
+    // If there's a pending move, update its coords with new flip
     if (pendingMove) {
-      if (canPlacePiece(board, pendingMove.row, pendingMove.col, newCoords)) {
-        setPendingMove({ ...pendingMove, coords: newCoords });
-      } else {
-        // Find a new valid position
-        for (let row = 0; row < BOARD_SIZE; row++) {
-          for (let col = 0; col < BOARD_SIZE; col++) {
-            if (canPlacePiece(board, row, col, newCoords)) {
-              setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
-              return;
-            }
-          }
-        }
-        setPendingMove(null);
-      }
-    } else {
-      // Try to find a valid position with new flip
-      for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-          if (canPlacePiece(board, row, col, newCoords)) {
-            setPendingMove({ row, col, coords: newCoords, piece: selectedPiece });
-            return;
-          }
-        }
-      }
+      const newCoords = getPieceCoords(selectedPiece, rotation, newFlipped);
+      setPendingMove({ ...pendingMove, coords: newCoords });
     }
-  }, [selectedPiece, gameState, rotation, flipped, pendingMove, board]);
+  }, [selectedPiece, gameState, rotation, flipped, pendingMove]);
 
   // Handle cell click
   const handleCellClick = useCallback((row, col) => {
@@ -895,7 +829,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             <ControlButtons
               selectedPiece={selectedPiece}
               pendingMove={pendingMove}
-              canConfirm={!!pendingMove}
+              canConfirm={!!pendingMove && canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords)}
               gameOver={false}
               gameMode="puzzle"
               currentPlayer={1}
@@ -904,6 +838,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               onFlip={flipPiece}
               onConfirm={confirmMove}
               onCancel={cancelMove}
+              hideResetButtons={true}
             />
           </div>
         )}

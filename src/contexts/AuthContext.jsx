@@ -1,5 +1,5 @@
 // Authentication Context
-import { useState, useEffect, createContext, useContext, useCallback } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 const AuthContext = createContext({
@@ -258,19 +258,13 @@ export const AuthProvider = ({ children }) => {
             window.history.replaceState({}, document.title, '/');
           }
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          // Token was refreshed (e.g., on app reopen) - ensure profile is loaded
-          console.log('[AuthContext] TOKEN_REFRESHED - checking profile');
-          if (!profile) {
-            console.log('[AuthContext] Profile not loaded, fetching...');
-            await fetchProfile(session.user.id);
-          }
+          // Token was refreshed (e.g., on app reopen) - always fetch profile to ensure it's loaded
+          console.log('[AuthContext] TOKEN_REFRESHED - fetching profile');
+          await fetchProfile(session.user.id);
         } else if (event === 'INITIAL_SESSION' && session?.user) {
-          // Initial session restored from storage
-          console.log('[AuthContext] INITIAL_SESSION - checking profile');
-          if (!profile) {
-            console.log('[AuthContext] Profile not loaded, fetching...');
-            await fetchProfile(session.user.id);
-          }
+          // Initial session restored from storage - always fetch profile
+          console.log('[AuthContext] INITIAL_SESSION - fetching profile');
+          await fetchProfile(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
           setIsOAuthCallback(false);
@@ -279,7 +273,7 @@ export const AuthProvider = ({ children }) => {
     );
 
     return () => subscription.unsubscribe();
-  }, [fetchProfile, profile]);
+  }, [fetchProfile]);
 
   const signUp = async (email, password, username) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
