@@ -1,6 +1,6 @@
 // Player Profile Card - Enhanced display for main menu with rating info, username editing, and achievements
 import { useState, useEffect } from 'react';
-import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader } from 'lucide-react';
+import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
 import { supabase } from '../utils/supabase';
@@ -343,26 +343,26 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
         className="w-full flex items-center gap-3 p-3 transition-all group"
         style={{
           background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
-          border: '2px solid rgba(100, 116, 139, 0.5)',
+          border: '2px solid rgba(34, 211, 238, 0.4)',
           borderRadius: '12px',
-          boxShadow: '0 0 25px rgba(100, 116, 139, 0.25), 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)'
+          boxShadow: '0 0 25px rgba(34, 211, 238, 0.15), 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)'
         }}
       >
         <div 
           className="w-12 h-12 rounded-full flex items-center justify-center"
           style={{
-            background: 'linear-gradient(135deg, rgb(71, 85, 105) 0%, rgb(51, 65, 85) 100%)',
-            border: '2px solid rgba(100, 116, 139, 0.5)',
-            boxShadow: '0 0 15px rgba(100, 116, 139, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
+            background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.2) 0%, rgba(15, 23, 42, 0.95) 100%)',
+            border: '2px solid rgba(34, 211, 238, 0.5)',
+            boxShadow: '0 0 15px rgba(34, 211, 238, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
           }}
         >
-          <WifiOff size={20} style={{ color: '#94a3b8' }} />
+          <LogIn size={20} style={{ color: '#22d3ee' }} />
         </div>
         <div className="flex-1 text-left">
-          <div style={{ color: 'white', fontWeight: '900', fontSize: '14px', letterSpacing: '0.05em', textShadow: '0 0 10px rgba(255,255,255,0.3)' }}>OFFLINE MODE</div>
-          <div style={{ color: '#64748b', fontSize: '12px' }}>Stats not tracked</div>
+          <div style={{ color: '#22d3ee', fontWeight: '900', fontSize: '14px', letterSpacing: '0.05em', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>SIGN IN</div>
+          <div style={{ color: '#94a3b8', fontSize: '12px' }}>Track stats & compete online</div>
         </div>
-        <ChevronRight size={20} style={{ color: '#64748b' }} className="group-hover:translate-x-1 transition-all" />
+        <ChevronRight size={20} style={{ color: '#22d3ee' }} className="group-hover:translate-x-1 transition-all" />
       </button>
     );
   }
@@ -439,7 +439,15 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   // Also fix borderColor to use proper rgba
   const borderRgba = hexToRgba(rankInfo?.color || '#22d3ee', 0.4);
   
-  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { displayName, glowColor, glowRgba, rankName: rankInfo?.name });
+  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { 
+    displayName, 
+    glowColor, 
+    glowRgba,
+    borderRgba,
+    buttonStyleBackground: buttonStyle.background,
+    buttonStyleBorder: buttonStyle.border,
+    rankName: rankInfo?.name 
+  });
   
   // Build style objects with proper rgba colors
   const buttonStyle = {

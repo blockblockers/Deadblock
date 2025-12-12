@@ -611,10 +611,26 @@
     // Handle dismiss
     if (dismissBtn) {
       dismissBtn.addEventListener('click', () => {
-        pwaLog('Dismissed for later');
+        // Track dismiss count
+        let dismissCount = 0;
+        try {
+          dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10);
+          dismissCount++;
+          localStorage.setItem('pwa-dismiss-count', dismissCount.toString());
+        } catch (e) {}
+        
         installPrompt.classList.remove('show');
-        // Dismiss for 7 days
-        localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+        
+        // After 2 dismisses, treat as permanently installed/dismissed
+        if (dismissCount >= 2) {
+          pwaLog('Dismissed ' + dismissCount + ' times - marking as installed');
+          appIsInstalled = true;
+          localStorage.setItem('pwa-was-installed', 'true');
+          localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
+        } else {
+          pwaLog('Dismissed (' + dismissCount + '/2) - will show again in 7 days');
+          localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+        }
       });
     }
 
