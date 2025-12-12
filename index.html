@@ -364,6 +364,17 @@
       <button id="install-btn">INSTALL</button>
       <button id="dismiss-btn">LATER</button>
     </div>
+    <button id="already-installed-btn" style="
+      margin-top: 10px;
+      background: transparent;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: #94a3b8;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      width: 100%;
+    ">Already installed? Don't show again</button>
   </div>
   
   <!-- Service Worker Registration & PWA Logic -->
@@ -600,11 +611,24 @@
     // Handle dismiss
     if (dismissBtn) {
       dismissBtn.addEventListener('click', () => {
-        pwaLog('Dismissed');
+        pwaLog('Dismissed for later');
         installPrompt.classList.remove('show');
-        // Mark as permanently dismissed (treated same as installed)
-        localStorage.setItem('pwa-was-installed', 'true');
+        // Dismiss for 7 days
         localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+      });
+    }
+
+    // Handle "Already Installed" / permanent dismiss
+    const alreadyInstalledBtn = document.getElementById('already-installed-btn');
+    if (alreadyInstalledBtn) {
+      alreadyInstalledBtn.addEventListener('click', () => {
+        pwaLog('User marked as already installed - permanent dismiss');
+        installPrompt.classList.remove('show');
+        appIsInstalled = true;
+        // Permanently mark as installed
+        localStorage.setItem('pwa-was-installed', 'true');
+        // Also set dismissed far in the future
+        localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
       });
     }
 

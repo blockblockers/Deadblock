@@ -231,9 +231,10 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     isAuthenticated, 
     hasProfile: !!profile, 
     profileUsername: profile?.username,
-    willRenderOffline: isOffline || !isAuthenticated,
-    willRenderLoading: !(isOffline || !isAuthenticated) && !profile,
-    willRenderAuthenticated: !(isOffline || !isAuthenticated) && !!profile
+    // New conditions: show offline only if explicitly offline AND no cached profile
+    willRenderOffline: isOffline && !profile,
+    willRenderLoading: !profile && !(isOffline && !profile),
+    willRenderAuthenticated: !!profile
   });
   
   // Get rank info for authenticated users
@@ -331,9 +332,10 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     }
   };
   
-  // Offline mode display
-  if (isOffline || !isAuthenticated) {
-    console.log('[PlayerProfileCard] Rendering: OFFLINE mode button');
+  // Offline mode display - only show if explicitly offline AND no cached profile
+  // If we have a profile (even from cache), show the authenticated view
+  if (isOffline && !profile) {
+    console.log('[PlayerProfileCard] Rendering: OFFLINE mode button (no profile)');
     return (
       <button
         onClick={onClick}
