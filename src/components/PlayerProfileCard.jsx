@@ -415,33 +415,44 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   const borderColor = rankInfo?.color ? `${rankInfo.color}60` : 'rgba(34, 211, 238, 0.4)';
   const glowColor = rankInfo?.color || '#22d3ee';
   
-  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { displayName, borderColor, glowColor, rankName: rankInfo?.name });
+  // Helper to convert hex color to rgba
+  const hexToRgba = (hex, alpha) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
   
-  // DEBUG: Using extremely obvious styling to diagnose visibility issue
-  // If you see a RED border and PURPLE background, the inline styles ARE working
-  // If you see BLACK, something is overriding inline styles (CSS specificity issue)
-  const DEBUG_MODE = false; // Set to true to see debug colors
+  // Convert glowColor to rgba versions with different opacities
+  const glowRgba = {
+    '08': hexToRgba(glowColor, 0.08),
+    '10': hexToRgba(glowColor, 0.10),
+    '15': hexToRgba(glowColor, 0.15),
+    '25': hexToRgba(glowColor, 0.25),
+    '35': hexToRgba(glowColor, 0.35),
+    '40': hexToRgba(glowColor, 0.40),
+    '50': hexToRgba(glowColor, 0.50),
+  };
   
-  // Build style objects without multi-line template strings (better minification compatibility)
-  const buttonStyle = DEBUG_MODE ? {
-    // DEBUG STYLES - Very obvious colors
-    background: 'purple',
-    border: '5px solid red',
+  // Also fix borderColor to use proper rgba
+  const borderRgba = hexToRgba(rankInfo?.color || '#22d3ee', 0.4);
+  
+  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { displayName, glowColor, glowRgba, rankName: rankInfo?.name });
+  
+  // Build style objects with proper rgba colors
+  const buttonStyle = {
+    background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${glowRgba['15']} 25%, rgba(30, 41, 59, 0.85) 50%, ${glowRgba['10']} 75%, rgba(15, 23, 42, 0.95) 100%)`,
+    border: `2px solid ${borderRgba}`,
     borderRadius: '12px',
-    padding: '20px',
-  } : {
-    background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${glowColor}15 25%, rgba(30, 41, 59, 0.85) 50%, ${glowColor}10 75%, rgba(15, 23, 42, 0.95) 100%)`,
-    border: `2px solid ${borderColor}`,
-    borderRadius: '12px',
-    boxShadow: `0 0 30px ${glowColor}25, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 40px ${glowColor}08`,
+    boxShadow: `0 0 30px ${glowRgba['25']}, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 40px ${glowRgba['08']}`,
     WebkitBackdropFilter: 'blur(8px)',
     backdropFilter: 'blur(8px)',
   };
   
   const tierIconStyle = {
     background: `radial-gradient(circle at 30% 30%, ${getTierIconBackground()}, rgba(10, 15, 25, 0.98))`,
-    border: `2px solid ${glowColor}50`,
-    boxShadow: `0 0 20px ${glowColor}35, inset 0 0 15px ${glowColor}15, inset 0 2px 4px rgba(255,255,255,0.1)`,
+    border: `2px solid ${glowRgba['50']}`,
+    boxShadow: `0 0 20px ${glowRgba['35']}, inset 0 0 15px ${glowRgba['15']}, inset 0 2px 4px rgba(255,255,255,0.1)`,
   };
   
   return (
@@ -469,7 +480,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
               className="font-black text-base tracking-wide truncate"
               style={{ 
                 color: '#f1f5f9',
-                textShadow: `0 0 12px ${glowColor}40, 0 0 4px rgba(0,0,0,0.8)` 
+                textShadow: `0 0 12px ${glowRgba['40']}, 0 0 4px rgba(0,0,0,0.8)` 
               }}
             >
               {displayName}
@@ -478,7 +489,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
               {rankInfo && (
                 <span 
                   className="text-xs font-bold uppercase tracking-wider"
-                  style={{ color: glowColor, textShadow: `0 0 10px ${glowColor}50` }}
+                  style={{ color: glowColor, textShadow: `0 0 10px ${glowRgba['50']}` }}
                 >
                   {rankInfo.name}
                 </span>

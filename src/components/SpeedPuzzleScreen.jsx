@@ -754,7 +754,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     // Play sound
     try {
-      soundManager.playGameOver();
+      soundManager.playLose();
     } catch (e) {
       console.error('[SpeedPuzzle] Error playing game over sound:', e);
     }
@@ -927,7 +927,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     if (canPlacePiece(board, row, col, coords)) {
       soundManager.playClickSound('place');
     } else {
-      soundManager.playInvalidMove();
+      soundManager.playInvalid();
     }
   }, [selectedPiece, gameState, rotation, flipped, board]);
 
@@ -956,7 +956,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const confirmMove = useCallback(() => {
     if (!pendingMove || !selectedPiece || gameState !== GAME_STATES.PLAYING) return;
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords)) {
-      soundManager.playInvalidMove();
+      soundManager.playInvalid();
       return;
     }
     
@@ -991,7 +991,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setUsedPieces(newUsedPieces);
     setSelectedPiece(null);
     setPendingMove(null);
-    soundManager.playPiecePlaced();
+    soundManager.playPiecePlace();
     
     // Clear animation after delay
     safeSetTimeout(() => setPlayerAnimatingMove(null), ANIMATION_CLEAR_DELAY_MS);
@@ -1025,7 +1025,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         setGameState(GAME_STATES.SUCCESS);
       } else {
         // Wrong move - restart timer
-        soundManager.playInvalidMove();
+        soundManager.playInvalid();
         gameOverHandledRef.current = false;
         setTimeLeft(TIMER_DURATION);
         lastTickRef.current = Date.now();

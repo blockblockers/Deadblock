@@ -1,6 +1,95 @@
-// Authentication Context
+// Authentication Context with Local Profile Caching
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+
+// Local storage keys for persistent auth
+const STORAGE_KEYS = {
+  CACHED_USER_ID: 'deadblock_cached_user_id',
+  CACHED_PROFILE: 'deadblock_cached_profile',
+  CACHED_TIMESTAMP: 'deadblock_cached_timestamp',
+};
+
+// Cache expiry time (7 days in milliseconds) - profile will still work but will be refreshed
+const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Helper to safely get from localStorage
+const safeGetStorage = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage read error:', e);
+    return null;
+  }
+};
+
+// Helper to safely set localStorage
+const safeSetStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage write error:', e);
+  }
+};
+
+// Helper to safely remove from localStorage
+const safeRemoveStorage = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage remove error:', e);
+  }
+};
+
+// Load cached profile from localStorage
+const loadCachedProfile = () => {
+  try {
+    const cachedUserId = safeGetStorage(STORAGE_KEYS.CACHED_USER_ID);
+    const cachedProfileStr = safeGetStorage(STORAGE_KEYS.CACHED_PROFILE);
+    const cachedTimestamp = safeGetStorage(STORAGE_KEYS.CACHED_TIMESTAMP);
+    
+    if (!cachedUserId || !cachedProfileStr) {
+      return null;
+    }
+    
+    const profile = JSON.parse(cachedProfileStr);
+    const timestamp = parseInt(cachedTimestamp, 10) || 0;
+    const age = Date.now() - timestamp;
+    
+    console.log('[AuthContext] Loaded cached profile:', { 
+      username: profile?.username, 
+      userId: cachedUserId,
+      ageMinutes: Math.round(age / 60000)
+    });
+    
+    return { userId: cachedUserId, profile, isExpired: age > CACHE_EXPIRY_MS };
+  } catch (e) {
+    console.warn('[AuthContext] Error loading cached profile:', e);
+    return null;
+  }
+};
+
+// Save profile to localStorage cache
+const saveCachedProfile = (userId, profile) => {
+  try {
+    if (!userId || !profile) return;
+    
+    safeSetStorage(STORAGE_KEYS.CACHED_USER_ID, userId);
+    safeSetStorage(STORAGE_KEYS.CACHED_PROFILE, JSON.stringify(profile));
+    safeSetStorage(STORAGE_KEYS.CACHED_TIMESTAMP, Date.now().toString());
+    
+    console.log('[AuthContext] Saved profile to cache:', { username: profile.username });
+  } catch (e) {
+    console.warn('[AuthContext] Error saving profile to cache:', e);
+  }
+};
+
+// Clear cached profile (on sign out)
+const clearCachedProfile = () => {
+  safeRemoveStorage(STORAGE_KEYS.CACHED_USER_ID);
+  safeRemoveStorage(STORAGE_KEYS.CACHED_PROFILE);
+  safeRemoveStorage(STORAGE_KEYS.CACHED_TIMESTAMP);
+  console.log('[AuthContext] Cleared cached profile');
+};
 
 const AuthContext = createContext({
   user: null,
@@ -17,14 +106,23 @@ const AuthContext = createContext({
   updateProfile: async () => {},
   clearOAuthCallback: () => {},
   clearNewUser: () => {},
+  refreshProfile: async () => {},
 });
 
 export const AuthProvider = ({ children }) => {
+  // Load cached data immediately for instant display
+  const cachedData = loadCachedProfile();
+  
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Start with cached profile if available - instant load!
+  const [profile, setProfile] = useState(cachedData?.profile || null);
+  // If we have cached data, don't show loading state
+  const [loading, setLoading] = useState(!cachedData?.profile);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
+  
+  // Track if we've done the initial server fetch
+  const initialFetchDone = useRef(false);
 
   const isOnlineEnabled = isSupabaseConfigured();
 
@@ -66,6 +164,10 @@ export const AuthProvider = ({ children }) => {
       
       console.log('[AuthContext] fetchProfile success:', { username: data?.username, id: data?.id });
       setProfile(data);
+      
+      // Cache the profile for instant loading next time
+      saveCachedProfile(userId, data);
+      
       return data;
     } catch (err) {
       console.error('[AuthContext] fetchProfile exception:', err);
@@ -180,17 +282,25 @@ export const AuthProvider = ({ children }) => {
     // Get initial session
     const initAuth = async () => {
       console.log('=== Auth Init Started ===');
+      
+      // Check if we have cached profile data for instant loading
+      const cached = loadCachedProfile();
+      if (cached?.profile && !initialFetchDone.current) {
+        console.log('Auth init: Using cached profile for instant display:', cached.profile.username);
+        setProfile(cached.profile);
+        // Don't show loading if we have cached data
+        setLoading(false);
+      }
+      
       let timeoutCleared = false;
       
-      // Set a longer timeout and make it smarter
+      // Shorter timeout since we have cached data as fallback
       const timeout = setTimeout(() => {
         if (!timeoutCleared) {
-          console.log('Auth init: TIMEOUT - checking if we should force complete');
-          // Only force complete if we don't have an active fetch in progress
-          // The auth listener may still be fetching profile
+          console.log('Auth init: TIMEOUT - completing with current state');
           setLoading(false);
         }
-      }, 8000); // Increased to 8 seconds
+      }, cached?.profile ? 3000 : 8000); // 3s if cached, 8s if not
       
       const clearTimeoutSafe = () => {
         timeoutCleared = true;
@@ -223,23 +333,45 @@ export const AuthProvider = ({ children }) => {
         setUser(session?.user ?? null);
         console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user);
         
-        if (session?.user) {
-          console.log('Auth init: Fetching profile for', session.user.id);
-          const profileResult = await fetchProfile(session.user.id);
-          console.log('Auth init: Profile fetch result', { 
-            hasProfile: !!profileResult,
-            username: profileResult?.username 
-          });
-          
-          // If profile fetch failed, try more aggressively
-          if (!profileResult) {
-            console.log('Auth init: Profile not found, starting aggressive retry...');
-            for (let i = 0; i < 5; i++) {
-              await new Promise(r => setTimeout(r, 800 * (i + 1)));
-              const retryResult = await fetchProfile(session.user.id);
-              console.log(`Auth init: Retry ${i + 1} result:`, { hasProfile: !!retryResult });
-              if (retryResult) break;
-            }
+        // Validate cached data matches current session
+        if (cached?.profile && session?.user) {
+          if (cached.userId !== session.user.id) {
+            console.log('Auth init: Cached profile is for different user, clearing');
+            clearCachedProfile();
+            setProfile(null);
+          }
+        }
+        
+        // If no session, clear any cached data
+        if (!session?.user) {
+          if (cached?.profile) {
+            console.log('Auth init: No session but have cached profile, clearing');
+            clearCachedProfile();
+            setProfile(null);
+          }
+          clearTimeoutSafe();
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch fresh profile from server (in background if we have cache)
+        console.log('Auth init: Fetching fresh profile for', session.user.id);
+        initialFetchDone.current = true;
+        
+        const profileResult = await fetchProfile(session.user.id);
+        console.log('Auth init: Profile fetch result', { 
+          hasProfile: !!profileResult,
+          username: profileResult?.username 
+        });
+        
+        // Only retry if we don't have cached data and server fetch failed
+        if (!profileResult && !cached?.profile) {
+          console.log('Auth init: Profile not found and no cache, starting retry...');
+          for (let i = 0; i < 3; i++) {
+            await new Promise(r => setTimeout(r, 500 * (i + 1)));
+            const retryResult = await fetchProfile(session.user.id);
+            console.log(`Auth init: Retry ${i + 1} result:`, { hasProfile: !!retryResult });
+            if (retryResult) break;
           }
         }
         
@@ -313,6 +445,9 @@ export const AuthProvider = ({ children }) => {
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
           setIsOAuthCallback(false);
+          // Clear cached profile on sign out
+          clearCachedProfile();
+          console.log('[AuthContext] SIGNED_OUT - cleared profile and cache');
         }
       }
     );
@@ -475,6 +610,9 @@ export const AuthProvider = ({ children }) => {
       setProfile(null);
       // Clear entry auth flag so user sees auth screen on next visit
       localStorage.removeItem('deadblock_entry_auth_passed');
+      // Clear cached profile
+      clearCachedProfile();
+      console.log('[AuthContext] signOut: Cleared user, profile, and cache');
     }
     return { error };
   };
@@ -538,6 +676,8 @@ export const AuthProvider = ({ children }) => {
 
     if (!error && data) {
       setProfile(data);
+      // Update cache with new profile data
+      saveCachedProfile(user.id, data);
     }
 
     return { data, error };
