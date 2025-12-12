@@ -289,31 +289,109 @@ StreakDisplay.propTypes = {
 /**
  * Success overlay - shown after correct puzzle solution
  */
-const SuccessOverlay = memo(({ streak, onContinue }) => (
-  <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.75)' }}>
-    <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border border-green-500/50 shadow-[0_0_60px_rgba(34,197,94,0.4)]">
-      <div className="text-center">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center animate-pulse">
-          <Zap size={32} className="text-white" />
-        </div>
-        <h2 className="text-2xl font-black text-green-400 mb-2">CORRECT!</h2>
-        <p className="text-slate-400 mb-4">Streak: <span className="text-white font-bold text-xl">{streak}</span></p>
-        
-        <button
-          onClick={onContinue}
-          className="w-full py-4 rounded-xl font-black tracking-wider text-lg bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-400 hover:to-emerald-500 transition-all shadow-[0_0_30px_rgba(34,197,94,0.5)] active:scale-[0.98]"
-        >
-          <div className="flex items-center justify-center gap-2">
+const SuccessOverlay = memo(({ streak, onContinue }) => {
+  console.log('[SuccessOverlay] Rendering with streak:', streak);
+  
+  return (
+    <div 
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.85)'
+      }}
+    >
+      <div 
+        style={{
+          background: 'linear-gradient(135deg, rgb(15, 23, 42) 0%, rgb(30, 41, 59) 100%)',
+          borderRadius: '16px',
+          padding: '24px',
+          maxWidth: '380px',
+          width: '100%',
+          margin: '0 16px',
+          border: '2px solid rgba(34, 197, 94, 0.5)',
+          boxShadow: '0 0 60px rgba(34, 197, 94, 0.4)'
+        }}
+      >
+        <div style={{ textAlign: 'center' }}>
+          {/* Icon */}
+          <div 
+            style={{
+              width: '64px',
+              height: '64px',
+              margin: '0 auto 16px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgb(34, 197, 94), rgb(16, 185, 129))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              animation: 'pulse 1s ease-in-out infinite'
+            }}
+          >
+            <Zap size={32} style={{ color: 'white' }} />
+          </div>
+          
+          {/* Title */}
+          <h2 
+            style={{ 
+              fontSize: '28px', 
+              fontWeight: '900', 
+              color: '#4ade80', 
+              marginBottom: '8px',
+              textShadow: '0 0 20px rgba(34, 197, 94, 0.5)'
+            }}
+          >
+            CORRECT!
+          </h2>
+          
+          {/* Streak */}
+          <p style={{ color: '#94a3b8', marginBottom: '16px' }}>
+            Streak: <span style={{ color: 'white', fontWeight: '700', fontSize: '24px' }}>{streak}</span>
+          </p>
+          
+          {/* Continue Button */}
+          <button
+            onClick={() => {
+              console.log('[SuccessOverlay] Continue clicked');
+              onContinue();
+            }}
+            style={{
+              width: '100%',
+              padding: '16px',
+              borderRadius: '12px',
+              fontWeight: '900',
+              letterSpacing: '0.05em',
+              fontSize: '18px',
+              background: 'linear-gradient(90deg, rgb(34, 197, 94), rgb(16, 185, 129))',
+              color: 'white',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 0 30px rgba(34, 197, 94, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
             <Play size={24} />
             NEXT PUZZLE
-          </div>
-        </button>
-        
-        <p className="text-xs text-slate-500 mt-3">Press quickly! Timer starts immediately</p>
+          </button>
+          
+          {/* Hint */}
+          <p style={{ fontSize: '12px', color: '#64748b', marginTop: '12px' }}>
+            Press quickly! Timer starts immediately
+          </p>
+        </div>
       </div>
     </div>
-  </div>
-));
+  );
+});
 
 SuccessOverlay.displayName = 'SuccessOverlay';
 SuccessOverlay.propTypes = {
@@ -809,41 +887,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setSelectedPiece(pieceType);
     setRotation(0);
     setFlipped(false);
-    
-    // Auto-find a valid position for the piece so d-pad works immediately
-    const coords = getPieceCoords(pieceType, 0, false);
-    
-    // Find center of board or first valid position
-    let foundPosition = null;
-    
-    // Try center first
-    const centerRow = Math.floor(BOARD_SIZE / 2);
-    const centerCol = Math.floor(BOARD_SIZE / 2);
-    
-    if (canPlacePiece(board, centerRow, centerCol, coords)) {
-      foundPosition = { row: centerRow, col: centerCol };
-    } else {
-      // Search for any valid position
-      for (let row = 0; row < BOARD_SIZE && !foundPosition; row++) {
-        for (let col = 0; col < BOARD_SIZE && !foundPosition; col++) {
-          if (canPlacePiece(board, row, col, coords)) {
-            foundPosition = { row, col };
-          }
-        }
-      }
-    }
-    
-    if (foundPosition) {
-      setPendingMove({ 
-        row: foundPosition.row, 
-        col: foundPosition.col, 
-        coords, 
-        piece: pieceType 
-      });
-    } else {
-      setPendingMove(null);
-    }
-  }, [gameState, board]);
+    // Don't auto-set pendingMove - user must tap on board to position piece
+    // This prevents accidental auto-placement
+    setPendingMove(null);
+  }, [gameState]);
 
   const rotatePiece = useCallback(() => {
     if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;

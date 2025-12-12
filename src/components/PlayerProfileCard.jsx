@@ -225,6 +225,17 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
   
+  // DEBUG: Log which render path we're taking
+  console.log('[PlayerProfileCard] Render state:', { 
+    isOffline, 
+    isAuthenticated, 
+    hasProfile: !!profile, 
+    profileUsername: profile?.username,
+    willRenderOffline: isOffline || !isAuthenticated,
+    willRenderLoading: !(isOffline || !isAuthenticated) && !profile,
+    willRenderAuthenticated: !(isOffline || !isAuthenticated) && !!profile
+  });
+  
   // Get rank info for authenticated users
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
   
@@ -322,9 +333,11 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   
   // Offline mode display
   if (isOffline || !isAuthenticated) {
+    console.log('[PlayerProfileCard] Rendering: OFFLINE mode button');
     return (
       <button
         onClick={onClick}
+        data-testid="profile-card-offline"
         className="w-full flex items-center gap-3 p-3 transition-all group"
         style={{
           background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
@@ -354,12 +367,14 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   
   // Loading state - clickable to retry
   if (!profile) {
+    console.log('[PlayerProfileCard] Rendering: LOADING state button');
     return (
       <button 
         onClick={() => {
           console.log('[PlayerProfileCard] Manual refresh triggered');
           if (refreshProfile) refreshProfile();
         }}
+        data-testid="profile-card-loading"
         className="w-full flex items-center gap-3 p-3 transition-colors cursor-pointer"
         style={{
           background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
@@ -400,40 +415,48 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   const borderColor = rankInfo?.color ? `${rankInfo.color}60` : 'rgba(34, 211, 238, 0.4)';
   const glowColor = rankInfo?.color || '#22d3ee';
   
+  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { displayName, borderColor, glowColor, rankName: rankInfo?.name });
+  
+  // DEBUG: Using extremely obvious styling to diagnose visibility issue
+  // If you see a RED border and PURPLE background, the inline styles ARE working
+  // If you see BLACK, something is overriding inline styles (CSS specificity issue)
+  const DEBUG_MODE = false; // Set to true to see debug colors
+  
+  // Build style objects without multi-line template strings (better minification compatibility)
+  const buttonStyle = DEBUG_MODE ? {
+    // DEBUG STYLES - Very obvious colors
+    background: 'purple',
+    border: '5px solid red',
+    borderRadius: '12px',
+    padding: '20px',
+  } : {
+    background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${glowColor}15 25%, rgba(30, 41, 59, 0.85) 50%, ${glowColor}10 75%, rgba(15, 23, 42, 0.95) 100%)`,
+    border: `2px solid ${borderColor}`,
+    borderRadius: '12px',
+    boxShadow: `0 0 30px ${glowColor}25, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 40px ${glowColor}08`,
+    WebkitBackdropFilter: 'blur(8px)',
+    backdropFilter: 'blur(8px)',
+  };
+  
+  const tierIconStyle = {
+    background: `radial-gradient(circle at 30% 30%, ${getTierIconBackground()}, rgba(10, 15, 25, 0.98))`,
+    border: `2px solid ${glowColor}50`,
+    boxShadow: `0 0 20px ${glowColor}35, inset 0 0 15px ${glowColor}15, inset 0 2px 4px rgba(255,255,255,0.1)`,
+  };
+  
   return (
     <>
       <button 
         onClick={onClick}
+        data-testid="profile-card-authenticated"
         className="w-full transition-all overflow-hidden group"
-        style={{
-          background: `linear-gradient(135deg, 
-            rgba(15, 23, 42, 0.95) 0%, 
-            ${glowColor}15 25%,
-            rgba(30, 41, 59, 0.85) 50%, 
-            ${glowColor}10 75%,
-            rgba(15, 23, 42, 0.95) 100%)`,
-          border: `2px solid ${borderColor}`,
-          borderRadius: '12px',
-          boxShadow: `0 0 30px ${glowColor}25, 
-                      0 4px 20px rgba(0,0,0,0.4),
-                      inset 0 1px 0 rgba(255,255,255,0.1),
-                      inset 0 0 40px ${glowColor}08`,
-          backdropFilter: 'blur(8px)',
-        }}
+        style={buttonStyle}
       >
         <div className="flex items-center gap-3 p-3">
           {/* Tier Icon Circle with contrasting background */}
           <div 
             className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ 
-              background: `radial-gradient(circle at 30% 30%, 
-                ${getTierIconBackground()}, 
-                rgba(10, 15, 25, 0.98))`,
-              border: `2px solid ${glowColor}50`,
-              boxShadow: `0 0 20px ${glowColor}35, 
-                          inset 0 0 15px ${glowColor}15,
-                          inset 0 2px 4px rgba(255,255,255,0.1)`
-            }}
+            style={tierIconStyle}
           >
             {rankInfo && (
               <TierIcon shape={rankInfo.shape} glowColor={rankInfo.color} size="medium" />

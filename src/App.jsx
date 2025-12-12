@@ -60,6 +60,10 @@ function AppContent() {
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showOnlineAuthPrompt, setShowOnlineAuthPrompt] = useState(false);
+  // Track where user wants to go after authentication (online-menu or weekly-menu)
+  const [pendingAuthDestination, setPendingAuthDestination] = useState(() => {
+    return localStorage.getItem('deadblock_pending_auth_destination') || 'online-menu';
+  });
   
   // Persist entry auth state to localStorage so it survives page refresh
   const [hasPassedEntryAuth, setHasPassedEntryAuth] = useState(() => {
@@ -332,10 +336,12 @@ function AppContent() {
       }
       // If user is in offline mode, show auth prompt
       if (isOfflineMode && !isAuthenticated) {
-        console.log('Offline mode, not authenticated - showing auth prompt');
-        // Set intent before showing auth - this persists through OAuth redirect
+        console.log('Offline mode, not authenticated - showing auth prompt for online-menu');
+        // Set intent and destination before showing auth
         localStorage.setItem('deadblock_pending_online_intent', 'true');
+        localStorage.setItem('deadblock_pending_auth_destination', 'online-menu');
         setPendingOnlineIntent(true);
+        setPendingAuthDestination('online-menu');
         setShowOnlineAuthPrompt(true);
         return;
       }
@@ -365,12 +371,20 @@ function AppContent() {
 
   // Handle online auth from offline mode
   const handleOnlineAuthSuccess = () => {
+    console.log('handleOnlineAuthSuccess - redirecting to:', pendingAuthDestination);
+    // Get the destination before clearing
+    const destination = pendingAuthDestination || 'online-menu';
+    
     // Clear pending online intent
     localStorage.removeItem('deadblock_pending_online_intent');
+    localStorage.removeItem('deadblock_pending_auth_destination');
     setPendingOnlineIntent(false);
+    setPendingAuthDestination('online-menu'); // Reset to default
     setShowOnlineAuthPrompt(false);
     setIsOfflineMode(false);
-    setGameMode('online-menu');
+    
+    // Go to the intended destination
+    setGameMode(destination);
   };
 
   // Handle weekly challenge button click
@@ -384,10 +398,12 @@ function AppContent() {
       return;
     }
     if (isOfflineMode && !isAuthenticated) {
-      console.log('Offline mode, not authenticated - showing auth prompt');
-      // Set intent before showing auth - this persists through OAuth redirect
+      console.log('Offline mode, not authenticated - showing auth prompt for weekly-menu');
+      // Set intent and destination before showing auth
       localStorage.setItem('deadblock_pending_online_intent', 'true');
+      localStorage.setItem('deadblock_pending_auth_destination', 'weekly-menu');
       setPendingOnlineIntent(true);
+      setPendingAuthDestination('weekly-menu');
       setShowOnlineAuthPrompt(true);
       return;
     }
@@ -642,17 +658,20 @@ function AppContent() {
 
   // Online Auth Prompt (for offline users trying to go online)
   if (showOnlineAuthPrompt) {
-    console.log('Rendering: Online Auth Prompt');
+    console.log('Rendering: Online Auth Prompt for destination:', pendingAuthDestination);
     return (
       <EntryAuthScreen
         onComplete={handleOnlineAuthSuccess}
         onOfflineMode={() => {
-          // Clear pending online intent when user cancels
+          // Clear pending online intent and destination when user cancels
           localStorage.removeItem('deadblock_pending_online_intent');
+          localStorage.removeItem('deadblock_pending_auth_destination');
           setPendingOnlineIntent(false);
+          setPendingAuthDestination('online-menu');
           setShowOnlineAuthPrompt(false);
         }}
         forceOnlineOnly={true}
+        intendedDestination={pendingAuthDestination}
       />
     );
   }

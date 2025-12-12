@@ -7,9 +7,20 @@ import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
-const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false }) => {
+const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, intendedDestination = 'online-menu' }) => {
   const { signIn, signUp, signInWithGoogle, signInWithMagicLink, resetPassword } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
+  
+  // Get friendly name for the destination
+  const getDestinationName = () => {
+    switch (intendedDestination) {
+      case 'weekly-menu':
+        return 'Weekly Challenge';
+      case 'online-menu':
+      default:
+        return 'Online Multiplayer';
+    }
+  };
   
   // Modes: select, login, signup, forgot-password, magic-link
   const [mode, setMode] = useState('select');
@@ -275,7 +286,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false })
         </div>
       </div>
 
-      {/* Offline Mode Option */}
+      {/* Offline Mode Option / Go Back Option */}
       {!forceOnlineOnly && (
         <>
           <div className="flex items-center gap-3">
@@ -297,12 +308,37 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false })
           </p>
         </>
       )}
-
-      {/* Force online message */}
+      
+      {/* Go Back button when forcing online */}
       {forceOnlineOnly && (
-        <p className="text-center text-amber-400/80 text-xs mt-2">
-          Sign in required for online multiplayer
-        </p>
+        <button
+          onClick={handleOfflineMode}
+          className="w-full py-2.5 mt-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/50 hover:border-slate-500/50"
+        >
+          <ArrowLeft size={16} />
+          Go Back to Menu
+        </button>
+      )}
+
+      {/* Force online message - enhanced with destination info */}
+      {forceOnlineOnly && (
+        <div className="bg-amber-900/30 border border-amber-500/40 rounded-xl p-4 mt-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Wifi size={16} className="text-amber-400" />
+            <span className="text-amber-400 text-sm font-bold">Sign In Required</span>
+          </div>
+          <p className="text-amber-200/80 text-sm mb-2">
+            <span className="font-semibold">{getDestinationName()}</span> requires you to sign in so we can:
+          </p>
+          <ul className="text-amber-200/60 text-xs space-y-1 ml-4">
+            <li>• Track your progress and stats</li>
+            <li>• Save your game history</li>
+            <li>• Show you on leaderboards</li>
+          </ul>
+          <p className="text-amber-200/50 text-xs mt-3 italic">
+            Your local game data stays on this device.
+          </p>
+        </div>
       )}
     </div>
   );
