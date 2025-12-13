@@ -110,8 +110,8 @@ export const ratingService = {
     if (rating >= 1800) return { name: 'Expert', shape: 'T', color: 'text-blue-400', glowColor: '#3b82f6' };
     if (rating >= 1600) return { name: 'Advanced', shape: 'Y', color: 'text-cyan-400', glowColor: '#22d3ee' };
     if (rating >= 1400) return { name: 'Intermediate', shape: 'L', color: 'text-green-400', glowColor: '#22c55e' };
-    if (rating >= 1200) return { name: 'Beginner', shape: 'I', color: 'text-slate-400', glowColor: '#94a3b8' };
-    return { name: 'Novice', shape: 'O', color: 'text-slate-500', glowColor: '#64748b' };
+    if (rating >= 1200) return { name: 'Beginner', shape: 'I', color: 'text-sky-400', glowColor: '#38bdf8' };
+    return { name: 'Novice', shape: 'O', color: 'text-teal-400', glowColor: '#2dd4bf' };
   },
 
   // Get rating change color

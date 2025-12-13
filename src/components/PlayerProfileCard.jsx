@@ -42,8 +42,8 @@ const RatingInfoModal = ({ onClose }) => {
               { min: 1800, name: 'Expert', shape: 'T', color: 'text-blue-400', glowColor: '#3b82f6', bg: 'bg-blue-500/10 border-blue-500/30' },
               { min: 1600, name: 'Advanced', shape: 'Y', color: 'text-cyan-400', glowColor: '#22d3ee', bg: 'bg-cyan-500/10 border-cyan-500/30' },
               { min: 1400, name: 'Intermediate', shape: 'L', color: 'text-green-400', glowColor: '#22c55e', bg: 'bg-green-500/10 border-green-500/30' },
-              { min: 1200, name: 'Beginner', shape: 'I', color: 'text-slate-400', glowColor: '#94a3b8', bg: 'bg-slate-500/10 border-slate-500/30' },
-              { min: 0, name: 'Novice', shape: 'O', color: 'text-slate-500', glowColor: '#64748b', bg: 'bg-slate-600/10 border-slate-600/30' },
+              { min: 1200, name: 'Beginner', shape: 'I', color: 'text-sky-400', glowColor: '#38bdf8', bg: 'bg-sky-500/10 border-sky-500/30' },
+              { min: 0, name: 'Novice', shape: 'O', color: 'text-teal-400', glowColor: '#2dd4bf', bg: 'bg-teal-500/10 border-teal-500/30' },
             ].map((tier) => (
               <div key={tier.name} className={`flex items-center justify-between p-2 rounded-lg border ${tier.bg}`}>
                 <div className="flex items-center gap-3">
@@ -407,8 +407,8 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       '#3b82f6': 'rgba(40, 25, 20, 0.95)',   // Expert blue → dark orange-brown
       '#22d3ee': 'rgba(40, 20, 40, 0.95)',   // Advanced cyan → dark magenta
       '#22c55e': 'rgba(40, 20, 35, 0.95)',   // Intermediate green → dark rose
-      '#94a3b8': 'rgba(20, 25, 40, 0.95)',   // Beginner slate → dark blue
-      '#64748b': 'rgba(20, 25, 40, 0.95)',   // Novice gray → dark blue
+      '#38bdf8': 'rgba(35, 25, 45, 0.95)',   // Beginner sky → dark purple
+      '#2dd4bf': 'rgba(40, 25, 50, 0.95)',   // Novice teal → dark violet
     };
     return contrastBackgrounds[rankInfo.glowColor] || 'rgba(15, 23, 42, 0.95)';
   };

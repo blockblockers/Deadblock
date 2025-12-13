@@ -459,11 +459,19 @@
         return false;
       }
       
+      // Check if user previously dismissed - use the same flag as installed
+      // This means once dismissed, we treat it as "installed" and never show again
       const wasDismissed = localStorage.getItem('pwa-install-dismissed');
       if (wasDismissed) {
         const dismissedTime = parseInt(wasDismissed);
         const daysSince = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
-        if (daysSince < 7) {
+        // After 3 dismissals or 30+ days, stop showing entirely
+        const dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10);
+        if (dismissCount >= 3) {
+          pwaLog('Dismissed ' + dismissCount + ' times, not showing anymore');
+          return false;
+        }
+        if (daysSince < 14) {
           pwaLog('Dismissed ' + Math.round(daysSince) + ' days ago, not showing');
           return false;
         }

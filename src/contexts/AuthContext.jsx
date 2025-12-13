@@ -126,6 +126,8 @@ export const AuthProvider = ({ children }) => {
   
   // Track if we've done the initial server fetch
   const initialFetchDone = useRef(false);
+  // Track if onAuthStateChange has already provided a valid session
+  const sessionFromAuthEvent = useRef(false);
 
   const isOnlineEnabled = isSupabaseConfigured();
 
@@ -317,9 +319,88 @@ export const AuthProvider = ({ children }) => {
         await handleOAuthCallback();
         console.log('Auth init: OAuth callback handling complete');
         
-        // Then get the current session
+        // If we have a cached profile, the app was reopened - refresh the session
+        // This ensures the access token is valid before making any queries
+        if (cached?.profile) {
+          console.log('Auth init: Cached profile exists, refreshing session...');
+          try {
+            const refreshPromise = supabase.auth.refreshSession();
+            const refreshTimeout = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Refresh timeout')), 5000)
+            );
+            
+            const { data: refreshData, error: refreshError } = await Promise.race([
+              refreshPromise,
+              refreshTimeout.then(() => ({ data: null, error: { message: 'Refresh timeout' } }))
+            ]);
+            
+            if (refreshError) {
+              console.log('Auth init: Session refresh failed:', refreshError.message);
+              // Continue anyway - the token might still work
+            } else if (refreshData?.session) {
+              console.log('Auth init: Session refreshed successfully');
+              setUser(refreshData.session.user);
+              setSessionReady(true);
+              
+              // Fetch fresh profile
+              initialFetchDone.current = true;
+              await fetchProfile(refreshData.session.user.id);
+              
+              clearTimeoutSafe();
+              setLoading(false);
+              console.log('=== Auth Init Complete (refreshed) ===');
+              return;
+            }
+          } catch (refreshErr) {
+            console.log('Auth init: Session refresh error:', refreshErr.message);
+            // Continue with normal flow
+          }
+        }
+        
+        // Give onAuthStateChange a moment to fire (it often beats getSession)
+        await new Promise(r => setTimeout(r, 100));
+        
+        // Check if onAuthStateChange already provided a session
+        if (sessionFromAuthEvent.current) {
+          console.log('Auth init: Session already received from auth event, skipping getSession');
+          clearTimeoutSafe();
+          setLoading(false);
+          console.log('=== Auth Init Complete (from auth event) ===');
+          return;
+        }
+        
+        // Then get the current session with a timeout
         console.log('Auth init: Getting current session...');
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const getSessionPromise = supabase.auth.getSession();
+        const getSessionTimeout = new Promise((resolve) => 
+          setTimeout(() => resolve({ data: { session: null }, error: { message: 'getSession timeout' }, timedOut: true }), 2000)
+        );
+        
+        const sessionResult = await Promise.race([getSessionPromise, getSessionTimeout]);
+        
+        // If getSession timed out but we have a session from auth event, use that
+        if (sessionResult.timedOut) {
+          console.log('Auth init: getSession timed out');
+          if (sessionFromAuthEvent.current) {
+            console.log('Auth init: Using session from auth event instead');
+            clearTimeoutSafe();
+            setLoading(false);
+            console.log('=== Auth Init Complete (auth event after timeout) ===');
+            return;
+          }
+          // No session from auth event either - clear cached data
+          if (cached?.profile) {
+            console.log('Auth init: No valid session, clearing cached profile');
+            clearCachedProfile();
+            setProfile(null);
+          }
+          clearTimeoutSafe();
+          setSessionReady(true);
+          setLoading(false);
+          return;
+        }
+        
+        const { data: { session }, error } = sessionResult;
         
         if (error) {
           console.error('Auth init: Error getting session:', error);
@@ -405,6 +486,7 @@ export const AuthProvider = ({ children }) => {
         if (session?.user) {
           console.log('[AuthContext] Setting sessionReady=true from', event);
           setSessionReady(true);
+          sessionFromAuthEvent.current = true;
         }
         
         if (event === 'SIGNED_IN' && session?.user) {

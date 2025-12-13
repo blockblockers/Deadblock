@@ -1,6 +1,12 @@
 # Netlify Redirects for Deadblock PWA
 # This file handles client-side routing for the SPA
 
+# Legal pages - serve static HTML files
+/privacy          /privacy.html    200
+/privacy.html     /privacy.html    200
+/terms            /terms.html      200
+/terms.html       /terms.html      200
+
 # Auth callback - important for OAuth redirects
 /auth/callback    /index.html    200
 
