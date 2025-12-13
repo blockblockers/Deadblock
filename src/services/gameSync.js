@@ -394,16 +394,34 @@ class GameSyncService {
     if (!supabase) return { data: [], error: null };
 
     console.log('gameSync.getActiveGames: Fetching for player', playerId);
+    const startTime = Date.now();
 
     try {
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000)
+      );
+
       // Fetch active games first
-      const { data: games, error } = await supabase
+      const gamesPromise = supabase
         .from('games')
         .select('*')
         .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
         .eq('status', 'active')
         .order('updated_at', { ascending: false });
 
+      let result;
+      try {
+        result = await Promise.race([gamesPromise, timeoutPromise]);
+      } catch (raceError) {
+        console.error('gameSync.getActiveGames: Timeout or error:', raceError.message);
+        return { data: [], error: { message: raceError.message } };
+      }
+
+      const { data: games, error } = result;
+      const elapsed = Date.now() - startTime;
+
+      console.log('gameSync.getActiveGames: Query completed in', elapsed, 'ms');
       console.log('gameSync.getActiveGames: Query result', { 
         count: games?.length, 
         error: error?.message,
@@ -423,11 +441,23 @@ class GameSyncService {
       // Get unique player IDs
       const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
       
-      // Fetch profiles
-      const { data: profiles } = await supabase
+      // Fetch profiles (with timeout)
+      const profilesPromise = supabase
         .from('profiles')
         .select('id, username, rating')
         .in('id', playerIds);
+
+      let profilesResult;
+      try {
+        profilesResult = await Promise.race([profilesPromise, new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profiles timeout')), 5000)
+        )]);
+      } catch (profileError) {
+        console.error('gameSync.getActiveGames: Profiles fetch timeout');
+        profilesResult = { data: null };
+      }
+
+      const { data: profiles } = profilesResult;
 
       const profileMap = {};
       profiles?.forEach(p => { profileMap[p.id] = p; });

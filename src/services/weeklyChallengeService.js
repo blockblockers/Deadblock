@@ -4,13 +4,68 @@ import { supabase, isSupabaseConfigured } from '../utils/supabase';
 class WeeklyChallengeService {
   // Get or create the current week's challenge
   async getCurrentChallenge() {
-    if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
+    console.log('[WeeklyChallengeService] getCurrentChallenge called');
+    
+    if (!isSupabaseConfigured()) {
+      console.log('[WeeklyChallengeService] Supabase not configured');
+      return { data: null, error: 'Supabase not configured' };
+    }
+    
+    console.log('[WeeklyChallengeService] Supabase is configured, checking connection...');
     
     try {
-      const { data, error } = await supabase.rpc('get_or_create_weekly_challenge');
+      console.log('[WeeklyChallengeService] Calling RPC get_or_create_weekly_challenge...');
+      const startTime = Date.now();
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000)
+      );
+      
+      const rpcPromise = supabase.rpc('get_or_create_weekly_challenge');
+      
+      let result;
+      try {
+        result = await Promise.race([rpcPromise, timeoutPromise]);
+      } catch (raceError) {
+        console.error('[WeeklyChallengeService] Race error:', raceError.message);
+        result = { data: null, error: { message: raceError.message } };
+      }
+      
+      const { data, error } = result;
+      const elapsed = Date.now() - startTime;
+      
+      console.log('[WeeklyChallengeService] RPC completed in', elapsed, 'ms');
+      console.log('[WeeklyChallengeService] RPC result:', { hasData: !!data, dataType: typeof data, error: error?.message });
+      
+      if (error) {
+        console.error('[WeeklyChallengeService] RPC error:', error);
+        
+        // Fallback: try to get current challenge directly from table
+        console.log('[WeeklyChallengeService] Trying fallback query...');
+        const now = new Date().toISOString();
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('weekly_challenges')
+          .select('*')
+          .lte('starts_at', now)
+          .gte('ends_at', now)
+          .order('starts_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (fallbackData) {
+          console.log('[WeeklyChallengeService] Fallback succeeded:', fallbackData.id);
+          return { data: fallbackData, error: null };
+        }
+        
+        console.error('[WeeklyChallengeService] Fallback also failed:', fallbackError?.message);
+        return { data: null, error: error?.message || 'Failed to load challenge' };
+      }
+      
+      console.log('[WeeklyChallengeService] Success! Challenge data:', data);
       return { data, error };
     } catch (err) {
-      console.error('Error getting weekly challenge:', err);
+      console.error('[WeeklyChallengeService] Exception in getCurrentChallenge:', err);
       return { data: null, error: err.message };
     }
   }

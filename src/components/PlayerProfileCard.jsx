@@ -398,7 +398,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   
   // Get contrasting background color for tier icon circle based on tier color
   const getTierIconBackground = () => {
-    if (!rankInfo?.color) return 'rgba(15, 23, 42, 0.9)';
+    if (!rankInfo?.glowColor) return 'rgba(15, 23, 42, 0.9)';
     
     // Map tier glow colors to contrasting dark backgrounds
     const contrastBackgrounds = {
@@ -410,12 +410,11 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       '#94a3b8': 'rgba(20, 25, 40, 0.95)',   // Beginner slate → dark blue
       '#64748b': 'rgba(20, 25, 40, 0.95)',   // Novice gray → dark blue
     };
-    return contrastBackgrounds[rankInfo.color] || 'rgba(15, 23, 42, 0.95)';
+    return contrastBackgrounds[rankInfo.glowColor] || 'rgba(15, 23, 42, 0.95)';
   };
   
-  // Get the border color - ensure it's always valid
-  const borderColor = rankInfo?.color ? `${rankInfo.color}60` : 'rgba(34, 211, 238, 0.4)';
-  const glowColor = rankInfo?.color || '#22d3ee';
+  // Get the glow color - use glowColor (hex) not color (Tailwind class)
+  const glowColor = rankInfo?.glowColor || '#22d3ee';
   
   // Helper to convert hex color to rgba
   const hexToRgba = (hex, alpha) => {
@@ -436,8 +435,8 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     '50': hexToRgba(glowColor, 0.50),
   };
   
-  // Also fix borderColor to use proper rgba
-  const borderRgba = hexToRgba(rankInfo?.color || '#22d3ee', 0.4);
+  // Border uses glowColor with rgba conversion
+  const borderRgba = hexToRgba(glowColor, 0.4);
   
   // Build style objects with proper rgba colors
   const buttonStyle = {
@@ -481,7 +480,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
             style={tierIconStyle}
           >
             {rankInfo && (
-              <TierIcon shape={rankInfo.shape} glowColor={rankInfo.color} size="medium" />
+              <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="medium" />
             )}
           </div>
           

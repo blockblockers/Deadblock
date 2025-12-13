@@ -915,6 +915,7 @@ function AppContent() {
 
   // Weekly Challenge Menu
   if (gameMode === 'weekly-menu') {
+    console.log('Rendering: WeeklyChallengeMenu');
     return (
       <LazyWrapper message="Loading weekly challenge...">
         <WeeklyChallengeMenu
@@ -952,6 +953,7 @@ function AppContent() {
   }
 
   // Render Game Screen (for ai, 2player, and puzzle modes)
+  console.log('Rendering: GameScreen (fallback) - gameMode:', gameMode);
   return (
     <GameScreen
       board={board}

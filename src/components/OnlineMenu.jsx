@@ -1,5 +1,5 @@
 // Online Menu - Hub for online features
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
@@ -337,13 +337,23 @@ const OnlineMenu = ({
     }
   };
 
+  // Track if loadGames is currently running to prevent duplicate calls
+  const loadGamesInProgress = useRef(false);
+  
   const loadGames = async () => {
     if (!profile?.id) {
       console.log('OnlineMenu.loadGames: No profile ID');
       setLoading(false);
       return;
     }
-
+    
+    // Prevent duplicate calls while one is in progress
+    if (loadGamesInProgress.current) {
+      console.log('OnlineMenu.loadGames: Already loading, skipping');
+      return;
+    }
+    
+    loadGamesInProgress.current = true;
     console.log('OnlineMenu.loadGames: Loading games for', profile.id);
 
     try {
@@ -369,6 +379,7 @@ const OnlineMenu = ({
       console.error('OnlineMenu.loadGames: Error loading games:', err);
     }
     
+    loadGamesInProgress.current = false;
     setLoading(false);
   };
 

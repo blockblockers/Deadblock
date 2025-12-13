@@ -19,11 +19,25 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState(null);
   
+  // Debug log on mount
+  console.log('[WeeklyChallengeMenu] Render:', { 
+    isAuthenticated, 
+    authLoading, 
+    hasProfile: !!profile,
+    loading,
+    hasChallenge: !!challenge 
+  });
+  
   // Load data when component mounts and when auth state changes
   useEffect(() => {
+    console.log('[WeeklyChallengeMenu] Auth effect triggered:', { authLoading, isAuthenticated });
     // Wait for auth to be ready before loading
-    if (authLoading) return;
+    if (authLoading) {
+      console.log('[WeeklyChallengeMenu] Auth still loading, waiting...');
+      return;
+    }
     
+    console.log('[WeeklyChallengeMenu] Auth ready, calling loadChallengeData');
     loadChallengeData();
   }, [authLoading, isAuthenticated]);
   
@@ -70,11 +84,14 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
   };
   
   const loadChallengeData = async () => {
+    console.log('[WeeklyChallengeMenu] loadChallengeData starting...');
     setLoading(true);
     
     try {
       // Get current challenge
+      console.log('[WeeklyChallengeMenu] Calling getCurrentChallenge...');
       const { data: challengeData, error } = await weeklyChallengeService.getCurrentChallenge();
+      console.log('[WeeklyChallengeMenu] getCurrentChallenge result:', { challengeData, error });
       
       if (error) {
         console.error('[WeeklyChallengeMenu] Error getting challenge:', error);
@@ -83,6 +100,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
       }
       
       if (challengeData) {
+        console.log('[WeeklyChallengeMenu] Challenge loaded:', challengeData.id);
         setChallenge(challengeData);
         
         // Load user-specific data
@@ -98,6 +116,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
       console.error('[WeeklyChallengeMenu] Error loading challenge:', err);
     }
     
+    console.log('[WeeklyChallengeMenu] loadChallengeData complete');
     setLoading(false);
   };
   

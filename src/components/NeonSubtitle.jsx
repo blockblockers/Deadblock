@@ -1,6 +1,6 @@
 // NeonSubtitle - Smaller neon text with customizable color theme
 
-const NeonSubtitle = ({ text = 'ONLINE', className = '', size = 'default', color = 'amber' }) => {
+const NeonSubtitle = ({ text = 'ONLINE', className = '', size = 'default', color = 'amber', inline = false }) => {
   // Size presets
   const sizeClasses = {
     tiny: 'text-xs',
@@ -24,9 +24,12 @@ const NeonSubtitle = ({ text = 'ONLINE', className = '', size = 'default', color
   
   // Generate unique class name based on color
   const uniqueClass = `neon-subtitle-${color}`;
+  
+  // Use block display by default to force subtitle below title
+  const displayClass = inline ? 'inline-block' : 'block';
 
   return (
-    <div className={`relative inline-block ${className}`}>
+    <div className={`relative ${displayClass} ${className}`}>
       <span className={`${uniqueClass} font-black tracking-[0.3em] ${sizeClass}`}>
         {text}
       </span>

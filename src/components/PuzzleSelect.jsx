@@ -1,11 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Loader, AlertCircle, ArrowLeft, Zap, Timer, Flame } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { pieces } from '../utils/pieces';
 
 // Dramatically different themes for each difficulty
 const themes = {
@@ -17,11 +16,6 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-green-950/50 to-slate-900/95',
     cardBorder: 'border-green-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(34,197,94,0.4),inset_0_0_30px_rgba(34,197,94,0.1)]',
-    floatingColors: [
-      { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },
-      { color: '#10b981', glow: 'rgba(16,185,129,0.6)' },
-      { color: '#84cc16', glow: 'rgba(132,204,22,0.6)' },
-    ],
   },
   medium: {
     gridColor: 'rgba(251,191,36,0.5)',
@@ -31,11 +25,6 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/50 to-slate-900/95',
     cardBorder: 'border-amber-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(251,191,36,0.4),inset_0_0_30px_rgba(251,191,36,0.1)]',
-    floatingColors: [
-      { color: '#f59e0b', glow: 'rgba(245,158,11,0.6)' },
-      { color: '#f97316', glow: 'rgba(249,115,22,0.6)' },
-      { color: '#fbbf24', glow: 'rgba(251,191,36,0.6)' },
-    ],
   },
   hard: {
     gridColor: 'rgba(168,85,247,0.5)',
@@ -45,11 +34,6 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-purple-950/50 to-slate-900/95',
     cardBorder: 'border-purple-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(168,85,247,0.4),inset_0_0_30px_rgba(168,85,247,0.1)]',
-    floatingColors: [
-      { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },
-      { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },
-      { color: '#8b5cf6', glow: 'rgba(139,92,246,0.6)' },
-    ],
   },
   speed: {
     gridColor: 'rgba(239,68,68,0.5)',
@@ -59,11 +43,6 @@ const themes = {
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-red-950/50 to-slate-900/95',
     cardBorder: 'border-red-500/50',
     cardShadow: 'shadow-[0_0_60px_rgba(239,68,68,0.4),inset_0_0_30px_rgba(239,68,68,0.1)]',
-    floatingColors: [
-      { color: '#ef4444', glow: 'rgba(239,68,68,0.6)' },
-      { color: '#f97316', glow: 'rgba(249,115,22,0.6)' },
-      { color: '#fbbf24', glow: 'rgba(251,191,36,0.6)' },
-    ],
   },
 };
 
@@ -131,89 +110,12 @@ const difficulties = [
   }
 ];
 
-// Floating pentomino piece component
-const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColor, size, rotation }) => {
-  const coords = pieces[piece] || pieces.T;
-  const minX = Math.min(...coords.map(([x]) => x));
-  const minY = Math.min(...coords.map(([, y]) => y));
-  
-  return (
-    <div
-      className="absolute pointer-events-none animate-float-piece"
-      style={{
-        left: `${startX}%`,
-        top: `${startY}%`,
-        animationDelay: `${delay}s`,
-        animationDuration: `${duration}s`,
-        transform: `rotate(${rotation}deg)`,
-        '--float-x': `${(Math.random() - 0.5) * 100}px`,
-        '--float-y': `${(Math.random() - 0.5) * 100}px`,
-      }}
-    >
-      <div className="relative" style={{ transform: `scale(${size})` }}>
-        {coords.map(([x, y], idx) => (
-          <div
-            key={idx}
-            className="absolute rounded-sm animate-sparkle"
-            style={{
-              width: 8,
-              height: 8,
-              left: (x - minX) * 10,
-              top: (y - minY) * 10,
-              backgroundColor: color,
-              boxShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}50`,
-              animationDelay: `${delay + idx * 0.1}s`,
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Floating pieces background - themed based on selected difficulty
-const FloatingPiecesBackground = ({ colorSet }) => {
-  const floatingPieces = useMemo(() => {
-    const pieceNames = Object.keys(pieces);
-    const colors = colorSet || [
-      { color: '#22d3ee', glow: 'rgba(34,211,238,0.6)' },
-      { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },
-      { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },
-    ];
-    
-    return Array.from({ length: 10 }).map((_, i) => {
-      const colorChoice = colors[i % colors.length];
-      return {
-        id: i,
-        piece: pieceNames[Math.floor(Math.random() * pieceNames.length)],
-        startX: Math.random() * 100,
-        startY: Math.random() * 100,
-        delay: Math.random() * 8,
-        duration: 15 + Math.random() * 10,
-        color: colorChoice.color,
-        glowColor: colorChoice.glow,
-        size: 0.6 + Math.random() * 0.6,
-        rotation: Math.random() * 360,
-      };
-    });
-  }, [colorSet]);
-
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      {floatingPieces.map((p) => (
-        <FloatingPiece key={p.id} {...p} />
-      ))}
-    </div>
-  );
-};
-
 const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState(PUZZLE_DIFFICULTY.EASY);
-  // Always enable scroll on this menu due to content size
-  const { needsScroll } = useResponsiveLayout(650);
+  const { needsScroll } = useResponsiveLayout(750);
   
   // Get best speed streak for display
   const [bestSpeedStreak] = useState(() => {
@@ -269,18 +171,10 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
     onBack();
   };
 
-  // Determine scroll styles - always allow scroll on this complex menu
-  const scrollStyles = needsScroll ? {
-    overflowY: 'auto',
-    overflowX: 'hidden',
-    WebkitOverflowScrolling: 'touch',
-    overscrollBehavior: 'contain',
-  } : {};
-
   return (
     <div 
       className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={scrollStyles}
+      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
     >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
@@ -293,59 +187,20 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       
-      {/* Floating pentomino pieces - themed */}
-      <FloatingPiecesBackground colorSet={theme.floatingColors} />
-      
-      {/* Animation keyframes */}
-      <style>{`
-        @keyframes float-piece {
-          0% { 
-            transform: translate(0, 0) rotate(0deg); 
-            opacity: 0;
-          }
-          10% { opacity: 0.6; }
-          50% { 
-            transform: translate(var(--float-x), var(--float-y)) rotate(180deg);
-            opacity: 0.8;
-          }
-          90% { opacity: 0.6; }
-          100% { 
-            transform: translate(calc(var(--float-x) * 2), calc(var(--float-y) * 2)) rotate(360deg);
-            opacity: 0;
-          }
-        }
-        @keyframes sparkle {
-          0%, 100% { 
-            opacity: 0.4; 
-            box-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
-          }
-          50% { 
-            opacity: 1; 
-            box-shadow: 0 0 16px currentColor, 0 0 32px currentColor, 0 0 48px currentColor;
-          }
-        }
-        .animate-float-piece { 
-          animation: float-piece var(--duration, 20s) ease-in-out infinite; 
-        }
-        .animate-sparkle { 
-          animation: sparkle 2s ease-in-out infinite; 
-        }
-      `}</style>
-      
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-6' : 'py-3'}`}>
         <div className="w-full max-w-md">
           {/* Title - Centered and Large */}
-          <div className="text-center mb-6">
+          <div className="text-center mb-4">
             <NeonTitle size="large" />
-            <NeonSubtitle text="PUZZLE MODE" size="default" className="mt-2" />
+            <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
           </div>
 
           {/* Card with dramatic theme */}
-          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-500`}>
+          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-500`}>
 
             {/* Difficulty Selection */}
-            <div className="space-y-3 mb-5">
+            <div className="space-y-2 mb-4">
               {difficulties.map((diff) => {
                 const isSelected = selectedDifficulty === diff.id;
                 const isSpeedMode = diff.isSpeed;
@@ -354,7 +209,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                     key={diff.id} 
                     onClick={() => handleSelectDifficulty(diff.id)} 
                     disabled={isLoading}
-                    className={`w-full p-4 rounded-xl border-2 transition-all duration-300 text-left relative overflow-hidden ${
+                    className={`w-full p-3 rounded-xl border-2 transition-all duration-300 text-left relative overflow-hidden ${
                       isSelected 
                         ? `bg-gradient-to-r ${diff.colors.gradient} border-white/40 ring-4 ${diff.colors.ring}` 
                         : `${diff.colors.bg} ${diff.colors.border} hover:bg-opacity-50`
@@ -375,8 +230,8 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                     
                     <div className="relative flex items-center justify-between">
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className={`font-black tracking-wide text-lg ${isSelected ? 'text-white' : diff.colors.text}`}>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className={`font-black tracking-wide text-base ${isSelected ? 'text-white' : diff.colors.text}`}>
                             {diff.name}
                           </h3>
                           {isSpeedMode ? (
@@ -397,16 +252,16 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                             </span>
                           )}
                         </div>
-                        <p className={`text-sm ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                        <p className={`text-xs ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
                           {diff.description}
                         </p>
                       </div>
                       
                       {/* Selection indicator */}
-                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ml-3 ${
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ml-2 ${
                         isSelected ? 'border-white bg-white' : 'border-slate-600'
                       }`}>
-                        {isSelected && <div className="w-3 h-3 rounded-full bg-slate-900" />}
+                        {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
                       </div>
                     </div>
                   </button>
@@ -416,10 +271,10 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
 
             {/* Turn order info - Enhanced styling (hide for speed mode) */}
             {!selectedDiff.isSpeed && (
-              <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+              <div className="mb-4 p-2.5 bg-slate-800/50 rounded-xl border border-slate-700/50">
                 {/* Styled header */}
-                <div className="text-center mb-3">
-                  <span className="turn-order-title font-black tracking-[0.2em] text-xs">TURN ORDER</span>
+                <div className="text-center mb-2">
+                  <span className="turn-order-title font-black tracking-[0.2em] text-[10px]">TURN ORDER</span>
                 </div>
                 <div className="flex items-center justify-center gap-1 text-xs flex-wrap">
                   {Array.from({ length: selectedDiff.moves }).map((_, i) => (
@@ -506,7 +361,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
             <button 
               onClick={handleGeneratePuzzle} 
               disabled={isLoading}
-              className={`w-full p-4 rounded-xl font-black tracking-wider text-lg transition-all flex items-center justify-center gap-3 ${
+              className={`w-full p-3 rounded-xl font-black tracking-wider text-base transition-all flex items-center justify-center gap-2 ${
                 isLoading 
                   ? 'bg-slate-700 text-slate-400 cursor-wait' 
                   : `bg-gradient-to-r ${selectedDiff.colors.gradient} text-white hover:scale-[1.02] active:scale-[0.98]`
@@ -515,15 +370,15 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
             >
               {isLoading ? (
                 <>
-                  <Loader size={22} className="animate-spin" />
+                  <Loader size={18} className="animate-spin" />
                   <div className="text-left">
-                    <div className="text-sm">GENERATING...</div>
-                    <div className="text-xs opacity-70">{progress}%</div>
+                    <div className="text-xs">GENERATING...</div>
+                    <div className="text-[10px] opacity-70">{progress}%</div>
                   </div>
                 </>
               ) : selectedDiff.isSpeed ? (
                 <>
-                  <Zap size={22} />
+                  <Zap size={18} />
                   START SPEED MODE
                 </>
               ) : (
@@ -537,14 +392,14 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
             <button 
               onClick={handleBack} 
               disabled={isLoading}
-              className="w-full mt-4 py-3 px-4 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] disabled:opacity-50"
+              className="w-full mt-3 py-2.5 px-4 rounded-xl font-bold text-sm text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] disabled:opacity-50"
             >
-              <ArrowLeft size={18} />
+              <ArrowLeft size={16} />
               BACK TO MENU
             </button>
           </div>
         </div>
-        {needsScroll && <div className="h-8 flex-shrink-0" />}
+        {needsScroll && <div className="h-6 flex-shrink-0" />}
       </div>
       
       {/* Shine animation */}
