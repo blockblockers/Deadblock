@@ -439,16 +439,6 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   // Also fix borderColor to use proper rgba
   const borderRgba = hexToRgba(rankInfo?.color || '#22d3ee', 0.4);
   
-  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { 
-    displayName, 
-    glowColor, 
-    glowRgba,
-    borderRgba,
-    buttonStyleBackground: buttonStyle.background,
-    buttonStyleBorder: buttonStyle.border,
-    rankName: rankInfo?.name 
-  });
-  
   // Build style objects with proper rgba colors
   const buttonStyle = {
     background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${glowRgba['15']} 25%, rgba(30, 41, 59, 0.85) 50%, ${glowRgba['10']} 75%, rgba(15, 23, 42, 0.95) 100%)`,
@@ -464,6 +454,17 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     border: `2px solid ${glowRgba['50']}`,
     boxShadow: `0 0 20px ${glowRgba['35']}, inset 0 0 15px ${glowRgba['15']}, inset 0 2px 4px rgba(255,255,255,0.1)`,
   };
+  
+  // Debug logging - AFTER style objects are defined
+  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { 
+    displayName, 
+    glowColor, 
+    glowRgba,
+    borderRgba,
+    buttonStyleBackground: buttonStyle.background,
+    buttonStyleBorder: buttonStyle.border,
+    rankName: rankInfo?.name 
+  });
   
   return (
     <>
