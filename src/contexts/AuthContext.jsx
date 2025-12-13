@@ -401,6 +401,12 @@ export const AuthProvider = ({ children }) => {
         console.log('[AuthContext] Auth event:', event, session?.user?.email);
         setUser(session?.user ?? null);
         
+        // Set sessionReady when we have a valid session from any auth event
+        if (session?.user) {
+          console.log('[AuthContext] Setting sessionReady=true from', event);
+          setSessionReady(true);
+        }
+        
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('[AuthContext] SIGNED_IN - fetching profile');
           await fetchProfile(session.user.id);
@@ -449,9 +455,21 @@ export const AuthProvider = ({ children }) => {
               if (retryResult) break;
             }
           }
+        } else if (event === 'INITIAL_SESSION' && !session) {
+          // No session - user is not logged in
+          console.log('[AuthContext] INITIAL_SESSION - no session, user not logged in');
+          setSessionReady(true);
+          // Clear any stale cached profile
+          if (loadCachedProfile()?.profile) {
+            console.log('[AuthContext] Clearing stale cached profile');
+            clearCachedProfile();
+            setProfile(null);
+          }
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
           setIsOAuthCallback(false);
+          // Keep sessionReady true - we know the session state (logged out)
+          setSessionReady(true);
           // Clear cached profile on sign out
           clearCachedProfile();
           console.log('[AuthContext] SIGNED_OUT - cleared profile and cache');
