@@ -2,6 +2,7 @@ import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from
 import { useGameState } from './hooks/useGameState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isSupabaseConfigured } from './utils/supabase';
+import { useRealtimeConnection } from './hooks/useRealtimeConnection';
 
 // Core screens (always loaded - used frequently)
 import MenuScreen from './components/MenuScreen';
@@ -92,6 +93,9 @@ function AppContent() {
   const [currentWeeklyChallenge, setCurrentWeeklyChallenge] = useState(null);
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser } = useAuth();
+  
+  // Initialize realtime connection when user logs in (optimized - uses only 2 channels)
+  useRealtimeConnection();
   
   // State for welcome modal
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);

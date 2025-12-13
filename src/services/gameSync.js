@@ -1,13 +1,15 @@
 // Game Sync Service - Real-time game state management
+// OPTIMIZED: Uses centralized RealtimeManager to reduce connection count
 import { supabase } from '../utils/supabase';
+import { realtimeManager } from './realtimeManager';
 
 class GameSyncService {
   constructor() {
-    this.activeSubscription = null;
     this.currentGameId = null;
+    this.unsubscribeHandler = null;
   }
 
-  // Subscribe to game updates
+  // Subscribe to game updates - now uses RealtimeManager
   subscribeToGame(gameId, onUpdate, onError) {
     if (!supabase) return { unsubscribe: () => {} };
 
@@ -15,39 +17,33 @@ class GameSyncService {
     this.unsubscribe();
     this.currentGameId = gameId;
 
-    this.activeSubscription = supabase
-      .channel(`game:${gameId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'games',
-          filter: `id=eq.${gameId}`
-        },
-        (payload) => {
-          console.log('Game update received:', payload);
-          onUpdate(payload.new);
-        }
-      )
-      .on('error', (error) => {
-        console.error('Subscription error:', error);
-        onError?.(error);
-      })
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+    console.log('[GameSync] Subscribing to game via RealtimeManager:', gameId);
 
-    return this.activeSubscription;
+    // Connect to game channel via RealtimeManager
+    realtimeManager.connectGame(gameId);
+
+    // Register handler for game updates
+    this.unsubscribeHandler = realtimeManager.on('gameUpdate', (gameData) => {
+      console.log('[GameSync] Game update received:', gameData?.id);
+      onUpdate(gameData);
+    });
+
+    // Return unsubscribe function
+    return {
+      unsubscribe: () => this.unsubscribe()
+    };
   }
 
   // Unsubscribe from current game
   unsubscribe() {
-    if (this.activeSubscription) {
-      this.activeSubscription.unsubscribe();
-      this.activeSubscription = null;
-      this.currentGameId = null;
+    if (this.unsubscribeHandler) {
+      this.unsubscribeHandler();
+      this.unsubscribeHandler = null;
     }
+    
+    // Disconnect game channel
+    realtimeManager.disconnectGame();
+    this.currentGameId = null;
   }
 
   // Get game state
@@ -163,26 +159,11 @@ class GameSyncService {
       winnerId 
     } = moveData;
 
-    console.log('gameSync.makeMove: Move details', {
-      pieceType,
-      row,
-      col,
-      rotation,
-      flipped,
-      newBoardFirstRow: newBoard?.[0],
-      newBoardPiecesKeys: Object.keys(newBoardPieces || {}),
-      newUsedPieces,
-      nextPlayer,
-      gameOver
-    });
-
     // Get current move count
     const { count: moveCount, error: countError } = await supabase
       .from('game_moves')
       .select('*', { count: 'exact', head: true })
       .eq('game_id', gameId);
-
-    console.log('gameSync.makeMove: Move count', { moveCount, countError });
 
     // Record the move in history with board state for replays
     const { data: moveRecord, error: moveError } = await supabase
@@ -203,9 +184,6 @@ class GameSyncService {
 
     if (moveError) {
       console.error('gameSync.makeMove: Error recording move:', moveError);
-      // Don't return here - still try to update the game
-    } else {
-      console.log('gameSync.makeMove: Move recorded', { moveId: moveRecord?.id });
     }
 
     // Update game state
@@ -221,20 +199,10 @@ class GameSyncService {
       updateData.status = 'completed';
       updateData.winner_id = winnerId || null;
 
-      // Update player stats
       if (winnerId) {
         await this.updatePlayerStats(gameId, winnerId);
       }
     }
-
-    console.log('gameSync.makeMove: Updating game with:', {
-      gameId,
-      updateData: {
-        ...updateData,
-        board: `[${updateData.board.length}x${updateData.board[0]?.length} array]`,
-        board_pieces: `${Object.keys(updateData.board_pieces || {}).length} pieces`
-      }
-    });
 
     const { data, error } = await supabase
       .from('games')
@@ -242,13 +210,6 @@ class GameSyncService {
       .eq('id', gameId)
       .select()
       .single();
-
-    console.log('gameSync.makeMove: Update result', { 
-      success: !error, 
-      error: error?.message,
-      dataId: data?.id,
-      dataBoardSample: data?.board?.[0]?.slice(0, 3)
-    });
 
     return { data, error };
   }
@@ -282,7 +243,6 @@ class GameSyncService {
         p_game_id: gameId,
         p_winner_id: winnerId
       });
-      console.log('gameSync: ELO ratings updated for game', gameId);
     } catch (err) {
       console.error('gameSync: Error updating ELO ratings:', err);
     }
@@ -297,7 +257,6 @@ class GameSyncService {
         p_user_id: loserId,
         p_game_id: gameId
       });
-      console.log('gameSync: Achievements checked for both players');
     } catch (err) {
       console.error('gameSync: Error checking achievements:', err);
     }
@@ -350,7 +309,6 @@ class GameSyncService {
     if (!supabase) return { data: [], error: null };
 
     try {
-      // Fetch games first
       const { data: games, error } = await supabase
         .from('games')
         .select('*')
@@ -359,14 +317,11 @@ class GameSyncService {
         .limit(limit);
 
       if (error || !games) {
-        console.error('Error fetching player games:', error);
         return { data: [], error };
       }
 
-      // Get unique player IDs
       const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
       
-      // Fetch profiles
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, username, rating')
@@ -375,7 +330,6 @@ class GameSyncService {
       const profileMap = {};
       profiles?.forEach(p => { profileMap[p.id] = p; });
 
-      // Attach profiles to games
       const gamesWithProfiles = games.map(game => ({
         ...game,
         player1: profileMap[game.player1_id] || null,
@@ -384,7 +338,6 @@ class GameSyncService {
 
       return { data: gamesWithProfiles, error: null };
     } catch (e) {
-      console.error('Exception fetching player games:', e);
       return { data: [], error: { message: e.message } };
     }
   }
@@ -393,16 +346,11 @@ class GameSyncService {
   async getActiveGames(playerId) {
     if (!supabase) return { data: [], error: null };
 
-    console.log('gameSync.getActiveGames: Fetching for player', playerId);
-    const startTime = Date.now();
-
     try {
-      // Create timeout promise
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000)
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
       );
 
-      // Fetch active games first
       const gamesPromise = supabase
         .from('games')
         .select('*')
@@ -410,59 +358,27 @@ class GameSyncService {
         .eq('status', 'active')
         .order('updated_at', { ascending: false });
 
-      let result;
-      try {
-        result = await Promise.race([gamesPromise, timeoutPromise]);
-      } catch (raceError) {
-        console.error('gameSync.getActiveGames: Timeout or error:', raceError.message);
-        return { data: [], error: { message: raceError.message } };
-      }
-
+      const result = await Promise.race([gamesPromise, timeoutPromise]);
       const { data: games, error } = result;
-      const elapsed = Date.now() - startTime;
-
-      console.log('gameSync.getActiveGames: Query completed in', elapsed, 'ms');
-      console.log('gameSync.getActiveGames: Query result', { 
-        count: games?.length, 
-        error: error?.message,
-        gameStatuses: games?.map(g => ({ id: g.id, status: g.status }))
-      });
 
       if (error || !games) {
-        console.error('Error fetching active games:', error);
         return { data: [], error };
       }
 
       if (games.length === 0) {
-        console.log('gameSync.getActiveGames: No active games found');
         return { data: [], error: null };
       }
 
-      // Get unique player IDs
       const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
       
-      // Fetch profiles (with timeout)
-      const profilesPromise = supabase
+      const { data: profiles } = await supabase
         .from('profiles')
         .select('id, username, rating')
         .in('id', playerIds);
 
-      let profilesResult;
-      try {
-        profilesResult = await Promise.race([profilesPromise, new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Profiles timeout')), 5000)
-        )]);
-      } catch (profileError) {
-        console.error('gameSync.getActiveGames: Profiles fetch timeout');
-        profilesResult = { data: null };
-      }
-
-      const { data: profiles } = profilesResult;
-
       const profileMap = {};
       profiles?.forEach(p => { profileMap[p.id] = p; });
 
-      // Attach profiles to games
       const gamesWithProfiles = games.map(game => ({
         ...game,
         player1: profileMap[game.player1_id] || null,
@@ -471,7 +387,6 @@ class GameSyncService {
 
       return { data: gamesWithProfiles, error: null };
     } catch (e) {
-      console.error('Exception fetching active games:', e);
       return { data: [], error: { message: e.message } };
     }
   }
@@ -479,7 +394,6 @@ class GameSyncService {
   // Check if it's the player's turn
   isPlayerTurn(game, playerId) {
     if (!game) return false;
-    
     const isPlayer1 = game.player1_id === playerId;
     return (isPlayer1 && game.current_player === 1) || 
            (!isPlayer1 && game.current_player === 2);

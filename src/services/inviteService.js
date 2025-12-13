@@ -1,7 +1,13 @@
 // Invite Service - Handle friend search and game invitations
+// OPTIMIZED: Uses centralized RealtimeManager for invite notifications
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { realtimeManager } from './realtimeManager';
 
 class InviteService {
+  constructor() {
+    this.unsubscribeHandler = null;
+  }
+
   // Search for users by username (partial match)
   async searchUsers(query, currentUserId, limit = 10) {
     if (!supabase || !query || query.length < 2) {
@@ -310,47 +316,32 @@ class InviteService {
     }
   }
 
-  // Subscribe to invite updates for a user
+  // Subscribe to invite updates - uses RealtimeManager (no new channel!)
   subscribeToInvites(userId, onInviteReceived, onInviteUpdated) {
-    if (!supabase) return null;
+    if (!supabase) return { unsubscribe: () => {} };
 
-    const subscription = supabase
-      .channel(`invites:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'game_invites',
-          filter: `to_user_id=eq.${userId}`
-        },
-        (payload) => {
-          console.log('New invite received:', payload);
-          onInviteReceived?.(payload.new);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'game_invites',
-          filter: `or(from_user_id.eq.${userId},to_user_id.eq.${userId})`
-        },
-        (payload) => {
-          console.log('Invite updated:', payload);
-          onInviteUpdated?.(payload.new);
-        }
-      )
-      .subscribe();
+    console.log('[InviteService] Subscribing to invites via RealtimeManager');
 
-    return subscription;
+    // Register handler with RealtimeManager
+    this.unsubscribeHandler = realtimeManager.on('gameInvite', (invite) => {
+      console.log('[InviteService] New invite received via RealtimeManager:', invite?.id);
+      onInviteReceived?.(invite);
+    });
+
+    return {
+      unsubscribe: () => {
+        if (this.unsubscribeHandler) {
+          this.unsubscribeHandler();
+          this.unsubscribeHandler = null;
+        }
+      }
+    };
   }
 
   // Unsubscribe from invite updates
   unsubscribeFromInvites(subscription) {
-    if (subscription) {
-      supabase?.removeChannel(subscription);
+    if (subscription?.unsubscribe) {
+      subscription.unsubscribe();
     }
   }
 

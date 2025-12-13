@@ -1,14 +1,16 @@
 // GameInviteNotification - Toast notifications for game invites and challenges
+// OPTIMIZED: Uses centralized RealtimeManager instead of creating separate channels
 import { useState, useEffect, useRef } from 'react';
 import { Gamepad2, X, Check, Clock, Users, Bell } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { realtimeManager } from '../services/realtimeManager';
 import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
 
 const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
   const [notifications, setNotifications] = useState([]);
-  const subscriptionRef = useRef(null);
+  const unsubscribeRef = useRef([]);
 
   useEffect(() => {
     if (!userId || !isSupabaseConfigured()) return;
@@ -16,83 +18,55 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
     // Check for pending invites on load
     checkPendingInvites();
 
-    // Subscribe to new invites
-    subscriptionRef.current = supabase
-      .channel('game-invites')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'game_invites',
-          filter: `invited_id=eq.${userId}`
-        },
-        async (payload) => {
-          // Fetch inviter details
-          const { data: inviter } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_url, elo_rating')
-            .eq('id', payload.new.inviter_id)
-            .single();
+    // Register handlers with RealtimeManager (no new channels created!)
+    const unsubInvite = realtimeManager.on('gameInvite', async (invite) => {
+      // Fetch inviter details
+      const { data: inviter } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url, rating')
+        .eq('id', invite.inviter_id)
+        .single();
 
-          const notification = {
-            id: payload.new.id,
-            type: 'invite',
-            inviter,
-            timerSeconds: payload.new.timer_seconds,
-            createdAt: payload.new.created_at,
-            expiresAt: new Date(Date.now() + 60000) // 60 second expiry
-          };
+      const notification = {
+        id: invite.id,
+        type: 'invite',
+        inviter,
+        timerSeconds: invite.timer_seconds,
+        createdAt: invite.created_at,
+        expiresAt: new Date(Date.now() + 60000) // 60 second expiry
+      };
 
-          setNotifications(prev => [...prev, notification]);
-          soundManager.playSound('notification');
-          
-          // Vibrate if supported
-          if (navigator.vibrate) {
-            navigator.vibrate([200, 100, 200]);
-          }
-        }
-      )
-      .subscribe();
+      setNotifications(prev => [...prev, notification]);
+      soundManager.playSound('notification');
+      
+      // Vibrate if supported
+      if (navigator.vibrate) {
+        navigator.vibrate([200, 100, 200]);
+      }
+    });
 
-    // Also listen for friend requests
-    const friendSub = supabase
-      .channel('friend-requests')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friends',
-          filter: `friend_id=eq.${userId}`
-        },
-        async (payload) => {
-          if (payload.new.status !== 'pending') return;
+    const unsubFriend = realtimeManager.on('friendRequest', async (request) => {
+      const { data: requester } = await supabase
+        .from('profiles')
+        .select('id, username, avatar_url, rating')
+        .eq('id', request.from_user_id)
+        .single();
 
-          const { data: requester } = await supabase
-            .from('profiles')
-            .select('id, username, avatar_url, elo_rating')
-            .eq('id', payload.new.user_id)
-            .single();
+      const notification = {
+        id: request.id,
+        type: 'friend_request',
+        from: requester,
+        createdAt: request.created_at
+      };
 
-          const notification = {
-            id: payload.new.id,
-            type: 'friend_request',
-            from: requester,
-            createdAt: payload.new.created_at
-          };
+      setNotifications(prev => [...prev, notification]);
+      soundManager.playSound('notification');
+    });
 
-          setNotifications(prev => [...prev, notification]);
-          soundManager.playSound('notification');
-        }
-      )
-      .subscribe();
+    unsubscribeRef.current = [unsubInvite, unsubFriend];
 
     return () => {
-      if (subscriptionRef.current) {
-        supabase.removeChannel(subscriptionRef.current);
-      }
-      supabase.removeChannel(friendSub);
+      unsubscribeRef.current.forEach(unsub => unsub?.());
     };
   }, [userId]);
 
@@ -103,9 +77,9 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
         id,
         timer_seconds,
         created_at,
-        inviter:profiles!game_invites_inviter_id_fkey(id, username, avatar_url, elo_rating)
+        inviter:profiles!game_invites_inviter_id_fkey(id, username, avatar_url, rating)
       `)
-      .eq('invited_id', userId)
+      .eq('invitee_id', userId)
       .eq('status', 'pending')
       .gte('created_at', new Date(Date.now() - 60000).toISOString()); // Last minute
 
@@ -191,7 +165,7 @@ const NotificationCard = ({ notification, onAccept, onDecline }) => {
   }, [notification.expiresAt]);
 
   if (notification.type === 'invite') {
-    const tier = ratingService.getRatingTier(notification.inviter?.elo_rating || 1200);
+    const tier = ratingService.getRatingTier(notification.inviter?.rating || 1200);
 
     return (
       <div className="bg-slate-900 border border-amber-500/50 rounded-xl shadow-xl overflow-hidden animate-slide-in">
@@ -215,7 +189,7 @@ const NotificationCard = ({ notification, onAccept, onDecline }) => {
               <div className="font-bold text-white">{notification.inviter?.username}</div>
               <div className="text-xs text-slate-400 flex items-center gap-1">
                 <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
-                {notification.inviter?.elo_rating || 1200}
+                {notification.inviter?.rating || 1200}
                 {notification.timerSeconds && (
                   <>
                     <span className="mx-1">•</span>

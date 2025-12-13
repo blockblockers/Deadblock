@@ -1,5 +1,7 @@
 // Chat Service - In-game quick chat and emotes
+// OPTIMIZED: Uses centralized RealtimeManager for chat subscriptions
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { realtimeManager } from './realtimeManager';
 
 // Quick chat messages
 export const QUICK_CHAT_MESSAGES = {
@@ -92,31 +94,24 @@ export const chatService = {
     return { data: data || [], error };
   },
 
-  // Subscribe to chat messages in a game
+  // Subscribe to chat messages - uses RealtimeManager (no new channel created!)
   subscribeToChat(gameId, callback) {
-    if (!isSupabaseConfigured()) return null;
+    if (!isSupabaseConfigured()) return () => {};
 
-    return supabase
-      .channel(`game-chat-${gameId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'game_chat',
-          filter: `game_id=eq.${gameId}`
-        },
-        (payload) => {
-          callback(payload.new);
-        }
-      )
-      .subscribe();
+    // Register handler with RealtimeManager
+    // The game channel is already subscribed, this just adds a handler
+    return realtimeManager.on('chatMessage', (message) => {
+      // Only callback for messages in this game
+      if (message.game_id === gameId) {
+        callback(message);
+      }
+    });
   },
 
-  // Unsubscribe from chat
-  unsubscribeFromChat(subscription) {
-    if (subscription) {
-      supabase.removeChannel(subscription);
+  // Unsubscribe from chat (now just removes handler, not a full channel)
+  unsubscribeFromChat(unsubscribeFn) {
+    if (unsubscribeFn && typeof unsubscribeFn === 'function') {
+      unsubscribeFn();
     }
   },
 

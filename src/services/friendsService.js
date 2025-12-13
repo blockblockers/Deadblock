@@ -1,91 +1,126 @@
 // Friends Service - Manage friend relationships
+// OPTIMIZED: Uses polling instead of Realtime for friend status (saves 1 channel per user)
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { realtimeManager } from './realtimeManager';
+
+// Polling interval for friend status (30 seconds)
+let statusPollingInterval = null;
 
 export const friendsService = {
   // Get all friends for a user
   async getFriends(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('friends')
-      .select(`
-        id,
-        status,
-        created_at,
-        user_id,
-        friend_id,
-        user:profiles!friends_user_id_fkey(id, username, avatar_url, elo_rating, is_online, last_seen),
-        friend:profiles!friends_friend_id_fkey(id, username, avatar_url, elo_rating, is_online, last_seen)
-      `)
-      .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
-      .eq('status', 'accepted');
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select(`
+          id,
+          status,
+          created_at,
+          user_id,
+          friend_id,
+          user:profiles!friends_user_id_fkey(id, username, avatar_url, rating, is_online, last_seen),
+          friend:profiles!friends_friend_id_fkey(id, username, avatar_url, rating, is_online, last_seen)
+        `)
+        .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
+        .eq('status', 'accepted');
 
-    if (error) return { data: null, error };
+      // If the table doesn't exist, return empty array
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        return { data: [], error: null };
+      }
 
-    // Normalize the data - get the "other" person in each friendship
-    const friends = data.map(f => {
-      const isUser = f.user_id === userId;
-      const friendData = isUser ? f.friend : f.user;
-      return {
-        friendshipId: f.id,
-        ...friendData,
-        friendSince: f.created_at
-      };
-    });
+      if (error) return { data: null, error };
 
-    return { data: friends, error: null };
+      // Normalize the data - get the "other" person in each friendship
+      const friends = data.map(f => {
+        const isUser = f.user_id === userId;
+        const friendData = isUser ? f.friend : f.user;
+        return {
+          friendshipId: f.id,
+          ...friendData,
+          friendSince: f.created_at
+        };
+      });
+
+      return { data: friends, error: null };
+    } catch (err) {
+      console.error('Error in getFriends:', err);
+      return { data: [], error: null };
+    }
   },
 
   // Get pending friend requests (received)
   async getPendingRequests(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('friends')
-      .select(`
-        id,
-        created_at,
-        user:profiles!friends_user_id_fkey(id, username, avatar_url, elo_rating)
-      `)
-      .eq('friend_id', userId)
-      .eq('status', 'pending');
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select(`
+          id,
+          created_at,
+          user:profiles!friends_user_id_fkey(id, username, avatar_url, rating)
+        `)
+        .eq('friend_id', userId)
+        .eq('status', 'pending');
 
-    if (error) return { data: null, error };
+      // If the table doesn't exist, return empty array
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        return { data: [], error: null };
+      }
 
-    return { 
-      data: data.map(r => ({
-        requestId: r.id,
-        from: r.user,
-        requestedAt: r.created_at
-      })), 
-      error: null 
-    };
+      if (error) return { data: null, error };
+
+      return { 
+        data: (data || []).map(r => ({
+          requestId: r.id,
+          from: r.user,
+          requestedAt: r.created_at
+        })), 
+        error: null 
+      };
+    } catch (err) {
+      console.error('Error in getPendingRequests:', err);
+      return { data: [], error: null };
+    }
   },
 
   // Get sent friend requests
   async getSentRequests(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('friends')
-      .select(`
-        id,
-        created_at,
-        friend:profiles!friends_friend_id_fkey(id, username, avatar_url, elo_rating)
-      `)
-      .eq('user_id', userId)
-      .eq('status', 'pending');
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select(`
+          id,
+          created_at,
+          friend:profiles!friends_friend_id_fkey(id, username, avatar_url, rating)
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'pending');
 
-    if (error) return { data: null, error };
+      // If the table doesn't exist, return empty array
+      if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+        return { data: [], error: null };
+      }
 
-    return { 
-      data: data.map(r => ({
-        requestId: r.id,
-        to: r.friend,
-        requestedAt: r.created_at
-      })), 
-      error: null 
-    };
+      if (error) return { data: null, error };
+
+      return { 
+        data: (data || []).map(r => ({
+          requestId: r.id,
+          to: r.friend,
+          requestedAt: r.created_at
+        })), 
+        error: null 
+      };
+    } catch (err) {
+      console.error('Error in getSentRequests:', err);
+      return { data: [], error: null };
+    }
   },
 
   // Send friend request
@@ -220,25 +255,64 @@ export const friendsService = {
     });
   },
 
-  // Subscribe to friend status changes
+  // Subscribe to friend status changes - OPTIMIZED: Uses polling instead of Realtime
+  // This saves 1 channel per user, trading off real-time updates for 30-second polling
   subscribToFriendStatus(userId, friendIds, callback) {
     if (!isSupabaseConfigured() || !friendIds.length) return null;
 
-    return supabase
-      .channel('friend-status')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=in.(${friendIds.join(',')})`
-        },
-        (payload) => {
-          callback(payload.new);
+    console.log('[FriendsService] Starting friend status polling (30s interval)');
+
+    // Initial fetch
+    this.fetchFriendStatuses(friendIds).then(statuses => {
+      statuses.forEach(status => callback(status));
+    });
+
+    // Poll every 30 seconds
+    statusPollingInterval = setInterval(async () => {
+      const statuses = await this.fetchFriendStatuses(friendIds);
+      statuses.forEach(status => callback(status));
+    }, 30000);
+
+    // Return an unsubscribe function that mimics the subscription interface
+    return {
+      unsubscribe: () => {
+        if (statusPollingInterval) {
+          clearInterval(statusPollingInterval);
+          statusPollingInterval = null;
         }
-      )
-      .subscribe();
+      }
+    };
+  },
+
+  // Helper to fetch friend statuses
+  async fetchFriendStatuses(friendIds) {
+    if (!isSupabaseConfigured() || !friendIds.length) return [];
+
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, is_online, last_seen')
+        .in('id', friendIds);
+
+      return data || [];
+    } catch (err) {
+      console.error('Error fetching friend statuses:', err);
+      return [];
+    }
+  },
+
+  // Subscribe to friend requests via RealtimeManager
+  subscribeToFriendRequests(userId, callback) {
+    if (!isSupabaseConfigured()) return { unsubscribe: () => {} };
+
+    console.log('[FriendsService] Subscribing to friend requests via RealtimeManager');
+
+    const unsubscribe = realtimeManager.on('friendRequest', (request) => {
+      console.log('[FriendsService] Friend request received:', request?.id);
+      callback(request);
+    });
+
+    return { unsubscribe };
   }
 };
 

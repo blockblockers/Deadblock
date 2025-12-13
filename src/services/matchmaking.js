@@ -1,9 +1,11 @@
 // Matchmaking Service
+// OPTIMIZED: Uses centralized RealtimeManager for match notifications
 import { supabase } from '../utils/supabase';
+import { realtimeManager } from './realtimeManager';
 
 class MatchmakingService {
   constructor() {
-    this.subscription = null;
+    this.unsubscribeHandler = null;
     this.pollingInterval = null;
   }
 
@@ -177,41 +179,41 @@ class MatchmakingService {
     return () => this.stopMatchmaking();
   }
 
-  // Subscribe to being matched by another player
+  // Subscribe to being matched by another player - uses RealtimeManager
   subscribeToMatches(userId, onMatch) {
     if (!supabase) return { unsubscribe: () => {} };
 
-    this.subscription = supabase
-      .channel(`user-matches-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'games',
-          filter: `player2_id=eq.${userId}`
-        },
-        async (payload) => {
-          // We were matched as player 2
-          const { data: game } = await supabase
-            .from('games')
-            .select(`
-              *,
-              player1:profiles!games_player1_id_fkey(*),
-              player2:profiles!games_player2_id_fkey(*)
-            `)
-            .eq('id', payload.new.id)
-            .single();
+    console.log('[Matchmaking] Subscribing to matches via RealtimeManager');
 
-          if (game) {
-            this.stopMatchmaking();
-            onMatch(game);
-          }
+    // Register handler with RealtimeManager (no new channel created!)
+    this.unsubscribeHandler = realtimeManager.on('matchFound', async (gameData) => {
+      console.log('[Matchmaking] Match found via RealtimeManager:', gameData?.id);
+      
+      // Fetch full game with profiles
+      const { data: game } = await supabase
+        .from('games')
+        .select(`
+          *,
+          player1:profiles!games_player1_id_fkey(*),
+          player2:profiles!games_player2_id_fkey(*)
+        `)
+        .eq('id', gameData.id)
+        .single();
+
+      if (game) {
+        this.stopMatchmaking();
+        onMatch(game);
+      }
+    });
+
+    return {
+      unsubscribe: () => {
+        if (this.unsubscribeHandler) {
+          this.unsubscribeHandler();
+          this.unsubscribeHandler = null;
         }
-      )
-      .subscribe();
-
-    return this.subscription;
+      }
+    };
   }
 
   // Stop all matchmaking
@@ -220,9 +222,9 @@ class MatchmakingService {
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
-    if (this.subscription) {
-      this.subscription.unsubscribe();
-      this.subscription = null;
+    if (this.unsubscribeHandler) {
+      this.unsubscribeHandler();
+      this.unsubscribeHandler = null;
     }
   }
 
