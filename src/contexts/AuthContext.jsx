@@ -299,14 +299,30 @@ export const AuthProvider = ({ children }) => {
       
       let timeoutCleared = false;
       
-      // Shorter timeout since we have cached data as fallback
+      // Longer timeout to allow session refresh to complete
       const timeout = setTimeout(() => {
         if (!timeoutCleared) {
-          console.log('Auth init: TIMEOUT - completing with current state');
-          setSessionReady(true); // Mark as ready even on timeout
-          setLoading(false);
+          console.log('Auth init: TIMEOUT - checking session state');
+          // Only mark as ready if we have a valid session from auth event
+          if (sessionFromAuthEvent.current) {
+            console.log('Auth init: TIMEOUT - session from auth event exists, marking ready');
+            setSessionReady(true);
+            setLoading(false);
+          } else if (cached?.profile) {
+            // Timeout with cached profile but no valid session - session is dead
+            console.log('Auth init: TIMEOUT - no valid session, clearing stale cache');
+            clearCachedProfile();
+            setProfile(null);
+            setUser(null);
+            setSessionReady(true);
+            setLoading(false);
+          } else {
+            // No cached profile, just mark as ready
+            setSessionReady(true);
+            setLoading(false);
+          }
         }
-      }, cached?.profile ? 3000 : 8000); // 3s if cached, 8s if not
+      }, 10000); // 10s timeout - give refresh time to complete
       
       const clearTimeoutSafe = () => {
         timeoutCleared = true;
@@ -326,7 +342,7 @@ export const AuthProvider = ({ children }) => {
           try {
             const refreshPromise = supabase.auth.refreshSession();
             const refreshTimeout = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Refresh timeout')), 5000)
+              setTimeout(() => reject(new Error('Refresh timeout')), 8000)
             );
             
             const { data: refreshData, error: refreshError } = await Promise.race([
@@ -336,11 +352,29 @@ export const AuthProvider = ({ children }) => {
             
             if (refreshError) {
               console.log('Auth init: Session refresh failed:', refreshError.message);
-              // Continue anyway - the token might still work
+              // Check if we got a valid session from auth event
+              if (sessionFromAuthEvent.current) {
+                console.log('Auth init: Using session from auth event after refresh failure');
+                clearTimeoutSafe();
+                setLoading(false);
+                console.log('=== Auth Init Complete (auth event) ===');
+                return;
+              }
+              // No valid session - clear cached data
+              console.log('Auth init: No valid session after refresh failure, clearing cache');
+              clearCachedProfile();
+              setProfile(null);
+              setUser(null);
+              setSessionReady(true);
+              clearTimeoutSafe();
+              setLoading(false);
+              console.log('=== Auth Init Complete (no session) ===');
+              return;
             } else if (refreshData?.session) {
               console.log('Auth init: Session refreshed successfully');
               setUser(refreshData.session.user);
               setSessionReady(true);
+              sessionFromAuthEvent.current = true;
               
               // Fetch fresh profile
               initialFetchDone.current = true;
@@ -353,7 +387,24 @@ export const AuthProvider = ({ children }) => {
             }
           } catch (refreshErr) {
             console.log('Auth init: Session refresh error:', refreshErr.message);
-            // Continue with normal flow
+            // Check if auth event gave us a valid session
+            if (sessionFromAuthEvent.current) {
+              console.log('Auth init: Using session from auth event after refresh error');
+              clearTimeoutSafe();
+              setLoading(false);
+              console.log('=== Auth Init Complete (auth event after error) ===');
+              return;
+            }
+            // Clear stale cached data
+            console.log('Auth init: Clearing stale cache after refresh error');
+            clearCachedProfile();
+            setProfile(null);
+            setUser(null);
+            setSessionReady(true);
+            clearTimeoutSafe();
+            setLoading(false);
+            console.log('=== Auth Init Complete (no session after error) ===');
+            return;
           }
         }
         
@@ -482,11 +533,55 @@ export const AuthProvider = ({ children }) => {
         console.log('[AuthContext] Auth event:', event, session?.user?.email);
         setUser(session?.user ?? null);
         
-        // Set sessionReady when we have a valid session from any auth event
+        // Check if token is valid (not expired)
+        const isTokenValid = (s) => {
+          if (!s?.expires_at) return false;
+          const now = Math.floor(Date.now() / 1000);
+          const expiresAt = s.expires_at;
+          const isValid = expiresAt > now;
+          console.log('[AuthContext] Token check:', { 
+            expiresAt: new Date(expiresAt * 1000).toISOString(),
+            now: new Date(now * 1000).toISOString(),
+            isValid,
+            secondsUntilExpiry: expiresAt - now
+          });
+          return isValid;
+        };
+        
+        // Only set sessionReady when we have a VALID (non-expired) session
         if (session?.user) {
-          console.log('[AuthContext] Setting sessionReady=true from', event);
-          setSessionReady(true);
-          sessionFromAuthEvent.current = true;
+          if (event === 'TOKEN_REFRESHED') {
+            // Token was just refreshed - definitely valid
+            console.log('[AuthContext] Setting sessionReady=true from TOKEN_REFRESHED (fresh token)');
+            setSessionReady(true);
+            sessionFromAuthEvent.current = true;
+          } else if (isTokenValid(session)) {
+            // Token is still valid
+            console.log('[AuthContext] Setting sessionReady=true from', event, '(token valid)');
+            setSessionReady(true);
+            sessionFromAuthEvent.current = true;
+          } else {
+            // Token is expired - Supabase will fire TOKEN_REFRESHED after refreshing
+            console.log('[AuthContext] Token expired from', event, '- waiting for TOKEN_REFRESHED');
+            // Don't set sessionReady - wait for refresh
+            // But do trigger a manual refresh if we haven't already
+            if (!sessionFromAuthEvent.current) {
+              console.log('[AuthContext] Triggering manual session refresh...');
+              supabase.auth.refreshSession().then(({ data, error }) => {
+                if (error) {
+                  console.error('[AuthContext] Manual refresh failed:', error.message);
+                  // Session is dead - clear everything
+                  setSessionReady(true); // Allow app to proceed (will show login)
+                  clearCachedProfile();
+                  setProfile(null);
+                  setUser(null);
+                } else if (data?.session) {
+                  console.log('[AuthContext] Manual refresh succeeded');
+                  // TOKEN_REFRESHED event will fire and set sessionReady
+                }
+              });
+            }
+          }
         }
         
         if (event === 'SIGNED_IN' && session?.user) {
