@@ -9,7 +9,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
-  const { profile, isAuthenticated, loading: authLoading, refreshProfile } = useAuth();
+  const { profile, isAuthenticated, loading: authLoading, sessionReady, refreshProfile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
   const [challenge, setChallenge] = useState(null);
@@ -22,7 +22,8 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
   // Debug log on mount
   console.log('[WeeklyChallengeMenu] Render:', { 
     isAuthenticated, 
-    authLoading, 
+    authLoading,
+    sessionReady,
     hasProfile: !!profile,
     loading,
     hasChallenge: !!challenge 
@@ -30,16 +31,22 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
   
   // Load data when component mounts and when auth state changes
   useEffect(() => {
-    console.log('[WeeklyChallengeMenu] Auth effect triggered:', { authLoading, isAuthenticated });
-    // Wait for auth to be ready before loading
-    if (authLoading) {
-      console.log('[WeeklyChallengeMenu] Auth still loading, waiting...');
+    console.log('[WeeklyChallengeMenu] Auth effect triggered:', { authLoading, sessionReady, isAuthenticated });
+    // Wait for session to be verified before loading data
+    if (!sessionReady) {
+      console.log('[WeeklyChallengeMenu] Session not ready yet, waiting...');
       return;
     }
     
-    console.log('[WeeklyChallengeMenu] Auth ready, calling loadChallengeData');
+    if (!isAuthenticated) {
+      console.log('[WeeklyChallengeMenu] Not authenticated, skipping load');
+      setLoading(false);
+      return;
+    }
+    
+    console.log('[WeeklyChallengeMenu] Session ready & authenticated, calling loadChallengeData');
     loadChallengeData();
-  }, [authLoading, isAuthenticated]);
+  }, [sessionReady, isAuthenticated]);
   
   // Also reload user-specific data when profile becomes available
   useEffect(() => {

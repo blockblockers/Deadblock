@@ -95,6 +95,7 @@ const AuthContext = createContext({
   user: null,
   profile: null,
   loading: true,
+  sessionReady: false,
   isAuthenticated: false,
   isOnlineEnabled: false,
   isOAuthCallback: false,
@@ -116,8 +117,10 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   // Start with cached profile if available - instant load!
   const [profile, setProfile] = useState(cachedData?.profile || null);
-  // If we have cached data, don't show loading state
+  // If we have cached data, don't show loading state for UI
   const [loading, setLoading] = useState(!cachedData?.profile);
+  // Session ready tracks if we've verified the Supabase session (separate from UI loading)
+  const [sessionReady, setSessionReady] = useState(false);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   
@@ -298,6 +301,7 @@ export const AuthProvider = ({ children }) => {
       const timeout = setTimeout(() => {
         if (!timeoutCleared) {
           console.log('Auth init: TIMEOUT - completing with current state');
+          setSessionReady(true); // Mark as ready even on timeout
           setLoading(false);
         }
       }, cached?.profile ? 3000 : 8000); // 3s if cached, 8s if not
@@ -320,6 +324,7 @@ export const AuthProvider = ({ children }) => {
         if (error) {
           console.error('Auth init: Error getting session:', error);
           clearTimeoutSafe();
+          setSessionReady(true); // Mark session check as complete even on error
           setLoading(false);
           return;
         }
@@ -331,7 +336,8 @@ export const AuthProvider = ({ children }) => {
         });
         
         setUser(session?.user ?? null);
-        console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user);
+        setSessionReady(true); // Session has been verified with Supabase
+        console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user, ', sessionReady: true');
         
         // Validate cached data matches current session
         if (cached?.profile && session?.user) {
@@ -350,6 +356,7 @@ export const AuthProvider = ({ children }) => {
             setProfile(null);
           }
           clearTimeoutSafe();
+          setSessionReady(true); // Mark session check as complete
           setLoading(false);
           return;
         }
@@ -724,6 +731,7 @@ export const AuthProvider = ({ children }) => {
       user,
       profile,
       loading,
+      sessionReady,
       isAuthenticated: !!user,
       isOnlineEnabled,
       isOAuthCallback,

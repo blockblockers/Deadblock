@@ -4,6 +4,7 @@ import { Flag, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
@@ -404,14 +405,22 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     }
 
     const coords = getPieceCoords(selectedPiece, rotation, flipped);
-    console.log('handleCellClick: Checking canPlacePiece', { row, col, coords, boardCell: board[row]?.[col] });
+    console.log('handleCellClick: Setting pending move', { row, col, coords });
     
-    if (canPlacePiece(board, row, col, coords)) {
-      console.log('handleCellClick: Setting pending move');
-      setPendingMove({ piece: selectedPiece, row, col });
+    // Always set pending move to show ghost outline (even if invalid)
+    setPendingMove({ piece: selectedPiece, row, col });
+    
+    // Check if placement is valid for sound feedback
+    const isWithinBounds = coords.every(([dx, dy]) => {
+      const cellRow = row + dy;
+      const cellCol = col + dx;
+      return cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE;
+    });
+    
+    if (isWithinBounds && canPlacePiece(board, row, col, coords)) {
       soundManager.playClickSound('place');
     } else {
-      console.log('handleCellClick: Cannot place piece here');
+      soundManager.playInvalid();
     }
   };
 
@@ -869,9 +878,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
             <div className="flex-1" /> {/* Spacer for centering */}
             <div className="text-center">
               <NeonTitle size="small" />
-              <div className="text-xs font-bold tracking-[0.3em] bg-gradient-to-r from-amber-400 via-orange-400 to-amber-400 bg-clip-text text-transparent drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
-                ONLINE
-              </div>
+              <NeonSubtitle text="ONLINE" size="tiny" color="amber" className="mt-1" />
             </div>
             <div className="flex-1 flex justify-end">
               <button 

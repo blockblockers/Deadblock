@@ -985,7 +985,7 @@ function AppContent() {
       onReset={resetGame}
       onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}
-      onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'ai-select')}
+      onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'difficulty-select')}
     />
   );
 }

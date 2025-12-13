@@ -932,16 +932,29 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   }, [selectedPiece, gameState, rotation, flipped, board]);
 
   const movePendingPiece = useCallback((direction) => {
-    if (!pendingMove || gameState !== GAME_STATES.PLAYING) return;
+    console.log('[SpeedPuzzle] movePendingPiece called:', direction, { pendingMove, gameState });
+    if (!pendingMove || gameState !== GAME_STATES.PLAYING) {
+      console.log('[SpeedPuzzle] movePendingPiece blocked:', { hasPending: !!pendingMove, gameState });
+      return;
+    }
     
     const [dr, dc] = DIRECTION_DELTAS[direction];
     const newRow = pendingMove.row + dr;
     const newCol = pendingMove.col + dc;
     
-    if (canPlacePiece(board, newRow, newCol, pendingMove.coords)) {
+    console.log('[SpeedPuzzle] Moving piece:', { from: { row: pendingMove.row, col: pendingMove.col }, to: { row: newRow, col: newCol } });
+    
+    // Always allow movement to show ghost outlines (even for invalid positions)
+    // The GameBoard will show red ghost cells for out-of-bounds positions
+    const isValid = canPlacePiece(board, newRow, newCol, pendingMove.coords);
+    
+    if (isValid) {
       soundManager.playClickSound('move');
-      setPendingMove(prev => ({ ...prev, row: newRow, col: newCol }));
+    } else {
+      soundManager.playInvalid();
     }
+    
+    setPendingMove(prev => ({ ...prev, row: newRow, col: newCol }));
   }, [pendingMove, gameState, board]);
 
   const cancelMove = useCallback(() => {

@@ -142,7 +142,7 @@ const OnlineMenu = ({
   onViewReplay,
   onBack 
 }) => {
-  const { user, profile, signOut, refreshProfile, updateProfile, checkUsernameAvailable } = useAuth();
+  const { user, profile, signOut, refreshProfile, updateProfile, checkUsernameAvailable, sessionReady } = useAuth();
   // OnlineMenu has substantial content, so always enable scroll
   const { needsScroll: checkScroll, viewportHeight } = useResponsiveLayout(1200);
   // Force scroll for this menu due to amount of content
@@ -239,7 +239,7 @@ const OnlineMenu = ({
 
   // Load friend requests function
   const loadFriendRequests = async () => {
-    if (!profile?.id) return;
+    if (!sessionReady || !profile?.id) return;
     const { data } = await friendsService.getPendingRequests(profile.id);
     setPendingFriendRequests(data?.length || 0);
   };
@@ -247,11 +247,17 @@ const OnlineMenu = ({
   // Load friend request count on mount
   useEffect(() => {
     loadFriendRequests();
-  }, [profile?.id]);
+  }, [sessionReady, profile?.id]);
 
   // Load games and invites
   useEffect(() => {
-    if (!profile?.id) return;
+    // Wait for session to be verified AND profile to exist
+    if (!sessionReady || !profile?.id) {
+      console.log('OnlineMenu: Waiting for session/profile', { sessionReady, hasProfile: !!profile?.id });
+      return;
+    }
+    
+    console.log('OnlineMenu: Session ready, loading data for', profile.id);
     
     // Set loading only on initial load
     setLoading(true);
@@ -270,11 +276,11 @@ const OnlineMenu = ({
     }, 30000);
     
     return () => clearInterval(refreshInterval);
-  }, [profile?.id]);
+  }, [sessionReady, profile?.id]);
   
   // Subscribe to invite updates
   useEffect(() => {
-    if (!profile?.id) return;
+    if (!sessionReady || !profile?.id) return;
     
     const subscription = inviteService.subscribeToInvites(
       profile.id,
@@ -317,7 +323,7 @@ const OnlineMenu = ({
     return () => {
       inviteService.unsubscribeFromInvites(subscription);
     };
-  }, [profile?.id]);
+  }, [sessionReady, profile?.id]);
 
   const loadInvites = async () => {
     if (!profile?.id) return;
