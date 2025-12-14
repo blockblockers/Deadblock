@@ -1,6 +1,48 @@
 // Realtime Connection Manager - Optimizes Supabase Realtime usage
 // Consolidates multiple channels into minimal connections to maximize free tier capacity
+// UPDATED: Polling fallback now uses direct fetch to bypass client timeout issues
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+
+// Direct fetch helper for polling (avoids Supabase client timeout)
+const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+
+const getAuthHeaders = () => {
+  const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+  const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  if (!authData?.access_token || !ANON_KEY) return null;
+  return {
+    'Authorization': `Bearer ${authData.access_token}`,
+    'apikey': ANON_KEY,
+    'Content-Type': 'application/json'
+  };
+};
+
+const directFetch = async (table, params = {}) => {
+  const headers = getAuthHeaders();
+  if (!headers) return { data: null };
+  
+  let url = `${SUPABASE_URL}/rest/v1/${table}?`;
+  const queryParams = [];
+  
+  if (params.select) queryParams.push(`select=${encodeURIComponent(params.select)}`);
+  if (params.eq) Object.entries(params.eq).forEach(([k, v]) => queryParams.push(`${k}=eq.${v}`));
+  if (params.order) queryParams.push(`order=${params.order}`);
+  if (params.limit) queryParams.push(`limit=${params.limit}`);
+  if (params.single) headers['Accept'] = 'application/vnd.pgrst.object+json';
+  
+  url += queryParams.join('&');
+  
+  try {
+    const response = await fetch(url, { headers });
+    if (!response.ok) return { data: null };
+    const data = await response.json();
+    return { data };
+  } catch (e) {
+    console.error('[RealtimeManager] Direct fetch error:', e);
+    return { data: null };
+  }
+};
 
 class RealtimeManager {
   constructor() {
@@ -36,6 +78,9 @@ class RealtimeManager {
     // Polling fallback for when realtime is unavailable
     this.pollingIntervals = {};
     this.usePollingFallback = false;
+    
+    // Track last seen data to only notify on changes
+    this.lastGameState = null;
   }
 
   // Initialize user channel - call once when user logs in
@@ -69,7 +114,7 @@ class RealtimeManager {
             event: 'INSERT',
             schema: 'public',
             table: 'game_invites',
-            filter: `invitee_id=eq.${userId}`
+            filter: `to_user_id=eq.${userId}`
           },
           (payload) => {
             console.log('[RealtimeManager] Game invite received:', payload.new?.id);
@@ -82,8 +127,8 @@ class RealtimeManager {
           {
             event: 'INSERT',
             schema: 'public',
-            table: 'friend_requests',
-            filter: `to_user_id=eq.${userId}`
+            table: 'friends',
+            filter: `friend_id=eq.${userId}`
           },
           (payload) => {
             console.log('[RealtimeManager] Friend request received:', payload.new?.id);
@@ -169,6 +214,7 @@ class RealtimeManager {
     await this.disconnectGame();
     
     this.currentGameId = gameId;
+    this.lastGameState = null; // Reset for new game
     console.log('[RealtimeManager] Connecting game channel for:', gameId);
     
     try {
@@ -239,6 +285,7 @@ class RealtimeManager {
     }
     
     this.currentGameId = null;
+    this.lastGameState = null;
     this.stopGamePolling();
   }
   
@@ -294,6 +341,7 @@ class RealtimeManager {
   }
   
   // Polling fallback for when Realtime is unavailable or quota exceeded
+  // UPDATED: Uses direct fetch instead of Supabase client
   enablePollingFallback() {
     if (this.usePollingFallback) return;
     
@@ -304,13 +352,12 @@ class RealtimeManager {
     this.pollingIntervals.invites = setInterval(async () => {
       if (!this.userId) return;
       
-      const { data } = await supabase
-        .from('game_invites')
-        .select('*')
-        .eq('invitee_id', this.userId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      const { data } = await directFetch('game_invites', {
+        select: '*',
+        eq: { to_user_id: this.userId, status: 'pending' },
+        order: 'created_at.desc',
+        limit: 5
+      });
       
       if (data?.length > 0) {
         // Check for new invites (created in last 15 seconds)
@@ -326,13 +373,12 @@ class RealtimeManager {
     this.pollingIntervals.friends = setInterval(async () => {
       if (!this.userId) return;
       
-      const { data } = await supabase
-        .from('friend_requests')
-        .select('*')
-        .eq('to_user_id', this.userId)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
-        .limit(5);
+      const { data } = await directFetch('friends', {
+        select: '*',
+        eq: { friend_id: this.userId, status: 'pending' },
+        order: 'created_at.desc',
+        limit: 5
+      });
       
       if (data?.length > 0) {
         const recentRequests = data.filter(req => {
@@ -355,6 +401,7 @@ class RealtimeManager {
   }
   
   // Game polling when realtime fails
+  // UPDATED: Uses direct fetch and only notifies on actual changes
   startGamePolling(gameId) {
     console.log('[RealtimeManager] Starting game polling for:', gameId);
     
@@ -364,14 +411,19 @@ class RealtimeManager {
         return;
       }
       
-      const { data } = await supabase
-        .from('games')
-        .select('*')
-        .eq('id', gameId)
-        .single();
+      const { data } = await directFetch('games', {
+        select: '*',
+        eq: { id: gameId },
+        single: true
+      });
       
       if (data) {
-        this.notifyHandlers('gameUpdate', data);
+        // Only notify if game state actually changed
+        const stateKey = `${data.current_player}-${data.status}-${JSON.stringify(data.board)}`;
+        if (stateKey !== this.lastGameState) {
+          this.lastGameState = stateKey;
+          this.notifyHandlers('gameUpdate', data);
+        }
       }
     }, 2000); // Poll every 2 seconds for active games
   }
@@ -381,6 +433,7 @@ class RealtimeManager {
       clearInterval(this.pollingIntervals.game);
       this.pollingIntervals.game = null;
     }
+    this.lastGameState = null;
   }
   
   // Get connection status

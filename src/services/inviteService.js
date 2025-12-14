@@ -1,33 +1,30 @@
 // Invite Service - Handle friend search and game invitations
-// OPTIMIZED: Uses centralized RealtimeManager for invite notifications
-import { supabase, isSupabaseConfigured } from '../utils/supabase';
+// UPDATED: Uses direct fetch to bypass Supabase client timeout issues
+import { isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
+import { dbSelect, dbInsert, dbUpdate, dbRpc, getAuthHeaders, SUPABASE_URL } from './supabaseDirectFetch';
 
 class InviteService {
   constructor() {
     this.unsubscribeHandler = null;
   }
 
-  // Search for users by username (partial match)
   async searchUsers(query, currentUserId, limit = 10) {
-    if (!supabase || !query || query.length < 2) {
+    if (!isSupabaseConfigured() || !query || query.length < 2) {
       return { data: [], error: null };
     }
 
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, rating, games_played, games_won')
-        .ilike('username', `%${query}%`)
-        .neq('id', currentUserId) // Exclude current user
-        .order('rating', { ascending: false })
-        .limit(limit);
+      const headers = getAuthHeaders();
+      if (!headers) return { data: [], error: { message: 'Not authenticated' } };
 
-      if (error) {
-        console.error('searchUsers error:', error);
-        return { data: [], error };
-      }
-
+      // Use ilike for partial match
+      const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,rating,games_played,games_won&username=ilike.*${encodeURIComponent(query)}*&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
+      
+      const response = await fetch(url, { headers });
+      if (!response.ok) return { data: [], error: { message: response.statusText } };
+      
+      const data = await response.json();
       return { data: data || [], error: null };
     } catch (e) {
       console.error('searchUsers exception:', e);
@@ -35,84 +32,61 @@ class InviteService {
     }
   }
 
-  // Send a game invite to another user
   async sendInvite(fromUserId, toUserId) {
-    if (!supabase) {
-      return { data: null, error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
-      // Check if there's already a pending invite between these users
-      const { data: existingInvite } = await supabase
-        .from('game_invites')
-        .select('id, status, from_user_id')
-        .or(`and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId})`)
-        .eq('status', 'pending')
-        .single();
+      // Check existing
+      const { data: existingInvite } = await dbSelect('game_invites', {
+        select: 'id,status,from_user_id',
+        or: `and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId})`,
+        eq: { status: 'pending' },
+        single: true
+      });
 
       if (existingInvite) {
-        // If the other user already invited us, auto-accept and create game
         if (existingInvite.from_user_id === toUserId) {
           return await this.acceptInvite(existingInvite.id, fromUserId);
         }
         return { data: null, error: { message: 'Invite already sent' } };
       }
 
-      // Create new invite
-      const { data, error } = await supabase
-        .from('game_invites')
-        .insert({
-          from_user_id: fromUserId,
-          to_user_id: toUserId,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('sendInvite error:', error);
-        return { data: null, error };
-      }
-
-      return { data, error: null };
+      return await dbInsert('game_invites', {
+        from_user_id: fromUserId,
+        to_user_id: toUserId,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      }, { returning: true, single: true });
     } catch (e) {
       console.error('sendInvite exception:', e);
       return { data: null, error: { message: e.message } };
     }
   }
 
-  // Get pending invites received by user
   async getReceivedInvites(userId) {
-    if (!supabase) {
-      return { data: [], error: null };
-    }
+    if (!isSupabaseConfigured()) return { data: [], error: null };
 
     try {
-      // First get the invites
-      const { data: invites, error } = await supabase
-        .from('game_invites')
-        .select('*')
-        .eq('to_user_id', userId)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false });
+      const headers = getAuthHeaders();
+      if (!headers) return { data: [], error: null };
 
-      if (error || !invites || invites.length === 0) {
-        return { data: [], error };
-      }
+      const url = `${SUPABASE_URL}/rest/v1/game_invites?select=*&to_user_id=eq.${userId}&status=eq.pending&expires_at=gt.${new Date().toISOString()}&order=created_at.desc`;
+      
+      const response = await fetch(url, { headers });
+      if (!response.ok) return { data: [], error: null };
+      
+      const invites = await response.json();
+      if (!invites?.length) return { data: [], error: null };
 
-      // Get the sender profiles
       const senderIds = invites.map(i => i.from_user_id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username, rating')
-        .in('id', senderIds);
+      const { data: profiles } = await dbSelect('profiles', {
+        select: 'id,username,rating',
+        in: { id: senderIds }
+      });
 
       const profileMap = {};
       profiles?.forEach(p => { profileMap[p.id] = p; });
 
-      // Attach profiles to invites
       const invitesWithProfiles = invites.map(invite => ({
         ...invite,
         from_user: profileMap[invite.from_user_id] || null
@@ -125,36 +99,30 @@ class InviteService {
     }
   }
 
-  // Get pending invites sent by user
   async getSentInvites(userId) {
-    if (!supabase) {
-      return { data: [], error: null };
-    }
+    if (!isSupabaseConfigured()) return { data: [], error: null };
 
     try {
-      const { data: invites, error } = await supabase
-        .from('game_invites')
-        .select('*')
-        .eq('from_user_id', userId)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false });
+      const headers = getAuthHeaders();
+      if (!headers) return { data: [], error: null };
 
-      if (error || !invites || invites.length === 0) {
-        return { data: [], error };
-      }
+      const url = `${SUPABASE_URL}/rest/v1/game_invites?select=*&from_user_id=eq.${userId}&status=eq.pending&expires_at=gt.${new Date().toISOString()}&order=created_at.desc`;
+      
+      const response = await fetch(url, { headers });
+      if (!response.ok) return { data: [], error: null };
+      
+      const invites = await response.json();
+      if (!invites?.length) return { data: [], error: null };
 
-      // Get the recipient profiles
       const recipientIds = invites.map(i => i.to_user_id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username, rating')
-        .in('id', recipientIds);
+      const { data: profiles } = await dbSelect('profiles', {
+        select: 'id,username,rating',
+        in: { id: recipientIds }
+      });
 
       const profileMap = {};
       profiles?.forEach(p => { profileMap[p.id] = p; });
 
-      // Attach profiles to invites
       const invitesWithProfiles = invites.map(invite => ({
         ...invite,
         to_user: profileMap[invite.to_user_id] || null
@@ -167,22 +135,17 @@ class InviteService {
     }
   }
 
-  // Accept an invite and create a game
   async acceptInvite(inviteId, acceptingUserId) {
-    if (!supabase) {
-      return { data: null, error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
       console.log('acceptInvite: Starting', { inviteId, acceptingUserId });
-      
-      // Get the invite
-      const { data: invite, error: fetchError } = await supabase
-        .from('game_invites')
-        .select('*')
-        .eq('id', inviteId)
-        .eq('status', 'pending')
-        .single();
+
+      const { data: invite, error: fetchError } = await dbSelect('game_invites', {
+        select: '*',
+        eq: { id: inviteId, status: 'pending' },
+        single: true
+      });
 
       console.log('acceptInvite: Fetched invite', { invite, fetchError });
 
@@ -190,29 +153,23 @@ class InviteService {
         return { data: null, error: { message: 'Invite not found or already processed' } };
       }
 
-      // Verify the accepting user is the recipient
       if (invite.to_user_id !== acceptingUserId) {
         return { data: null, error: { message: 'Not authorized to accept this invite' } };
       }
 
-      // Create the game - inviter (from_user) goes first as player 1
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(null));
-      
+
       console.log('acceptInvite: Creating game...');
-      
-      const { data: game, error: gameError } = await supabase
-        .from('games')
-        .insert({
-          player1_id: invite.from_user_id,
-          player2_id: invite.to_user_id,
-          board: emptyBoard,
-          board_pieces: {},
-          used_pieces: [],
-          current_player: 1,
-          status: 'active'
-        })
-        .select()
-        .single();
+
+      const { data: game, error: gameError } = await dbInsert('games', {
+        player1_id: invite.from_user_id,
+        player2_id: invite.to_user_id,
+        board: emptyBoard,
+        board_pieces: {},
+        used_pieces: [],
+        current_player: 1,
+        status: 'active'
+      }, { returning: true, single: true });
 
       console.log('acceptInvite: Game created', { game, gameError });
 
@@ -221,49 +178,25 @@ class InviteService {
         return { data: null, error: gameError };
       }
 
-      // Update invite status
-      const { error: updateError } = await supabase
-        .from('game_invites')
-        .update({ 
-          status: 'accepted',
-          game_id: game.id 
-        })
-        .eq('id', inviteId);
+      await dbUpdate('game_invites',
+        { status: 'accepted', game_id: game.id },
+        { eq: { id: inviteId } }
+      );
 
-      console.log('acceptInvite: Invite updated', { updateError });
+      // Fetch profiles
+      const { data: profiles } = await dbSelect('profiles', {
+        select: 'id,username,display_name,rating',
+        in: { id: [invite.from_user_id, invite.to_user_id] }
+      });
 
-      // Fetch the full game with player profiles
-      let fullGame = null;
-      try {
-        const { data: gameWithProfiles } = await supabase
-          .from('games')
-          .select(`
-            *,
-            player1:profiles!games_player1_id_fkey(id, username, display_name, rating),
-            player2:profiles!games_player2_id_fkey(id, username, display_name, rating)
-          `)
-          .eq('id', game.id)
-          .single();
-        
-        fullGame = gameWithProfiles;
-      } catch (joinError) {
-        console.log('acceptInvite: Join failed, fetching profiles separately', joinError);
-      }
+      const profileMap = {};
+      profiles?.forEach(p => { profileMap[p.id] = p; });
 
-      // Fallback: fetch profiles separately if join didn't work
-      if (!fullGame || !fullGame.player1 || !fullGame.player2) {
-        console.log('acceptInvite: Fetching profiles separately');
-        const [{ data: p1 }, { data: p2 }] = await Promise.all([
-          supabase.from('profiles').select('id, username, display_name, rating').eq('id', invite.from_user_id).single(),
-          supabase.from('profiles').select('id, username, display_name, rating').eq('id', invite.to_user_id).single()
-        ]);
-        
-        fullGame = {
-          ...game,
-          player1: p1,
-          player2: p2
-        };
-      }
+      const fullGame = {
+        ...game,
+        player1: profileMap[invite.from_user_id],
+        player2: profileMap[invite.to_user_id]
+      };
 
       console.log('acceptInvite: Final game', { fullGame });
 
@@ -274,55 +207,39 @@ class InviteService {
     }
   }
 
-  // Decline an invite
   async declineInvite(inviteId, userId) {
-    if (!supabase) {
-      return { error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
     try {
-      const { error } = await supabase
-        .from('game_invites')
-        .update({ status: 'declined' })
-        .eq('id', inviteId)
-        .eq('to_user_id', userId)
-        .eq('status', 'pending');
-
-      return { error };
+      return await dbUpdate('game_invites',
+        { status: 'declined' },
+        { eq: { id: inviteId, to_user_id: userId, status: 'pending' } }
+      );
     } catch (e) {
       console.error('declineInvite exception:', e);
       return { error: { message: e.message } };
     }
   }
 
-  // Cancel a sent invite
   async cancelInvite(inviteId, userId) {
-    if (!supabase) {
-      return { error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
     try {
-      const { error } = await supabase
-        .from('game_invites')
-        .update({ status: 'cancelled' })
-        .eq('id', inviteId)
-        .eq('from_user_id', userId)
-        .eq('status', 'pending');
-
-      return { error };
+      return await dbUpdate('game_invites',
+        { status: 'cancelled' },
+        { eq: { id: inviteId, from_user_id: userId, status: 'pending' } }
+      );
     } catch (e) {
       console.error('cancelInvite exception:', e);
       return { error: { message: e.message } };
     }
   }
 
-  // Subscribe to invite updates - uses RealtimeManager (no new channel!)
   subscribeToInvites(userId, onInviteReceived, onInviteUpdated) {
-    if (!supabase) return { unsubscribe: () => {} };
+    if (!isSupabaseConfigured()) return { unsubscribe: () => {} };
 
     console.log('[InviteService] Subscribing to invites via RealtimeManager');
 
-    // Register handler with RealtimeManager
     this.unsubscribeHandler = realtimeManager.on('gameInvite', (invite) => {
       console.log('[InviteService] New invite received via RealtimeManager:', invite?.id);
       onInviteReceived?.(invite);
@@ -338,51 +255,32 @@ class InviteService {
     };
   }
 
-  // Unsubscribe from invite updates
   unsubscribeFromInvites(subscription) {
-    if (subscription?.unsubscribe) {
-      subscription.unsubscribe();
-    }
+    if (subscription?.unsubscribe) subscription.unsubscribe();
   }
 
-  // ============ SHAREABLE INVITE LINKS ============
-  // No email service needed - users share links via text, WhatsApp, email, etc.
-
-  // Create a shareable invite link
   async createInviteLink(fromUserId, recipientName = '') {
-    if (!supabase) {
-      return { data: null, error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
-      // Create invite record
-      const { data: invite, error: createError } = await supabase
-        .from('email_invites')
-        .insert({
-          from_user_id: fromUserId,
-          to_email: recipientName.trim() || `friend_${Date.now()}`,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
-        })
-        .select()
-        .single();
+      const { data: invite, error: createError } = await dbInsert('email_invites', {
+        from_user_id: fromUserId,
+        to_email: recipientName.trim() || `friend_${Date.now()}`,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      }, { returning: true, single: true });
 
       if (createError) {
         console.error('Error creating invite link:', createError);
         return { data: null, error: createError };
       }
 
-      // Generate the shareable link
       const appUrl = window.location.origin;
       const inviteLink = `${appUrl}/?invite=${invite.invite_code}`;
 
-      return { 
-        data: { 
-          ...invite, 
-          inviteLink,
-          recipientName: recipientName.trim() || 'Friend'
-        }, 
-        error: null 
+      return {
+        data: { ...invite, inviteLink, recipientName: recipientName.trim() || 'Friend' },
+        error: null
       };
     } catch (e) {
       console.error('createInviteLink exception:', e);
@@ -390,33 +288,25 @@ class InviteService {
     }
   }
 
-  // Get pending invite links created by user
   async getInviteLinks(userId) {
-    if (!supabase) {
-      return { data: [], error: null };
-    }
+    if (!isSupabaseConfigured()) return { data: [], error: null };
 
     try {
-      const { data, error } = await supabase
-        .from('email_invites')
-        .select('*')
-        .eq('from_user_id', userId)
-        .in('status', ['pending', 'sent'])
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false });
+      const headers = getAuthHeaders();
+      if (!headers) return { data: [], error: null };
 
-      if (error) {
-        return { data: [], error };
-      }
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${new Date().toISOString()}&order=created_at.desc`;
 
-      // Add invite links to each record
+      const response = await fetch(url, { headers });
+      if (!response.ok) return { data: [], error: null };
+
+      const data = await response.json();
       const appUrl = window.location.origin;
+      
       const invitesWithLinks = (data || []).map(invite => ({
         ...invite,
         inviteLink: `${appUrl}/?invite=${invite.invite_code}`,
-        recipientName: invite.to_email?.startsWith('friend_') 
-          ? 'Friend' 
-          : invite.to_email
+        recipientName: invite.to_email?.startsWith('friend_') ? 'Friend' : invite.to_email
       }));
 
       return { data: invitesWithLinks, error: null };
@@ -426,57 +316,48 @@ class InviteService {
     }
   }
 
-  // Cancel/delete an invite link
   async cancelInviteLink(inviteId, userId) {
-    if (!supabase) {
-      return { error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
     try {
-      const { error } = await supabase
-        .from('email_invites')
-        .update({ status: 'expired' })
-        .eq('id', inviteId)
-        .eq('from_user_id', userId)
-        .in('status', ['pending', 'sent']);
+      const headers = getAuthHeaders();
+      if (!headers) return { error: { message: 'Not authenticated' } };
 
-      return { error };
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?id=eq.${inviteId}&from_user_id=eq.${userId}&status=in.(pending,sent)`;
+
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ status: 'expired' })
+      });
+
+      if (!response.ok) return { error: { message: response.statusText } };
+      return { error: null };
     } catch (e) {
       console.error('cancelInviteLink exception:', e);
       return { error: { message: e.message } };
     }
   }
 
-  // Mark invite as "sent" (user copied/shared the link)
   async markInviteLinkShared(inviteId, userId) {
-    if (!supabase) {
-      return { error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
     try {
-      const { error } = await supabase
-        .from('email_invites')
-        .update({ status: 'sent', sent_at: new Date().toISOString() })
-        .eq('id', inviteId)
-        .eq('from_user_id', userId)
-        .eq('status', 'pending');
-
-      return { error };
+      return await dbUpdate('email_invites',
+        { status: 'sent', sent_at: new Date().toISOString() },
+        { eq: { id: inviteId, from_user_id: userId, status: 'pending' } }
+      );
     } catch (e) {
       console.error('markInviteLinkShared exception:', e);
       return { error: { message: e.message } };
     }
   }
 
-  // Get invite details by code (for the invite landing page)
   async getInviteByCode(code) {
-    if (!supabase) {
-      return { data: null, error: { message: 'Not configured' } };
-    }
+    if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
-      const { data, error } = await supabase
-        .rpc('get_email_invite_by_code', { code });
+      const { data, error } = await dbRpc('get_email_invite_by_code', { code });
 
       if (error || !data || data.length === 0) {
         return { data: null, error: error || { message: 'Invite not found' } };

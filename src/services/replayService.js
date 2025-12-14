@@ -1,84 +1,75 @@
 // Replay Service - Game replay functionality
-import { supabase, isSupabaseConfigured } from '../utils/supabase';
+// UPDATED: Uses direct fetch to bypass Supabase client timeout issues
+import { isSupabaseConfigured } from '../utils/supabase';
+import { dbSelect, dbInsert, dbCount } from './supabaseDirectFetch';
 
 export const replayService = {
-  // Record a move (called during gameplay)
   async recordMove(gameId, playerId, moveData) {
     if (!isSupabaseConfigured()) return { error: null };
 
-    const { data, error } = await supabase
-      .from('game_moves')
-      .insert({
-        game_id: gameId,
-        player_id: playerId,
-        move_number: moveData.moveNumber,
-        piece_type: moveData.pieceType,
-        row: moveData.row,
-        col: moveData.col,
-        rotation: moveData.rotation || 0,
-        flipped: moveData.flipped || false,
-        board_state: moveData.boardState,
-        time_taken_seconds: moveData.timeTaken
-      })
-      .select()
-      .single();
-
-    return { data, error };
+    return await dbInsert('game_moves', {
+      game_id: gameId,
+      player_id: playerId,
+      move_number: moveData.moveNumber,
+      piece_type: moveData.pieceType,
+      row: moveData.row,
+      col: moveData.col,
+      rotation: moveData.rotation || 0,
+      flipped: moveData.flipped || false,
+      board_state: moveData.boardState,
+      time_taken_seconds: moveData.timeTaken
+    }, { returning: true, single: true });
   },
 
-  // Get all moves for a game
   async getGameMoves(gameId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('game_moves')
-      .select(`
-        id,
-        move_number,
-        piece_type,
-        row,
-        col,
-        rotation,
-        flipped,
-        board_state,
-        time_taken_seconds,
-        created_at,
-        player:profiles!game_moves_player_id_fkey(id, username)
-      `)
-      .eq('game_id', gameId)
-      .order('move_number', { ascending: true });
+    const { data: moves, error } = await dbSelect('game_moves', {
+      select: 'id,move_number,piece_type,row,col,rotation,flipped,board_state,time_taken_seconds,created_at,player_id',
+      eq: { game_id: gameId },
+      order: 'move_number.asc'
+    });
 
-    return { data: data || [], error };
+    if (error || !moves?.length) return { data: [], error };
+
+    const playerIds = [...new Set(moves.map(m => m.player_id))];
+    const { data: profiles } = await dbSelect('profiles', {
+      select: 'id,username',
+      in: { id: playerIds }
+    });
+
+    const profileMap = {};
+    profiles?.forEach(p => { profileMap[p.id] = p; });
+
+    const result = moves.map(m => ({
+      ...m,
+      player: profileMap[m.player_id]
+    }));
+
+    return { data: result, error: null };
   },
 
-  // Get game summary for replay
   async getReplaySummary(gameId) {
     if (!isSupabaseConfigured()) return { data: null, error: null };
 
-    // Get game details
-    const { data: game, error: gameError } = await supabase
-      .from('online_games')
-      .select(`
-        id,
-        status,
-        winner_id,
-        created_at,
-        updated_at,
-        player1:profiles!online_games_player1_id_fkey(id, username, avatar_url, elo_rating),
-        player2:profiles!online_games_player2_id_fkey(id, username, avatar_url, elo_rating)
-      `)
-      .eq('id', gameId)
-      .single();
+    const { data: game, error: gameError } = await dbSelect('online_games', {
+      select: 'id,status,winner_id,created_at,updated_at,player1_id,player2_id',
+      eq: { id: gameId },
+      single: true
+    });
 
-    if (gameError) return { data: null, error: gameError };
+    if (gameError || !game) return { data: null, error: gameError };
 
-    // Get move count
-    const { count: moveCount } = await supabase
-      .from('game_moves')
-      .select('id', { count: 'exact', head: true })
-      .eq('game_id', gameId);
+    const { data: profiles } = await dbSelect('profiles', {
+      select: 'id,username,avatar_url,elo_rating',
+      in: { id: [game.player1_id, game.player2_id] }
+    });
 
-    // Get total game duration
+    const profileMap = {};
+    profiles?.forEach(p => { profileMap[p.id] = p; });
+
+    const { count: moveCount } = await dbCount('game_moves', { eq: { game_id: gameId } });
+
     const startTime = new Date(game.created_at);
     const endTime = new Date(game.updated_at);
     const durationSeconds = Math.floor((endTime - startTime) / 1000);
@@ -86,6 +77,8 @@ export const replayService = {
     return {
       data: {
         ...game,
+        player1: profileMap[game.player1_id],
+        player2: profileMap[game.player2_id],
         moveCount: moveCount || 0,
         durationSeconds,
         durationFormatted: formatDuration(durationSeconds)
@@ -94,43 +87,38 @@ export const replayService = {
     };
   },
 
-  // Get available replays for a user
   async getUserReplays(userId, limit = 20) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('online_games')
-      .select(`
-        id,
-        status,
-        winner_id,
-        created_at,
-        updated_at,
-        player1_id,
-        player2_id,
-        player1:profiles!online_games_player1_id_fkey(id, username, avatar_url),
-        player2:profiles!online_games_player2_id_fkey(id, username, avatar_url)
-      `)
-      .or(`player1_id.eq.${userId},player2_id.eq.${userId}`)
-      .eq('status', 'completed')
-      .order('updated_at', { ascending: false })
-      .limit(limit);
+    const { data: games, error } = await dbSelect('online_games', {
+      select: 'id,status,winner_id,created_at,updated_at,player1_id,player2_id',
+      or: `player1_id.eq.${userId},player2_id.eq.${userId}`,
+      eq: { status: 'completed' },
+      order: 'updated_at.desc',
+      limit
+    });
 
-    if (error) return { data: null, error };
+    if (error || !games?.length) return { data: [], error };
 
-    // Add move counts
+    const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
+    const { data: profiles } = await dbSelect('profiles', {
+      select: 'id,username,avatar_url',
+      in: { id: playerIds }
+    });
+
+    const profileMap = {};
+    profiles?.forEach(p => { profileMap[p.id] = p; });
+
     const replaysWithCounts = await Promise.all(
-      data.map(async (game) => {
-        const { count } = await supabase
-          .from('game_moves')
-          .select('id', { count: 'exact', head: true })
-          .eq('game_id', game.id);
-
+      games.map(async (game) => {
+        const { count } = await dbCount('game_moves', { eq: { game_id: game.id } });
         return {
           ...game,
+          player1: profileMap[game.player1_id],
+          player2: profileMap[game.player2_id],
           moveCount: count || 0,
           isWin: game.winner_id === userId,
-          opponent: game.player1_id === userId ? game.player2 : game.player1
+          opponent: game.player1_id === userId ? profileMap[game.player2_id] : profileMap[game.player1_id]
         };
       })
     );
@@ -138,32 +126,33 @@ export const replayService = {
     return { data: replaysWithCounts, error: null };
   },
 
-  // Get featured/popular replays
   async getFeaturedReplays(limit = 10) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
-    // Get recent completed games with high-rated players
-    const { data, error } = await supabase
-      .from('online_games')
-      .select(`
-        id,
-        winner_id,
-        created_at,
-        updated_at,
-        player1:profiles!online_games_player1_id_fkey(id, username, avatar_url, elo_rating),
-        player2:profiles!online_games_player2_id_fkey(id, username, avatar_url, elo_rating)
-      `)
-      .eq('status', 'completed')
-      .order('updated_at', { ascending: false })
-      .limit(50);
+    const { data: games, error } = await dbSelect('online_games', {
+      select: 'id,winner_id,created_at,updated_at,player1_id,player2_id',
+      eq: { status: 'completed' },
+      order: 'updated_at.desc',
+      limit: 50
+    });
 
-    if (error) return { data: null, error };
+    if (error || !games?.length) return { data: [], error };
 
-    // Sort by combined rating and take top ones
-    const sorted = data
+    const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
+    const { data: profiles } = await dbSelect('profiles', {
+      select: 'id,username,avatar_url,elo_rating',
+      in: { id: playerIds }
+    });
+
+    const profileMap = {};
+    profiles?.forEach(p => { profileMap[p.id] = p; });
+
+    const sorted = games
       .map(g => ({
         ...g,
-        combinedRating: (g.player1?.elo_rating || 1200) + (g.player2?.elo_rating || 1200)
+        player1: profileMap[g.player1_id],
+        player2: profileMap[g.player2_id],
+        combinedRating: (profileMap[g.player1_id]?.elo_rating || 1200) + (profileMap[g.player2_id]?.elo_rating || 1200)
       }))
       .sort((a, b) => b.combinedRating - a.combinedRating)
       .slice(0, limit);
@@ -171,13 +160,10 @@ export const replayService = {
     return { data: sorted, error: null };
   },
 
-  // Generate shareable replay link
   getReplayLink(gameId) {
-    const baseUrl = window.location.origin;
-    return `${baseUrl}/?replay=${gameId}`;
+    return `${window.location.origin}/?replay=${gameId}`;
   },
 
-  // Get key moments in a game (significant moves)
   async getKeyMoments(gameId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
@@ -186,45 +172,25 @@ export const replayService = {
 
     const keyMoments = [];
 
-    // First move
     if (moves.length > 0) {
-      keyMoments.push({
-        type: 'first_move',
-        moveNumber: 1,
-        description: 'Game started',
-        move: moves[0]
-      });
+      keyMoments.push({ type: 'first_move', moveNumber: 1, description: 'Game started', move: moves[0] });
     }
 
-    // Detect "blocking" moves (would need board analysis)
-    // For now, mark every 5th move as potentially significant
     moves.forEach((move, index) => {
       if (index > 0 && index % 5 === 0) {
-        keyMoments.push({
-          type: 'mid_game',
-          moveNumber: move.move_number,
-          description: `Move ${move.move_number}`,
-          move
-        });
+        keyMoments.push({ type: 'mid_game', moveNumber: move.move_number, description: `Move ${move.move_number}`, move });
       }
     });
 
-    // Last move (winning move)
     if (moves.length > 1) {
       const lastMove = moves[moves.length - 1];
-      keyMoments.push({
-        type: 'winning_move',
-        moveNumber: lastMove.move_number,
-        description: 'Winning move',
-        move: lastMove
-      });
+      keyMoments.push({ type: 'winning_move', moveNumber: lastMove.move_number, description: 'Winning move', move: lastMove });
     }
 
     return { data: keyMoments, error: null };
   }
 };
 
-// Helper function to format duration
 function formatDuration(seconds) {
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
