@@ -304,28 +304,61 @@ class GameSyncService {
     return { data: data || [], error };
   }
 
-  // Get player's recent games
+  // Get player's recent games - uses direct fetch
   async getPlayerGames(playerId, limit = 10) {
     if (!supabase) return { data: [], error: null };
 
     try {
-      const { data: games, error } = await supabase
-        .from('games')
-        .select('*')
-        .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      // Get auth token for direct fetch
+      const authKey = Object.keys(localStorage).find(k => k.includes('supabase') && k.includes('auth-token'));
+      const authData = authKey ? JSON.parse(localStorage.getItem(authKey)) : null;
+      
+      if (!authData?.access_token) {
+        return { data: [], error: { message: 'No auth token' } };
+      }
 
-      if (error || !games) {
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const gamesResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${playerId},player2_id.eq.${playerId})&order=created_at.desc&limit=${limit}&select=*`,
+        {
+          headers: {
+            'Authorization': `Bearer ${authData.access_token}`,
+            'apikey': ANON_KEY,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!gamesResponse.ok) {
+        const error = await gamesResponse.json();
         return { data: [], error };
+      }
+
+      const games = await gamesResponse.json();
+
+      if (!games || games.length === 0) {
+        return { data: [], error: null };
       }
 
       const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
       
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username, rating')
-        .in('id', playerIds);
+      const profilesResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=in.(${playerIds.join(',')})&select=id,username,rating`,
+        {
+          headers: {
+            'Authorization': `Bearer ${authData.access_token}`,
+            'apikey': ANON_KEY,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      let profiles = [];
+      if (profilesResponse.ok) {
+        profiles = await profilesResponse.json();
+      }
 
       const profileMap = {};
       profiles?.forEach(p => { profileMap[p.id] = p; });
@@ -343,38 +376,69 @@ class GameSyncService {
   }
 
   // Get active games for a player
+  // Uses direct fetch to bypass Supabase client timeout issues
   async getActiveGames(playerId) {
     if (!supabase) return { data: [], error: null };
 
     try {
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      // Get auth token and anon key for direct fetch
+      const authKey = Object.keys(localStorage).find(k => k.includes('supabase') && k.includes('auth-token'));
+      const authData = authKey ? JSON.parse(localStorage.getItem(authKey)) : null;
+      
+      if (!authData?.access_token) {
+        console.log('[GameSync] No access token for getActiveGames');
+        return { data: [], error: { message: 'No auth token' } };
+      }
+
+      // Use the anon key from environment (embedded at build time)
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      console.log('[GameSync] getActiveGames: Using direct fetch for', playerId);
+
+      // Direct fetch - bypasses Supabase client issues
+      const gamesResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${playerId},player2_id.eq.${playerId})&status=eq.active&order=updated_at.desc&select=*`,
+        {
+          headers: {
+            'Authorization': `Bearer ${authData.access_token}`,
+            'apikey': ANON_KEY,
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
-      const gamesPromise = supabase
-        .from('games')
-        .select('*')
-        .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
-        .eq('status', 'active')
-        .order('updated_at', { ascending: false });
-
-      const result = await Promise.race([gamesPromise, timeoutPromise]);
-      const { data: games, error } = result;
-
-      if (error || !games) {
+      if (!gamesResponse.ok) {
+        const error = await gamesResponse.json();
+        console.error('[GameSync] getActiveGames fetch error:', error);
         return { data: [], error };
       }
+
+      const games = await gamesResponse.json();
+      console.log('[GameSync] getActiveGames: Fetched', games.length, 'games');
 
       if (games.length === 0) {
         return { data: [], error: null };
       }
 
+      // Fetch profiles for players
       const playerIds = [...new Set(games.flatMap(g => [g.player1_id, g.player2_id]))];
       
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, username, rating')
-        .in('id', playerIds);
+      const profilesResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=in.(${playerIds.join(',')})&select=id,username,rating`,
+        {
+          headers: {
+            'Authorization': `Bearer ${authData.access_token}`,
+            'apikey': ANON_KEY,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      let profiles = [];
+      if (profilesResponse.ok) {
+        profiles = await profilesResponse.json();
+      }
 
       const profileMap = {};
       profiles?.forEach(p => { profileMap[p.id] = p; });
@@ -387,6 +451,7 @@ class GameSyncService {
 
       return { data: gamesWithProfiles, error: null };
     } catch (e) {
+      console.error('[GameSync] getActiveGames exception:', e);
       return { data: [], error: { message: e.message } };
     }
   }
