@@ -12,6 +12,7 @@ import NeonSubtitle from './NeonSubtitle';
 import TierIcon from './TierIcon';
 import NotificationPrompt from './NotificationPrompt';
 import FriendsList from './FriendsList';
+import ViewPlayerProfile from './ViewPlayerProfile';
 import Achievements, { AchievementPopup } from './Achievements';
 import { SpectatableGamesList } from './SpectatorView';
 import GameInviteNotification from './GameInviteNotification';
@@ -221,6 +222,8 @@ const OnlineMenu = ({
   const [showFriendsList, setShowFriendsList] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSpectateList, setShowSpectateList] = useState(false);
+  const [viewingPlayerId, setViewingPlayerId] = useState(null);
+  const [viewingPlayerData, setViewingPlayerData] = useState(null);
   const [showRecentGames, setShowRecentGames] = useState(false);
   const [showActiveGames, setShowActiveGames] = useState(false);
   const [showRatingInfo, setShowRatingInfo] = useState(false);
@@ -714,11 +717,15 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
+      className="fixed inset-0 bg-slate-950"
       style={{ 
+        overflowY: 'auto',
+        overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch', 
-        touchAction: 'pan-y',
+        touchAction: 'pan-y pinch-zoom',
         overscrollBehavior: 'contain',
+        height: '100%',
+        width: '100%',
       }}
     >
       {/* Themed Grid background */}
@@ -889,9 +896,9 @@ const OnlineMenu = ({
               FIND MATCH
             </button>
 
-            {/* Friend Search / Invite Section */}
+            {/* Challenge a Player Section */}
             <div className="bg-slate-800/40 rounded-xl p-4 mb-4 border border-slate-700/50">
-              {/* Toggle Search */}
+              {/* Header */}
               <button
                 onClick={() => {
                   setShowSearch(!showSearch);
@@ -903,8 +910,8 @@ const OnlineMenu = ({
                 className="w-full flex items-center justify-between text-left"
               >
                 <div className="flex items-center gap-2">
-                  <UserPlus size={18} className="text-amber-400" />
-                  <span className="text-sm font-medium text-slate-300">Invite a Friend</span>
+                  <Swords size={18} className="text-amber-400" />
+                  <span className="text-sm font-medium text-slate-300">Challenge a Player</span>
                 </div>
                 <ChevronRight 
                   size={18} 
@@ -912,218 +919,201 @@ const OnlineMenu = ({
                 />
               </button>
               
-              {/* Search Input & Results */}
+              {/* Expanded Content */}
               {showSearch && (
-                <div className="mt-3 space-y-3">
-                  {/* Tab buttons for Username vs Share Link */}
-                  <div className="flex gap-2 mb-2">
-                    <button
-                      onClick={() => setShowInviteLink(false)}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
-                        !showInviteLink 
-                          ? 'bg-amber-500 text-white' 
-                          : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      By Username
-                    </button>
-                    <button
-                      onClick={() => setShowInviteLink(true)}
-                      className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium transition-all ${
-                        showInviteLink 
-                          ? 'bg-amber-500 text-white' 
-                          : 'bg-slate-800 text-slate-400 hover:text-white'
-                      }`}
-                    >
-                      Share Link
-                    </button>
-                  </div>
-
-                  {!showInviteLink ? (
-                    <>
-                      {/* Search Input */}
-                      <div className="relative">
-                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
-                          type="text"
-                          value={searchQuery}
-                          onChange={(e) => handleSearch(e.target.value)}
-                          placeholder="Search by username..."
-                          className="w-full pl-9 pr-4 py-2.5 bg-slate-900/80 rounded-lg text-white text-sm border border-slate-700/50 focus:border-amber-500/50 focus:outline-none placeholder:text-slate-600"
-                        />
-                        {searching && (
-                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                            <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Search Results */}
-                      {searchResults.length > 0 && (
-                        <div className="space-y-2 max-h-48 overflow-y-auto">
-                          {searchResults.map(user => {
-                            const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
-                            return (
-                              <div
-                                key={user.id}
-                                className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-700/30"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                                    {user.username?.[0]?.toUpperCase() || '?'}
-                                  </div>
-                                  <div>
-                                    <div className="text-white text-sm font-medium">{user.username}</div>
-                                    <div className="text-amber-400/70 text-xs flex items-center gap-1">
-                                      <TierIcon shape={ratingService.getRatingTier(user.rating || 1000).shape} glowColor={ratingService.getRatingTier(user.rating || 1000).glowColor} size="small" />
-                                      <span>{user.rating || 1000}</span>
-                                    </div>
+                <div className="mt-3 space-y-4">
+                  {/* Option 1: Search by Username */}
+                  <div className="bg-slate-900/50 rounded-lg p-3 border border-cyan-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Search size={14} className="text-cyan-400" />
+                      <span className="text-cyan-300 text-xs font-medium">SEARCH BY USERNAME</span>
+                    </div>
+                    <p className="text-slate-500 text-xs mb-3">
+                      Find and challenge players who already have an account
+                    </p>
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        placeholder="Enter username..."
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none placeholder:text-slate-600"
+                      />
+                      {searching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Search Results */}
+                    {searchResults.length > 0 && (
+                      <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        {searchResults.map(user => {
+                          const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
+                          return (
+                            <div
+                              key={user.id}
+                              className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/30"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                  {user.username?.[0]?.toUpperCase() || '?'}
+                                </div>
+                                <div>
+                                  <div className="text-white text-sm font-medium">{user.username}</div>
+                                  <div className="text-cyan-400/70 text-xs flex items-center gap-1">
+                                    <TierIcon shape={ratingService.getRatingTier(user.rating || 1000).shape} glowColor={ratingService.getRatingTier(user.rating || 1000).glowColor} size="small" />
+                                    <span>{user.rating || 1000}</span>
                                   </div>
                                 </div>
+                              </div>
+                              <button
+                                onClick={() => handleSendInvite(user.id)}
+                                disabled={sendingInvite === user.id || alreadyInvited}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                                  alreadyInvited
+                                    ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                    : 'bg-cyan-500 text-white hover:bg-cyan-400 active:scale-95'
+                                }`}
+                              >
+                                {sendingInvite === user.id ? (
+                                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : alreadyInvited ? (
+                                  <>
+                                    <Clock size={12} />
+                                    Sent
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send size={12} />
+                                    Challenge
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    
+                    {/* No Results */}
+                    {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+                      <p className="text-slate-500 text-xs text-center py-2 mt-2">No players found</p>
+                    )}
+                  </div>
+                  
+                  {/* Option 2: Share Invite Link */}
+                  <div className="bg-slate-900/50 rounded-lg p-3 border border-amber-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Link size={14} className="text-amber-400" />
+                      <span className="text-amber-300 text-xs font-medium">INVITE VIA LINK</span>
+                    </div>
+                    <p className="text-slate-500 text-xs mb-3">
+                      Create a shareable link for friends who don't have an account yet. They'll join after signing up!
+                    </p>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <UserPlus size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          value={friendName}
+                          onChange={(e) => setFriendName(e.target.value)}
+                          placeholder="Friend's name (optional)"
+                          className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-amber-500/50 focus:outline-none placeholder:text-slate-600"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleCreateInviteLink();
+                            }
+                          }}
+                        />
+                      </div>
+                      <button
+                        onClick={handleCreateInviteLink}
+                        disabled={creatingLink}
+                        className="px-4 py-2.5 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {creatingLink ? (
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <>
+                            <Link size={14} />
+                            Create
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Active Invite Links */}
+                    {inviteLinks.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-slate-700/50">
+                        <p className="text-slate-400 text-xs mb-2 font-medium">Your active invite links:</p>
+                        <div className="space-y-2 max-h-40 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                          {inviteLinks.map(invite => (
+                            <div
+                              key={invite.id}
+                              className="p-3 bg-slate-800/40 rounded-lg border border-slate-700/30"
+                            >
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-white text-sm font-medium">
+                                    {invite.recipientName || 'Friend'}
+                                  </span>
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                    invite.status === 'sent' 
+                                      ? 'bg-blue-900/50 text-blue-400' 
+                                      : 'bg-amber-900/50 text-amber-400'
+                                  }`} title={invite.status === 'sent' ? 'Link has been copied/shared' : 'Link created, ready to share'}>
+                                    {invite.status === 'sent' ? 'Copied' : 'New'}
+                                  </span>
+                                </div>
                                 <button
-                                  onClick={() => handleSendInvite(user.id)}
-                                  disabled={sendingInvite === user.id || alreadyInvited}
-                                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
-                                    alreadyInvited
-                                      ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                      : 'bg-amber-500 text-white hover:bg-amber-400 active:scale-95'
+                                  onClick={() => handleCancelInviteLink(invite)}
+                                  disabled={processingInvite === invite.id}
+                                  className="text-slate-500 hover:text-red-400 transition-colors p-1 disabled:opacity-50"
+                                  title="Delete invite link"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleCopyLink(invite)}
+                                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
+                                    copiedLinkId === invite.id
+                                      ? 'bg-green-600 text-white'
+                                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
                                   }`}
                                 >
-                                  {sendingInvite === user.id ? (
-                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  ) : alreadyInvited ? (
+                                  {copiedLinkId === invite.id ? (
                                     <>
-                                      <Clock size={12} />
-                                      Sent
+                                      <Check size={12} />
+                                      Copied!
                                     </>
                                   ) : (
                                     <>
-                                      <Send size={12} />
-                                      Invite
+                                      <Copy size={12} />
+                                      Copy Link
                                     </>
                                   )}
                                 </button>
+                                {navigator.share && (
+                                  <button
+                                    onClick={() => handleShareLink(invite)}
+                                    className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-400 transition-all flex items-center justify-center gap-1.5"
+                                  >
+                                    <Share2 size={12} />
+                                    Share
+                                  </button>
+                                )}
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                      
-                      {/* No Results */}
-                      {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
-                        <p className="text-slate-500 text-xs text-center py-2">No players found</p>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {/* Shareable Invite Link */}
-                      <div className="space-y-3">
-                        <p className="text-slate-400 text-xs">
-                          Create a link to share with friends who don't have an account yet. Send it via text, WhatsApp, email - however you like!
-                        </p>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <UserPlus size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <input
-                              type="text"
-                              value={friendName}
-                              onChange={(e) => setFriendName(e.target.value)}
-                              placeholder="Friend's name (optional)"
-                              className="w-full pl-9 pr-4 py-2.5 bg-slate-900/80 rounded-lg text-white text-sm border border-slate-700/50 focus:border-amber-500/50 focus:outline-none placeholder:text-slate-600"
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  handleCreateInviteLink();
-                                }
-                              }}
-                            />
-                          </div>
-                          <button
-                            onClick={handleCreateInviteLink}
-                            disabled={creatingLink}
-                            className="px-4 py-2.5 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          >
-                            {creatingLink ? (
-                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <>
-                                <Link size={14} />
-                                Create
-                              </>
-                            )}
-                          </button>
-                        </div>
-
-                        {/* Pending Invite Links */}
-                        {inviteLinks.length > 0 && (
-                          <div className="mt-3 pt-3 border-t border-slate-700/50">
-                            <p className="text-slate-500 text-xs mb-2">Your invite links:</p>
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
-                              {inviteLinks.map(invite => (
-                                <div
-                                  key={invite.id}
-                                  className="p-3 bg-slate-900/40 rounded-lg border border-slate-700/30"
-                                >
-                                  <div className="flex items-center justify-between mb-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-white text-sm font-medium">
-                                        {invite.recipientName || 'Friend'}
-                                      </span>
-                                      <span className={`px-1.5 py-0.5 rounded text-[10px] ${
-                                        invite.status === 'sent' 
-                                          ? 'bg-green-900/50 text-green-400' 
-                                          : 'bg-slate-700 text-slate-400'
-                                      }`}>
-                                        {invite.status === 'sent' ? 'Shared' : 'Ready'}
-                                      </span>
-                                    </div>
-                                    <button
-                                      onClick={() => handleCancelInviteLink(invite)}
-                                      disabled={processingInvite === invite.id}
-                                      className="text-slate-500 hover:text-red-400 transition-colors p-1 disabled:opacity-50"
-                                      title="Delete invite"
-                                    >
-                                      <X size={14} />
-                                    </button>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => handleCopyLink(invite)}
-                                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-                                        copiedLinkId === invite.id
-                                          ? 'bg-green-600 text-white'
-                                          : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                                      }`}
-                                    >
-                                      {copiedLinkId === invite.id ? (
-                                        <>
-                                          <Check size={12} />
-                                          Copied!
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Copy size={12} />
-                                          Copy Link
-                                        </>
-                                      )}
-                                    </button>
-                                    {navigator.share && (
-                                      <button
-                                        onClick={() => handleShareLink(invite)}
-                                        className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-400 transition-all flex items-center justify-center gap-1.5"
-                                      >
-                                        <Share2 size={12} />
-                                        Share
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
                             </div>
-                          </div>
-                        )}
+                          ))}
+                        </div>
                       </div>
-                    </>
-                  )}
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -1135,7 +1125,10 @@ const OnlineMenu = ({
                   <Mail size={16} />
                   GAME INVITES ({receivedInvites.length})
                 </h3>
-                <div className="space-y-2">
+                <div 
+                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
+                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                >
                   {receivedInvites.map(invite => (
                     <div
                       key={invite.id}
@@ -1183,7 +1176,10 @@ const OnlineMenu = ({
                   <Clock size={16} />
                   PENDING INVITES ({sentInvites.length})
                 </h3>
-                <div className="space-y-2">
+                <div 
+                  className="space-y-2 max-h-40 overflow-y-auto pr-1"
+                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                >
                   {sentInvites.map(invite => (
                     <div
                       key={invite.id}
@@ -1696,7 +1692,32 @@ const OnlineMenu = ({
             setShowFriendsList(false);
             onSpectateGame?.(gameId);
           }}
+          onViewProfile={(playerId, playerData) => {
+            setViewingPlayerId(playerId);
+            setViewingPlayerData(playerData || null);
+          }}
           onClose={() => setShowFriendsList(false)}
+        />
+      )}
+      
+      {/* View Player Profile Modal */}
+      {viewingPlayerId && (
+        <ViewPlayerProfile
+          playerId={viewingPlayerId}
+          playerData={viewingPlayerData}
+          currentUserId={profile?.id}
+          onInviteToGame={async (player) => {
+            const { error } = await inviteService.sendInvite(profile.id, player.id);
+            if (!error) {
+              soundManager.playSound('success');
+              setViewingPlayerId(null);
+              setViewingPlayerData(null);
+            }
+          }}
+          onClose={() => {
+            setViewingPlayerId(null);
+            setViewingPlayerData(null);
+          }}
         />
       )}
       

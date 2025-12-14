@@ -52,76 +52,68 @@ class GameSyncService {
 
     console.log('gameSync.getGame: Starting fetch for game:', gameId);
 
-    // Create a timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Request timed out after 10 seconds')), 10000);
-    });
+    const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+    const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-    // First try with foreign key joins
-    try {
-      console.log('gameSync.getGame: Trying with foreign key joins...');
-      
-      const queryPromise = supabase
-        .from('games')
-        .select(`
-          *,
-          player1:profiles!games_player1_id_fkey(*),
-          player2:profiles!games_player2_id_fkey(*)
-        `)
-        .eq('id', gameId)
-        .single();
-
-      const { data, error } = await Promise.race([queryPromise, timeoutPromise]);
-
-      if (!error && data) {
-        console.log('gameSync.getGame: Success with foreign keys, game:', data.id);
-        return { data, error: null };
-      }
-      
-      console.log('gameSync.getGame: Foreign key join failed:', error?.message);
-    } catch (e) {
-      console.log('gameSync.getGame: Exception with foreign key join:', e.message);
+    const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+    if (!authData?.access_token || !ANON_KEY) {
+      console.error('gameSync.getGame: No auth token');
+      return { data: null, error: { message: 'Not authenticated' } };
     }
 
-    // Fallback: fetch game and profiles separately
+    const headers = {
+      'Authorization': `Bearer ${authData.access_token}`,
+      'apikey': ANON_KEY,
+      'Content-Type': 'application/json',
+      'Accept': 'application/vnd.pgrst.object+json'
+    };
+
     try {
-      console.log('gameSync.getGame: Trying fallback (separate queries)...');
-      
-      const gameQueryPromise = supabase
-        .from('games')
-        .select('*')
-        .eq('id', gameId)
-        .single();
+      // Fetch game
+      console.log('gameSync.getGame: Fetching game...');
+      const gameResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}&select=*`,
+        { headers }
+      );
 
-      const { data: game, error: gameError } = await Promise.race([gameQueryPromise, timeoutPromise]);
-
-      if (gameError) {
-        console.error('gameSync.getGame: Error fetching game:', gameError);
-        return { data: null, error: gameError };
+      if (!gameResponse.ok) {
+        const errorText = await gameResponse.text();
+        console.error('gameSync.getGame: Game fetch failed:', errorText);
+        return { data: null, error: { message: 'Failed to fetch game' } };
       }
 
-      if (!game) {
+      const game = await gameResponse.json();
+      
+      if (!game || !game.id) {
         console.log('gameSync.getGame: Game not found');
         return { data: null, error: { message: 'Game not found' } };
       }
 
       console.log('gameSync.getGame: Game loaded, fetching profiles...');
 
-      // Fetch player profiles separately
-      const profilesPromise = supabase
-        .from('profiles')
-        .select('*')
-        .in('id', [game.player1_id, game.player2_id].filter(Boolean));
+      // Fetch player profiles
+      const playerIds = [game.player1_id, game.player2_id].filter(Boolean);
+      let player1 = null;
+      let player2 = null;
 
-      const { data: profiles, error: profilesError } = await Promise.race([profilesPromise, timeoutPromise]);
-      
-      if (profilesError) {
-        console.log('gameSync.getGame: Profiles fetch failed, returning game without profiles:', profilesError.message);
-        return { data: { ...game, player1: null, player2: null }, error: null };
+      if (playerIds.length > 0) {
+        const profileHeaders = { ...headers };
+        delete profileHeaders['Accept']; // Remove single object header for array result
+        
+        const profilesResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${playerIds.join(',')})&select=*`,
+          { headers: profileHeaders }
+        );
+
+        if (profilesResponse.ok) {
+          const profiles = await profilesResponse.json();
+          player1 = profiles?.find(p => p.id === game.player1_id) || null;
+          player2 = profiles?.find(p => p.id === game.player2_id) || null;
+        } else {
+          console.log('gameSync.getGame: Profiles fetch failed, returning game without profiles');
+        }
       }
-
-      const player1 = profiles?.find(p => p.id === game.player1_id) || null;
-      const player2 = profiles?.find(p => p.id === game.player2_id) || null;
 
       console.log('gameSync.getGame: Complete success, returning game with profiles');
 
@@ -134,7 +126,7 @@ class GameSyncService {
         error: null
       };
     } catch (e) {
-      console.error('gameSync.getGame: Exception in fallback:', e.message);
+      console.error('gameSync.getGame: Exception:', e.message);
       return { data: null, error: { message: e.message } };
     }
   }

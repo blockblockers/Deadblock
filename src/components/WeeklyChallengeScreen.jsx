@@ -218,6 +218,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   // Game state
   const [puzzle, setPuzzle] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null); // Track loading errors
   const [gameStarted, setGameStarted] = useState(false);
   const [gameComplete, setGameComplete] = useState(false);
   const [gameLost, setGameLost] = useState(false); // Player lost (AI won)
@@ -261,15 +262,30 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   // Load the puzzle
   useEffect(() => {
     const loadWeeklyPuzzle = async () => {
+      // Handle missing challenge
+      if (!challenge || !challenge.id) {
+        console.error('[WeeklyChallengeScreen] No challenge provided');
+        setLoadError('Challenge data not available. Please go back and try again.');
+        setLoading(false);
+        return;
+      }
+      
       setLoading(true);
+      setLoadError(null);
       
       try {
         // Generate deterministic puzzle from challenge seed
         const seed = weeklyChallengeService.generatePuzzleSeed(challenge);
+        console.log('[WeeklyChallengeScreen] Loading puzzle with seed:', seed);
+        
         const puzzleData = await getSeededPuzzle(seed, PUZZLE_DIFFICULTY.HARD);
         
         if (puzzleData) {
+          console.log('[WeeklyChallengeScreen] Puzzle loaded successfully');
           setPuzzle(puzzleData);
+        } else {
+          console.error('[WeeklyChallengeScreen] Puzzle generation returned null');
+          setLoadError('Failed to generate puzzle. Please try again.');
         }
         
         // Get user's existing results
@@ -281,6 +297,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
         }
       } catch (err) {
         console.error('Error loading weekly puzzle:', err);
+        setLoadError('Failed to load puzzle: ' + (err.message || 'Unknown error'));
       }
       
       setLoading(false);
@@ -320,12 +337,17 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   
   // Start the game
   const handleStartGame = useCallback(() => {
-    if (puzzle) {
-      loadPuzzle(puzzle);
-      setGameStarted(true);
-      startTimer();
-      soundManager.playClickSound('success');
+    if (!puzzle) {
+      console.error('[WeeklyChallengeScreen] Cannot start game - puzzle is null');
+      setLoadError('Puzzle not loaded. Please go back and try again.');
+      return;
     }
+    
+    console.log('[WeeklyChallengeScreen] Starting game with puzzle');
+    loadPuzzle(puzzle);
+    setGameStarted(true);
+    startTimer();
+    soundManager.playClickSound('success');
   }, [puzzle, loadPuzzle, startTimer]);
   
   // Check for puzzle completion (win or loss)
@@ -418,6 +440,36 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-red-300">Loading weekly challenge...</p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Error state - show error and back button
+  if (loadError || !puzzle) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="bg-slate-900/90 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 text-center">
+          <X size={48} className="mx-auto text-red-400 mb-4" />
+          <h2 className="text-xl font-bold text-red-300 mb-2">Failed to Load</h2>
+          <p className="text-slate-400 mb-6 text-sm">
+            {loadError || 'Unable to load the weekly challenge puzzle. Please try again.'}
+          </p>
+          <div className="space-y-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full p-3 rounded-xl font-bold bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => { soundManager.playButtonClick(); onMenu(); }}
+              className="w-full p-3 rounded-xl font-bold text-slate-400 hover:text-slate-300 transition-all flex items-center justify-center gap-2"
+            >
+              <ArrowLeft size={18} />
+              Back to Menu
+            </button>
+          </div>
         </div>
       </div>
     );

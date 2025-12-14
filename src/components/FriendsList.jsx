@@ -1,13 +1,15 @@
 // FriendsList - View and manage friends
+// UPDATED: Added request game, opponent info for spectating, view profile
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, UserMinus, Search, Clock, Check, X, MessageCircle, Gamepad2, Eye, Circle, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, UserMinus, Search, Clock, Check, X, Gamepad2, Eye, Circle, AlertTriangle, User, Swords, ChevronRight } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { spectatorService } from '../services/spectatorService';
+import { inviteService } from '../services/inviteService';
 import { soundManager } from '../utils/soundManager';
 import TierIcon from './TierIcon';
 
-const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
+const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClose }) => {
   const [activeTab, setActiveTab] = useState('friends'); // friends, requests, add
   const [friends, setFriends] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -18,6 +20,8 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [friendGames, setFriendGames] = useState([]);
   const [error, setError] = useState(null);
+  const [sendingInvite, setSendingInvite] = useState(null);
+  const [sentGameInvites, setSentGameInvites] = useState(new Set());
 
   // Load friends data
   useEffect(() => {
@@ -60,31 +64,27 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
     
     setSearching(true);
     
-    // Import supabase for search
-    const { supabase } = await import('../utils/supabase');
-    
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, username, avatar_url, elo_rating')
-      .ilike('username', `%${searchQuery}%`)
-      .neq('id', userId)
-      .limit(10);
-
-    if (data) {
-      // Filter out existing friends
-      const friendIds = new Set(friends.map(f => f.id));
-      const pendingIds = new Set([
-        ...pendingRequests.map(r => r.from.id),
-        ...sentRequests.map(r => r.to.id)
-      ]);
+    try {
+      const { data } = await inviteService.searchUsers(searchQuery, userId, 10);
       
-      const filtered = data.map(user => ({
-        ...user,
-        isFriend: friendIds.has(user.id),
-        isPending: pendingIds.has(user.id)
-      }));
-      
-      setSearchResults(filtered);
+      if (data) {
+        // Filter out existing friends
+        const friendIds = new Set(friends.map(f => f.id));
+        const pendingIds = new Set([
+          ...pendingRequests.map(r => r.from?.id),
+          ...sentRequests.map(r => r.to?.id)
+        ].filter(Boolean));
+        
+        const filtered = data.map(user => ({
+          ...user,
+          isFriend: friendIds.has(user.id),
+          isPending: pendingIds.has(user.id)
+        }));
+        
+        setSearchResults(filtered);
+      }
+    } catch (err) {
+      console.error('Search error:', err);
     }
     
     setSearching(false);
@@ -129,29 +129,79 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
     }
   };
 
-  // Check if friend is in a game
+  // Send game invite to friend
+  const sendGameInvite = async (friend) => {
+    if (sendingInvite || sentGameInvites.has(friend.id)) return;
+    
+    setSendingInvite(friend.id);
+    
+    try {
+      const { data, error } = await inviteService.sendInvite(userId, friend.id);
+      if (!error) {
+        soundManager.playSound('success');
+        setSentGameInvites(prev => new Set([...prev, friend.id]));
+        // Also call onInviteFriend if provided for backwards compatibility
+        if (onInviteFriend) {
+          onInviteFriend(friend);
+        }
+      }
+    } catch (err) {
+      console.error('Error sending game invite:', err);
+    }
+    
+    setSendingInvite(null);
+  };
+
+  // Check if friend is in a game and get game details
   const getFriendGame = (friendId) => {
     return friendGames.find(g => 
       g.player1?.id === friendId || g.player2?.id === friendId
     );
   };
 
+  // Get the opponent in a game
+  const getOpponent = (game, friendId) => {
+    if (!game) return null;
+    return game.player1?.id === friendId ? game.player2 : game.player1;
+  };
+
   // Get online status indicator
   const getStatusIndicator = (friend) => {
-    if (getFriendGame(friend.id)) {
-      return <Circle size={8} className="fill-green-400 text-green-400" title="In game" />;
+    const game = getFriendGame(friend.id);
+    if (game) {
+      return (
+        <div className="flex items-center gap-1">
+          <Circle size={8} className="fill-green-400 text-green-400" />
+          <span className="text-green-400 text-xs">In Game</span>
+        </div>
+      );
     }
     if (friend.is_online) {
-      return <Circle size={8} className="fill-green-400 text-green-400" title="Online" />;
+      return (
+        <div className="flex items-center gap-1">
+          <Circle size={8} className="fill-green-400 text-green-400" />
+          <span className="text-green-400 text-xs">Online</span>
+        </div>
+      );
     }
-    return <Circle size={8} className="fill-slate-600 text-slate-600" title="Offline" />;
+    return (
+      <div className="flex items-center gap-1">
+        <Circle size={8} className="fill-slate-600 text-slate-600" />
+        <span className="text-slate-500 text-xs">Offline</span>
+      </div>
+    );
   };
+
+  // Get tier info for a player
+  const getTier = (rating) => ratingService.getRatingTier(rating || 1200);
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-xl">
+      <div 
+        className="bg-slate-900 rounded-xl max-w-md w-full max-h-[85vh] overflow-hidden border border-amber-500/30 shadow-xl flex flex-col"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-amber-500/20">
+        <div className="flex items-center justify-between p-4 border-b border-amber-500/20 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Users className="text-amber-400" size={24} />
             <h2 className="text-lg font-bold text-amber-300">Friends</h2>
@@ -162,7 +212,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-amber-500/20">
+        <div className="flex border-b border-amber-500/20 flex-shrink-0">
           <button
             onClick={() => setActiveTab('friends')}
             className={`flex-1 py-3 text-sm font-medium transition-colors ${
@@ -200,92 +250,132 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
           </button>
         </div>
 
-        {/* Content */}
-        <div className="p-4 overflow-y-auto max-h-[50vh]">
-          {error ? (
-            <div className="text-center py-8">
-              <AlertTriangle className="mx-auto text-amber-400 mb-2" size={40} />
-              <p className="text-amber-300 font-medium mb-2">Feature Not Available</p>
-              <p className="text-slate-400 text-sm">{error}</p>
-              <button
-                onClick={onClose}
-                className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-              >
-                Close
-              </button>
+        {/* Content - Scrollable */}
+        <div 
+          className="flex-1 overflow-y-auto p-4"
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        >
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
             </div>
-          ) : loading ? (
+          ) : error ? (
             <div className="text-center py-8">
-              <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2" />
-              <p className="text-slate-400 text-sm">Loading...</p>
+              <AlertTriangle className="mx-auto text-amber-500 mb-3" size={40} />
+              <p className="text-amber-300 mb-2 font-medium">Feature Setup Required</p>
+              <p className="text-slate-400 text-sm">{error}</p>
             </div>
           ) : activeTab === 'friends' ? (
             friends.length === 0 ? (
               <div className="text-center py-8">
                 <Users className="mx-auto text-slate-600 mb-2" size={40} />
                 <p className="text-slate-400">No friends yet</p>
+                <p className="text-slate-500 text-sm mt-1">Add friends to challenge them to games!</p>
                 <button
                   onClick={() => setActiveTab('add')}
-                  className="mt-2 text-amber-400 text-sm hover:underline"
+                  className="mt-4 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-400"
                 >
-                  Add your first friend
+                  Find Friends
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
                 {friends.map(friend => {
                   const friendGame = getFriendGame(friend.id);
-                  const tier = ratingService.getRatingTier(friend.elo_rating || 1200);
+                  const opponent = getOpponent(friendGame, friend.id);
+                  const tier = getTier(friend.rating || friend.elo_rating);
+                  const hasInviteSent = sentGameInvites.has(friend.id);
                   
                   return (
                     <div 
-                      key={friend.id}
-                      className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700"
+                      key={friend.friendshipId}
+                      className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-amber-500/30 transition-colors"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center text-white font-bold">
-                            {friend.username?.[0]?.toUpperCase() || '?'}
+                      {/* Main Friend Row */}
+                      <div className="flex items-center justify-between">
+                        <button
+                          onClick={() => onViewProfile?.(friend.id, friend)}
+                          className="flex items-center gap-3 flex-1 text-left hover:opacity-80 transition-opacity"
+                        >
+                          <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-full flex items-center justify-center text-white font-bold overflow-hidden">
+                            {friend.avatar_url ? (
+                              <img src={friend.avatar_url} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              friend.username?.[0]?.toUpperCase() || '?'
+                            )}
                           </div>
-                          <div className="absolute -bottom-1 -right-1">
-                            {getStatusIndicator(friend)}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-white truncate">{friend.username}</p>
+                              <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
+                            </div>
+                            <div className="flex items-center gap-2 text-xs">
+                              <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
+                              <span className={tier.color}>{friend.rating || 1200}</span>
+                              <span className="text-slate-600">•</span>
+                              {getStatusIndicator(friend)}
+                            </div>
                           </div>
-                        </div>
-                        <div>
-                          <p className="font-medium text-white">{friend.username}</p>
-                          <div className="flex items-center gap-1 text-xs">
-                            <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
-                            <span className="text-slate-400">{friend.elo_rating || 1200}</span>
-                          </div>
+                        </button>
+                        
+                        <div className="flex items-center gap-1 ml-2">
+                          {friendGame ? (
+                            <button
+                              onClick={() => onSpectate?.(friendGame.id)}
+                              className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
+                              title="Watch game"
+                            >
+                              <Eye size={18} />
+                            </button>
+                          ) : friend.is_online && !hasInviteSent ? (
+                            <button
+                              onClick={() => sendGameInvite(friend)}
+                              disabled={sendingInvite === friend.id}
+                              className="p-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors disabled:opacity-50"
+                              title="Challenge to a game"
+                            >
+                              {sendingInvite === friend.id ? (
+                                <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Gamepad2 size={18} />
+                              )}
+                            </button>
+                          ) : hasInviteSent ? (
+                            <div className="px-2 py-1 bg-slate-700 text-slate-400 rounded text-xs">
+                              Invited
+                            </div>
+                          ) : null}
+                          <button
+                            onClick={() => removeFriend(friend.friendshipId)}
+                            className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                            title="Remove friend"
+                          >
+                            <UserMinus size={18} />
+                          </button>
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-2">
-                        {friendGame ? (
-                          <button
-                            onClick={() => onSpectate?.(friendGame.id)}
-                            className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30"
-                            title="Watch game"
-                          >
-                            <Eye size={18} />
-                          </button>
-                        ) : friend.is_online ? (
-                          <button
-                            onClick={() => onInviteFriend?.(friend)}
-                            className="p-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30"
-                            title="Invite to play"
-                          >
-                            <Gamepad2 size={18} />
-                          </button>
-                        ) : null}
-                        <button
-                          onClick={() => removeFriend(friend.friendshipId)}
-                          className="p-2 text-slate-500 hover:text-red-400"
-                          title="Remove friend"
-                        >
-                          <UserMinus size={18} />
-                        </button>
-                      </div>
+                      {/* Game Info - Show opponent when spectating is available */}
+                      {friendGame && opponent && (
+                        <div className="mt-2 pt-2 border-t border-slate-700/50">
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2 text-slate-400">
+                              <Swords size={12} className="text-green-400" />
+                              <span>Playing vs</span>
+                              <span className="text-white font-medium">{opponent.username || 'Unknown'}</span>
+                              {opponent.rating && (
+                                <span className="text-slate-500">({opponent.rating})</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => onSpectate?.(friendGame.id)}
+                              className="text-green-400 hover:text-green-300 font-medium"
+                            >
+                              Watch →
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -298,38 +388,45 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
                 <div>
                   <h3 className="text-sm font-medium text-slate-400 mb-2">Received</h3>
                   <div className="space-y-2">
-                    {pendingRequests.map(request => (
-                      <div 
-                        key={request.requestId}
-                        className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-amber-500/30"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-                            {request.from.username?.[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div>
-                            <p className="font-medium text-white">{request.from.username}</p>
-                            <p className="text-xs text-slate-400">
-                              Rating: {request.from.elo_rating || 1200}
-                            </p>
+                    {pendingRequests.map(request => {
+                      const tier = getTier(request.from?.elo_rating || request.from?.rating);
+                      return (
+                        <div 
+                          key={request.requestId}
+                          className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-amber-500/30"
+                        >
+                          <button
+                            onClick={() => onViewProfile?.(request.from?.id, request.from)}
+                            className="flex items-center gap-3 flex-1 text-left hover:opacity-80"
+                          >
+                            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                              {request.from?.username?.[0]?.toUpperCase() || '?'}
+                            </div>
+                            <div>
+                              <p className="font-medium text-white">{request.from?.username}</p>
+                              <div className="flex items-center gap-1 text-xs">
+                                <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
+                                <span className={tier.color}>{request.from?.rating || 1200}</span>
+                              </div>
+                            </div>
+                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => acceptRequest(request.requestId)}
+                              className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30"
+                            >
+                              <Check size={18} />
+                            </button>
+                            <button
+                              onClick={() => declineRequest(request.requestId)}
+                              className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
+                            >
+                              <X size={18} />
+                            </button>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => acceptRequest(request.requestId)}
-                            className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30"
-                          >
-                            <Check size={18} />
-                          </button>
-                          <button
-                            onClick={() => declineRequest(request.requestId)}
-                            className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
-                          >
-                            <X size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -346,10 +443,10 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-slate-300 font-bold">
-                            {request.to.username?.[0]?.toUpperCase() || '?'}
+                            {request.to?.username?.[0]?.toUpperCase() || '?'}
                           </div>
                           <div>
-                            <p className="font-medium text-white">{request.to.username}</p>
+                            <p className="font-medium text-white">{request.to?.username}</p>
                             <p className="text-xs text-slate-500 flex items-center gap-1">
                               <Clock size={12} /> Pending
                             </p>
@@ -397,37 +494,44 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onClose }) => {
 
               {searchResults.length > 0 ? (
                 <div className="space-y-2">
-                  {searchResults.map(user => (
-                    <div 
-                      key={user.id}
-                      className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold">
-                          {user.username?.[0]?.toUpperCase() || '?'}
-                        </div>
-                        <div>
-                          <p className="font-medium text-white">{user.username}</p>
-                          <p className="text-xs text-slate-400">
-                            Rating: {user.elo_rating || 1200}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      {user.isFriend ? (
-                        <span className="text-green-400 text-sm">Friends</span>
-                      ) : user.isPending ? (
-                        <span className="text-amber-400 text-sm">Pending</span>
-                      ) : (
+                  {searchResults.map(user => {
+                    const tier = getTier(user.rating || user.elo_rating);
+                    return (
+                      <div 
+                        key={user.id}
+                        className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700"
+                      >
                         <button
-                          onClick={() => sendRequest(user.id)}
-                          className="p-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30"
+                          onClick={() => onViewProfile?.(user.id, user)}
+                          className="flex items-center gap-3 flex-1 text-left hover:opacity-80"
                         >
-                          <UserPlus size={18} />
+                          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-bold">
+                            {user.username?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <p className="font-medium text-white">{user.username}</p>
+                            <div className="flex items-center gap-1 text-xs">
+                              <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
+                              <span className={tier.color}>{user.rating || user.elo_rating || 1200}</span>
+                            </div>
+                          </div>
                         </button>
-                      )}
-                    </div>
-                  ))}
+                        
+                        {user.isFriend ? (
+                          <span className="text-green-400 text-sm">Friends</span>
+                        ) : user.isPending ? (
+                          <span className="text-amber-400 text-sm">Pending</span>
+                        ) : (
+                          <button
+                            onClick={() => sendRequest(user.id)}
+                            className="p-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30"
+                          >
+                            <UserPlus size={18} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : searchQuery.length >= 2 && !searching ? (
                 <div className="text-center py-4 text-slate-400">
