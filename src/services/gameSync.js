@@ -310,8 +310,8 @@ class GameSyncService {
 
     try {
       // Get auth token for direct fetch
-      const authKey = Object.keys(localStorage).find(k => k.includes('supabase') && k.includes('auth-token'));
-      const authData = authKey ? JSON.parse(localStorage.getItem(authKey)) : null;
+      const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+      const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
       
       if (!authData?.access_token) {
         return { data: [], error: { message: 'No auth token' } };
@@ -382,8 +382,8 @@ class GameSyncService {
 
     try {
       // Get auth token and anon key for direct fetch
-      const authKey = Object.keys(localStorage).find(k => k.includes('supabase') && k.includes('auth-token'));
-      const authData = authKey ? JSON.parse(localStorage.getItem(authKey)) : null;
+      const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+      const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
       
       if (!authData?.access_token) {
         console.log('[GameSync] No access token for getActiveGames');
