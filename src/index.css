@@ -5,40 +5,10 @@
 /* Custom styles for the app */
 * {
   -webkit-tap-highlight-color: transparent;
-  /* Prevent text selection on touch devices for UI elements */
-  -webkit-touch-callout: none;
 }
 
 html, body {
   overscroll-behavior: none;
-  /* Fix for iOS/iPad scrolling */
-  height: 100%;
-  width: 100%;
-  position: fixed;
-  overflow: hidden;
-}
-
-#root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
-
-/* Enable smooth scrolling on iOS/iPad */
-.scroll-container {
-  -webkit-overflow-scrolling: touch;
-  overflow: auto;
-  touch-action: pan-y pinch-zoom;
-}
-
-/* Fix for iOS momentum scrolling */
-@supports (-webkit-touch-callout: none) {
-  /* iOS specific styles */
-  .fixed {
-    position: fixed;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-  }
 }
 
 /* Font for headings */

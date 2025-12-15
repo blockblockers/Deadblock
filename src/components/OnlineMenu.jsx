@@ -719,10 +719,13 @@ const OnlineMenu = ({
     <div 
       className="fixed inset-0 bg-slate-950"
       style={{ 
-        overflow: 'auto',
+        overflowY: 'auto',
+        overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch', 
         touchAction: 'pan-y pinch-zoom',
         overscrollBehavior: 'contain',
+        height: '100%',
+        width: '100%',
       }}
     >
       {/* Themed Grid background */}

@@ -642,7 +642,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const [flipped, setFlipped] = useState(false);
   const [pendingMove, setPendingMove] = useState(null);
   const [playerAnimatingMove, setPlayerAnimatingMove] = useState(null);
-  const [showWrongMove, setShowWrongMove] = useState(false);
 
   // -------------------------------------------------------------------------
   // REFS - For values that shouldn't trigger re-renders
@@ -1038,23 +1037,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         
         setGameState(GAME_STATES.SUCCESS);
       } else {
-        // Wrong move - AI can still play!
-        console.log('[SpeedPuzzle] Wrong move - AI can still play, showing feedback');
+        // Wrong move - restart timer
         soundManager.playInvalid();
-        
-        // Show wrong move feedback briefly
-        setShowWrongMove(true);
-        safeSetTimeout(() => {
-          setShowWrongMove(false);
-        }, 1500);
-        
-        // Reset board to puzzle state and restart timer
-        setBoard(currentPuzzle ? parsePuzzleBoardState(currentPuzzle.boardState).newBoard : board);
-        setBoardPieces(currentPuzzle ? parsePuzzleBoardState(currentPuzzle.boardState).newBoardPieces : boardPieces);
-        setUsedPieces(currentPuzzle?.usedPieces || []);
-        setSelectedPiece(null);
-        setPendingMove(null);
-        
         gameOverHandledRef.current = false;
         setTimeLeft(TIMER_DURATION);
         lastTickRef.current = Date.now();
@@ -1064,7 +1048,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   }, [
     pendingMove, selectedPiece, gameState, board, boardPieces, usedPieces,
     streak, effectiveBestStreak, isOfflineMode, rotation, flipped,
-    clearTimer, safeSetTimeout, currentPuzzle
+    clearTimer, safeSetTimeout
   ]);
 
   // -------------------------------------------------------------------------
@@ -1173,7 +1157,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         {/* Game board */}
         {(gameState === GAME_STATES.PLAYING || gameState === GAME_STATES.SUCCESS) && (
           <>
-            <div className="w-full max-w-md flex-shrink-0 flex justify-center relative">
+            <div className="w-full max-w-md flex-shrink-0 flex justify-center">
               <div className="w-[min(85vw,85vh,340px)] aspect-square">
                 <GameBoard
                   board={board}
@@ -1191,18 +1175,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                   }}
                 />
               </div>
-              
-              {/* Wrong move feedback overlay */}
-              {showWrongMove && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                  <div className="bg-red-900/90 text-white px-6 py-4 rounded-xl border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.5)] animate-pulse">
-                    <div className="text-center">
-                      <div className="text-2xl font-black mb-1">WRONG MOVE!</div>
-                      <div className="text-sm text-red-200">AI can still play - try again</div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
             
             {/* Piece tray */}

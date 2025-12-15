@@ -1,162 +1,102 @@
-import { memo } from 'react';
-import { PIECE_NAMES, getPieceCoords, PIECE_COLORS } from '../utils/gameLogic';
-import { soundManager } from '../utils/soundManager';
+import { pieces, pieceColors } from '../utils/pieces';
 
-// Memoized piece display component
-const PieceDisplay = memo(({ piece, size = 'normal', isSelected, isUsed, onClick }) => {
-  const baseCoords = getPieceCoords(piece, 0, false);
-  const cellSize = size === 'small' ? 6 : size === 'tiny' ? 4 : 8;
-  const gapSize = 1;
+// Render a mini piece preview with cyberpunk styling
+const MiniPiece = ({ name, coords }) => {
+  // Safety check for coords
+  if (!coords || !Array.isArray(coords) || coords.length === 0) {
+    return null;
+  }
   
-  // Calculate grid bounds
-  const minRow = Math.min(...baseCoords.map(([r]) => r));
-  const maxRow = Math.max(...baseCoords.map(([r]) => r));
-  const minCol = Math.min(...baseCoords.map(([, c]) => c));
-  const maxCol = Math.max(...baseCoords.map(([, c]) => c));
-  
-  const rows = maxRow - minRow + 1;
-  const cols = maxCol - minCol + 1;
-  
-  // Normalize coordinates
-  const normalizedCoords = baseCoords.map(([r, c]) => [r - minRow, c - minCol]);
-  
-  const gridWidth = cols * cellSize + (cols - 1) * gapSize;
-  const gridHeight = rows * cellSize + (rows - 1) * gapSize;
-  
-  const colors = PIECE_COLORS[piece] || { bg: 'bg-gray-500', glow: 'rgba(128,128,128,0.5)' };
-  
+  const minX = Math.min(...coords.map(([x]) => x));
+  const maxX = Math.max(...coords.map(([x]) => x));
+  const minY = Math.min(...coords.map(([, y]) => y));
+  const maxY = Math.max(...coords.map(([, y]) => y));
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+
   return (
-    <button
-      onClick={onClick}
-      disabled={isUsed}
-      className={`
-        relative p-2 rounded-lg transition-all duration-200 touch-manipulation
-        ${isUsed 
-          ? 'opacity-30 cursor-not-allowed' 
-          : isSelected 
-            ? 'ring-2 ring-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.5)]' 
-            : 'hover:scale-105 active:scale-95'
-        }
-      `}
-      style={{
-        background: isSelected 
-          ? 'linear-gradient(135deg, rgba(255,255,255,0.2), rgba(255,255,255,0.1))' 
-          : 'rgba(30, 41, 59, 0.8)',
-        minWidth: `${gridWidth + 16}px`,
-      }}
-    >
-      <div 
-        className="relative"
-        style={{ 
-          width: gridWidth, 
-          height: gridHeight,
-          display: 'grid',
-          gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
-          gridTemplateRows: `repeat(${rows}, ${cellSize}px)`,
-          gap: `${gapSize}px`,
-        }}
-      >
-        {Array.from({ length: rows * cols }).map((_, idx) => {
-          const row = Math.floor(idx / cols);
-          const col = idx % cols;
-          const isFilled = normalizedCoords.some(([r, c]) => r === row && c === col);
-          
-          return (
-            <div
-              key={idx}
-              className={`rounded-sm ${isFilled ? colors.bg : 'bg-transparent'}`}
-              style={{
-                boxShadow: isFilled ? `0 0 ${cellSize}px ${colors.glow}` : 'none',
-              }}
-            />
-          );
-        })}
-      </div>
-      
-      {/* Piece label */}
-      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] text-slate-400 font-bold">
-        {piece}
-      </div>
-    </button>
+    <div className="inline-flex flex-col gap-0.5">
+      {Array(height).fill().map((_, row) => (
+        <div key={row} className="flex gap-0.5">
+          {Array(width).fill().map((_, col) => {
+            const isFilled = coords.some(([x, y]) => x === col + minX && y === row + minY);
+            return (
+              <div
+                key={col}
+                className={`w-2 h-2 sm:w-3 sm:h-3 rounded-sm relative overflow-hidden ${
+                  isFilled ? pieceColors[name] : 'bg-transparent'
+                }`}
+              >
+                {/* Mini scan line for filled cells */}
+                {isFilled && (
+                  <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_1px,rgba(255,255,255,0.2)_1px,rgba(255,255,255,0.2)_2px)]" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
   );
-});
+};
 
-PieceDisplay.displayName = 'PieceDisplay';
-
-const PieceTray = ({
-  usedPieces,
-  selectedPiece,
+const PieceTray = ({ 
+  usedPieces = [], 
+  selectedPiece, 
   pendingMove,
   gameOver,
   gameMode,
   currentPlayer,
   isMobile,
   isGeneratingPuzzle,
-  onSelectPiece
+  onSelectPiece 
 }) => {
-  const handlePieceSelect = (piece) => {
-    if (usedPieces[piece] || gameOver || (gameMode === 'ai' && currentPlayer === 2) || isGeneratingPuzzle) {
-      return;
-    }
-    soundManager.playClickSound('select');
-    onSelectPiece(piece);
-  };
-
-  const isDisabled = gameOver || (gameMode === 'ai' && currentPlayer === 2) || isGeneratingPuzzle;
+  // Ensure usedPieces is always an array
+  const safeUsedPieces = Array.isArray(usedPieces) ? usedPieces : [];
+  
+  const isDisabled = (pieceName) => 
+    gameOver || 
+    safeUsedPieces.includes(pieceName) || 
+    ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) ||
+    (!!pendingMove && isMobile) ||
+    isGeneratingPuzzle;
 
   return (
-    <div className="w-full">
-      {/* Label */}
-      <div className="text-center mb-2">
-        <span className="text-cyan-300/70 text-xs tracking-wider">
-          {pendingMove ? 'PLACING PIECE' : 'SELECT A PIECE'}
-        </span>
+    <div className={`bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-xl p-2 border border-cyan-500/30 shadow-[0_0_25px_rgba(34,211,238,0.15),inset_0_0_30px_rgba(0,0,0,0.3)] mt-2 ${isGeneratingPuzzle ? 'opacity-50' : ''}`}>
+      {/* Header with scan line effect */}
+      <div className="text-xs font-semibold text-cyan-300/80 text-center mb-2 tracking-widest relative">
+        <span className="relative z-10">PIECES: {safeUsedPieces.length}/12 USED</span>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent" />
       </div>
-      
-      {/* Scrollable piece container */}
-      <div 
-        className="piece-tray-scroll"
-        style={{
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          WebkitOverflowScrolling: 'touch',
-          overscrollBehaviorX: 'contain',
-          touchAction: 'pan-x',
-          scrollBehavior: 'smooth',
-          // Hide scrollbar
-          msOverflowStyle: 'none',
-          scrollbarWidth: 'none',
-        }}
-      >
-        <div 
-          className="flex gap-2 px-2 py-2"
-          style={{
-            minWidth: 'max-content',
-            paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0))',
-            paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0))',
-          }}
-        >
-          {PIECE_NAMES.map((piece) => (
-            <PieceDisplay
-              key={piece}
-              piece={piece}
-              size={isMobile ? 'small' : 'normal'}
-              isSelected={selectedPiece === piece && !pendingMove}
-              isUsed={usedPieces[piece]}
-              onClick={() => handlePieceSelect(piece)}
-            />
-          ))}
-        </div>
+      <div className="grid grid-cols-6 gap-1.5">
+        {pieces && Object.entries(pieces).map(([name, coords]) => {
+          const isUsed = safeUsedPieces.includes(name);
+          const isSelected = selectedPiece === name;
+          
+          return (
+            <button
+              key={name}
+              onClick={() => !isUsed && !pendingMove && !isGeneratingPuzzle && onSelectPiece(name)}
+              className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden ${
+                isUsed
+                  ? 'bg-slate-800/30 opacity-25 cursor-not-allowed border border-slate-700/30'
+                  : isSelected
+                    ? 'bg-slate-700/80 ring-2 ring-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.7),inset_0_0_15px_rgba(34,211,238,0.2)] border border-cyan-400/50'
+                    : 'bg-slate-800/60 hover:bg-slate-700/70 border border-cyan-500/20 hover:border-cyan-500/40 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)]'
+              }`}
+              disabled={isDisabled(name)}
+            >
+              {/* Selection glow effect */}
+              {isSelected && (
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-transparent pointer-events-none" />
+              )}
+              <MiniPiece name={name} coords={coords} />
+            </button>
+          );
+        })}
       </div>
-      
-      {/* Scroll hint for mobile */}
-      {isMobile && (
-        <div className="text-center mt-1">
-          <span className="text-slate-500 text-[10px]">← swipe to see more →</span>
-        </div>
-      )}
     </div>
   );
 };
 
-export default memo(PieceTray);
+export default PieceTray;
