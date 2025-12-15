@@ -1,134 +1,170 @@
-// How to Play Modal
-import { X, Target, Users, Trophy, Lightbulb, Wifi } from 'lucide-react';
+import { X, ChevronRight } from 'lucide-react';
+import { soundManager } from '../utils/soundManager';
 
 const HowToPlayModal = ({ isOpen, onClose }) => {
+  const handleClose = () => {
+    soundManager.playButtonClick();
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[85vh] overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.3)]">
-        {/* Header */}
-        <div className="p-4 border-b border-cyan-500/20 flex items-center justify-between bg-gradient-to-r from-slate-900 to-slate-800">
-          <h2 className="text-xl font-black text-cyan-300 tracking-wider">HOW TO PLAY</h2>
-          <button
-            onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white transition-colors"
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        backdropFilter: 'blur(4px)',
+      }}
+      onClick={handleClose}
+    >
+      <div 
+        className="bg-slate-900/95 rounded-2xl w-full max-w-lg border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]"
+        style={{
+          maxHeight: '85vh',
+          maxHeight: '85dvh',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header - fixed */}
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-700/50 flex-shrink-0">
+          <h2 className="text-2xl font-bold text-cyan-300 tracking-wide">HOW TO PLAY</h2>
+          <button 
+            onClick={handleClose}
+            className="text-slate-400 hover:text-white transition-colors p-2 -m-2 touch-manipulation active:scale-90"
           >
             <X size={24} />
           </button>
         </div>
+        
+        {/* Scrollable content */}
+        <div 
+          className="flex-1 overflow-auto px-6 py-4"
+          style={{
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+            touchAction: 'pan-y',
+          }}
+        >
+          <div className="space-y-6 text-slate-300">
+            {/* Objective */}
+            <section>
+              <h3 className="text-lg font-bold text-purple-400 mb-2 flex items-center gap-2">
+                <ChevronRight size={18} className="text-purple-400" />
+                Objective
+              </h3>
+              <p className="text-sm leading-relaxed">
+                Be the <span className="text-cyan-400 font-semibold">last player to place a piece</span> on the board. 
+                When neither player can make a valid move, the last player to have placed a piece wins!
+              </p>
+            </section>
 
-        {/* Content */}
-        <div className="p-5 overflow-y-auto max-h-[70vh] space-y-5">
-          {/* Objective */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-cyan-400">
-              <Target size={20} />
-              <h3 className="font-bold tracking-wide">OBJECTIVE</h3>
-            </div>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              Be the last player to place a piece! Force your opponent into a position where they can't make a valid move.
-            </p>
-          </div>
+            {/* The Pieces */}
+            <section>
+              <h3 className="text-lg font-bold text-purple-400 mb-2 flex items-center gap-2">
+                <ChevronRight size={18} className="text-purple-400" />
+                The Pieces
+              </h3>
+              <p className="text-sm leading-relaxed mb-2">
+                There are <span className="text-cyan-400 font-semibold">12 unique pentominoes</span> - shapes made of exactly 5 connected squares. 
+                Each piece can only be used once per game by either player.
+              </p>
+              <div className="bg-slate-800/50 rounded-lg p-3 text-xs text-slate-400">
+                Pieces: F, I, L, N, P, T, U, V, W, X, Y, Z
+              </div>
+            </section>
 
-          {/* Gameplay */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-emerald-400">
-              <Users size={20} />
-              <h3 className="font-bold tracking-wide">GAMEPLAY</h3>
-            </div>
-            <ul className="text-slate-300 text-sm space-y-2 leading-relaxed">
-              <li className="flex gap-2">
-                <span className="text-emerald-400">1.</span>
-                <span>Players take turns placing one of 12 unique pentomino pieces on the 8×8 board.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-emerald-400">2.</span>
-                <span>Each piece can only be used once per game.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-emerald-400">3.</span>
-                <span>Pieces cannot overlap with existing pieces.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-emerald-400">4.</span>
-                <span>Use rotate and flip buttons to adjust piece orientation.</span>
-              </li>
-            </ul>
-          </div>
+            {/* How to Place */}
+            <section>
+              <h3 className="text-lg font-bold text-purple-400 mb-2 flex items-center gap-2">
+                <ChevronRight size={18} className="text-purple-400" />
+                How to Place
+              </h3>
+              <ol className="text-sm space-y-2 list-decimal list-inside">
+                <li>Select a piece from the tray at the bottom</li>
+                <li>Tap a cell on the board to place it</li>
+                <li>Use <span className="text-cyan-400">Rotate</span> and <span className="text-cyan-400">Flip</span> to adjust orientation</li>
+                <li>Use the <span className="text-cyan-400">D-pad</span> to fine-tune position</li>
+                <li>Press <span className="text-green-400">Confirm</span> when the placement is valid (green outline)</li>
+              </ol>
+            </section>
 
-          {/* Winning */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-amber-400">
-              <Trophy size={20} />
-              <h3 className="font-bold tracking-wide">WINNING</h3>
-            </div>
-            <p className="text-slate-300 text-sm leading-relaxed">
-              The game ends when a player cannot place any remaining piece. The player who made the last successful move wins!
-            </p>
-          </div>
+            {/* Placement Rules */}
+            <section>
+              <h3 className="text-lg font-bold text-purple-400 mb-2 flex items-center gap-2">
+                <ChevronRight size={18} className="text-purple-400" />
+                Placement Rules
+              </h3>
+              <ul className="text-sm space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Piece must fit entirely within the 8×8 board</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Piece cannot overlap with any existing pieces</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-red-400">✗</span>
+                  <span>Red outline = invalid placement</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-400">✓</span>
+                  <span>Green outline = valid placement</span>
+                </li>
+              </ul>
+            </section>
 
-          {/* Online Play */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-orange-400">
-              <Wifi size={20} />
-              <h3 className="font-bold tracking-wide">ONLINE PLAY</h3>
-            </div>
-            <ul className="text-slate-300 text-sm space-y-2 leading-relaxed">
-              <li className="flex gap-2">
-                <span className="text-orange-400">•</span>
-                <span>Create an account or sign in with Google to play online.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-orange-400">•</span>
-                <span>Use "Find Match" for quick matchmaking with other players.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-orange-400">•</span>
-                <span>Invite friends using a shareable link.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-orange-400">•</span>
-                <span>Your rating changes based on wins and losses.</span>
-              </li>
-            </ul>
-          </div>
+            {/* Game Modes */}
+            <section>
+              <h3 className="text-lg font-bold text-purple-400 mb-2 flex items-center gap-2">
+                <ChevronRight size={18} className="text-purple-400" />
+                Game Modes
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+                  <h4 className="font-bold text-purple-300 mb-1">VS AI</h4>
+                  <p className="text-slate-400">Play against the computer with 3 difficulty levels</p>
+                </div>
+                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-3">
+                  <h4 className="font-bold text-cyan-300 mb-1">2 PLAYER</h4>
+                  <p className="text-slate-400">Local multiplayer on the same device</p>
+                </div>
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+                  <h4 className="font-bold text-green-300 mb-1">PUZZLE MODE</h4>
+                  <p className="text-slate-400">Solve pre-set challenges with limited moves</p>
+                </div>
+              </div>
+            </section>
 
-          {/* Tips */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-purple-400">
-              <Lightbulb size={20} />
-              <h3 className="font-bold tracking-wide">TIPS</h3>
-            </div>
-            <ul className="text-slate-300 text-sm space-y-2 leading-relaxed">
-              <li className="flex gap-2">
-                <span className="text-purple-400">•</span>
-                <span>Save flexible pieces for later in the game.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-purple-400">•</span>
-                <span>Create awkward spaces that are hard for opponents to fill.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-purple-400">•</span>
-                <span>Watch what pieces your opponent has left.</span>
-              </li>
-            </ul>
-          </div>
+            {/* Tips */}
+            <section>
+              <h3 className="text-lg font-bold text-purple-400 mb-2 flex items-center gap-2">
+                <ChevronRight size={18} className="text-purple-400" />
+                Tips & Strategy
+              </h3>
+              <ul className="text-sm space-y-2 text-slate-400">
+                <li>• Control the center of the board early</li>
+                <li>• Save flexible pieces (like I and L) for later</li>
+                <li>• Try to create awkward spaces your opponent can't fill</li>
+                <li>• Watch for opportunities to block your opponent</li>
+              </ul>
+            </section>
 
-          {/* Piece Info */}
-          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
-            <p className="text-slate-400 text-xs text-center">
-              There are 12 unique pentomino shapes, each made of 5 connected squares: F, I, L, N, P, T, U, V, W, X, Y, Z
-            </p>
+            {/* Extra padding at bottom */}
+            <div className="h-4" />
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-cyan-500/20">
+        {/* Footer - fixed */}
+        <div className="p-4 border-t border-slate-700/50 flex-shrink-0">
           <button
-            onClick={onClose}
-            className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-white font-bold rounded-lg transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+            onClick={handleClose}
+            className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-xl transition-all duration-300 shadow-lg touch-manipulation active:scale-[0.98]"
           >
             GOT IT!
           </button>
