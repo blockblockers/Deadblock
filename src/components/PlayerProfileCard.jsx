@@ -1,10 +1,9 @@
 // Player Profile Card - Enhanced display for main menu with rating info, username editing, and achievements
-// UPDATED: Uses direct fetch to bypass Supabase client timeout issues
 import { useState, useEffect } from 'react';
 import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
-import { dbSelect, dbUpdate } from '../services/supabaseDirectFetch';
+import { supabase } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
 import achievementService from '../services/achievementService';
@@ -36,26 +35,30 @@ const RatingInfoModal = ({ onClose }) => {
           
           {/* Tier List */}
           <div className="space-y-2">
-            <h3 className="text-sm font-bold text-cyan-300">Rating Tiers</h3>
+            <h3 className="text-sm font-bold text-slate-300 mb-2">Rating Tiers</h3>
             {[
-              { name: 'Novice', range: '0-999', color: 'text-slate-400', bg: 'bg-slate-600' },
-              { name: 'Bronze', range: '1000-1199', color: 'text-amber-600', bg: 'bg-amber-900/50' },
-              { name: 'Silver', range: '1200-1399', color: 'text-slate-300', bg: 'bg-slate-500/50' },
-              { name: 'Gold', range: '1400-1599', color: 'text-amber-400', bg: 'bg-amber-600/50' },
-              { name: 'Platinum', range: '1600-1799', color: 'text-cyan-300', bg: 'bg-cyan-600/50' },
-              { name: 'Diamond', range: '1800-1999', color: 'text-purple-300', bg: 'bg-purple-600/50' },
-              { name: 'Master', range: '2000-2199', color: 'text-red-400', bg: 'bg-red-600/50' },
-              { name: 'Grandmaster', range: '2200+', color: 'text-amber-300', bg: 'bg-gradient-to-r from-amber-600/50 to-red-600/50' },
-            ].map(tier => (
-              <div key={tier.name} className={`flex items-center justify-between p-2 rounded ${tier.bg}`}>
-                <span className={`font-medium ${tier.color}`}>{tier.name}</span>
-                <span className="text-slate-400 text-sm">{tier.range}</span>
+              { min: 2200, name: 'Grandmaster', shape: 'X', color: 'text-amber-400', glowColor: '#f59e0b', bg: 'bg-amber-500/10 border-amber-500/30' },
+              { min: 2000, name: 'Master', shape: 'W', color: 'text-purple-400', glowColor: '#a855f7', bg: 'bg-purple-500/10 border-purple-500/30' },
+              { min: 1800, name: 'Expert', shape: 'T', color: 'text-blue-400', glowColor: '#3b82f6', bg: 'bg-blue-500/10 border-blue-500/30' },
+              { min: 1600, name: 'Advanced', shape: 'Y', color: 'text-cyan-400', glowColor: '#22d3ee', bg: 'bg-cyan-500/10 border-cyan-500/30' },
+              { min: 1400, name: 'Intermediate', shape: 'L', color: 'text-green-400', glowColor: '#22c55e', bg: 'bg-green-500/10 border-green-500/30' },
+              { min: 1200, name: 'Beginner', shape: 'I', color: 'text-sky-400', glowColor: '#38bdf8', bg: 'bg-sky-500/10 border-sky-500/30' },
+              { min: 0, name: 'Novice', shape: 'O', color: 'text-teal-400', glowColor: '#2dd4bf', bg: 'bg-teal-500/10 border-teal-500/30' },
+            ].map((tier) => (
+              <div key={tier.name} className={`flex items-center justify-between p-2 rounded-lg border ${tier.bg}`}>
+                <div className="flex items-center gap-3">
+                  <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="default" />
+                  <span className={`font-bold ${tier.color}`}>{tier.name}</span>
+                </div>
+                <span className="text-xs text-slate-500">{tier.min}+</span>
               </div>
             ))}
           </div>
           
-          <div className="text-xs text-slate-500 pt-2 border-t border-slate-700">
-            Win against stronger opponents for bigger gains, lose against weaker opponents for bigger losses.
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/30">
+            <p className="text-xs text-slate-500">
+              New players start at 1000 ELO. Win against stronger opponents for bigger gains, lose against weaker opponents for bigger losses.
+            </p>
           </div>
         </div>
         
@@ -73,7 +76,7 @@ const RatingInfoModal = ({ onClose }) => {
   );
 };
 
-// Username Edit Modal - UPDATED to use dbSelect instead of supabase client
+// Username Edit Modal
 const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
   const [newUsername, setNewUsername] = useState(currentUsername || '');
   const [error, setError] = useState('');
@@ -101,33 +104,31 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
       return;
     }
     
-    // Check if username is available using direct fetch
+    // Check if username is available
     const checkUsername = async () => {
       setChecking(true);
       setError('');
       
       try {
-        // Use dbSelect instead of supabase client
-        const { data, error: fetchError } = await dbSelect('profiles', {
-          select: 'id',
-          eq: { username: newUsername.toLowerCase() },
-          limit: 1
-        });
+        const { data, error: fetchError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', newUsername.toLowerCase())
+          .maybeSingle();
         
-        if (fetchError) {
-          setError('Could not check username');
-        } else if (data && data.length > 0) {
-          setError('Username already taken');
+        if (fetchError) throw fetchError;
+        if (data) {
+          setError('Username is already taken');
         }
       } catch (err) {
-        setError('Could not check username');
+        console.error('Error checking username:', err);
       }
       
       setChecking(false);
     };
     
-    const debounceTimer = setTimeout(checkUsername, 500);
-    return () => clearTimeout(debounceTimer);
+    const debounce = setTimeout(checkUsername, 500);
+    return () => clearTimeout(debounce);
   }, [newUsername, currentUsername]);
   
   const handleSave = async () => {
@@ -147,52 +148,45 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-slate-900 rounded-xl max-w-sm w-full overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.2)]">
-        <div className="p-4 border-b border-cyan-500/20">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Pencil size={20} className="text-cyan-400" />
-              <h2 className="text-lg font-bold text-cyan-300">Edit Username</h2>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1 text-slate-400 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
+        {/* Header */}
+        <div className="p-4 border-b border-cyan-500/20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Pencil size={20} className="text-cyan-400" />
+            <h2 className="text-lg font-bold text-cyan-300">Edit Username</h2>
           </div>
+          <button
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
         </div>
         
+        {/* Form */}
         <div className="p-4 space-y-4">
           <div>
             <label className="block text-sm text-slate-400 mb-2">New Username</label>
-            <input
-              type="text"
-              value={newUsername}
-              onChange={(e) => setNewUsername(e.target.value)}
-              placeholder="Enter new username"
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
-              maxLength={20}
-            />
-            
-            {/* Status indicator */}
-            <div className="mt-2 h-5 flex items-center">
+            <div className="relative">
+              <input
+                type="text"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="Enter username"
+                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                maxLength={20}
+              />
               {checking && (
-                <span className="text-slate-400 text-sm flex items-center gap-2">
-                  <Loader size={14} className="animate-spin" />
-                  Checking availability...
-                </span>
-              )}
-              {error && !checking && (
-                <span className="text-red-400 text-sm">{error}</span>
-              )}
-              {!error && !checking && newUsername && newUsername !== currentUsername && (
-                <span className="text-green-400 text-sm">✓ Username available</span>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader size={18} className="text-cyan-400 animate-spin" />
+                </div>
               )}
             </div>
-          </div>
-          
-          <div className="text-xs text-slate-500">
-            Letters, numbers, and underscores only.
+            {error && (
+              <p className="mt-2 text-sm text-red-400">{error}</p>
+            )}
+            <p className="mt-2 text-xs text-slate-500">
+              3-20 characters. Letters, numbers, and underscores only.
+            </p>
           </div>
           
           <div className="flex gap-3">
@@ -314,21 +308,19 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     }
   }, [profile?.id]);
   
-  // Handle username save - UPDATED to use dbUpdate instead of supabase client
+  // Handle username save
   const handleSaveUsername = async (newUsername) => {
     if (!profile?.id) return false;
     
     try {
-      // Use dbUpdate instead of supabase client
-      const { error } = await dbUpdate(
-        'profiles',
-        { username: newUsername.toLowerCase(), display_name: newUsername },
-        { eq: { id: profile.id } }
-      );
+      const { error } = await supabase
+        .from('profiles')
+        .update({ username: newUsername.toLowerCase(), display_name: newUsername })
+        .eq('id', profile.id);
       
       if (error) throw error;
       
-      // Update local profile via AuthContext
+      // Update local profile
       if (updateProfile) {
         await updateProfile({ username: newUsername.toLowerCase(), display_name: newUsername });
       }
@@ -380,122 +372,151 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     console.log('[PlayerProfileCard] Rendering: LOADING state button');
     return (
       <button 
-        onClick={onClick}
+        onClick={() => {
+          console.log('[PlayerProfileCard] Manual refresh triggered');
+          if (refreshProfile) refreshProfile();
+        }}
         data-testid="profile-card-loading"
-        className="w-full flex items-center gap-3 p-3 transition-all group"
+        className="w-full flex items-center gap-3 p-3 transition-colors cursor-pointer"
         style={{
           background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
-          border: '2px solid rgba(100, 116, 139, 0.4)',
+          border: '2px solid rgba(34, 211, 238, 0.3)',
           borderRadius: '12px',
-          boxShadow: '0 0 15px rgba(100, 116, 139, 0.15), 0 4px 15px rgba(0,0,0,0.3)'
+          boxShadow: '0 0 20px rgba(34, 211, 238, 0.15), inset 0 1px 0 rgba(255,255,255,0.05)'
         }}
       >
-        <div 
-          className="w-12 h-12 rounded-full flex items-center justify-center"
-          style={{
-            background: 'linear-gradient(135deg, rgba(100, 116, 139, 0.2) 0%, rgba(15, 23, 42, 0.95) 100%)',
-            border: '2px solid rgba(100, 116, 139, 0.5)'
-          }}
-        >
-          <Loader size={20} className="animate-spin" style={{ color: '#94a3b8' }} />
-        </div>
+        <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse" />
         <div className="flex-1 text-left">
-          <div style={{ color: '#94a3b8', fontWeight: '700', fontSize: '14px' }}>Loading Profile...</div>
-          <div style={{ color: '#64748b', fontSize: '12px' }}>Tap to retry</div>
+          <div className="h-4 w-24 bg-slate-700 rounded animate-pulse mb-1.5" />
+          <div style={{ fontSize: '12px', color: '#64748b' }}>Loading profile... tap to retry</div>
         </div>
-        <ChevronRight size={20} style={{ color: '#64748b' }} />
       </button>
     );
   }
   
-  // Authenticated display with profile
-  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED with profile:', profile.username);
+  const displayName = profile.username || profile.display_name || 'Player';
   
-  const displayName = profile.display_name || profile.username || 'Player';
+  // Get contrasting background color for tier icon circle based on tier color
+  const getTierIconBackground = () => {
+    if (!rankInfo?.glowColor) return 'rgba(15, 23, 42, 0.9)';
+    
+    // Map tier glow colors to contrasting dark backgrounds
+    const contrastBackgrounds = {
+      '#f59e0b': 'rgba(30, 20, 60, 0.95)',   // Grandmaster amber → dark purple
+      '#a855f7': 'rgba(20, 40, 40, 0.95)',   // Master purple → dark teal
+      '#3b82f6': 'rgba(40, 25, 20, 0.95)',   // Expert blue → dark orange-brown
+      '#22d3ee': 'rgba(40, 20, 40, 0.95)',   // Advanced cyan → dark magenta
+      '#22c55e': 'rgba(40, 20, 35, 0.95)',   // Intermediate green → dark rose
+      '#38bdf8': 'rgba(35, 25, 45, 0.95)',   // Beginner sky → dark purple
+      '#2dd4bf': 'rgba(40, 25, 50, 0.95)',   // Novice teal → dark violet
+    };
+    return contrastBackgrounds[rankInfo.glowColor] || 'rgba(15, 23, 42, 0.95)';
+  };
+  
+  // Get the glow color - use glowColor (hex) not color (Tailwind class)
   const glowColor = rankInfo?.glowColor || '#22d3ee';
   
-  // Parse glow color for rgba variations
+  // Helper to convert hex color to rgba
+  const hexToRgba = (hex, alpha) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+  
+  // Convert glowColor to rgba versions with different opacities
   const glowRgba = {
-    '15': glowColor.replace(')', ', 0.15)').replace('rgb', 'rgba'),
-    '30': glowColor.replace(')', ', 0.30)').replace('rgb', 'rgba'),
-    '40': glowColor.replace(')', ', 0.40)').replace('rgb', 'rgba'),
-    '50': glowColor.replace(')', ', 0.50)').replace('rgb', 'rgba'),
+    '08': hexToRgba(glowColor, 0.08),
+    '10': hexToRgba(glowColor, 0.10),
+    '15': hexToRgba(glowColor, 0.15),
+    '25': hexToRgba(glowColor, 0.25),
+    '35': hexToRgba(glowColor, 0.35),
+    '40': hexToRgba(glowColor, 0.40),
+    '50': hexToRgba(glowColor, 0.50),
   };
   
-  // For hex colors
-  if (glowColor.startsWith('#')) {
-    const hex = glowColor.slice(1);
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    glowRgba['15'] = `rgba(${r}, ${g}, ${b}, 0.15)`;
-    glowRgba['30'] = `rgba(${r}, ${g}, ${b}, 0.30)`;
-    glowRgba['40'] = `rgba(${r}, ${g}, ${b}, 0.40)`;
-    glowRgba['50'] = `rgba(${r}, ${g}, ${b}, 0.50)`;
-  }
+  // Border uses glowColor with rgba conversion
+  const borderRgba = hexToRgba(glowColor, 0.4);
   
-  // Style for the tier icon container - darker background for contrast
+  // Build style objects with proper rgba colors
+  const buttonStyle = {
+    background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${glowRgba['15']} 25%, rgba(30, 41, 59, 0.85) 50%, ${glowRgba['10']} 75%, rgba(15, 23, 42, 0.95) 100%)`,
+    border: `2px solid ${borderRgba}`,
+    borderRadius: '12px',
+    boxShadow: `0 0 30px ${glowRgba['25']}, 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 40px ${glowRgba['08']}`,
+    WebkitBackdropFilter: 'blur(8px)',
+    backdropFilter: 'blur(8px)',
+  };
+  
   const tierIconStyle = {
-    background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%)`,
-    border: `2px solid ${glowColor}`,
-    boxShadow: `0 0 20px ${glowRgba['40']}, inset 0 0 15px ${glowRgba['15']}`
+    background: `radial-gradient(circle at 30% 30%, ${getTierIconBackground()}, rgba(10, 15, 25, 0.98))`,
+    border: `2px solid ${glowRgba['50']}`,
+    boxShadow: `0 0 20px ${glowRgba['35']}, inset 0 0 15px ${glowRgba['15']}, inset 0 2px 4px rgba(255,255,255,0.1)`,
   };
+  
+  // Debug logging - AFTER style objects are defined
+  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { 
+    displayName, 
+    glowColor, 
+    glowRgba,
+    borderRgba,
+    buttonStyleBackground: buttonStyle.background,
+    buttonStyleBorder: buttonStyle.border,
+    rankName: rankInfo?.name 
+  });
   
   return (
     <>
-      <button
+      <button 
         onClick={onClick}
         data-testid="profile-card-authenticated"
-        className="w-full flex items-center gap-3 p-3 transition-all group hover:scale-[1.02]"
-        style={{
-          background: `linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)`,
-          border: `2px solid ${glowColor}`,
-          borderRadius: '12px',
-          boxShadow: `0 0 25px ${glowRgba['30']}, 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)`
-        }}
+        className="w-full transition-all overflow-hidden group"
+        style={buttonStyle}
       >
-        {/* Tier Icon Container - darker contrasting background */}
-        <div 
-          className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
-          style={tierIconStyle}
-        >
-          {rankInfo && (
-            <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="medium" />
-          )}
-        </div>
-        
-        {/* Player info */}
-        <div className="flex-1 text-left min-w-0">
+        <div className="flex items-center gap-3 p-3">
+          {/* Tier Icon Circle with contrasting background */}
           <div 
-            className="font-black text-base tracking-wide truncate"
-            style={{ 
-              color: '#f1f5f9',
-              textShadow: `0 0 12px ${glowRgba['40']}, 0 0 4px rgba(0,0,0,0.8)` 
-            }}
+            className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+            style={tierIconStyle}
           >
-            {displayName}
-          </div>
-          <div className="flex items-center gap-2">
             {rankInfo && (
-              <span 
-                className="text-xs font-bold uppercase tracking-wider"
-                style={{ color: glowColor, textShadow: `0 0 10px ${glowRgba['50']}` }}
-              >
-                {rankInfo.name}
-              </span>
+              <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="medium" />
             )}
-            <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
-              {profile.rating || 1000} ELO
-            </span>
           </div>
+          
+          {/* Player info */}
+          <div className="flex-1 text-left min-w-0">
+            <div 
+              className="font-black text-base tracking-wide truncate"
+              style={{ 
+                color: '#f1f5f9',
+                textShadow: `0 0 12px ${glowRgba['40']}, 0 0 4px rgba(0,0,0,0.8)` 
+              }}
+            >
+              {displayName}
+            </div>
+            <div className="flex items-center gap-2">
+              {rankInfo && (
+                <span 
+                  className="text-xs font-bold uppercase tracking-wider"
+                  style={{ color: glowColor, textShadow: `0 0 10px ${glowRgba['50']}` }}
+                >
+                  {rankInfo.name}
+                </span>
+              )}
+              <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
+                {profile.rating || 1000} ELO
+              </span>
+            </div>
+          </div>
+          
+          {/* Arrow */}
+          <ChevronRight 
+            size={20} 
+            className="group-hover:translate-x-0.5 transition-all flex-shrink-0" 
+            style={{ color: glowColor, opacity: 0.7 }} 
+          />
         </div>
-        
-        {/* Arrow */}
-        <ChevronRight 
-          size={20} 
-          className="group-hover:translate-x-0.5 transition-all flex-shrink-0" 
-          style={{ color: glowColor, opacity: 0.7 }} 
-        />
       </button>
       
       {/* Modals */}

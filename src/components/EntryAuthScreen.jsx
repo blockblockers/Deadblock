@@ -7,32 +7,6 @@ import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
-// Footer component with privacy and terms links
-const Footer = () => (
-  <div className="text-center pt-6 pb-4">
-    <p className="text-slate-600 text-xs mb-2">© 2024 Deadblock</p>
-    <div className="flex items-center justify-center gap-3 text-xs">
-      <a 
-        href="/privacy.html" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
-      >
-        Privacy Policy
-      </a>
-      <span className="text-slate-700">•</span>
-      <a 
-        href="/terms.html" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
-      >
-        Terms of Service
-      </a>
-    </div>
-  </div>
-);
-
 const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, intendedDestination = 'online-menu' }) => {
   const { signIn, signUp, signInWithGoogle, signInWithMagicLink, resetPassword } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
@@ -90,31 +64,52 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
     setLoading(false);
   };
 
-  // Handle email/password sign up
+  // Handle sign up
   const handleSignUp = async (e) => {
     e.preventDefault();
     clearMessages();
-    
-    if (!username || username.length < 3) {
-      setError('Username must be at least 3 characters');
-      return;
-    }
-    
-    if (!password || password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-    
     setLoading(true);
     soundManager.playButtonClick();
 
     try {
-      const { error } = await signUp(email, password, username);
+      // Validations
+      if (!username || username.length < 3) {
+        setError('Username must be at least 3 characters');
+        setLoading(false);
+        return;
+      }
+      if (username.length > 20) {
+        setError('Username must be 20 characters or less');
+        setLoading(false);
+        return;
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        setError('Username can only contain letters, numbers, and underscores');
+        setLoading(false);
+        return;
+      }
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters');
+        setLoading(false);
+        return;
+      }
+      if (!email || !email.includes('@')) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+
+      const { error, needsEmailConfirmation } = await signUp(email, password, username);
       if (error) {
         setError(error.message);
+      } else if (needsEmailConfirmation) {
+        setSuccess('Account created! Check your email to confirm, then sign in.');
       } else {
-        setSuccess('Account created! Check your email to verify, then sign in.');
-        setMode('login');
+        // User is auto-logged in (email confirmation disabled)
+        setSuccess('Account created! Signing you in...');
+        setTimeout(() => {
+          onComplete?.();
+        }, 1000);
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -131,11 +126,17 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
     soundManager.playButtonClick();
 
     try {
+      if (!email || !email.includes('@')) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+
       const { error } = await resetPassword(email);
       if (error) {
         setError(error.message);
       } else {
-        setSuccess('Password reset email sent! Check your inbox.');
+        setSuccess('Password reset email sent! Check your inbox (and junk/spam folder).');
       }
     } catch (err) {
       setError('An unexpected error occurred');
@@ -152,6 +153,12 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
     soundManager.playButtonClick();
 
     try {
+      if (!email || !email.includes('@')) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
+
       const { error } = await signInWithMagicLink(email);
       if (error) {
         setError(error.message);
@@ -202,6 +209,17 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
     soundManager.playButtonClick();
     onOfflineMode?.();
   };
+
+  // Scroll styles for mobile/iPad
+  const scrollStyles = needsScroll ? {
+    overflow: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    touchAction: 'pan-y pinch-zoom',
+    overscrollBehavior: 'contain',
+    height: '100%',
+    minHeight: '100vh',
+    minHeight: '100dvh', // Dynamic viewport height for iOS
+  } : {};
 
   // Selection screen - choose auth method
   const renderSelectMode = () => (
@@ -258,47 +276,71 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         </button>
       </div>
 
-      {/* Benefits of signing in */}
+      {/* Benefits of signing in - Updated styling to match other menus */}
       <div className="bg-slate-900/80 backdrop-blur-md rounded-xl p-4 border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.15)]">
         <div className="flex items-center gap-2 mb-2">
           <Wifi size={14} className="text-cyan-400" />
-          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Online Features</span>
+          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Sign In Benefits</span>
         </div>
-        <ul className="text-slate-400 text-xs space-y-1">
-          <li className="flex items-center gap-2">
-            <ArrowRight size={12} className="text-green-400 flex-shrink-0" />
-            Play against other players online
-          </li>
-          <li className="flex items-center gap-2">
-            <ArrowRight size={12} className="text-green-400 flex-shrink-0" />
-            Weekly challenges with leaderboards
-          </li>
-          <li className="flex items-center gap-2">
-            <ArrowRight size={12} className="text-green-400 flex-shrink-0" />
-            Track your stats and achievements
-          </li>
-          <li className="flex items-center gap-2">
-            <ArrowRight size={12} className="text-green-400 flex-shrink-0" />
-            Speed puzzles with global rankings
-          </li>
-        </ul>
+        <div className="text-sm text-slate-300 space-y-1">
+          <p>• Track your stats & achievements</p>
+          <p>• Compete on global leaderboards</p>
+          <p>• Play ranked matches online</p>
+        </div>
       </div>
 
-      {/* Continue Offline - Only show if not forced online */}
+      {/* Offline Mode Option / Go Back Option */}
       {!forceOnlineOnly && (
+        <>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-slate-700" />
+            <span className="text-slate-500 text-xs">OR</span>
+            <div className="flex-1 h-px bg-slate-700" />
+          </div>
+
+          <button
+            onClick={handleOfflineMode}
+            className="w-full py-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/50 hover:border-slate-500/50"
+          >
+            <WifiOff size={16} />
+            Continue Offline
+          </button>
+
+          <p className="text-center text-slate-500 text-xs">
+            Stats won't be saved. Online features unavailable.
+          </p>
+        </>
+      )}
+      
+      {/* Go Back button when forcing online */}
+      {forceOnlineOnly && (
         <button
           onClick={handleOfflineMode}
-          className="w-full py-3 bg-slate-800/70 hover:bg-slate-700/70 text-slate-300 font-semibold rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/50 active:scale-[0.98]"
+          className="w-full py-2.5 mt-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/50 hover:border-slate-500/50"
         >
-          <WifiOff size={18} />
-          Continue Offline
+          <ArrowLeft size={16} />
+          Go Back to Menu
         </button>
       )}
 
-      {/* Destination hint for forced online */}
+      {/* Force online message - enhanced with destination info */}
       {forceOnlineOnly && (
-        <div className="text-center text-slate-500 text-xs">
-          <p>Sign in required for {getDestinationName()}</p>
+        <div className="bg-amber-900/30 border border-amber-500/40 rounded-xl p-4 mt-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Wifi size={16} className="text-amber-400" />
+            <span className="text-amber-400 text-sm font-bold">Sign In Required</span>
+          </div>
+          <p className="text-amber-200/80 text-sm mb-2">
+            <span className="font-semibold">{getDestinationName()}</span> requires you to sign in so we can:
+          </p>
+          <ul className="text-amber-200/60 text-xs space-y-1 ml-4">
+            <li>• Track your progress and stats</li>
+            <li>• Save your game history</li>
+            <li>• Show you on leaderboards</li>
+          </ul>
+          <p className="text-amber-200/50 text-xs mt-3 italic">
+            Your local game data stays on this device.
+          </p>
         </div>
       )}
     </div>
@@ -371,21 +413,13 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs">
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={() => switchMode('forgot-password')}
-            className="text-cyan-400 hover:text-cyan-300 transition-colors"
+            className="text-xs text-slate-400 hover:text-amber-400 transition-colors"
           >
             Forgot password?
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode('magic-link')}
-            className="text-violet-400 hover:text-violet-300 transition-colors flex items-center gap-1"
-          >
-            <Wand2 size={12} />
-            Magic Link
           </button>
         </div>
 
@@ -407,11 +441,23 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
           )}
         </button>
       </form>
+
+      <div className="mt-4 pt-3 border-t border-slate-700/50">
+        <button
+          type="button"
+          onClick={() => switchMode('magic-link')}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-slate-400 hover:text-violet-300 transition-colors group"
+        >
+          <Wand2 size={14} className="group-hover:rotate-12 transition-transform" />
+          Sign in with Magic Link
+          <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+        </button>
+      </div>
     </div>
   );
 
-  // Sign up form
-  const renderSignUpForm = () => (
+  // Signup form
+  const renderSignupForm = () => (
     <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-4 border border-slate-700/50 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
       <div className="flex items-center gap-2 mb-3">
         <UserPlus2 size={14} className="text-purple-400" />
@@ -478,7 +524,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Create a password (min 6 chars)"
+              placeholder="Create password (6+ chars)"
               className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
               required
             />
@@ -500,7 +546,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Creating account...
+              Creating...
             </span>
           ) : (
             <span className="flex items-center justify-center gap-2">
@@ -543,6 +589,10 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
       )}
 
       <form onSubmit={handleResetPassword} className="space-y-3">
+        <p className="text-slate-400 text-sm mb-3">
+          Enter your email and we'll send you a link to reset your password.
+        </p>
+        
         <div>
           <label className="block text-slate-400 text-xs mb-1">Email</label>
           <div className="relative">
@@ -561,7 +611,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 shadow-[0_0_20px_rgba(251,191,36,0.4)] text-white"
+          className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -575,6 +625,10 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
             </span>
           )}
         </button>
+
+        <p className="text-slate-500 text-xs text-center mt-2">
+          📧 Don't forget to check your junk/spam folder!
+        </p>
       </form>
     </div>
   );
@@ -596,10 +650,6 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         Back to Sign In
       </button>
       
-      <p className="text-slate-400 text-xs mb-3">
-        Enter your email and we'll send you a magic link to sign in instantly - no password needed!
-      </p>
-      
       {error && (
         <div className="mb-3 p-2.5 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
           {error}
@@ -613,6 +663,10 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
       )}
 
       <form onSubmit={handleMagicLink} className="space-y-3">
+        <p className="text-slate-400 text-sm mb-3">
+          Enter your email and we'll send you a magic link to sign in instantly - no password needed!
+        </p>
+        
         <div>
           <label className="block text-slate-400 text-xs mb-1">Email</label>
           <div className="relative">
@@ -645,57 +699,84 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
             </span>
           )}
         </button>
+
+        <p className="text-slate-500 text-xs text-center mt-2">
+          📧 Don't forget to check your junk/spam folder!
+        </p>
       </form>
     </div>
   );
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-950"
-      style={{
-        overflow: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: 'pan-y pinch-zoom',
-      }}
+      className="fixed inset-0 bg-slate-950 flex flex-col"
+      style={scrollStyles}
     >
-      {/* Fixed backgrounds */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute inset-0 opacity-30" style={{
-          backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
-          backgroundSize: '40px 40px'
-        }} />
-        <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl" />
-      </div>
+      {/* Grid background */}
+      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
+        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+        backgroundSize: '40px 40px'
+      }} />
       
-      {/* Scrollable content */}
-      <div 
-        className="relative min-h-full flex flex-col items-center justify-center px-4 py-8"
-        style={{
-          minHeight: '100%',
-          paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))',
-        }}
-      >
-        {/* Title */}
-        <div className="text-center mb-6">
-          <NeonTitle className="text-4xl sm:text-5xl mb-2">DEADBLOCK</NeonTitle>
-          <p className="text-cyan-300/70 tracking-widest text-xs sm:text-sm">STRATEGIC PENTOMINO PUZZLE</p>
-        </div>
+      {/* Glow effects */}
+      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
 
-        {/* Auth Card */}
+      {/* Content */}
+      <div className="relative flex-1 flex flex-col items-center justify-center px-4 py-6">
         <div className="w-full max-w-sm">
+          {/* Title */}
+          <div className="text-center mb-5">
+            <NeonTitle size="large" />
+            <div className="entry-subtitle font-black tracking-[0.15em] text-sm mt-2">
+              STRATEGIC PUZZLE GAME
+            </div>
+          </div>
+
+          {/* Render based on mode */}
           {mode === 'select' && renderSelectMode()}
           {mode === 'login' && renderLoginForm()}
-          {mode === 'signup' && renderSignUpForm()}
+          {mode === 'signup' && renderSignupForm()}
           {mode === 'forgot-password' && renderForgotPasswordForm()}
           {mode === 'magic-link' && renderMagicLinkForm()}
+          
+          {/* Bottom safe area spacer */}
+          {needsScroll && <div className="h-8 flex-shrink-0" />}
         </div>
-        
-        {/* Footer with Privacy & Terms */}
-        <Footer />
       </div>
+      
+      {/* Footer */}
+      <div className="relative text-center pb-4 pt-2">
+        <p className="text-slate-600 text-xs mb-2">
+          © 2024 Deadblock
+        </p>
+        <div className="flex items-center justify-center gap-3 text-xs">
+          <a 
+            href="/privacy-policy.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Privacy Policy
+          </a>
+          <span className="text-slate-700">•</span>
+          <a 
+            href="/terms-of-service.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Terms of Service
+          </a>
+        </div>
+      </div>
+      
+      {/* Subtitle styling to match other screens */}
+      <style>{`
+        .entry-subtitle {
+          color: #94a3b8;
+        }
+      `}</style>
     </div>
   );
 };
