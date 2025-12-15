@@ -1,173 +1,46 @@
-import { Settings, HelpCircle, Globe } from 'lucide-react';
-import { useMemo } from 'react';
+import { Bot, User, Trophy, Settings } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
-import PlayerProfileCard from './PlayerProfileCard';
+import { menuButtonShapes } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import { isSupabaseConfigured } from '../utils/supabase';
-import { pieces } from '../utils/pieces';
 
-// Custom pentomino shapes for buttons
-const buttonShapes = {
-  X: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]], // X shape - cross pattern (Online)
-  V: [[0, 2], [1, 2], [2, 0], [2, 1], [2, 2]], // V shape - bottom-left to up-right (VS AI)
-  Z: [[0, 0], [1, 0], [1, 1], [1, 2], [2, 2]], // Z shape (was W) - for 2 Player
-  P: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1]], // P shape - flag pattern (Puzzle)
-  W: [[0, 2], [1, 1], [1, 2], [2, 0], [2, 1]], // W shape (was Z) - for Weekly
-};
-
-// Floating pentomino piece for background animation
-const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColor, size, rotation }) => {
-  const coords = pieces[piece] || pieces.T;
-  const minX = Math.min(...coords.map(([x]) => x));
-  const minY = Math.min(...coords.map(([, y]) => y));
+// Polyomino-shaped button component
+const PolyominoButton = ({ onClick, shape, color, glowColor, icon: Icon, iconSvg, title, subtitle }) => {
+  const cells = menuButtonShapes[shape] || menuButtonShapes.T;
   
-  return (
-    <div
-      className="absolute pointer-events-none animate-float-piece"
-      style={{
-        left: `${startX}%`,
-        top: `${startY}%`,
-        animationDelay: `${delay}s`,
-        animationDuration: `${duration}s`,
-        transform: `rotate(${rotation}deg)`,
-        '--float-x': `${(Math.random() - 0.5) * 100}px`,
-        '--float-y': `${(Math.random() - 0.5) * 100}px`,
-      }}
-    >
-      <div className="relative" style={{ transform: `scale(${size})` }}>
-        {coords.map(([x, y], idx) => (
-          <div
-            key={idx}
-            className="absolute rounded-sm animate-sparkle"
-            style={{
-              width: 8,
-              height: 8,
-              left: (x - minX) * 10,
-              top: (y - minY) * 10,
-              backgroundColor: color,
-              boxShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}50`,
-              animationDelay: `${delay + idx * 0.1}s`,
-            }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
-
-// Background floating pieces container
-const FloatingPiecesBackground = () => {
-  const floatingPieces = useMemo(() => {
-    const pieceNames = Object.keys(pieces);
-    const colors = [
-      { color: '#22d3ee', glow: 'rgba(34,211,238,0.6)' },   // cyan
-      { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },   // pink
-      { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },   // purple
-      { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },    // green
-      { color: '#f59e0b', glow: 'rgba(245,158,11,0.6)' },   // amber
-      { color: '#6366f1', glow: 'rgba(99,102,241,0.6)' },   // indigo
-    ];
-    
-    return Array.from({ length: 12 }).map((_, i) => {
-      const colorSet = colors[i % colors.length];
-      return {
-        id: i,
-        piece: pieceNames[Math.floor(Math.random() * pieceNames.length)],
-        startX: Math.random() * 100,
-        startY: Math.random() * 100,
-        delay: Math.random() * 8,
-        duration: 15 + Math.random() * 10,
-        color: colorSet.color,
-        glowColor: colorSet.glow,
-        size: 0.6 + Math.random() * 0.6,
-        rotation: Math.random() * 360,
-      };
-    });
-  }, []);
-
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-      {floatingPieces.map((p) => (
-        <FloatingPiece key={p.id} {...p} />
-      ))}
-    </div>
-  );
-};
-
-// Pentomino shape component (no icons inside) - reduced size for compact menu
-const PentominoShape = ({ shape, color, glowColor, cellSize = 18, gap = 2 }) => {
-  const coords = buttonShapes[shape] || buttonShapes.T;
-  
-  const minX = Math.min(...coords.map(([x]) => x));
-  const maxX = Math.max(...coords.map(([x]) => x));
-  const minY = Math.min(...coords.map(([, y]) => y));
-  const maxY = Math.max(...coords.map(([, y]) => y));
-  const width = maxX - minX + 1;
-  const height = maxY - minY + 1;
-  
-  const normalizedCoords = coords.map(([x, y]) => [x - minX, y - minY]);
-  
-  return (
-    <div 
-      className="relative flex-shrink-0"
-      style={{ 
-        width: width * (cellSize + gap) - gap, 
-        height: height * (cellSize + gap) - gap 
-      }}
-    >
-      {normalizedCoords.map(([x, y], idx) => (
-        <div
-          key={idx}
-          className={`absolute ${color} rounded-sm border border-white/20`}
-          style={{
-            width: cellSize,
-            height: cellSize,
-            left: x * (cellSize + gap),
-            top: y * (cellSize + gap),
-            boxShadow: `0 0 8px ${glowColor}`,
-          }}
-        />
-      ))}
-    </div>
-  );
-};
-
-// Button with pentomino shape and themed colors - compact version
-const PentominoButton = ({ onClick, shape, color, glowColor, title, subtitle, textColor, hoverTextColor }) => {
   const handleClick = () => {
     soundManager.playButtonClick();
     onClick();
   };
   
   return (
-    <button onClick={handleClick} className="w-full group">
-      <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:bg-slate-700/80 hover:border-slate-500/50 transition-all duration-200 group-active:scale-[0.98]">
-        {/* Fixed width container for pentomino alignment - reduced */}
-        <div 
-          className="flex-shrink-0 flex items-center justify-center transition-transform duration-200 group-hover:scale-110"
-          style={{ width: 60, height: 60 }}
-        >
-          <PentominoShape shape={shape} color={color} glowColor={glowColor} />
+    <button 
+      onClick={handleClick}
+      className={`relative w-full p-4 ${color} rounded-xl hover:scale-105 transition-all duration-300 border border-white/20`}
+      style={{ boxShadow: `0 0 25px ${glowColor}, inset 0 0 20px rgba(255,255,255,0.1)` }}
+    >
+      {/* Mini polyomino shape in corner */}
+      <div className="absolute top-2 left-2 opacity-30">
+        <div className="grid gap-0.5" style={{ gridTemplateColumns: 'repeat(3, 8px)' }}>
+          {[0,1,2].map(row => [0,1,2].map(col => (
+            <div 
+              key={`${row}-${col}`}
+              className={`w-2 h-2 rounded-sm ${
+                cells.some(([r,c]) => r === col && c === row) ? 'bg-white' : 'bg-transparent'
+              }`}
+            />
+          )))}
         </div>
-        
-        {/* Text - left aligned */}
-        <div className="flex-1 text-left">
-          <div className={`font-bold text-sm tracking-wide transition-colors ${textColor} ${hoverTextColor}`}>
-            {title}
-          </div>
-          <div className="text-slate-500 text-xs group-hover:text-slate-400 transition-colors">
-            {subtitle}
-          </div>
-        </div>
-        
-        {/* Arrow */}
-        <div className="text-slate-600 group-hover:text-slate-400 group-hover:translate-x-1 transition-all duration-200 flex-shrink-0">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+      </div>
+      
+      {/* Button content - fixed alignment */}
+      <div className="flex items-center gap-3 ml-8">
+        {Icon && <Icon size={26} className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] flex-shrink-0" />}
+        {iconSvg}
+        <div className="text-left text-white">
+          <div className="text-lg font-bold tracking-wide">{title}</div>
+          <div className="text-xs opacity-70">{subtitle}</div>
         </div>
       </div>
     </button>
@@ -176,244 +49,137 @@ const PentominoButton = ({ onClick, shape, color, glowColor, title, subtitle, te
 
 const MenuScreen = ({ 
   onStartGame, 
-  onPuzzleSelect,
-  onWeeklyChallenge,
+  onPuzzleSelect, 
   showHowToPlay, 
   onToggleHowToPlay,
   showSettings,
-  onToggleSettings,
-  isOnlineEnabled = false,
-  isAuthenticated = false,
-  isOfflineMode = false,
-  onShowProfile
+  onToggleSettings
 }) => {
-  const { needsScroll } = useResponsiveLayout(700);
-  const showOnline = isSupabaseConfigured();
-
-  // Scroll styles for iPad/mobile compatibility
-  const scrollStyles = needsScroll ? {
-    overflow: 'auto',
-    WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y pinch-zoom',
-    overscrollBehavior: 'contain',
-  } : { overflow: 'hidden' };
-
   return (
     <div 
-      className="fixed inset-0 bg-slate-950"
-      style={scrollStyles}
+      className="min-h-screen relative p-4 flex flex-col items-center justify-center overflow-hidden bg-slate-950"
+      style={{
+        overflow: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-y pinch-zoom',
+        overscrollBehavior: 'contain',
+      }}
     >
-      {/* Grid background with subtle drift animation */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none animate-grid-drift" style={{
+      {/* Animated grid background */}
+      <div className="absolute inset-0 opacity-30" style={{
         backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Animated glow orbs */}
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none animate-orb-1" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none animate-orb-2" />
-      <div className="fixed top-1/2 right-1/3 w-48 h-48 bg-purple-500/15 rounded-full blur-3xl pointer-events-none animate-orb-3" />
+      {/* Glow effects */}
+      <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl" />
       
-      {/* Background animation keyframes */}
-      <style>{`
-        @keyframes grid-drift {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(10px, 10px); }
-        }
-        @keyframes orb-1 {
-          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.2; }
-          33% { transform: translate(30px, -20px) scale(1.1); opacity: 0.3; }
-          66% { transform: translate(-20px, 30px) scale(0.9); opacity: 0.15; }
-        }
-        @keyframes orb-2 {
-          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.2; }
-          33% { transform: translate(-25px, 25px) scale(0.95); opacity: 0.25; }
-          66% { transform: translate(35px, -15px) scale(1.05); opacity: 0.18; }
-        }
-        @keyframes orb-3 {
-          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
-          50% { transform: translate(-15px, -25px) scale(1.15); opacity: 0.22; }
-        }
-        @keyframes float-piece {
-          0% { 
-            transform: translate(0, 0) rotate(0deg); 
-            opacity: 0;
-          }
-          10% { opacity: 0.6; }
-          50% { 
-            transform: translate(var(--float-x), var(--float-y)) rotate(180deg);
-            opacity: 0.8;
-          }
-          90% { opacity: 0.6; }
-          100% { 
-            transform: translate(calc(var(--float-x) * 2), calc(var(--float-y) * 2)) rotate(360deg);
-            opacity: 0;
-          }
-        }
-        @keyframes sparkle {
-          0%, 100% { 
-            opacity: 0.4; 
-            box-shadow: 0 0 8px currentColor, 0 0 16px currentColor;
-          }
-          50% { 
-            opacity: 1; 
-            box-shadow: 0 0 16px currentColor, 0 0 32px currentColor, 0 0 48px currentColor;
-          }
-        }
-        .animate-grid-drift { animation: grid-drift 20s ease-in-out infinite; }
-        .animate-orb-1 { animation: orb-1 15s ease-in-out infinite; }
-        .animate-orb-2 { animation: orb-2 18s ease-in-out infinite; }
-        .animate-orb-3 { animation: orb-3 12s ease-in-out infinite; }
-        .animate-float-piece { animation: float-piece var(--duration, 20s) ease-in-out infinite; }
-        .animate-sparkle { animation: sparkle 2s ease-in-out infinite; }
-      `}</style>
-      
-      {/* Floating pentomino pieces */}
-      <FloatingPiecesBackground />
-      
-      {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-full' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
-        <div className="w-full max-w-sm">
-          
-          {/* TITLE - Above the box */}
-          <div className="text-center mb-4">
-            <NeonTitle size="large" />
-          </div>
-          
-          {/* Menu Box */}
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-3 sm:p-4 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
-            
-            {/* Player Profile Card - Inside menu at top */}
-            <div className="mb-3">
-              <PlayerProfileCard 
-                onClick={onShowProfile} 
-                isOffline={isOfflineMode}
-              />
-            </div>
-            
-            {/* Divider */}
-            <div className="h-px bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent mb-3" />
-            
-            {/* Game Mode Buttons */}
-            <div className="space-y-2 mb-3">
-              {/* Online Button - Show if Supabase is configured */}
-              {showOnline && (
-                <PentominoButton
-                  onClick={() => onStartGame('online')}
-                  shape="X"
-                  color="bg-gradient-to-br from-amber-500 to-orange-600"
-                  glowColor="rgba(251,191,36,0.5)"
-                  title="ONLINE MULTIPLAYER"
-                  subtitle={isOfflineMode ? "Sign in for ranked play" : (isAuthenticated ? "Ranked matches vs humans" : "Sign in to play")}
-                  textColor="text-amber-300"
-                  hoverTextColor="group-hover:text-amber-200"
-                />
-              )}
-              
-              <PentominoButton
-                onClick={() => onStartGame('ai')}
-                shape="V"
-                color="bg-gradient-to-br from-purple-500 to-pink-600"
-                glowColor="rgba(168,85,247,0.5)"
-                title="VS A.I."
-                subtitle="Challenge the computer"
-                textColor="text-purple-300"
-                hoverTextColor="group-hover:text-purple-200"
-              />
-              
-              <PentominoButton
-                onClick={() => onStartGame('2player')}
-                shape="Z"
-                color="bg-gradient-to-br from-cyan-500 to-blue-600"
-                glowColor="rgba(34,211,238,0.5)"
-                title="2 PLAYER"
-                subtitle="Local multiplayer"
-                textColor="text-cyan-300"
-                hoverTextColor="group-hover:text-cyan-200"
-              />
-              
-              <PentominoButton
-                onClick={onPuzzleSelect}
-                shape="P"
-                color="bg-gradient-to-br from-green-500 to-emerald-600"
-                glowColor="rgba(34,197,94,0.5)"
-                title="PUZZLE"
-                subtitle="Solve challenges"
-                textColor="text-green-300"
-                hoverTextColor="group-hover:text-green-200"
-              />
-              
-              {/* Weekly Challenge - Show if Supabase is configured */}
-              {showOnline && (
-                <PentominoButton
-                  onClick={onWeeklyChallenge}
-                  shape="W"
-                  color="bg-gradient-to-br from-red-500 to-rose-600"
-                  glowColor="rgba(239,68,68,0.5)"
-                  title="WEEKLY CHALLENGE"
-                  subtitle="Compete for best time"
-                  textColor="text-red-300"
-                  hoverTextColor="group-hover:text-red-200"
-                />
-              )}
-            </div>
-            
-            {/* Bottom Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  soundManager.playButtonClick();
-                  onToggleHowToPlay(true);
-                }}
-                className="flex-1 py-2.5 px-3 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 bg-gradient-to-r from-slate-800 to-slate-700 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400/60 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:text-cyan-200 group"
-              >
-                <HelpCircle size={16} className="group-hover:rotate-12 transition-transform" />
-                <span>HOW TO PLAY</span>
-              </button>
-              
-              <button
-                onClick={() => {
-                  soundManager.playButtonClick();
-                  onToggleSettings(true);
-                }}
-                className="py-2.5 px-3 rounded-lg transition-all duration-200 flex items-center justify-center bg-gradient-to-r from-slate-800 to-slate-700 text-slate-400 border border-slate-600/50 hover:border-purple-500/50 hover:text-purple-300 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)] group"
-              >
-                <Settings size={18} className="group-hover:rotate-90 transition-transform duration-300" />
-              </button>
-            </div>
-          </div>
-          
-          {/* Footer with Privacy & Terms links */}
-          <div className="text-center mt-4">
-            <div className="flex items-center justify-center gap-3 text-xs">
-              <a 
-                href="/privacy-policy.html" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
-              >
-                Privacy Policy
-              </a>
-              <span className="text-slate-700">•</span>
-              <a 
-                href="/terms-of-service.html" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
-              >
-                Terms of Service
-              </a>
-            </div>
-          </div>
-        </div>
+      <div className="relative bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-6 sm:p-8 max-w-md w-full border border-cyan-500/30 shadow-[0_0_30px_rgba(34,211,238,0.3)]">
+        <NeonTitle className="text-4xl sm:text-5xl text-center mb-2">DEADBLOCK</NeonTitle>
+        <p className="text-center text-cyan-300/70 mb-6 tracking-widest text-xs sm:text-sm">CHOOSE YOUR MODE</p>
         
-        {/* Bottom padding */}
-        {needsScroll && <div className="h-8 flex-shrink-0" />}
+        <div className="space-y-3">
+          {/* Play vs AI */}
+          <PolyominoButton 
+            onClick={() => onStartGame('ai')}
+            shape="T"
+            color="bg-gradient-to-r from-purple-600/90 to-pink-600/90"
+            glowColor="rgba(168,85,247,0.5)"
+            icon={Bot}
+            title="PLAY vs AI"
+            subtitle="Challenge the machine"
+          />
+          
+          {/* 2 Player */}
+          <PolyominoButton
+            onClick={() => onStartGame('2player')}
+            shape="L"
+            color="bg-gradient-to-r from-cyan-600/90 to-blue-600/90"
+            glowColor="rgba(34,211,238,0.5)"
+            icon={User}
+            title="2 PLAYER"
+            subtitle="Local multiplayer"
+          />
+
+          {/* Puzzle Mode */}
+          <PolyominoButton
+            onClick={onPuzzleSelect}
+            shape="Z"
+            color="bg-gradient-to-r from-green-600/90 to-emerald-600/90"
+            glowColor="rgba(74,222,128,0.5)"
+            icon={Trophy}
+            title="PUZZLE MODE"
+            subtitle="Tactical challenges"
+          />
+
+          {/* How to Play */}
+          <PolyominoButton
+            onClick={() => onToggleHowToPlay(true)}
+            shape="P"
+            color="bg-gradient-to-r from-amber-600/90 to-orange-600/90"
+            glowColor="rgba(251,191,36,0.5)"
+            iconSvg={
+              <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-[0_0_8px_rgba(255,255,255,0.6)] flex-shrink-0">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <path d="M12 17h.01"/>
+              </svg>
+            }
+            title="HOW TO PLAY"
+            subtitle="Learn the rules"
+          />
+
+          {/* Settings */}
+          <PolyominoButton
+            onClick={() => onToggleSettings(true)}
+            shape="T"
+            color="bg-gradient-to-r from-slate-600/90 to-slate-700/90"
+            glowColor="rgba(148,163,184,0.4)"
+            icon={Settings}
+            title="SETTINGS"
+            subtitle="Sound & vibration"
+          />
+        </div>
       </div>
 
-      {/* Modals */}
-      <HowToPlayModal isOpen={showHowToPlay} onClose={() => onToggleHowToPlay(false)} />
-      <SettingsModal isOpen={showSettings} onClose={() => onToggleSettings(false)} />
+      {/* Footer with Privacy & Terms */}
+      <div className="relative text-center mt-6 pt-2">
+        <p className="text-slate-600 text-xs mb-2">
+          © 2024 Deadblock
+        </p>
+        <div className="flex items-center justify-center gap-3 text-xs">
+          <a 
+            href="/privacy.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Privacy Policy
+          </a>
+          <span className="text-slate-700">•</span>
+          <a 
+            href="/terms.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Terms of Service
+          </a>
+        </div>
+      </div>
+
+      {/* How to Play Modal */}
+      <HowToPlayModal 
+        isOpen={showHowToPlay}
+        onClose={() => onToggleHowToPlay(false)}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettings}
+        onClose={() => onToggleSettings(false)}
+      />
     </div>
   );
 };
