@@ -190,15 +190,18 @@ const MenuScreen = ({
   const { needsScroll } = useResponsiveLayout(700);
   const showOnline = isSupabaseConfigured();
 
+  // Scroll styles for iPad/mobile compatibility
+  const scrollStyles = needsScroll ? {
+    overflow: 'auto',
+    WebkitOverflowScrolling: 'touch',
+    touchAction: 'pan-y pinch-zoom',
+    overscrollBehavior: 'contain',
+  } : { overflow: 'hidden' };
+
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? {
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
-      } : {}}
+      className="fixed inset-0 bg-slate-950"
+      style={scrollStyles}
     >
       {/* Grid background with subtle drift animation */}
       <div className="fixed inset-0 opacity-30 pointer-events-none animate-grid-drift" style={{
@@ -269,7 +272,7 @@ const MenuScreen = ({
       <FloatingPiecesBackground />
       
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
+      <div className={`relative ${needsScroll ? 'min-h-full' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
         <div className="w-full max-w-sm">
           
           {/* TITLE - Above the box */}
@@ -377,6 +380,29 @@ const MenuScreen = ({
               >
                 <Settings size={18} className="group-hover:rotate-90 transition-transform duration-300" />
               </button>
+            </div>
+          </div>
+          
+          {/* Footer with Privacy & Terms links */}
+          <div className="text-center mt-4">
+            <div className="flex items-center justify-center gap-3 text-xs">
+              <a 
+                href="/privacy-policy.html" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+              >
+                Privacy Policy
+              </a>
+              <span className="text-slate-700">•</span>
+              <a 
+                href="/terms-of-service.html" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+              >
+                Terms of Service
+              </a>
             </div>
           </div>
         </div>

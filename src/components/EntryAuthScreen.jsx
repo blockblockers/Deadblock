@@ -210,12 +210,15 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
     onOfflineMode?.();
   };
 
-  // Scroll styles for mobile
+  // Scroll styles for mobile/iPad
   const scrollStyles = needsScroll ? {
-    overflowY: 'auto',
-    overflowX: 'hidden',
+    overflow: 'auto',
     WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y',
+    touchAction: 'pan-y pinch-zoom',
+    overscrollBehavior: 'contain',
+    height: '100%',
+    minHeight: '100vh',
+    minHeight: '100dvh', // Dynamic viewport height for iOS
   } : {};
 
   // Selection screen - choose auth method
@@ -706,7 +709,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 flex flex-col"
+      className="fixed inset-0 bg-slate-950 flex flex-col"
       style={scrollStyles}
     >
       {/* Grid background */}
@@ -743,10 +746,29 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
       </div>
       
       {/* Footer */}
-      <div className="relative text-center pb-4">
-        <p className="text-slate-600 text-xs">
+      <div className="relative text-center pb-4 pt-2">
+        <p className="text-slate-600 text-xs mb-2">
           © 2024 Deadblock
         </p>
+        <div className="flex items-center justify-center gap-3 text-xs">
+          <a 
+            href="/privacy-policy.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Privacy Policy
+          </a>
+          <span className="text-slate-700">•</span>
+          <a 
+            href="/terms-of-service.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Terms of Service
+          </a>
+        </div>
       </div>
       
       {/* Subtitle styling to match other screens */}
