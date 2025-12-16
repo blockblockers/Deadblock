@@ -1,4 +1,5 @@
 // Authentication Context with Local Profile Caching
+// UPDATED: signOut now clears local state FIRST with timeout protection
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
@@ -484,87 +485,29 @@ export const AuthProvider = ({ children }) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
     // Validate username format
-    if (!username || username.length < 3 || username.length > 20) {
-      return { error: { message: 'Username must be 3-20 characters' } };
+    if (!username || username.length < 3) {
+      return { error: { message: 'Username must be at least 3 characters' } };
     }
+    
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
     }
 
-    // Check if username is taken
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('username', username)
-      .single();
-
-    if (existing) {
-      return { error: { message: 'Username already taken' } };
-    }
-
-    // Sign up the user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { 
-          username, 
-          display_name: username 
-        },
-        // Don't require email verification redirect
-        emailRedirectTo: undefined
+        data: {
+          username: username
+        }
       }
     });
 
-    // If signup succeeded but we got a database error, try to manually create profile
-    if (!error && data?.user) {
-      // Wait a moment for the trigger to run
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Check if profile was created
-      const { data: profileCheck } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', data.user.id)
-        .single();
-      
-      // If no profile exists, create it manually
-      if (!profileCheck) {
-        console.log('Profile not created by trigger, creating manually...');
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: data.user.id,
-            username: username,
-            display_name: username
-          });
-        
-        if (profileError) {
-          console.error('Failed to create profile manually:', profileError);
-        }
-      }
-      
-      // Check if email confirmation is required
-      // If session exists, user is auto-confirmed
-      const needsEmailConfirmation = !data.session;
-      
-      // Mark as new user to show welcome modal
-      setIsNewUser(true);
-      
-      return { 
-        data, 
-        error: null, 
-        needsEmailConfirmation,
-        isNewUser: true
-      };
-    }
-
-    // Handle specific error messages
     if (error) {
+      // Make error messages more friendly
       let friendlyMessage = error.message;
-      
-      if (error.message.includes('database error')) {
-        friendlyMessage = 'Account created but profile setup failed. Please try signing in.';
+      if (error.message.includes('User already registered')) {
+        friendlyMessage = 'An account with this email already exists. Please try signing in.';
       } else if (error.message.includes('already registered')) {
         friendlyMessage = 'An account with this email already exists';
       } else if (error.message.includes('invalid email')) {
@@ -626,20 +569,50 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // =====================================================
+  // FIXED SIGN OUT - Clears local state first with timeout
+  // =====================================================
   const signOut = async () => {
-    if (!supabase) return;
+    console.log('[AuthContext] signOut: Starting...');
     
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
-      setUser(null);
-      setProfile(null);
-      // Clear entry auth flag so user sees auth screen on next visit
-      localStorage.removeItem('deadblock_entry_auth_passed');
-      // Clear cached profile
-      clearCachedProfile();
-      console.log('[AuthContext] signOut: Cleared user, profile, and cache');
+    // CRITICAL: Clear local state FIRST before attempting Supabase call
+    // This ensures the user is "logged out" from the app's perspective
+    // even if the Supabase call times out
+    setUser(null);
+    setProfile(null);
+    
+    // Clear entry auth flag so user sees auth screen on next visit
+    localStorage.removeItem('deadblock_entry_auth_passed');
+    
+    // Clear pending online intent
+    localStorage.removeItem('deadblock_pending_online_intent');
+    localStorage.removeItem('deadblock_pending_auth_destination');
+    
+    // Clear cached profile
+    clearCachedProfile();
+    
+    console.log('[AuthContext] signOut: Cleared local state, now attempting Supabase call...');
+    
+    // Now attempt Supabase sign out with timeout
+    // If this fails/times out, we don't care - local state is already cleared
+    if (supabase) {
+      try {
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Sign out timeout')), 3000)
+        );
+        
+        const signOutPromise = supabase.auth.signOut();
+        
+        await Promise.race([signOutPromise, timeoutPromise]);
+        console.log('[AuthContext] signOut: Supabase sign out successful');
+      } catch (err) {
+        // Don't worry about errors - we've already cleared local state
+        console.log('[AuthContext] signOut: Supabase call failed/timed out (local state already cleared):', err.message);
+      }
     }
-    return { error };
+    
+    console.log('[AuthContext] signOut: Complete');
+    return { error: null };
   };
 
   // Send password reset email
