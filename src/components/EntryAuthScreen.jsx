@@ -1,4 +1,5 @@
 // Entry Authentication Screen - First screen after app load
+// UPDATED: Fixed privacy/terms links to use correct file paths
 // Offers: Google Sign In, Email/Password, or Offline Mode
 import { useState } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff } from 'lucide-react';
@@ -276,71 +277,52 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         </button>
       </div>
 
-      {/* Benefits of signing in - Updated styling to match other menus */}
+      {/* Benefits of signing in */}
       <div className="bg-slate-900/80 backdrop-blur-md rounded-xl p-4 border border-cyan-500/30 shadow-[0_0_20px_rgba(34,211,238,0.15)]">
         <div className="flex items-center gap-2 mb-2">
           <Wifi size={14} className="text-cyan-400" />
-          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Sign In Benefits</span>
+          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Online Features</span>
         </div>
-        <div className="text-sm text-slate-300 space-y-1">
-          <p>• Track your stats & achievements</p>
-          <p>• Compete on global leaderboards</p>
-          <p>• Play ranked matches online</p>
-        </div>
+        <ul className="space-y-1 text-slate-300 text-sm">
+          <li className="flex items-center gap-2">
+            <CheckCircle size={14} className="text-green-400" />
+            Challenge players worldwide
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle size={14} className="text-green-400" />
+            Track your stats & achievements
+          </li>
+          <li className="flex items-center gap-2">
+            <CheckCircle size={14} className="text-green-400" />
+            Weekly puzzles & leaderboards
+          </li>
+        </ul>
       </div>
 
-      {/* Offline Mode Option / Go Back Option */}
+      {/* Offline Mode Option - only if not forced online */}
       {!forceOnlineOnly && (
-        <>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-slate-700" />
-            <span className="text-slate-500 text-xs">OR</span>
-            <div className="flex-1 h-px bg-slate-700" />
-          </div>
-
-          <button
-            onClick={handleOfflineMode}
-            className="w-full py-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/50 hover:border-slate-500/50"
-          >
-            <WifiOff size={16} />
-            Continue Offline
-          </button>
-
-          <p className="text-center text-slate-500 text-xs">
-            Stats won't be saved. Online features unavailable.
-          </p>
-        </>
-      )}
-      
-      {/* Go Back button when forcing online */}
-      {forceOnlineOnly && (
         <button
           onClick={handleOfflineMode}
-          className="w-full py-2.5 mt-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-600/50 hover:border-slate-500/50"
+          className="w-full py-2.5 text-slate-400 hover:text-slate-300 transition-colors flex items-center justify-center gap-2 text-sm"
         >
-          <ArrowLeft size={16} />
-          Go Back to Menu
+          <WifiOff size={16} />
+          Continue Offline
         </button>
       )}
-
-      {/* Force online message - enhanced with destination info */}
+      
+      {/* Force online message */}
       {forceOnlineOnly && (
-        <div className="bg-amber-900/30 border border-amber-500/40 rounded-xl p-4 mt-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Wifi size={16} className="text-amber-400" />
-            <span className="text-amber-400 text-sm font-bold">Sign In Required</span>
-          </div>
-          <p className="text-amber-200/80 text-sm mb-2">
-            <span className="font-semibold">{getDestinationName()}</span> requires you to sign in so we can:
+        <div className="text-center">
+          <p className="text-amber-400 text-sm">
+            Sign in required for {getDestinationName()}
           </p>
-          <ul className="text-amber-200/60 text-xs space-y-1 ml-4">
-            <li>• Track your progress and stats</li>
-            <li>• Save your game history</li>
-            <li>• Show you on leaderboards</li>
-          </ul>
-          <p className="text-amber-200/50 text-xs mt-3 italic">
-            Your local game data stays on this device.
-          </p>
+          <button
+            onClick={handleOfflineMode}
+            className="mt-2 text-slate-500 hover:text-slate-400 text-xs flex items-center justify-center gap-1 mx-auto"
+          >
+            <ArrowLeft size={12} />
+            Back to Menu
+          </button>
         </div>
       )}
     </div>
@@ -348,59 +330,57 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
 
   // Login form
   const renderLoginForm = () => (
-    <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-4 border border-slate-700/50 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
-      <div className="flex items-center gap-2 mb-3">
-        <KeyRound size={14} className="text-cyan-400" />
-        <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Sign In</span>
-      </div>
-      
+    <div className="space-y-3">
+      {/* Back button */}
       <button
-        type="button"
         onClick={() => switchMode('select')}
-        className="flex items-center gap-2 mb-3 text-slate-400 hover:text-cyan-300 text-sm transition-colors"
+        className="flex items-center gap-1 text-slate-400 hover:text-cyan-400 transition-colors text-sm mb-2"
       >
-        <ArrowLeft size={14} />
+        <ArrowLeft size={16} />
         Back
       </button>
       
+      {/* Error/Success Messages */}
       {error && (
-        <div className="mb-3 p-2.5 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
+        <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-3 p-2.5 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm flex items-start gap-2">
-          <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
-          <span>{success}</span>
+        <div className="p-3 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm">
+          {success}
         </div>
       )}
 
       <form onSubmit={handleSignIn} className="space-y-3">
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Email</label>
-          <div className="relative">
-            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        <div className="bg-slate-900/80 rounded-xl p-4 border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-3">
+            <KeyRound size={14} className="text-cyan-400" />
+            <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Sign In</span>
+          </div>
+          
+          {/* Email */}
+          <div className="relative mb-3">
+            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
+              placeholder="Email"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none transition-colors"
               required
             />
           </div>
-        </div>
-
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Password</label>
+          
+          {/* Password */}
           <div className="relative">
-            <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter password"
-              className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
+              placeholder="Password"
+              className="w-full pl-10 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none transition-colors"
               required
             />
             <button
@@ -408,25 +388,15 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
             >
-              {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
-        </div>
-
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => switchMode('forgot-password')}
-            className="text-xs text-slate-400 hover:text-amber-400 transition-colors"
-          >
-            Forgot password?
-          </button>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-[0_0_20px_rgba(34,211,238,0.4)] text-white"
+          className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -442,15 +412,20 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         </button>
       </form>
 
-      <div className="mt-4 pt-3 border-t border-slate-700/50">
+      {/* Forgot Password / Magic Link */}
+      <div className="flex justify-center gap-4 text-xs">
         <button
-          type="button"
-          onClick={() => switchMode('magic-link')}
-          className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-slate-400 hover:text-violet-300 transition-colors group"
+          onClick={() => switchMode('forgot-password')}
+          className="text-slate-400 hover:text-cyan-400 transition-colors"
         >
-          <Wand2 size={14} className="group-hover:rotate-12 transition-transform" />
-          Sign in with Magic Link
-          <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          Forgot Password?
+        </button>
+        <span className="text-slate-600">|</span>
+        <button
+          onClick={() => switchMode('magic-link')}
+          className="text-slate-400 hover:text-purple-400 transition-colors"
+        >
+          Use Magic Link
         </button>
       </div>
     </div>
@@ -458,74 +433,71 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
 
   // Signup form
   const renderSignupForm = () => (
-    <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-4 border border-slate-700/50 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
-      <div className="flex items-center gap-2 mb-3">
-        <UserPlus2 size={14} className="text-purple-400" />
-        <span className="text-purple-400 text-xs font-bold uppercase tracking-wider">Create Account</span>
-      </div>
-      
+    <div className="space-y-3">
+      {/* Back button */}
       <button
-        type="button"
         onClick={() => switchMode('select')}
-        className="flex items-center gap-2 mb-3 text-slate-400 hover:text-cyan-300 text-sm transition-colors"
+        className="flex items-center gap-1 text-slate-400 hover:text-cyan-400 transition-colors text-sm mb-2"
       >
-        <ArrowLeft size={14} />
+        <ArrowLeft size={16} />
         Back
       </button>
       
+      {/* Error/Success Messages */}
       {error && (
-        <div className="mb-3 p-2.5 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
+        <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-3 p-2.5 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm flex items-start gap-2">
-          <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
-          <span>{success}</span>
+        <div className="p-3 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm">
+          {success}
         </div>
       )}
 
       <form onSubmit={handleSignUp} className="space-y-3">
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Username</label>
-          <div className="relative">
-            <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+        <div className="bg-slate-900/80 rounded-xl p-4 border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-3">
+            <UserPlus2 size={14} className="text-purple-400" />
+            <span className="text-purple-400 text-xs font-bold uppercase tracking-wider">Create Account</span>
+          </div>
+          
+          {/* Username */}
+          <div className="relative mb-3">
+            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Choose a username"
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+              placeholder="Username"
+              maxLength={20}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none transition-colors"
               required
             />
           </div>
-        </div>
-
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Email</label>
-          <div className="relative">
-            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          
+          {/* Email */}
+          <div className="relative mb-3">
+            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+              placeholder="Email"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none transition-colors"
               required
             />
           </div>
-        </div>
-
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Password</label>
+          
+          {/* Password */}
           <div className="relative">
-            <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Create password (6+ chars)"
-              className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
+              placeholder="Password (min 6 characters)"
+              className="w-full pl-10 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-purple-500 focus:outline-none transition-colors"
               required
             />
             <button
@@ -533,7 +505,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
             >
-              {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
         </div>
@@ -541,12 +513,12 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.4)] text-white"
+          className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Creating...
+              Creating account...
             </span>
           ) : (
             <span className="flex items-center justify-center gap-2">
@@ -555,54 +527,65 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
             </span>
           )}
         </button>
+
+        <p className="text-slate-500 text-xs text-center">
+          By signing up, you agree to our{' '}
+          <a href="/terms.html" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">
+            Terms
+          </a>{' '}
+          and{' '}
+          <a href="/privacy.html" target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">
+            Privacy Policy
+          </a>
+        </p>
       </form>
     </div>
   );
 
   // Forgot password form
   const renderForgotPasswordForm = () => (
-    <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-4 border border-slate-700/50 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
-      <div className="flex items-center gap-2 mb-3">
-        <Key size={14} className="text-amber-400" />
-        <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">Reset Password</span>
-      </div>
-      
+    <div className="space-y-3">
+      {/* Back button */}
       <button
-        type="button"
         onClick={() => switchMode('login')}
-        className="flex items-center gap-2 mb-3 text-slate-400 hover:text-cyan-300 text-sm transition-colors"
+        className="flex items-center gap-1 text-slate-400 hover:text-cyan-400 transition-colors text-sm mb-2"
       >
-        <ArrowLeft size={14} />
+        <ArrowLeft size={16} />
         Back to Sign In
       </button>
       
+      {/* Error/Success Messages */}
       {error && (
-        <div className="mb-3 p-2.5 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
+        <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-3 p-2.5 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm flex items-start gap-2">
-          <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
-          <span>{success}</span>
+        <div className="p-3 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm">
+          {success}
         </div>
       )}
 
       <form onSubmit={handleResetPassword} className="space-y-3">
-        <p className="text-slate-400 text-sm mb-3">
-          Enter your email and we'll send you a link to reset your password.
-        </p>
-        
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Email</label>
+        <div className="bg-slate-900/80 rounded-xl p-4 border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-3">
+            <Key size={14} className="text-amber-400" />
+            <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">Reset Password</span>
+          </div>
+          
+          <p className="text-slate-400 text-sm mb-3">
+            Enter your email and we'll send you a link to reset your password.
+          </p>
+          
+          {/* Email */}
           <div className="relative">
-            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all"
+              placeholder="Email"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none transition-colors"
               required
             />
           </div>
@@ -611,7 +594,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white"
+          className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -620,7 +603,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
             </span>
           ) : (
             <span className="flex items-center justify-center gap-2">
-              <Mail size={16} />
+              <Key size={16} />
               Send Reset Link
             </span>
           )}
@@ -635,48 +618,48 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
 
   // Magic link form
   const renderMagicLinkForm = () => (
-    <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-4 border border-slate-700/50 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
-      <div className="flex items-center gap-2 mb-3">
-        <Wand2 size={14} className="text-violet-400" />
-        <span className="text-violet-400 text-xs font-bold uppercase tracking-wider">Magic Link</span>
-      </div>
-      
+    <div className="space-y-3">
+      {/* Back button */}
       <button
-        type="button"
         onClick={() => switchMode('login')}
-        className="flex items-center gap-2 mb-3 text-slate-400 hover:text-cyan-300 text-sm transition-colors"
+        className="flex items-center gap-1 text-slate-400 hover:text-cyan-400 transition-colors text-sm mb-2"
       >
-        <ArrowLeft size={14} />
+        <ArrowLeft size={16} />
         Back to Sign In
       </button>
       
+      {/* Error/Success Messages */}
       {error && (
-        <div className="mb-3 p-2.5 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
+        <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-3 p-2.5 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm flex items-start gap-2">
-          <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
-          <span>{success}</span>
+        <div className="p-3 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm">
+          {success}
         </div>
       )}
 
       <form onSubmit={handleMagicLink} className="space-y-3">
-        <p className="text-slate-400 text-sm mb-3">
-          Enter your email and we'll send you a magic link to sign in instantly - no password needed!
-        </p>
-        
-        <div>
-          <label className="block text-slate-400 text-xs mb-1">Email</label>
+        <div className="bg-slate-900/80 rounded-xl p-4 border border-slate-700/50">
+          <div className="flex items-center gap-2 mb-3">
+            <Wand2 size={14} className="text-violet-400" />
+            <span className="text-violet-400 text-xs font-bold uppercase tracking-wider">Magic Link</span>
+          </div>
+          
+          <p className="text-slate-400 text-sm mb-3">
+            No password needed! We'll email you a secure link to sign in.
+          </p>
+          
+          {/* Email */}
           <div className="relative">
-            <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-all"
+              placeholder="Email"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-violet-500 focus:outline-none transition-colors"
               required
             />
           </div>
@@ -685,7 +668,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-400 hover:to-purple-500 shadow-[0_0_20px_rgba(139,92,246,0.4)] text-white"
+          className="w-full py-3 bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-400 hover:to-purple-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
         >
           {loading ? (
             <span className="flex items-center justify-center gap-2">
@@ -745,14 +728,14 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
         </div>
       </div>
       
-      {/* Footer */}
+      {/* Footer - FIXED: Updated links to correct paths */}
       <div className="relative text-center pb-4 pt-2">
         <p className="text-slate-600 text-xs mb-2">
           © 2024 Deadblock
         </p>
         <div className="flex items-center justify-center gap-3 text-xs">
           <a 
-            href="/privacy-policy.html" 
+            href="/privacy.html" 
             target="_blank" 
             rel="noopener noreferrer"
             className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
@@ -761,7 +744,7 @@ const EntryAuthScreen = ({ onComplete, onOfflineMode, forceOnlineOnly = false, i
           </a>
           <span className="text-slate-700">•</span>
           <a 
-            href="/terms-of-service.html" 
+            href="/terms.html" 
             target="_blank" 
             rel="noopener noreferrer"
             className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"

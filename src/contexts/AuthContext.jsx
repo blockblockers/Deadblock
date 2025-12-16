@@ -1,6 +1,7 @@
 // Authentication Context with Local Profile Caching
 // UPDATED: signOut now clears local state FIRST with timeout protection
-import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
+// PERFORMANCE FIX: Provider value is now memoized to prevent unnecessary re-renders
+import { useState, useEffect, createContext, useContext, useCallback, useRef, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 // Local storage keys for persistent auth
@@ -481,7 +482,7 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
-  const signUp = async (email, password, username) => {
+  const signUp = useCallback(async (email, password, username) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
     // Validate username format
@@ -513,16 +514,15 @@ export const AuthProvider = ({ children }) => {
       } else if (error.message.includes('invalid email')) {
         friendlyMessage = 'Please enter a valid email address';
       } else if (error.message.includes('weak password')) {
-        friendlyMessage = 'Password is too weak. Use at least 6 characters';
+        friendlyMessage = 'Password is too weak. Please use at least 6 characters.';
       }
-      
-      return { data, error: { ...error, message: friendlyMessage } };
+      return { data: null, error: { ...error, message: friendlyMessage } };
     }
 
-    return { data, error };
-  };
+    return { data, error: null };
+  }, []);
 
-  const signIn = async (email, password) => {
+  const signIn = useCallback(async (email, password) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -530,49 +530,68 @@ export const AuthProvider = ({ children }) => {
       password
     });
 
-    return { data, error };
-  };
+    if (error) {
+      let friendlyMessage = error.message;
+      if (error.message.includes('Invalid login credentials')) {
+        friendlyMessage = 'Invalid email or password';
+      }
+      return { data: null, error: { ...error, message: friendlyMessage } };
+    }
 
-  const signInWithGoogle = async () => {
+    return { data, error: null };
+  }, []);
+
+  const signInWithGoogle = useCallback(async () => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
-    console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
-    
     try {
+      console.log('Starting Google OAuth...');
+      
+      // Store pending online intent before redirect
+      localStorage.setItem('deadblock_pending_online_intent', 'true');
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: false, // Ensure redirect happens
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
         }
       });
-      
-      console.log('[AuthContext] Google OAuth result:', { data, error });
-      
+
       if (error) {
-        console.error('[AuthContext] Google OAuth error:', error);
-        return { data, error };
+        console.error('Google OAuth error:', error);
+        localStorage.removeItem('deadblock_pending_online_intent');
+        return { data: null, error };
       }
-      
-      // If we get here without redirect, there might be an issue
-      // The browser should be redirecting, so wait a moment
-      if (data?.url) {
-        console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
-        // Manually redirect if the auto-redirect didn't work
-        window.location.href = data.url;
-      }
-      
-      return { data, error };
+
+      console.log('Google OAuth initiated, redirect pending...');
+      return { data, error: null };
     } catch (err) {
-      console.error('[AuthContext] Google OAuth exception:', err);
+      console.error('Google OAuth exception:', err);
       return { data: null, error: { message: err.message || 'Failed to start Google Sign In' } };
     }
-  };
+  }, []);
+
+  const signInWithMagicLink = useCallback(async (email) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+
+    return { data, error };
+  }, []);
 
   // =====================================================
   // FIXED SIGN OUT - Clears local state first with timeout
   // =====================================================
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     console.log('[AuthContext] signOut: Starting...');
     
     // CRITICAL: Clear local state FIRST before attempting Supabase call
@@ -606,17 +625,16 @@ export const AuthProvider = ({ children }) => {
         await Promise.race([signOutPromise, timeoutPromise]);
         console.log('[AuthContext] signOut: Supabase sign out successful');
       } catch (err) {
-        // Don't worry about errors - we've already cleared local state
-        console.log('[AuthContext] signOut: Supabase call failed/timed out (local state already cleared):', err.message);
+        console.warn('[AuthContext] signOut: Supabase call failed/timed out (this is OK):', err.message);
+        // This is fine - local state is already cleared
       }
     }
     
     console.log('[AuthContext] signOut: Complete');
     return { error: null };
-  };
+  }, []);
 
-  // Send password reset email
-  const resetPassword = async (email) => {
+  const resetPassword = useCallback(async (email) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -624,45 +642,29 @@ export const AuthProvider = ({ children }) => {
     });
 
     return { data, error };
-  };
+  }, []);
 
-  // Sign in with magic link (passwordless)
-  const signInWithMagicLink = async (email) => {
+  const updateEmail = useCallback(async (newEmail) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
-
-    const { data, error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?type=magiclink`
-      }
-    });
-
-    return { data, error };
-  };
-
-  // Update user email (requires re-authentication)
-  const updateEmail = async (newEmail) => {
-    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
 
     const { data, error } = await supabase.auth.updateUser({
       email: newEmail
     });
 
     return { data, error };
-  };
+  }, []);
 
-  // Update user password
-  const updatePassword = async (newPassword) => {
-    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+  const updatePassword = useCallback(async (newPassword) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
 
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword
     });
 
     return { data, error };
-  };
+  }, []);
 
-  const updateProfile = async (updates) => {
+  const updateProfile = useCallback(async (updates) => {
     if (!supabase || !user) return { error: { message: 'Not authenticated' } };
 
     const { data, error } = await supabase
@@ -679,10 +681,10 @@ export const AuthProvider = ({ children }) => {
     }
 
     return { data, error };
-  };
+  }, [user]);
 
   // Check if username is available
-  const checkUsernameAvailable = async (username) => {
+  const checkUsernameAvailable = useCallback(async (username) => {
     if (!supabase) return { available: false, error: { message: 'Not configured' } };
     
     // Don't check if it's the current user's username
@@ -707,45 +709,78 @@ export const AuthProvider = ({ children }) => {
 
     // Data found = username taken
     return { available: false, error: null };
-  };
+  }, [profile?.username]);
 
-  const clearOAuthCallback = () => {
+  const clearOAuthCallback = useCallback(() => {
     setIsOAuthCallback(false);
-  };
+  }, []);
   
-  const clearNewUser = () => {
+  const clearNewUser = useCallback(() => {
     setIsNewUser(false);
-  };
+  }, []);
+
+  const refreshProfile = useCallback(async () => {
+    if (user) {
+      return await fetchProfile(user.id);
+    }
+    return null;
+  }, [user, fetchProfile]);
+
+  // =====================================================
+  // PERFORMANCE FIX: Memoize context value
+  // This prevents all consumers from re-rendering when
+  // unrelated state changes in this component
+  // =====================================================
+  const contextValue = useMemo(() => ({
+    user,
+    profile,
+    loading,
+    sessionReady,
+    isAuthenticated: !!user,
+    isOnlineEnabled,
+    isOAuthCallback,
+    isNewUser,
+    // All functions below are stable (wrapped in useCallback)
+    signUp,
+    signIn,
+    signInWithGoogle,
+    signInWithMagicLink,
+    signOut,
+    resetPassword,
+    updateEmail,
+    updatePassword,
+    updateProfile,
+    checkUsernameAvailable,
+    refreshProfile,
+    clearOAuthCallback,
+    clearNewUser,
+  }), [
+    // State dependencies
+    user,
+    profile,
+    loading,
+    sessionReady,
+    isOnlineEnabled,
+    isOAuthCallback,
+    isNewUser,
+    // Function dependencies (all are stable due to useCallback)
+    signUp,
+    signIn,
+    signInWithGoogle,
+    signInWithMagicLink,
+    signOut,
+    resetPassword,
+    updateEmail,
+    updatePassword,
+    updateProfile,
+    checkUsernameAvailable,
+    refreshProfile,
+    clearOAuthCallback,
+    clearNewUser,
+  ]);
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      profile,
-      loading,
-      sessionReady,
-      isAuthenticated: !!user,
-      isOnlineEnabled,
-      isOAuthCallback,
-      isNewUser,
-      signUp,
-      signIn,
-      signInWithGoogle,
-      signInWithMagicLink,
-      signOut,
-      resetPassword,
-      updateEmail,
-      updatePassword,
-      updateProfile,
-      checkUsernameAvailable,
-      refreshProfile: async () => {
-        if (user) {
-          return await fetchProfile(user.id);
-        }
-        return null;
-      },
-      clearOAuthCallback,
-      clearNewUser,
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

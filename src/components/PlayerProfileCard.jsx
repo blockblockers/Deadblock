@@ -1,6 +1,7 @@
 // Player Profile Card - Enhanced display for main menu with rating info, username editing, and achievements
 // UPDATED: Uses direct fetch to bypass Supabase client timeout issues
-import { useState, useEffect } from 'react';
+// FIXED: Loads cached profile immediately on mount to prevent loading state after app reopen
+import { useState, useEffect, useMemo } from 'react';
 import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
@@ -8,6 +9,26 @@ import { dbSelect, dbUpdate } from '../services/supabaseDirectFetch';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
 import achievementService from '../services/achievementService';
+
+// =====================================================
+// LOCAL STORAGE KEYS (same as AuthContext)
+// =====================================================
+const STORAGE_KEYS = {
+  CACHED_PROFILE: 'deadblock_cached_profile',
+};
+
+// Helper to safely get cached profile from localStorage
+const getCachedProfileSync = () => {
+  try {
+    const cached = localStorage.getItem(STORAGE_KEYS.CACHED_PROFILE);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch (e) {
+    console.warn('[PlayerProfileCard] Error reading cached profile:', e);
+  }
+  return null;
+};
 
 // Rating Info Modal
 const RatingInfoModal = ({ onClose }) => {
@@ -34,28 +55,35 @@ const RatingInfoModal = ({ onClose }) => {
             Your ELO rating changes based on match results. Beat higher-rated players to gain more points!
           </p>
           
-          {/* Tier List */}
+          {/* Rank Tiers */}
           <div className="space-y-2">
-            <h3 className="text-sm font-bold text-cyan-300">Rating Tiers</h3>
-            {[
-              { name: 'Novice', range: '0-999', color: 'text-slate-400', bg: 'bg-slate-600' },
-              { name: 'Bronze', range: '1000-1199', color: 'text-amber-600', bg: 'bg-amber-900/50' },
-              { name: 'Silver', range: '1200-1399', color: 'text-slate-300', bg: 'bg-slate-500/50' },
-              { name: 'Gold', range: '1400-1599', color: 'text-amber-400', bg: 'bg-amber-600/50' },
-              { name: 'Platinum', range: '1600-1799', color: 'text-cyan-300', bg: 'bg-cyan-600/50' },
-              { name: 'Diamond', range: '1800-1999', color: 'text-purple-300', bg: 'bg-purple-600/50' },
-              { name: 'Master', range: '2000-2199', color: 'text-red-400', bg: 'bg-red-600/50' },
-              { name: 'Grandmaster', range: '2200+', color: 'text-amber-300', bg: 'bg-gradient-to-r from-amber-600/50 to-red-600/50' },
-            ].map(tier => (
-              <div key={tier.name} className={`flex items-center justify-between p-2 rounded ${tier.bg}`}>
-                <span className={`font-medium ${tier.color}`}>{tier.name}</span>
-                <span className="text-slate-400 text-sm">{tier.range}</span>
-              </div>
-            ))}
+            <h3 className="text-cyan-300 font-semibold text-sm">Rank Tiers</h3>
+            <div className="space-y-1.5">
+              {[
+                { name: 'Bronze', range: '< 1200', color: 'text-amber-600' },
+                { name: 'Silver', range: '1200-1399', color: 'text-slate-300' },
+                { name: 'Gold', range: '1400-1599', color: 'text-yellow-400' },
+                { name: 'Platinum', range: '1600-1799', color: 'text-cyan-300' },
+                { name: 'Diamond', range: '1800-1999', color: 'text-purple-400' },
+                { name: 'Master', range: '2000+', color: 'text-pink-400' },
+              ].map(tier => (
+                <div key={tier.name} className="flex justify-between items-center text-sm">
+                  <span className={tier.color}>{tier.name}</span>
+                  <span className="text-slate-500">{tier.range}</span>
+                </div>
+              ))}
+            </div>
           </div>
           
-          <div className="text-xs text-slate-500 pt-2 border-t border-slate-700">
-            Win against stronger opponents for bigger gains, lose against weaker opponents for bigger losses.
+          {/* How it works */}
+          <div className="space-y-2">
+            <h3 className="text-cyan-300 font-semibold text-sm">How Rating Changes</h3>
+            <ul className="text-sm text-slate-400 space-y-1">
+              <li>• Win vs higher rated: +20 to +32 points</li>
+              <li>• Win vs similar rated: +16 points</li>
+              <li>• Win vs lower rated: +8 to +16 points</li>
+              <li>• Loss: -8 to -32 points (inverse)</li>
+            </ul>
           </div>
         </div>
         
@@ -117,17 +145,20 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
         if (fetchError) {
           setError('Could not check username');
         } else if (data && data.length > 0) {
-          setError('Username already taken');
+          setError('Username is already taken');
+        } else {
+          setError('');
         }
       } catch (err) {
-        setError('Could not check username');
+        console.error('Username check error:', err);
+        setError('Could not verify username');
       }
       
       setChecking(false);
     };
     
-    const debounceTimer = setTimeout(checkUsername, 500);
-    return () => clearTimeout(debounceTimer);
+    const debounce = setTimeout(checkUsername, 500);
+    return () => clearTimeout(debounce);
   }, [newUsername, currentUsername]);
   
   const handleSave = async () => {
@@ -147,12 +178,10 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div className="bg-slate-900 rounded-xl max-w-sm w-full overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.2)]">
+        {/* Header */}
         <div className="p-4 border-b border-cyan-500/20">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Pencil size={20} className="text-cyan-400" />
-              <h2 className="text-lg font-bold text-cyan-300">Edit Username</h2>
-            </div>
+            <h2 className="text-lg font-bold text-cyan-300">Edit Username</h2>
             <button
               onClick={onClose}
               className="p-1 text-slate-400 hover:text-white transition-colors"
@@ -162,37 +191,28 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
           </div>
         </div>
         
+        {/* Content */}
         <div className="p-4 space-y-4">
           <div>
             <label className="block text-sm text-slate-400 mb-2">New Username</label>
             <input
               type="text"
               value={newUsername}
-              onChange={(e) => setNewUsername(e.target.value)}
-              placeholder="Enter new username"
-              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none"
+              onChange={(e) => setNewUsername(e.target.value.trim())}
+              className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-cyan-500 focus:outline-none transition-colors"
+              placeholder="Enter username"
               maxLength={20}
+              autoFocus
             />
-            
-            {/* Status indicator */}
-            <div className="mt-2 h-5 flex items-center">
-              {checking && (
-                <span className="text-slate-400 text-sm flex items-center gap-2">
-                  <Loader size={14} className="animate-spin" />
-                  Checking availability...
-                </span>
-              )}
-              {error && !checking && (
-                <span className="text-red-400 text-sm">{error}</span>
-              )}
-              {!error && !checking && newUsername && newUsername !== currentUsername && (
-                <span className="text-green-400 text-sm">✓ Username available</span>
-              )}
-            </div>
-          </div>
-          
-          <div className="text-xs text-slate-500">
-            Letters, numbers, and underscores only.
+            {error && (
+              <p className="text-red-400 text-sm mt-2">{error}</p>
+            )}
+            {checking && (
+              <p className="text-slate-400 text-sm mt-2">Checking availability...</p>
+            )}
+            {!error && !checking && newUsername && newUsername !== currentUsername && (
+              <p className="text-green-400 text-sm mt-2">Username is available!</p>
+            )}
           </div>
           
           <div className="flex gap-3">
@@ -231,20 +251,38 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
   
+  // =====================================================
+  // FIX: Load cached profile synchronously on mount
+  // This ensures profile displays immediately when app reopens
+  // =====================================================
+  const [localCachedProfile, setLocalCachedProfile] = useState(() => getCachedProfileSync());
+  
+  // Use cached profile as fallback when AuthContext profile isn't loaded yet
+  const effectiveProfile = profile || localCachedProfile;
+  
+  // Update local cache when AuthContext profile changes
+  useEffect(() => {
+    if (profile) {
+      setLocalCachedProfile(profile);
+    }
+  }, [profile]);
+  
   // DEBUG: Log which render path we're taking
   console.log('[PlayerProfileCard] Render state:', { 
     isOffline, 
     isAuthenticated, 
-    hasProfile: !!profile, 
-    profileUsername: profile?.username,
+    hasProfile: !!profile,
+    hasLocalCache: !!localCachedProfile,
+    hasEffectiveProfile: !!effectiveProfile,
+    profileUsername: effectiveProfile?.username,
     // New conditions: show offline only if explicitly offline AND no cached profile
-    willRenderOffline: isOffline && !profile,
-    willRenderLoading: !profile && !(isOffline && !profile),
-    willRenderAuthenticated: !!profile
+    willRenderOffline: isOffline && !effectiveProfile,
+    willRenderLoading: !effectiveProfile && !isOffline,
+    willRenderAuthenticated: !!effectiveProfile
   });
   
   // Get rank info for authenticated users
-  const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
+  const rankInfo = effectiveProfile ? getRankInfo(effectiveProfile.rating || 1000) : null;
   
   // Retry profile fetch if authenticated but no profile
   useEffect(() => {
@@ -274,8 +312,8 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       }
     };
     
-    // Only start retrying if authenticated but no profile
-    if (isAuthenticated && !profile) {
+    // Only start retrying if authenticated but no profile (and no cache)
+    if (isAuthenticated && !profile && !localCachedProfile) {
       // Small delay to let AuthContext finish its initialization
       const startDelay = setTimeout(() => {
         attemptFetch();
@@ -290,14 +328,14 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     return () => {
       mounted = false;
     };
-  }, [isAuthenticated, profile, refreshProfile]);
+  }, [isAuthenticated, profile, localCachedProfile, refreshProfile]);
   
   // Load achievement count
   useEffect(() => {
-    if (profile?.id) {
+    if (effectiveProfile?.id) {
       // Check if getAchievementStats exists before calling
       if (typeof achievementService?.getAchievementStats === 'function') {
-        achievementService.getAchievementStats(profile.id).then(result => {
+        achievementService.getAchievementStats(effectiveProfile.id).then(result => {
           if (result.data) {
             setAchievementCount({
               unlocked: result.data.unlockedCount || 0,
@@ -312,18 +350,18 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
         console.warn('[PlayerProfileCard] achievementService.getAchievementStats is not available');
       }
     }
-  }, [profile?.id]);
+  }, [effectiveProfile?.id]);
   
   // Handle username save - UPDATED to use dbUpdate instead of supabase client
   const handleSaveUsername = async (newUsername) => {
-    if (!profile?.id) return false;
+    if (!effectiveProfile?.id) return false;
     
     try {
       // Use dbUpdate instead of supabase client
       const { error } = await dbUpdate(
         'profiles',
         { username: newUsername.toLowerCase(), display_name: newUsername },
-        { eq: { id: profile.id } }
+        { eq: { id: effectiveProfile.id } }
       );
       
       if (error) throw error;
@@ -342,7 +380,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   
   // Offline mode display - only show if explicitly offline AND no cached profile
   // If we have a profile (even from cache), show the authenticated view
-  if (isOffline && !profile) {
+  if (isOffline && !effectiveProfile) {
     console.log('[PlayerProfileCard] Rendering: OFFLINE mode button (no profile)');
     return (
       <button
@@ -375,8 +413,8 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     );
   }
   
-  // Loading state - clickable to retry
-  if (!profile) {
+  // Loading state - only show if no profile AND no cache AND not offline
+  if (!effectiveProfile) {
     console.log('[PlayerProfileCard] Rendering: LOADING state button');
     return (
       <button 
@@ -408,93 +446,121 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     );
   }
   
-  // Authenticated display with profile
-  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED with profile:', profile.username);
+  // Authenticated display with profile (from AuthContext OR from local cache)
+  console.log('[PlayerProfileCard] Rendering: AUTHENTICATED with profile:', effectiveProfile.username);
   
-  const displayName = profile.display_name || profile.username || 'Player';
-  const glowColor = rankInfo?.glowColor || '#22d3ee';
-  
-  // Parse glow color for rgba variations
-  const glowRgba = {
-    '15': glowColor.replace(')', ', 0.15)').replace('rgb', 'rgba'),
-    '30': glowColor.replace(')', ', 0.30)').replace('rgb', 'rgba'),
-    '40': glowColor.replace(')', ', 0.40)').replace('rgb', 'rgba'),
-    '50': glowColor.replace(')', ', 0.50)').replace('rgb', 'rgba'),
-  };
-  
-  // For hex colors
-  if (glowColor.startsWith('#')) {
-    const hex = glowColor.slice(1);
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    glowRgba['15'] = `rgba(${r}, ${g}, ${b}, 0.15)`;
-    glowRgba['30'] = `rgba(${r}, ${g}, ${b}, 0.30)`;
-    glowRgba['40'] = `rgba(${r}, ${g}, ${b}, 0.40)`;
-    glowRgba['50'] = `rgba(${r}, ${g}, ${b}, 0.50)`;
-  }
-  
-  // Style for the tier icon container - darker background for contrast
-  const tierIconStyle = {
-    background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%)`,
-    border: `2px solid ${glowColor}`,
-    boxShadow: `0 0 20px ${glowRgba['40']}, inset 0 0 15px ${glowRgba['15']}`
-  };
+  const displayName = effectiveProfile.display_name || effectiveProfile.username || 'Player';
+  const initial = displayName[0]?.toUpperCase() || '?';
   
   return (
     <>
       <button
         onClick={onClick}
         data-testid="profile-card-authenticated"
-        className="w-full flex items-center gap-3 p-3 transition-all group hover:scale-[1.02]"
+        className="w-full flex items-center gap-3 p-3 transition-all group"
         style={{
-          background: `linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)`,
-          border: `2px solid ${glowColor}`,
+          background: `linear-gradient(135deg, ${rankInfo?.bgColor || 'rgba(51, 65, 85, 0.9)'} 0%, rgba(30, 41, 59, 0.95) 100%)`,
+          border: `2px solid ${rankInfo?.borderColor || 'rgba(34, 211, 238, 0.4)'}`,
           borderRadius: '12px',
-          boxShadow: `0 0 25px ${glowRgba['30']}, 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)`
+          boxShadow: `0 0 25px ${rankInfo?.glowColor || 'rgba(34, 211, 238, 0.15)'}, 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)`
         }}
       >
-        {/* Tier Icon Container - darker contrasting background */}
+        {/* Avatar */}
         <div 
-          className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
-          style={tierIconStyle}
+          className="w-12 h-12 rounded-full flex items-center justify-center overflow-hidden relative"
+          style={{
+            background: `linear-gradient(135deg, ${rankInfo?.avatarBg || 'rgba(34, 211, 238, 0.2)'} 0%, rgba(15, 23, 42, 0.95) 100%)`,
+            border: `2px solid ${rankInfo?.borderColor || 'rgba(34, 211, 238, 0.5)'}`,
+            boxShadow: `0 0 15px ${rankInfo?.glowColor || 'rgba(34, 211, 238, 0.3)'}, inset 0 1px 0 rgba(255,255,255,0.1)`
+          }}
         >
+          {effectiveProfile.avatar_url && !imageError ? (
+            <img 
+              src={effectiveProfile.avatar_url} 
+              alt={displayName}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <span style={{ color: rankInfo?.textColor || '#22d3ee', fontWeight: '700', fontSize: '18px' }}>
+              {initial}
+            </span>
+          )}
+          
+          {/* Tier Icon Overlay */}
           {rankInfo && (
-            <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="medium" />
+            <div className="absolute -bottom-1 -right-1">
+              <TierIcon tier={rankInfo.tier} size={18} />
+            </div>
           )}
         </div>
         
-        {/* Player info */}
+        {/* Info */}
         <div className="flex-1 text-left min-w-0">
-          <div 
-            className="font-black text-base tracking-wide truncate"
-            style={{ 
-              color: '#f1f5f9',
-              textShadow: `0 0 12px ${glowRgba['40']}, 0 0 4px rgba(0,0,0,0.8)` 
-            }}
-          >
-            {displayName}
-          </div>
-          <div className="flex items-center gap-2">
-            {rankInfo && (
-              <span 
-                className="text-xs font-bold uppercase tracking-wider"
-                style={{ color: glowColor, textShadow: `0 0 10px ${glowRgba['50']}` }}
-              >
-                {rankInfo.name}
-              </span>
-            )}
-            <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
-              {profile.rating || 1000} ELO
+          <div className="flex items-center gap-1.5">
+            <span 
+              className="font-bold text-sm truncate"
+              style={{ color: rankInfo?.textColor || '#22d3ee' }}
+            >
+              {displayName}
             </span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowUsernameEdit(true);
+              }}
+              className="p-0.5 opacity-50 hover:opacity-100 transition-opacity"
+            >
+              <Pencil size={12} style={{ color: rankInfo?.textColor || '#22d3ee' }} />
+            </button>
+          </div>
+          
+          {/* Rating & Stats Row */}
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-1">
+              <Trophy size={12} style={{ color: rankInfo?.accentColor || '#fbbf24' }} />
+              <span style={{ color: rankInfo?.accentColor || '#fbbf24', fontSize: '12px', fontWeight: '600' }}>
+                {effectiveProfile.rating || 1000}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowRatingInfo(true);
+                }}
+                className="opacity-50 hover:opacity-100 transition-opacity"
+              >
+                <HelpCircle size={10} style={{ color: '#94a3b8' }} />
+              </button>
+            </div>
+            <span style={{ color: '#64748b', fontSize: '11px' }}>•</span>
+            <span style={{ color: '#94a3b8', fontSize: '11px' }}>
+              {effectiveProfile.games_played || 0} games
+            </span>
+            {achievementCount.unlocked > 0 && (
+              <>
+                <span style={{ color: '#64748b', fontSize: '11px' }}>•</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAchievements(true);
+                  }}
+                  className="flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity"
+                >
+                  <Trophy size={10} style={{ color: '#fbbf24' }} />
+                  <span style={{ color: '#fbbf24', fontSize: '11px' }}>
+                    {achievementCount.unlocked}
+                  </span>
+                </button>
+              </>
+            )}
           </div>
         </div>
         
         {/* Arrow */}
         <ChevronRight 
           size={20} 
-          className="group-hover:translate-x-0.5 transition-all flex-shrink-0" 
-          style={{ color: glowColor, opacity: 0.7 }} 
+          style={{ color: rankInfo?.textColor || '#22d3ee' }} 
+          className="group-hover:translate-x-1 transition-all flex-shrink-0" 
         />
       </button>
       
@@ -505,7 +571,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       
       {showUsernameEdit && (
         <UsernameEditModal
-          currentUsername={profile.username}
+          currentUsername={effectiveProfile.username}
           onSave={handleSaveUsername}
           onClose={() => setShowUsernameEdit(false)}
         />
@@ -513,7 +579,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       
       {showAchievements && (
         <Achievements
-          userId={profile.id}
+          isOpen={showAchievements}
           onClose={() => setShowAchievements(false)}
         />
       )}

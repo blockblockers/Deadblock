@@ -1,5 +1,6 @@
 // Sound Manager - With seamless audio looping using Web Audio API
 // Uses AudioBufferSourceNode for gapless background music loops
+// UPDATED: Added playPuzzleSolvedSound() and playGameOver() for weekly challenge notifications
 
 class SoundManager {
   constructor() {
@@ -245,6 +246,29 @@ class SoundManager {
     } catch (e) {}
   }
 
+  // Play a tone with specific parameters (for melodies)
+  playTone(freq, duration, startTime = 0) {
+    if (!this.sfxEnabled || !this.audioContext) return;
+    if (this.audioContext.state === 'suspended') return;
+
+    try {
+      const osc = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+      
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      
+      const actualStartTime = this.audioContext.currentTime + startTime;
+      gain.gain.setValueAtTime(this.sfxVolume * 0.25, actualStartTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(this.audioContext.destination);
+      osc.start(actualStartTime);
+      osc.stop(actualStartTime + duration);
+    } catch (e) {}
+  }
+
   vibrate(pattern = 'short') {
     if (!this.vibrationEnabled || !navigator.vibrate) return;
     
@@ -252,6 +276,7 @@ class SoundManager {
       short: 20,
       medium: 40,
       long: 80,
+      soft: 15,
       confirm: [20, 40, 20],
       error: [40, 20, 40],
       win: [80, 40, 80, 40, 160]
@@ -330,6 +355,54 @@ class SoundManager {
     this.vibrate('error');
   }
 
+  // =====================================================
+  // NEW: Weekly Challenge Sound Effects
+  // =====================================================
+
+  /**
+   * Play celebratory sound when player wins weekly challenge puzzle
+   * Ascending major arpeggio: C5 → E5 → G5 → C6
+   */
+  playPuzzleSolvedSound() {
+    this.onUserInteraction();
+    
+    // Ascending celebratory tones (C major arpeggio)
+    const notes = [
+      { freq: 523, delay: 0 },      // C5
+      { freq: 659, delay: 0.1 },    // E5
+      { freq: 784, delay: 0.2 },    // G5
+      { freq: 1047, delay: 0.3 }    // C6
+    ];
+    
+    notes.forEach(note => {
+      this.playTone(note.freq, 0.15, note.delay);
+    });
+    
+    this.vibrate('win');
+  }
+
+  /**
+   * Play game over sound when AI wins (player loses weekly challenge)
+   * Descending minor progression: G4 → E4 → C4 → G3
+   */
+  playGameOver() {
+    this.onUserInteraction();
+    
+    // Descending somber tones
+    const notes = [
+      { freq: 392, delay: 0 },      // G4
+      { freq: 330, delay: 0.12 },   // E4
+      { freq: 262, delay: 0.24 },   // C4
+      { freq: 196, delay: 0.36 }    // G3
+    ];
+    
+    notes.forEach(note => {
+      this.playTone(note.freq, 0.2, note.delay);
+    });
+    
+    this.vibrate('error');
+  }
+
   // Generic playSound method - maps sound names to methods
   playSound(name) {
     this.onUserInteraction();
@@ -367,6 +440,12 @@ class SoundManager {
       case 'cancel':
         this.playCancel();
         break;
+      case 'puzzle-solved':
+        this.playPuzzleSolvedSound();
+        break;
+      case 'game-over':
+        this.playGameOver();
+        break;
       default:
         this.playBeep(500, 0.1);
     }
@@ -381,6 +460,9 @@ class SoundManager {
       confirm: 700,
       cancel: 330,
       error: 220,
+      place: 523,
+      move: 440,
+      success: 770,
       default: 600
     };
     this.playBeep(freqs[type] || freqs.default, 0.08);

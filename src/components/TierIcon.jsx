@@ -1,4 +1,7 @@
 // TierIcon - Cyberpunk pentomino shapes for ELO tiers
+// PERFORMANCE FIX: Wrapped with React.memo to prevent unnecessary re-renders
+// This component is used 20+ places, so memoization has significant impact
+import { memo } from 'react';
 
 // Pentomino shape definitions (each cell is 1 unit)
 const shapes = {
@@ -18,7 +21,7 @@ const shapes = {
   O: [[0,0]],
 };
 
-const TierIcon = ({ shape, glowColor, size = 'default' }) => {
+const TierIcon = memo(({ shape, glowColor, size = 'default' }) => {
   const coords = shapes[shape] || shapes.O;
   
   // Find bounds
@@ -34,6 +37,7 @@ const TierIcon = ({ shape, glowColor, size = 'default' }) => {
   const sizeConfig = {
     small: { cell: 4, gap: 1 },
     default: { cell: 6, gap: 1 },
+    medium: { cell: 5, gap: 1 },
     large: { cell: 8, gap: 1 },
   };
   
@@ -69,10 +73,13 @@ const TierIcon = ({ shape, glowColor, size = 'default' }) => {
       </div>
     </div>
   );
-};
+});
+
+// Set display name for React DevTools
+TierIcon.displayName = 'TierIcon';
 
 // Tier icon with animation for special display
-export const AnimatedTierIcon = ({ shape, glowColor, size = 'default' }) => {
+export const AnimatedTierIcon = memo(({ shape, glowColor, size = 'default' }) => {
   return (
     <div className="relative animate-tier-pulse">
       <TierIcon shape={shape} glowColor={glowColor} size={size} />
@@ -93,6 +100,8 @@ export const AnimatedTierIcon = ({ shape, glowColor, size = 'default' }) => {
       `}</style>
     </div>
   );
-};
+});
+
+AnimatedTierIcon.displayName = 'AnimatedTierIcon';
 
 export default TierIcon;

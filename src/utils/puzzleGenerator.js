@@ -286,6 +286,11 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
 // Simple 1-move puzzle for speed mode (less strict requirements)
 export const generateSpeedPuzzle = () => {
   // Try to generate a simple 1-move puzzle where placing the correct piece blocks all remaining pieces
+  // Prefer puzzles where most/all moves are winning moves to reduce frustration
+  
+  let bestPuzzle = null;
+  let bestWinRatio = 0;
+  
   for (let attempt = 0; attempt < 50; attempt++) {
     const game = playCompleteGame();
     
@@ -327,22 +332,56 @@ export const generateSpeedPuzzle = () => {
       }
     }
     
-    // If we found at least one winning move, this is a valid puzzle
+    // If we found winning moves, check if this is a good puzzle
     if (winningMoves.length > 0) {
-      console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves`);
+      const winRatio = winningMoves.length / allMoves.length;
       
-      return {
-        id: `speed-puzzle-${Date.now()}`,
-        name: 'Speed Puzzle',
-        difficulty: PUZZLE_DIFFICULTY.EASY,
-        description: '1 move to win!',
-        boardState: boardToString(puzzleState.boardPieces),
-        usedPieces: [...puzzleState.usedPieces],
-        movesRemaining: 1,
-        // Store winning moves for debugging (not used in game)
-        _winningMoveCount: winningMoves.length
-      };
+      // Ideal puzzle: ALL moves are winning (100% win ratio)
+      // This means any valid placement wins - very intuitive!
+      if (winRatio >= 1.0) {
+        console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves (PERFECT - 100%)`);
+        return {
+          id: `speed-puzzle-${Date.now()}`,
+          name: 'Speed Puzzle',
+          difficulty: PUZZLE_DIFFICULTY.EASY,
+          description: '1 move to win!',
+          boardState: boardToString(puzzleState.boardPieces),
+          usedPieces: [...puzzleState.usedPieces],
+          movesRemaining: 1,
+          _winningMoveCount: winningMoves.length,
+          _totalMoves: allMoves.length
+        };
+      }
+      
+      // Track the best puzzle we've found so far
+      // Prefer higher win ratios (more intuitive puzzles)
+      if (winRatio > bestWinRatio) {
+        bestWinRatio = winRatio;
+        bestPuzzle = {
+          id: `speed-puzzle-${Date.now()}`,
+          name: 'Speed Puzzle',
+          difficulty: PUZZLE_DIFFICULTY.EASY,
+          description: '1 move to win!',
+          boardState: boardToString(puzzleState.boardPieces),
+          usedPieces: [...puzzleState.usedPieces],
+          movesRemaining: 1,
+          _winningMoveCount: winningMoves.length,
+          _totalMoves: allMoves.length
+        };
+      }
     }
+  }
+  
+  // Return the best puzzle found (prefer 50%+ win ratio)
+  if (bestPuzzle && bestWinRatio >= 0.5) {
+    console.log(`Speed puzzle generated: ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
+    return bestPuzzle;
+  }
+  
+  // If no good puzzle found, return the best we have (even if low win ratio)
+  if (bestPuzzle) {
+    console.log(`Speed puzzle generated (low quality): ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
+    return bestPuzzle;
   }
   
   console.error('Failed to generate winning speed puzzle after 50 attempts');

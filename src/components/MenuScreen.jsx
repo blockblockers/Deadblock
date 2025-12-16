@@ -387,7 +387,7 @@ const MenuScreen = ({
           <div className="text-center mt-4">
             <div className="flex items-center justify-center gap-3 text-xs">
               <a 
-                href="/privacy-policy.html" 
+                href="/privacy.html" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
@@ -396,7 +396,7 @@ const MenuScreen = ({
               </a>
               <span className="text-slate-700">•</span>
               <a 
-                href="/terms-of-service.html" 
+                href="/terms.html" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
