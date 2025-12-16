@@ -1,7 +1,26 @@
 // Game Sync Service - Real-time game state management
-// OPTIMIZED: Uses centralized RealtimeManager to reduce connection count
+// FIXED: makeMove now uses direct fetch to bypass Supabase client timeout issues
 import { supabase } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
+
+// Constants for direct fetch
+const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+  if (!authData?.access_token || !ANON_KEY) {
+    return null;
+  }
+  return {
+    'Authorization': `Bearer ${authData.access_token}`,
+    'apikey': ANON_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': 'return=representation'
+  };
+};
 
 class GameSyncService {
   constructor() {
@@ -46,32 +65,23 @@ class GameSyncService {
     this.currentGameId = null;
   }
 
-  // Get game state
+  // Get game state - uses direct fetch
   async getGame(gameId) {
     if (!supabase) return { data: null, error: { message: 'Not configured' } };
 
     console.log('gameSync.getGame: Starting fetch for game:', gameId);
 
-    const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
-    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
-    const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-    const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
-    if (!authData?.access_token || !ANON_KEY) {
+    const headers = getAuthHeaders();
+    if (!headers) {
       console.error('gameSync.getGame: No auth token');
       return { data: null, error: { message: 'Not authenticated' } };
     }
 
-    const headers = {
-      'Authorization': `Bearer ${authData.access_token}`,
-      'apikey': ANON_KEY,
-      'Content-Type': 'application/json',
-      'Accept': 'application/vnd.pgrst.object+json'
-    };
+    // Add Accept header for single object
+    headers['Accept'] = 'application/vnd.pgrst.object+json';
 
     try {
       // Fetch game
-      console.log('gameSync.getGame: Fetching game...');
       const gameResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}&select=*`,
         { headers }
@@ -79,28 +89,28 @@ class GameSyncService {
 
       if (!gameResponse.ok) {
         const errorText = await gameResponse.text();
-        console.error('gameSync.getGame: Game fetch failed:', errorText);
-        return { data: null, error: { message: 'Failed to fetch game' } };
+        console.error('gameSync.getGame: Fetch failed', gameResponse.status, errorText);
+        return { data: null, error: { message: `Failed to fetch game: ${gameResponse.status}` } };
       }
 
       const game = await gameResponse.json();
       
       if (!game || !game.id) {
-        console.log('gameSync.getGame: Game not found');
+        console.error('gameSync.getGame: No game found');
         return { data: null, error: { message: 'Game not found' } };
       }
 
-      console.log('gameSync.getGame: Game loaded, fetching profiles...');
+      console.log('gameSync.getGame: Game fetched successfully');
 
       // Fetch player profiles
-      const playerIds = [game.player1_id, game.player2_id].filter(Boolean);
       let player1 = null;
       let player2 = null;
 
+      const playerIds = [game.player1_id, game.player2_id].filter(Boolean);
       if (playerIds.length > 0) {
         const profileHeaders = { ...headers };
-        delete profileHeaders['Accept']; // Remove single object header for array result
-        
+        delete profileHeaders['Accept']; // Remove single object preference
+
         const profilesResponse = await fetch(
           `${SUPABASE_URL}/rest/v1/profiles?id=in.(${playerIds.join(',')})&select=*`,
           { headers: profileHeaders }
@@ -131,11 +141,20 @@ class GameSyncService {
     }
   }
 
-  // Make a move
+  // =====================================================
+  // FIXED: makeMove now uses direct fetch
+  // This fixes the "confirm doesn't submit" issue
+  // =====================================================
   async makeMove(gameId, playerId, moveData) {
     if (!supabase) return { error: { message: 'Not configured' } };
 
     console.log('gameSync.makeMove: Starting move', { gameId, playerId });
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      console.error('gameSync.makeMove: No auth token');
+      return { data: null, error: { message: 'Not authenticated' } };
+    }
 
     const { 
       pieceType, 
@@ -151,59 +170,116 @@ class GameSyncService {
       winnerId 
     } = moveData;
 
-    // Get current move count
-    const { count: moveCount, error: countError } = await supabase
-      .from('game_moves')
-      .select('*', { count: 'exact', head: true })
-      .eq('game_id', gameId);
+    try {
+      // Step 1: Get current move count using direct fetch
+      const countHeaders = { ...headers };
+      countHeaders['Prefer'] = 'count=exact';
+      countHeaders['Range-Unit'] = 'items';
+      countHeaders['Range'] = '0-0';
+      
+      let moveCount = 0;
+      try {
+        const countResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&select=id`,
+          { headers: countHeaders, method: 'HEAD' }
+        );
+        const contentRange = countResponse.headers.get('content-range');
+        if (contentRange) {
+          const match = contentRange.match(/\/(\d+)/);
+          if (match) moveCount = parseInt(match[1], 10);
+        }
+      } catch (e) {
+        console.log('gameSync.makeMove: Could not get move count, using 0');
+      }
 
-    // Record the move in history with board state for replays
-    const { data: moveRecord, error: moveError } = await supabase
-      .from('game_moves')
-      .insert({
+      console.log('gameSync.makeMove: Current move count:', moveCount);
+
+      // Step 2: Record the move in history using direct fetch
+      const moveInsertData = {
         game_id: gameId,
         player_id: playerId,
         piece_type: pieceType,
         row,
         col,
-        rotation,
+        rotation: rotation || 0,
         flipped: flipped || false,
-        move_number: (moveCount || 0) + 1,
+        move_number: moveCount + 1,
         board_state: { board: newBoard, boardPieces: newBoardPieces }
-      })
-      .select()
-      .single();
+      };
 
-    if (moveError) {
-      console.error('gameSync.makeMove: Error recording move:', moveError);
-    }
+      const moveInsertResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/game_moves`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(moveInsertData)
+        }
+      );
 
-    // Update game state
-    const updateData = {
-      board: newBoard,
-      board_pieces: newBoardPieces,
-      used_pieces: newUsedPieces,
-      current_player: nextPlayer,
-      updated_at: new Date().toISOString()
-    };
+      if (!moveInsertResponse.ok) {
+        const errorText = await moveInsertResponse.text();
+        console.error('gameSync.makeMove: Error recording move:', errorText);
+        // Don't fail the entire operation - move recording is for replay
+      } else {
+        console.log('gameSync.makeMove: Move recorded successfully');
+      }
 
-    if (gameOver) {
-      updateData.status = 'completed';
-      updateData.winner_id = winnerId || null;
+      // Step 3: Update game state using direct fetch
+      const updateData = {
+        board: newBoard,
+        board_pieces: newBoardPieces,
+        used_pieces: newUsedPieces,
+        current_player: nextPlayer,
+        updated_at: new Date().toISOString()
+      };
 
-      if (winnerId) {
+      if (gameOver) {
+        updateData.status = 'completed';
+        updateData.winner_id = winnerId || null;
+      }
+
+      console.log('gameSync.makeMove: Updating game state...', { 
+        nextPlayer, 
+        gameOver, 
+        usedPiecesCount: newUsedPieces.length 
+      });
+
+      const updateHeaders = { ...headers };
+      updateHeaders['Accept'] = 'application/vnd.pgrst.object+json';
+
+      const gameUpdateResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}`,
+        {
+          method: 'PATCH',
+          headers: updateHeaders,
+          body: JSON.stringify(updateData)
+        }
+      );
+
+      if (!gameUpdateResponse.ok) {
+        const errorText = await gameUpdateResponse.text();
+        console.error('gameSync.makeMove: Game update failed:', errorText);
+        return { data: null, error: { message: `Game update failed: ${gameUpdateResponse.status}` } };
+      }
+
+      const updatedGame = await gameUpdateResponse.json();
+      console.log('gameSync.makeMove: Game updated successfully', { 
+        newCurrentPlayer: updatedGame.current_player,
+        status: updatedGame.status 
+      });
+
+      // Step 4: Update player stats if game is over
+      if (gameOver && winnerId) {
+        console.log('gameSync.makeMove: Game over, updating stats...');
         await this.updatePlayerStats(gameId, winnerId);
       }
+
+      return { data: updatedGame, error: null };
+
+    } catch (e) {
+      console.error('gameSync.makeMove: Exception:', e.message);
+      return { data: null, error: { message: e.message } };
     }
-
-    const { data, error } = await supabase
-      .from('games')
-      .update(updateData)
-      .eq('id', gameId)
-      .select()
-      .single();
-
-    return { data, error };
   }
 
   // Update player statistics after game ends
@@ -217,26 +293,26 @@ class GameSyncService {
     const player2Id = game.player2_id;
     const loserId = winnerId === player1Id ? player2Id : player1Id;
 
-    // Update winner stats
-    await supabase.rpc('increment_player_stats', {
-      player_id: winnerId,
-      won: true
-    });
-
-    // Update loser stats
-    await supabase.rpc('increment_player_stats', {
-      player_id: loserId,
-      won: false
-    });
-
-    // Update ELO ratings
     try {
+      // Update winner stats
+      await supabase.rpc('increment_player_stats', {
+        player_id: winnerId,
+        won: true
+      });
+
+      // Update loser stats
+      await supabase.rpc('increment_player_stats', {
+        player_id: loserId,
+        won: false
+      });
+
+      // Update ELO ratings
       await supabase.rpc('update_ratings_after_game', {
         p_game_id: gameId,
         p_winner_id: winnerId
       });
     } catch (err) {
-      console.error('gameSync: Error updating ELO ratings:', err);
+      console.error('gameSync: Error updating stats:', err);
     }
 
     // Check achievements for both players
@@ -254,7 +330,7 @@ class GameSyncService {
     }
   }
 
-  // Forfeit/abandon game
+  // Forfeit/abandon game - uses direct fetch
   async forfeitGame(gameId, forfeitingPlayerId) {
     if (!supabase) return { error: { message: 'Not configured' } };
 
@@ -265,62 +341,79 @@ class GameSyncService {
       ? game.player2_id 
       : game.player1_id;
 
-    const { data, error } = await supabase
-      .from('games')
-      .update({
-        status: 'completed',
-        winner_id: winnerId,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', gameId)
-      .select()
-      .single();
-
-    if (!error) {
-      await this.updatePlayerStats(gameId, winnerId);
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return { data: null, error: { message: 'Not authenticated' } };
     }
 
-    return { data, error };
+    headers['Accept'] = 'application/vnd.pgrst.object+json';
+
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}`,
+        {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            status: 'completed',
+            winner_id: winnerId,
+            updated_at: new Date().toISOString()
+          })
+        }
+      );
+
+      if (!response.ok) {
+        return { data: null, error: { message: 'Forfeit failed' } };
+      }
+
+      const data = await response.json();
+      await this.updatePlayerStats(gameId, winnerId);
+
+      return { data, error: null };
+    } catch (e) {
+      return { data: null, error: { message: e.message } };
+    }
   }
 
   // Get game history/moves
   async getGameMoves(gameId) {
     if (!supabase) return { data: [], error: null };
 
-    const { data, error } = await supabase
-      .from('game_moves')
-      .select('*')
-      .eq('game_id', gameId)
-      .order('move_number', { ascending: true });
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return { data: [], error: { message: 'Not authenticated' } };
+    }
 
-    return { data: data || [], error };
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&order=move_number.asc&select=*`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        return { data: [], error: { message: 'Failed to fetch moves' } };
+      }
+
+      const data = await response.json();
+      return { data: data || [], error: null };
+    } catch (e) {
+      return { data: [], error: { message: e.message } };
+    }
   }
 
   // Get player's recent games - uses direct fetch
   async getPlayerGames(playerId, limit = 10) {
     if (!supabase) return { data: [], error: null };
 
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return { data: [], error: { message: 'No auth token' } };
+    }
+
     try {
-      // Get auth token for direct fetch
-      const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
-      const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
-      
-      if (!authData?.access_token) {
-        return { data: [], error: { message: 'No auth token' } };
-      }
-
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
-      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
       const gamesResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${playerId},player2_id.eq.${playerId})&order=created_at.desc&limit=${limit}&select=*`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authData.access_token}`,
-            'apikey': ANON_KEY,
-            'Content-Type': 'application/json'
-          }
-        }
+        { headers }
       );
 
       if (!gamesResponse.ok) {
@@ -338,13 +431,7 @@ class GameSyncService {
       
       const profilesResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/profiles?id=in.(${playerIds.join(',')})&select=id,username,rating`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authData.access_token}`,
-            'apikey': ANON_KEY,
-            'Content-Type': 'application/json'
-          }
-        }
+        { headers }
       );
 
       let profiles = [];
@@ -367,37 +454,22 @@ class GameSyncService {
     }
   }
 
-  // Get active games for a player
-  // Uses direct fetch to bypass Supabase client timeout issues
+  // Get active games for a player - uses direct fetch
   async getActiveGames(playerId) {
     if (!supabase) return { data: [], error: null };
 
+    const headers = getAuthHeaders();
+    if (!headers) {
+      console.log('[GameSync] No access token for getActiveGames');
+      return { data: [], error: { message: 'No auth token' } };
+    }
+
+    console.log('[GameSync] getActiveGames: Using direct fetch for', playerId);
+
     try {
-      // Get auth token and anon key for direct fetch
-      const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
-      const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
-      
-      if (!authData?.access_token) {
-        console.log('[GameSync] No access token for getActiveGames');
-        return { data: [], error: { message: 'No auth token' } };
-      }
-
-      // Use the anon key from environment (embedded at build time)
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
-      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-      console.log('[GameSync] getActiveGames: Using direct fetch for', playerId);
-
-      // Direct fetch - bypasses Supabase client issues
       const gamesResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${playerId},player2_id.eq.${playerId})&status=eq.active&order=updated_at.desc&select=*`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authData.access_token}`,
-            'apikey': ANON_KEY,
-            'Content-Type': 'application/json'
-          }
-        }
+        { headers }
       );
 
       if (!gamesResponse.ok) {
@@ -418,13 +490,7 @@ class GameSyncService {
       
       const profilesResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/profiles?id=in.(${playerIds.join(',')})&select=id,username,rating`,
-        {
-          headers: {
-            'Authorization': `Bearer ${authData.access_token}`,
-            'apikey': ANON_KEY,
-            'Content-Type': 'application/json'
-          }
-        }
+        { headers }
       );
 
       let profiles = [];

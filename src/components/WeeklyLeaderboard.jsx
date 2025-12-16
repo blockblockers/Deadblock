@@ -220,7 +220,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
                         </div>
                         <div className="min-w-0">
                           <div className={`font-medium truncate ${isCurrentUser ? 'text-red-300' : 'text-white'}`}>
-                            {entry.display_name || entry.username || 'Player'}
+                            {entry.display_name || entry.display_name || 'Player'}
                             {isCurrentUser && <span className="text-red-500 text-xs ml-1">(you)</span>}
                           </div>
                         </div>

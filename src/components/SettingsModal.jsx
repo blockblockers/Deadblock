@@ -41,20 +41,26 @@ const SettingsModal = ({ isOpen, onClose }) => {
   };
 
   const handleSignOut = async () => {
-    setSigningOut(true);
-    try {
-      // Clear local storage first
-      localStorage.removeItem('deadblock_settings');
-      
-      // Also clear Supabase auth data
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('sb-') || key.includes('supabase')) {
-          localStorage.removeItem(key);
-        }
-      });
-      
-      // Sign out using context method
-      const result = await signOut();
+  setSigningOut(true);
+  
+  // Clear local storage immediately for responsive UI
+  localStorage.removeItem('deadblock_settings');
+  localStorage.removeItem('deadblock_cached_profile');
+  localStorage.removeItem('deadblock_cached_user_id');
+  localStorage.removeItem('deadblock_cached_timestamp');
+  localStorage.removeItem('deadblock_entry_auth_passed');
+  
+  // Clear Supabase auth data
+  Object.keys(localStorage).forEach(key => {
+    if (key.startsWith('sb-') || key.includes('supabase')) {
+      try { localStorage.removeItem(key); } catch (e) {}
+    }
+  });
+  
+  try {
+    // Sign out with timeout - don't wait forever
+    const timeoutPromise = new Promise(resolve => setTimeout(resolve, 3000));
+    await Promise.race([signOut(), timeoutPromise]);
       
       if (result?.error) {
         console.error('Sign out error:', result.error);

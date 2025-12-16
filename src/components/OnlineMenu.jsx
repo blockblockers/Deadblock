@@ -859,39 +859,37 @@ const OnlineMenu = ({
               
               {/* Rating/Tier display */}
          {(() => {
-  const tier = ratingService.getRatingTier(profile?.rating || 1000);
-  const glowColor = tier?.glowColor || '#f59e0b';
+   const tier = ratingService.getRatingTier(profile?.rating || 1000);
+  const glowColor = tier?.glowColor || '#22d3ee';
   
-  // Helper to convert hex to rgba
   const hexToRgba = (hex, alpha) => {
-    if (!hex?.startsWith('#')) return `rgba(251, 191, 36, ${alpha})`;
+    if (!hex?.startsWith('#')) return `rgba(100, 116, 139, ${alpha})`;
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
   
-  // Get contrasting background based on tier
   const getTierBackground = () => {
     const backgrounds = {
-      '#f59e0b': 'rgba(30, 20, 60, 0.95)',   // Grandmaster amber → dark purple
-      '#a855f7': 'rgba(20, 40, 40, 0.95)',   // Master purple → dark teal
-      '#3b82f6': 'rgba(40, 25, 20, 0.95)',   // Expert blue → dark brown
-      '#22d3ee': 'rgba(40, 20, 40, 0.95)',   // Advanced cyan → dark magenta
-      '#22c55e': 'rgba(40, 20, 35, 0.95)',   // Intermediate green → dark rose
-      '#38bdf8': 'rgba(35, 25, 45, 0.95)',   // Beginner sky → dark purple
-      '#2dd4bf': 'rgba(40, 25, 50, 0.95)',   // Novice teal → dark violet
+      '#f59e0b': 'rgba(30, 20, 60, 0.95)',
+      '#a855f7': 'rgba(20, 40, 40, 0.95)',
+      '#3b82f6': 'rgba(40, 25, 20, 0.95)',
+      '#22d3ee': 'rgba(40, 20, 40, 0.95)',
+      '#22c55e': 'rgba(40, 20, 35, 0.95)',
+      '#38bdf8': 'rgba(35, 25, 45, 0.95)',
+      '#2dd4bf': 'rgba(40, 25, 50, 0.95)',
     };
     return backgrounds[glowColor] || 'rgba(15, 23, 42, 0.95)';
   };
   
   return (
     <div 
-      className="flex items-center justify-between rounded-xl px-4 py-3 transition-all"
+      className="flex items-center justify-between rounded-lg px-3 py-3"
       style={{
         background: `linear-gradient(135deg, ${getTierBackground()} 0%, ${hexToRgba(glowColor, 0.15)} 100%)`,
         border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
-        boxShadow: `0 0 25px ${hexToRgba(glowColor, 0.25)}, inset 0 0 30px ${hexToRgba(glowColor, 0.05)}`
+        boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.2)}, inset 0 0 30px ${hexToRgba(glowColor, 0.05)}`
       }}
     >
       <div className="flex items-center gap-3">

@@ -298,7 +298,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                           
                           {/* Name */}
                           <div className="flex-1 truncate text-sm text-white">
-                            {player.display_name || player.username || 'Player'}
+                            {player.display_name || player.display_name || 'Player'}
                           </div>
                           
                           {/* Time - show first attempt for ranking */}
