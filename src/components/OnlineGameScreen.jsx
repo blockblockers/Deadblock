@@ -877,8 +877,8 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           <div className="flex items-center justify-between mb-3 flex-shrink-0">
             <div className="flex-1" /> {/* Spacer for centering */}
             <div className="text-center">
-              <NeonTitle size="small" />
-              <NeonSubtitle text="ONLINE" size="tiny" color="amber" className="mt-1" />
+              <NeonTitle size="medium" />
+              <NeonSubtitle text="ONLINE" size="small" color="amber" className="mt-1" />
             </div>
             <div className="flex-1 flex justify-end">
               <button 
@@ -891,7 +891,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           </div>
 
           {/* Turn Indicator with Timer */}
-          <div className={`flex items-center justify-center gap-3 py-2 mb-2 rounded-lg font-bold text-sm flex-shrink-0 ${
+          <div className={`flex items-center justify-center gap-3 py-2 mb-2 rounded-lg font-bold text-base sm:text-lg flex-shrink-0 ${
             isMyTurn 
               ? `${theme.accentBg} ${theme.accent} border ${theme.accentBorder}` 
               : 'bg-slate-800/50 text-slate-400 border border-slate-700/50'
