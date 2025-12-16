@@ -1,7 +1,7 @@
 // Player Profile Card - Enhanced display for main menu with rating info, username editing, and achievements
 // UPDATED: Uses direct fetch to bypass Supabase client timeout issues
-// FIXED: Loads cached profile immediately on mount to prevent loading state after app reopen
-import { useState, useEffect, useMemo } from 'react';
+// FIXED: Handles missing achievement RPC functions gracefully
+import { useState, useEffect } from 'react';
 import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
@@ -275,7 +275,6 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     hasLocalCache: !!localCachedProfile,
     hasEffectiveProfile: !!effectiveProfile,
     profileUsername: effectiveProfile?.username,
-    // New conditions: show offline only if explicitly offline AND no cached profile
     willRenderOffline: isOffline && !effectiveProfile,
     willRenderLoading: !effectiveProfile && !isOffline,
     willRenderAuthenticated: !!effectiveProfile
@@ -330,25 +329,31 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     };
   }, [isAuthenticated, profile, localCachedProfile, refreshProfile]);
   
-  // Load achievement count
+  // =====================================================
+  // FIXED: Load achievement count with graceful fallback
+  // Handles missing RPC functions without errors
+  // =====================================================
   useEffect(() => {
     if (effectiveProfile?.id) {
-      // Check if getAchievementStats exists before calling
-      if (typeof achievementService?.getAchievementStats === 'function') {
-        achievementService.getAchievementStats(effectiveProfile.id).then(result => {
-          if (result.data) {
-            setAchievementCount({
-              unlocked: result.data.unlockedCount || 0,
-              total: result.data.totalAchievements || 0
-            });
+      const loadAchievements = async () => {
+        try {
+          // Check if getAchievementStats exists before calling
+          if (typeof achievementService?.getAchievementStats === 'function') {
+            const result = await achievementService.getAchievementStats(effectiveProfile.id);
+            if (result.data) {
+              setAchievementCount({
+                unlocked: result.data.unlockedCount || 0,
+                total: result.data.totalAchievements || 0
+              });
+            }
           }
-        }).catch((err) => {
-          console.warn('[PlayerProfileCard] Achievement stats error:', err);
-          // Achievements may not be available
-        });
-      } else {
-        console.warn('[PlayerProfileCard] achievementService.getAchievementStats is not available');
-      }
+        } catch (err) {
+          // Silently fail - achievements are optional feature
+          console.log('[PlayerProfileCard] Achievements not available:', err.message);
+        }
+      };
+      
+      loadAchievements();
     }
   }, [effectiveProfile?.id]);
   
@@ -379,7 +384,6 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   };
   
   // Offline mode display - only show if explicitly offline AND no cached profile
-  // If we have a profile (even from cache), show the authenticated view
   if (isOffline && !effectiveProfile) {
     console.log('[PlayerProfileCard] Rendering: OFFLINE mode button (no profile)');
     return (

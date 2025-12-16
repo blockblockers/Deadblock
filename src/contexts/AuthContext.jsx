@@ -1,6 +1,6 @@
 // Authentication Context with Local Profile Caching
-// UPDATED: signOut now clears local state FIRST with timeout protection
-// PERFORMANCE FIX: Provider value is now memoized to prevent unnecessary re-renders
+// PERFORMANCE FIX: Provider value is memoized with useMemo
+// NOTE: Original signInWithGoogle and signOut behavior preserved
 import { useState, useEffect, createContext, useContext, useCallback, useRef, useMemo } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
@@ -486,40 +486,99 @@ export const AuthProvider = ({ children }) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
     // Validate username format
-    if (!username || username.length < 3) {
-      return { error: { message: 'Username must be at least 3 characters' } };
+    if (!username || username.length < 3 || username.length > 20) {
+      return { error: { message: 'Username must be 3-20 characters' } };
     }
-    
     if (!/^[a-zA-Z0-9_]+$/.test(username)) {
       return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
     }
 
+    // Check if username is taken
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username)
+      .single();
+
+    if (existing) {
+      return { error: { message: 'Username already taken' } };
+    }
+
+    // Sign up the user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: {
-          username: username
-        }
+        data: { 
+          username, 
+          display_name: username 
+        },
+        // Don't require email verification redirect
+        emailRedirectTo: undefined
       }
     });
 
+    // If signup succeeded but we got a database error, try to manually create profile
+    if (!error && data?.user) {
+      // Wait a moment for the trigger to run
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Check if profile was created
+      const { data: profileCheck } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', data.user.id)
+        .single();
+      
+      // If no profile exists, create it manually
+      if (!profileCheck) {
+        console.log('Profile not created by trigger, creating manually...');
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            username: username,
+            display_name: username
+          });
+        
+        if (profileError) {
+          console.error('Failed to create profile manually:', profileError);
+        }
+      }
+      
+      // Check if email confirmation is required
+      // If session exists, user is auto-confirmed
+      const needsEmailConfirmation = !data.session;
+      
+      // Mark as new user to show welcome modal
+      setIsNewUser(true);
+      
+      return { 
+        data, 
+        error: null, 
+        needsEmailConfirmation,
+        isNewUser: true
+      };
+    }
+
+    // Handle specific error messages
     if (error) {
-      // Make error messages more friendly
       let friendlyMessage = error.message;
-      if (error.message.includes('User already registered')) {
-        friendlyMessage = 'An account with this email already exists. Please try signing in.';
+      
+      if (error.message.includes('database error')) {
+        friendlyMessage = 'Account created but profile setup failed. Please try signing in.';
       } else if (error.message.includes('already registered')) {
         friendlyMessage = 'An account with this email already exists';
       } else if (error.message.includes('invalid email')) {
         friendlyMessage = 'Please enter a valid email address';
       } else if (error.message.includes('weak password')) {
-        friendlyMessage = 'Password is too weak. Please use at least 6 characters.';
+        friendlyMessage = 'Password is too weak. Use at least 6 characters';
       }
-      return { data: null, error: { ...error, message: friendlyMessage } };
+      
+      return { data, error: { ...error, message: friendlyMessage } };
     }
 
-    return { data, error: null };
+    return { data, error };
   }, []);
 
   const signIn = useCallback(async (email, password) => {
@@ -530,47 +589,47 @@ export const AuthProvider = ({ children }) => {
       password
     });
 
-    if (error) {
-      let friendlyMessage = error.message;
-      if (error.message.includes('Invalid login credentials')) {
-        friendlyMessage = 'Invalid email or password';
-      }
-      return { data: null, error: { ...error, message: friendlyMessage } };
-    }
-
-    return { data, error: null };
+    return { data, error };
   }, []);
 
+  // =====================================================
+  // ORIGINAL signInWithGoogle - NO pending intent, NO queryParams
+  // This preserves the behavior where:
+  // 1. User doesn't get redirected to online menu after auth
+  // 2. Google doesn't ask for re-confirmation if already authorized
+  // =====================================================
   const signInWithGoogle = useCallback(async () => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
+    console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
+    
     try {
-      console.log('Starting Google OAuth...');
-      
-      // Store pending online intent before redirect
-      localStorage.setItem('deadblock_pending_online_intent', 'true');
-      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          }
+          skipBrowserRedirect: false, // Ensure redirect happens
         }
       });
-
+      
+      console.log('[AuthContext] Google OAuth result:', { data, error });
+      
       if (error) {
-        console.error('Google OAuth error:', error);
-        localStorage.removeItem('deadblock_pending_online_intent');
-        return { data: null, error };
+        console.error('[AuthContext] Google OAuth error:', error);
+        return { data, error };
       }
-
-      console.log('Google OAuth initiated, redirect pending...');
-      return { data, error: null };
+      
+      // If we get here without redirect, there might be an issue
+      // The browser should be redirecting, so wait a moment
+      if (data?.url) {
+        console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
+        // Manually redirect if the auto-redirect didn't work
+        window.location.href = data.url;
+      }
+      
+      return { data, error };
     } catch (err) {
-      console.error('Google OAuth exception:', err);
+      console.error('[AuthContext] Google OAuth exception:', err);
       return { data: null, error: { message: err.message || 'Failed to start Google Sign In' } };
     }
   }, []);
@@ -581,7 +640,7 @@ export const AuthProvider = ({ children }) => {
     const { data, error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: `${window.location.origin}/auth/callback?type=magiclink`
       }
     });
 
@@ -589,49 +648,22 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // =====================================================
-  // FIXED SIGN OUT - Clears local state first with timeout
+  // ORIGINAL signOut - Simple version without timeout
   // =====================================================
   const signOut = useCallback(async () => {
-    console.log('[AuthContext] signOut: Starting...');
+    if (!supabase) return;
     
-    // CRITICAL: Clear local state FIRST before attempting Supabase call
-    // This ensures the user is "logged out" from the app's perspective
-    // even if the Supabase call times out
-    setUser(null);
-    setProfile(null);
-    
-    // Clear entry auth flag so user sees auth screen on next visit
-    localStorage.removeItem('deadblock_entry_auth_passed');
-    
-    // Clear pending online intent
-    localStorage.removeItem('deadblock_pending_online_intent');
-    localStorage.removeItem('deadblock_pending_auth_destination');
-    
-    // Clear cached profile
-    clearCachedProfile();
-    
-    console.log('[AuthContext] signOut: Cleared local state, now attempting Supabase call...');
-    
-    // Now attempt Supabase sign out with timeout
-    // If this fails/times out, we don't care - local state is already cleared
-    if (supabase) {
-      try {
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Sign out timeout')), 3000)
-        );
-        
-        const signOutPromise = supabase.auth.signOut();
-        
-        await Promise.race([signOutPromise, timeoutPromise]);
-        console.log('[AuthContext] signOut: Supabase sign out successful');
-      } catch (err) {
-        console.warn('[AuthContext] signOut: Supabase call failed/timed out (this is OK):', err.message);
-        // This is fine - local state is already cleared
-      }
+    const { error } = await supabase.auth.signOut();
+    if (!error) {
+      setUser(null);
+      setProfile(null);
+      // Clear entry auth flag so user sees auth screen on next visit
+      localStorage.removeItem('deadblock_entry_auth_passed');
+      // Clear cached profile
+      clearCachedProfile();
+      console.log('[AuthContext] signOut: Cleared user, profile, and cache');
     }
-    
-    console.log('[AuthContext] signOut: Complete');
-    return { error: null };
+    return { error };
   }, []);
 
   const resetPassword = useCallback(async (email) => {
@@ -645,24 +677,24 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const updateEmail = useCallback(async (newEmail) => {
-    if (!supabase) return { error: { message: 'Online features not configured' } };
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
 
     const { data, error } = await supabase.auth.updateUser({
       email: newEmail
     });
 
     return { data, error };
-  }, []);
+  }, [user]);
 
   const updatePassword = useCallback(async (newPassword) => {
-    if (!supabase) return { error: { message: 'Online features not configured' } };
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
 
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword
     });
 
     return { data, error };
-  }, []);
+  }, [user]);
 
   const updateProfile = useCallback(async (updates) => {
     if (!supabase || !user) return { error: { message: 'Not authenticated' } };
@@ -683,7 +715,6 @@ export const AuthProvider = ({ children }) => {
     return { data, error };
   }, [user]);
 
-  // Check if username is available
   const checkUsernameAvailable = useCallback(async (username) => {
     if (!supabase) return { available: false, error: { message: 'Not configured' } };
     
