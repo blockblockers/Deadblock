@@ -1,22 +1,55 @@
 // Player Stats Modal - Comprehensive stats display
-// FIXES: Scroll behavior on mobile - users can now scroll back up after scrolling down
+// FIXES:
+// 1. Uses username priority (same as PlayerProfileCard)
+// 2. Enhanced tier-based theming
+// 3. Scroll behavior on mobile
 
 import { useState, useEffect, useRef } from 'react';
-import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { statsService } from '../utils/statsService';
 import { getRankInfo } from '../utils/rankUtils';
 import { soundManager } from '../utils/soundManager';
+import TierIcon from './TierIcon';
 import AchievementsDisplay from './AchievementsDisplay';
+
+// Helper to convert hex to rgba
+const hexToRgba = (hex, alpha) => {
+  if (!hex || !hex.startsWith('#')) return `rgba(34, 211, 238, ${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+// Get contrasting background for tier
+const getTierBackground = (glowColor) => {
+  const backgrounds = {
+    '#f59e0b': 'rgba(30, 20, 60, 0.95)',   // Grandmaster
+    '#a855f7': 'rgba(20, 40, 40, 0.95)',   // Master
+    '#3b82f6': 'rgba(40, 25, 20, 0.95)',   // Expert
+    '#22d3ee': 'rgba(40, 20, 40, 0.95)',   // Advanced
+    '#22c55e': 'rgba(40, 20, 35, 0.95)',   // Intermediate
+    '#38bdf8': 'rgba(35, 25, 45, 0.95)',   // Beginner
+    '#2dd4bf': 'rgba(40, 25, 50, 0.95)',   // Novice
+  };
+  return backgrounds[glowColor] || 'rgba(15, 23, 42, 0.95)';
+};
 
 const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const { profile, updateProfile } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState(false);
-  const [newDisplayName, setNewDisplayName] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
   const [expandedSection, setExpandedSection] = useState('overview');
   const scrollContainerRef = useRef(null);
+  
+  // Get tier info for theming
+  const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
+  const glowColor = rankInfo?.glowColor || '#22d3ee';
   
   useEffect(() => {
     if (isOpen && !isOffline) {
@@ -26,7 +59,8 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   
   useEffect(() => {
     if (profile) {
-      setNewDisplayName(profile.display_name || profile.username || '');
+      // FIX: Use username priority (same as PlayerProfileCard)
+      setNewUsername(profile.username || profile.display_name || '');
     }
   }, [profile]);
   
@@ -46,12 +80,40 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
     setLoading(false);
   };
   
-  const handleSaveDisplayName = async () => {
-    if (newDisplayName.trim() && newDisplayName !== profile?.display_name) {
-      await updateProfile({ display_name: newDisplayName.trim() });
-      soundManager.playClickSound('success');
+  const handleSaveUsername = async () => {
+    if (!newUsername.trim()) return;
+    
+    // Validate
+    if (newUsername.length < 3) {
+      setUsernameError('Username must be at least 3 characters');
+      return;
     }
-    setEditingName(false);
+    if (newUsername.length > 20) {
+      setUsernameError('Username must be 20 characters or less');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
+      setUsernameError('Only letters, numbers, and underscores allowed');
+      return;
+    }
+    
+    setSavingUsername(true);
+    setUsernameError('');
+    
+    // Update both username and display_name
+    const { error } = await updateProfile({ 
+      username: newUsername.toLowerCase(),
+      display_name: newUsername 
+    });
+    
+    setSavingUsername(false);
+    
+    if (error) {
+      setUsernameError(error.message || 'Failed to update username');
+    } else {
+      soundManager.playClickSound('success');
+      setEditingName(false);
+    }
   };
   
   const toggleSection = (section) => {
@@ -61,13 +123,18 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   
   if (!isOpen) return null;
   
-  const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
-  const RankIcon = rankInfo?.icon;
-  const displayName = profile?.display_name || profile?.username || 'Player';
+  // FIX: Use username priority (same as PlayerProfileCard button)
+  const displayName = profile?.username || profile?.display_name || 'Player';
   
-  // Stat card component
+  // Stat card component - Tier themed
   const StatCard = ({ icon: Icon, label, value, subValue, color = 'cyan' }) => (
-    <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/50">
+    <div 
+      className="rounded-lg p-3"
+      style={{
+        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+        border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+      }}
+    >
       <div className="flex items-center gap-2 mb-1">
         <Icon size={14} className={`text-${color}-400`} />
         <span className="text-slate-400 text-xs">{label}</span>
@@ -77,14 +144,21 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
     </div>
   );
   
-  // Collapsible section component
+  // Collapsible section component - Tier themed
   const Section = ({ id, title, icon: Icon, color, children }) => {
     const isExpanded = expandedSection === id;
     return (
-      <div className="border border-slate-700/50 rounded-xl overflow-hidden">
+      <div 
+        className="rounded-xl overflow-hidden"
+        style={{ border: `1px solid ${hexToRgba(glowColor, 0.2)}` }}
+      >
         <button
           onClick={() => toggleSection(id)}
-          className={`w-full flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800/80 transition-colors ${isExpanded ? 'border-b border-slate-700/50' : ''}`}
+          className="w-full flex items-center justify-between p-3 transition-colors"
+          style={{ 
+            backgroundColor: isExpanded ? hexToRgba(glowColor, 0.1) : 'rgba(30, 41, 59, 0.5)',
+            borderBottom: isExpanded ? `1px solid ${hexToRgba(glowColor, 0.2)}` : 'none'
+          }}
         >
           <div className="flex items-center gap-2">
             <Icon size={16} className={`text-${color}-400`} />
@@ -116,8 +190,11 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         </div>
         <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
           <div 
-            className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all"
-            style={{ width: `${rate}%` }}
+            className="h-full rounded-full transition-all"
+            style={{ 
+              width: `${rate}%`,
+              background: `linear-gradient(90deg, ${glowColor}, ${hexToRgba(glowColor, 0.6)})`
+            }}
           />
         </div>
       </div>
@@ -126,7 +203,6 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   
   // Handle touch events to prevent modal close on scroll
   const handleTouchMove = (e) => {
-    // Allow scrolling within the scroll container
     e.stopPropagation();
   };
   
@@ -137,24 +213,38 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       onClick={onClose}
     >
       <div 
-        className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[85vh] border border-slate-700/50 shadow-2xl flex flex-col"
+        className="w-full max-w-md max-h-[85vh] rounded-2xl flex flex-col"
         onClick={e => e.stopPropagation()}
-        style={{ minHeight: 0 }} // Critical for flex scroll to work
+        style={{ 
+          minHeight: 0,
+          background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, rgba(15, 23, 42, 0.98) 50%, ${hexToRgba(glowColor, 0.05)} 100%)`,
+          border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
+          boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}, inset 0 0 40px ${hexToRgba(glowColor, 0.05)}`
+        }}
       >
-        {/* Header - Fixed */}
-        <div className="p-4 border-b border-slate-700/50 bg-gradient-to-r from-slate-800 to-slate-900 flex-shrink-0 rounded-t-2xl">
+        {/* Header - Fixed, Tier themed */}
+        <div 
+          className="p-4 flex-shrink-0 rounded-t-2xl"
+          style={{ 
+            background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.15)} 0%, rgba(15, 23, 42, 0.9) 100%)`,
+            borderBottom: `1px solid ${hexToRgba(glowColor, 0.3)}`
+          }}
+        >
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              {/* Avatar */}
+              {/* Avatar with Tier Icon */}
               <div 
-                className="w-16 h-16 rounded-full overflow-hidden border-2 flex items-center justify-center flex-shrink-0"
+                className="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
                 style={{ 
-                  borderColor: rankInfo?.color || '#64748b',
-                  backgroundColor: rankInfo?.color + '20' || '#475569'
+                  background: `radial-gradient(circle at 30% 30%, ${getTierBackground(glowColor)}, rgba(10, 15, 25, 0.98))`,
+                  border: `3px solid ${hexToRgba(glowColor, 0.6)}`,
+                  boxShadow: `0 0 25px ${hexToRgba(glowColor, 0.4)}`
                 }}
               >
                 {profile?.avatar_url ? (
                   <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : rankInfo ? (
+                  <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="large" />
                 ) : (
                   <User size={28} className="text-white/60" />
                 )}
@@ -163,24 +253,56 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
               {/* Name and rank */}
               <div className="min-w-0 flex-1">
                 {editingName ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newDisplayName}
-                      onChange={(e) => setNewDisplayName(e.target.value)}
-                      className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm w-32"
-                      autoFocus
-                      maxLength={20}
-                    />
-                    <button onClick={handleSaveDisplayName} className="text-green-400 hover:text-green-300">
-                      <Check size={16} />
-                    </button>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newUsername}
+                        onChange={(e) => {
+                          setNewUsername(e.target.value);
+                          setUsernameError('');
+                        }}
+                        className="bg-slate-800 rounded px-2 py-1 text-white text-sm w-32 focus:outline-none"
+                        style={{ border: `1px solid ${hexToRgba(glowColor, 0.5)}` }}
+                        autoFocus
+                        maxLength={20}
+                      />
+                      <button 
+                        onClick={handleSaveUsername} 
+                        disabled={savingUsername}
+                        className="text-green-400 hover:text-green-300 disabled:opacity-50"
+                      >
+                        {savingUsername ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setEditingName(false);
+                          setNewUsername(profile?.username || profile?.display_name || '');
+                          setUsernameError('');
+                        }}
+                        className="text-slate-500 hover:text-slate-300"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    {usernameError && (
+                      <p className="text-red-400 text-xs">{usernameError}</p>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-bold text-lg truncate">{displayName}</span>
+                    <span 
+                      className="font-bold text-lg truncate"
+                      style={{ color: '#f1f5f9', textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
+                    >
+                      {displayName}
+                    </span>
                     {!isOffline && (
-                      <button onClick={() => setEditingName(true)} className="text-slate-500 hover:text-slate-300 flex-shrink-0">
+                      <button 
+                        onClick={() => setEditingName(true)} 
+                        className="flex-shrink-0 transition-colors"
+                        style={{ color: hexToRgba(glowColor, 0.6) }}
+                      >
                         <Edit2 size={14} />
                       </button>
                     )}
@@ -189,8 +311,10 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 
                 {rankInfo && !isOffline && (
                   <div className="flex items-center gap-2 mt-1">
-                    {RankIcon && <RankIcon size={14} style={{ color: rankInfo.color }} />}
-                    <span style={{ color: rankInfo.color }} className="text-sm font-medium">
+                    <span 
+                      className="text-sm font-bold uppercase tracking-wider"
+                      style={{ color: glowColor, textShadow: `0 0 8px ${hexToRgba(glowColor, 0.5)}` }}
+                    >
                       {rankInfo.name}
                     </span>
                     <span className="text-slate-500 text-sm">
@@ -209,7 +333,8 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
             
             <button 
               onClick={onClose}
-              className="text-slate-400 hover:text-white transition-colors flex-shrink-0"
+              className="transition-colors flex-shrink-0"
+              style={{ color: hexToRgba(glowColor, 0.6) }}
             >
               <X size={20} />
             </button>
@@ -226,8 +351,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
             overflowX: 'hidden',
             WebkitOverflowScrolling: 'touch',
             overscrollBehaviorY: 'contain',
-            minHeight: 0, // Critical for flex scroll
-            // Remove touchAction to allow natural scrolling
+            minHeight: 0,
           }}
         >
           {isOffline ? (
@@ -238,7 +362,10 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
             </div>
           ) : loading ? (
             <div className="text-center py-8">
-              <div className="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto" />
+              <div 
+                className="w-8 h-8 border-2 rounded-full animate-spin mx-auto"
+                style={{ borderColor: hexToRgba(glowColor, 0.3), borderTopColor: glowColor }}
+              />
               <p className="text-slate-400 mt-3">Loading stats...</p>
             </div>
           ) : (
@@ -284,118 +411,128 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
               {/* Online Stats */}
               <Section id="online" title="Online Matches" icon={Globe} color="blue">
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="text-green-400 font-bold text-lg">{stats?.games_won || 0}</div>
-                      <div className="text-slate-500 text-xs">Wins</div>
-                    </div>
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="text-red-400 font-bold text-lg">{(stats?.games_played || 0) - (stats?.games_won || 0)}</div>
-                      <div className="text-slate-500 text-xs">Losses</div>
-                    </div>
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="text-cyan-400 font-bold text-lg">{stats?.onlineWinRate || 0}%</div>
-                      <div className="text-slate-500 text-xs">Win Rate</div>
-                    </div>
+                  <WinRateBar 
+                    wins={stats?.games_won || 0} 
+                    total={stats?.games_played || 0} 
+                    label="Overall"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <StatCard 
+                      icon={Trophy} 
+                      label="Wins" 
+                      value={stats?.games_won || 0}
+                      color="green"
+                    />
+                    <StatCard 
+                      icon={Target} 
+                      label="Games" 
+                      value={stats?.games_played || 0}
+                      color="blue"
+                    />
                   </div>
-                  
-                  <div className="bg-slate-800/50 rounded-lg p-3">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock size={14} className="text-slate-400" />
-                      <span className="text-slate-400 text-xs">Total Games</span>
+                  {(stats?.highest_rating || 0) > 0 && (
+                    <div 
+                      className="text-center p-2 rounded-lg"
+                      style={{ 
+                        backgroundColor: hexToRgba(glowColor, 0.1),
+                        border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                      }}
+                    >
+                      <span className="text-slate-400 text-sm">Highest Rating: </span>
+                      <span style={{ color: glowColor }} className="font-bold">{stats?.highest_rating}</span>
                     </div>
-                    <div className="text-white font-bold text-xl">{stats?.games_played || 0}</div>
-                  </div>
+                  )}
                 </div>
               </Section>
               
               {/* AI Stats */}
-              <Section id="ai" title="VS AI" icon={Bot} color="purple">
+              <Section id="ai" title="AI Battles" icon={Bot} color="purple">
                 <div className="space-y-3">
                   <WinRateBar 
-                    wins={stats?.ai_beginner_wins || 0} 
-                    total={stats?.ai_beginner_games || 0} 
-                    label="Beginner AI"
+                    wins={stats?.aiTotalWins || 0} 
+                    total={stats?.aiTotalGames || 0} 
+                    label="Overall vs AI"
                   />
-                  <WinRateBar 
-                    wins={stats?.ai_intermediate_wins || 0} 
-                    total={stats?.ai_intermediate_games || 0} 
-                    label="Intermediate AI"
-                  />
-                  <WinRateBar 
-                    wins={stats?.ai_expert_wins || 0} 
-                    total={stats?.ai_expert_games || 0} 
-                    label="Expert AI"
-                  />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/20">
+                      <div className="text-green-400 font-bold">{stats?.ai_easy_wins || 0}</div>
+                      <div className="text-slate-500 text-xs">Easy</div>
+                    </div>
+                    <div className="text-center p-2 bg-amber-900/20 rounded-lg border border-amber-500/20">
+                      <div className="text-amber-400 font-bold">{stats?.ai_medium_wins || 0}</div>
+                      <div className="text-slate-500 text-xs">Medium</div>
+                    </div>
+                    <div className="text-center p-2 bg-red-900/20 rounded-lg border border-red-500/20">
+                      <div className="text-red-400 font-bold">{stats?.ai_hard_wins || 0}</div>
+                      <div className="text-slate-500 text-xs">Hard</div>
+                    </div>
+                  </div>
                 </div>
               </Section>
               
               {/* Puzzle Stats */}
               <Section id="puzzles" title="Puzzles" icon={Target} color="green">
                 <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="bg-slate-800/50 rounded-lg p-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/20">
                       <div className="text-green-400 font-bold">{stats?.puzzles_easy_solved || 0}</div>
                       <div className="text-slate-500 text-xs">Easy</div>
                     </div>
-                    <div className="bg-slate-800/50 rounded-lg p-2">
+                    <div className="text-center p-2 bg-amber-900/20 rounded-lg border border-amber-500/20">
                       <div className="text-amber-400 font-bold">{stats?.puzzles_medium_solved || 0}</div>
                       <div className="text-slate-500 text-xs">Medium</div>
                     </div>
-                    <div className="bg-slate-800/50 rounded-lg p-2">
-                      <div className="text-purple-400 font-bold">{stats?.puzzles_hard_solved || 0}</div>
+                    <div className="text-center p-2 bg-red-900/20 rounded-lg border border-red-500/20">
+                      <div className="text-red-400 font-bold">{stats?.puzzles_hard_solved || 0}</div>
                       <div className="text-slate-500 text-xs">Hard</div>
                     </div>
                   </div>
                   
-                  <div className="bg-slate-800/50 rounded-lg p-3">
+                  {/* Speed Puzzle Stats */}
+                  <div 
+                    className="p-3 rounded-lg"
+                    style={{ 
+                      backgroundColor: hexToRgba(glowColor, 0.05),
+                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                    }}
+                  >
                     <div className="flex items-center gap-2 mb-2">
-                      <Zap size={14} className="text-orange-400" />
-                      <span className="text-slate-400 text-xs">Speed Puzzle</span>
+                      <Zap size={14} style={{ color: glowColor }} />
+                      <span className="text-slate-300 text-sm font-medium">Speed Puzzles</span>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
                       <div>
-                        <div className="text-slate-500 text-xs">Completed</div>
-                        <div className="text-white font-bold">{stats?.speed_puzzles_completed || 0}</div>
+                        <span className="text-slate-500">Solved: </span>
+                        <span className="text-white font-bold">{stats?.speed_puzzles_solved || 0}</span>
                       </div>
-                      <div className="h-8 w-px bg-slate-700" />
                       <div>
-                        <div className="text-slate-500 text-xs">Best Streak</div>
-                        <div className="text-orange-400 font-bold">{stats?.speed_best_streak || 0}</div>
+                        <span className="text-slate-500">Best Streak: </span>
+                        <span className="text-amber-400 font-bold">{stats?.speed_best_streak || 0}</span>
                       </div>
+                      {stats?.speed_best_time && (
+                        <div className="col-span-2">
+                          <span className="text-slate-500">Best Time: </span>
+                          <span style={{ color: glowColor }} className="font-bold">
+                            {(stats.speed_best_time / 1000).toFixed(2)}s
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               </Section>
-              
-              {/* Local Stats */}
-              <Section id="local" title="Local 2P" icon={Users} color="pink">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                    <div className="text-cyan-400 font-bold text-lg">{stats?.local_player1_wins || 0}</div>
-                    <div className="text-slate-500 text-xs">Player 1 Wins</div>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                    <div className="text-pink-400 font-bold text-lg">{stats?.local_player2_wins || 0}</div>
-                    <div className="text-slate-500 text-xs">Player 2 Wins</div>
-                  </div>
-                </div>
-              </Section>
-              
-              {/* Bottom padding for scroll */}
-              <div className="h-4" />
             </>
           )}
         </div>
         
-        {/* Footer with close button - Fixed */}
-        <div className="p-3 border-t border-slate-700/50 bg-slate-800/50 flex-shrink-0 rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="w-full py-2.5 rounded-lg font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 transition-all"
-          >
-            Close
-          </button>
+        {/* Footer */}
+        <div 
+          className="p-3 text-center flex-shrink-0 rounded-b-2xl"
+          style={{ borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}` }}
+        >
+          <p className="text-slate-600 text-xs">
+            Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
+          </p>
         </div>
       </div>
     </div>

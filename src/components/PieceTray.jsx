@@ -62,11 +62,7 @@ const PieceTray = ({
 
   return (
     <div className={`bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-xl p-2 border border-cyan-500/30 shadow-[0_0_25px_rgba(34,211,238,0.15),inset_0_0_30px_rgba(0,0,0,0.3)] mt-2 ${isGeneratingPuzzle ? 'opacity-50' : ''}`}>
-      {/* Header with scan line effect */}
-      <div className="text-xs font-semibold text-cyan-300/80 text-center mb-2 tracking-widest relative">
-        <span className="relative z-10">PIECES: {safeUsedPieces.length}/12 USED</span>
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent" />
-      </div>
+      {/* UPDATED: Piece grid moved to top */}
       <div className="grid grid-cols-6 gap-1.5">
         {pieces && Object.entries(pieces).map(([name, coords]) => {
           const isUsed = safeUsedPieces.includes(name);
@@ -93,6 +89,12 @@ const PieceTray = ({
             </button>
           );
         })}
+      </div>
+      
+      {/* UPDATED: Counter moved below the pieces grid */}
+      <div className="text-xs font-semibold text-cyan-300/80 text-center mt-2 tracking-widest relative">
+        <span className="relative z-10">PIECES: {safeUsedPieces.length}/12 USED</span>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent" />
       </div>
     </div>
   );

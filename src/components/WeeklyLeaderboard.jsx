@@ -1,4 +1,5 @@
 // Weekly Leaderboard - Shows rankings for weekly challenge
+// FIXED: Uses username priority (not display_name)
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Trophy, Crown, Medal, User, Clock, RefreshCw, Calendar } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
@@ -82,6 +83,13 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
   const getDisplayTime = (entry) => {
     return entry.first_attempt_time_ms || entry.completion_time_ms;
   };
+
+  // =====================================================
+  // FIX: Get display name with USERNAME priority
+  // =====================================================
+  const getPlayerName = (entry) => {
+    return entry.username || entry.display_name || 'Player';
+  };
   
   return (
     <div 
@@ -90,36 +98,28 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
     >
       {/* Background - RED THEME */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
+        backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-red-500/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-rose-500/15 rounded-full blur-3xl pointer-events-none" />
       
-      {/* Content */}
+      {/* Glowing orbs */}
+      <div className="fixed top-10 right-20 w-64 h-64 bg-red-500/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-20 left-10 w-48 h-48 bg-rose-500/25 rounded-full blur-3xl pointer-events-none" />
+      
       <div className="relative min-h-screen px-4 py-6">
         <div className="max-w-md mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleBack}
-                className="p-2 text-slate-400 hover:text-red-300 transition-colors"
-              >
-                <ArrowLeft size={24} />
-              </button>
-              <div>
-                <h1 className="text-xl font-black text-red-300 flex items-center gap-2">
-                  <Trophy size={24} />
-                  WEEKLY LEADERBOARD
-                </h1>
-                <div className="flex items-center gap-2 text-slate-500 text-sm">
-                  <Calendar size={14} />
-                  Week {challenge.week_number}, {challenge.year}
-                </div>
-              </div>
+            <button
+              onClick={handleBack}
+              className="p-2 text-slate-400 hover:text-red-300 transition-colors"
+            >
+              <ArrowLeft size={24} />
+            </button>
+            <div className="flex items-center gap-2">
+              <Trophy size={24} className="text-red-400" />
+              <h1 className="text-xl font-bold text-red-300">Leaderboard</h1>
             </div>
-            
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -219,8 +219,9 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
                           )}
                         </div>
                         <div className="min-w-0">
+                          {/* FIX: Use username priority */}
                           <div className={`font-medium truncate ${isCurrentUser ? 'text-red-300' : 'text-white'}`}>
-                            {entry.display_name || entry.display_name || 'Player'}
+                            {getPlayerName(entry)}
                             {isCurrentUser && <span className="text-red-500 text-xs ml-1">(you)</span>}
                           </div>
                         </div>

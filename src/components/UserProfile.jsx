@@ -1,15 +1,45 @@
-// User Profile Screen
+// User Profile Screen - Enhanced with tier theming and clickable opponents
+// FIXES:
+// 1. Uses username priority (same as PlayerProfileCard)
+// 2. Tier-colored styling throughout
+// 3. Clickable opponents in match history
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
+import { getRankInfo } from '../utils/rankUtils';
 import NeonTitle from './NeonTitle';
+import TierIcon from './TierIcon';
+import ViewPlayerProfile from './ViewPlayerProfile';
 import { soundManager } from '../utils/soundManager';
+
+// Helper to convert hex to rgba
+const hexToRgba = (hex, alpha) => {
+  if (!hex || !hex.startsWith('#')) return `rgba(34, 211, 238, ${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+// Get contrasting background for tier
+const getTierBackground = (glowColor) => {
+  const backgrounds = {
+    '#f59e0b': 'rgba(30, 20, 60, 0.95)',   // Grandmaster
+    '#a855f7': 'rgba(20, 40, 40, 0.95)',   // Master
+    '#3b82f6': 'rgba(40, 25, 20, 0.95)',   // Expert
+    '#22d3ee': 'rgba(40, 20, 40, 0.95)',   // Advanced
+    '#22c55e': 'rgba(40, 20, 35, 0.95)',   // Intermediate
+    '#38bdf8': 'rgba(35, 25, 45, 0.95)',   // Beginner
+    '#2dd4bf': 'rgba(40, 25, 50, 0.95)',   // Novice
+  };
+  return backgrounds[glowColor] || 'rgba(15, 23, 42, 0.95)';
+};
 
 const UserProfile = ({ onBack }) => {
   const { profile, updateProfile } = useAuth();
   const [editing, setEditing] = useState(false);
-  const [displayName, setDisplayName] = useState(profile?.display_name || '');
+  const [displayName, setDisplayName] = useState(profile?.username || profile?.display_name || '');
   const [saving, setSaving] = useState(false);
   const [recentGames, setRecentGames] = useState([]);
   const [stats, setStats] = useState({
@@ -20,10 +50,18 @@ const UserProfile = ({ onBack }) => {
     currentStreak: 0,
     bestStreak: 0
   });
+  
+  // State for viewing opponent profile
+  const [viewingOpponent, setViewingOpponent] = useState(null);
+
+  // Get tier info for theming
+  const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
+  const glowColor = rankInfo?.glowColor || '#22d3ee';
 
   useEffect(() => {
     if (profile) {
-      setDisplayName(profile.display_name || profile.username);
+      // FIX: Use username priority
+      setDisplayName(profile.username || profile.display_name || 'Player');
       loadStats();
     }
   }, [profile]);
@@ -77,7 +115,10 @@ const UserProfile = ({ onBack }) => {
     setSaving(true);
     soundManager.playButtonClick();
     
-    const { error } = await updateProfile({ display_name: displayName });
+    const { error } = await updateProfile({ 
+      username: displayName.toLowerCase(),
+      display_name: displayName 
+    });
     
     if (!error) {
       setEditing(false);
@@ -91,11 +132,22 @@ const UserProfile = ({ onBack }) => {
     onBack();
   };
 
-  const getOpponentName = (game) => {
+  // FIX: Get opponent info with username priority
+  const getOpponentInfo = (game) => {
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || 'Unknown';
+      return {
+        id: game.player2_id,
+        name: game.player2?.username || game.player2?.display_name || 'Unknown',
+        rating: game.player2?.rating || 1000,
+        data: game.player2
+      };
     }
-    return game.player1?.username || 'Unknown';
+    return {
+      id: game.player1_id,
+      name: game.player1?.username || game.player1?.display_name || 'Unknown',
+      rating: game.player1?.rating || 1000,
+      data: game.player1
+    };
   };
 
   const formatDate = (dateString) => {
@@ -103,13 +155,35 @@ const UserProfile = ({ onBack }) => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  // Handle clicking on opponent
+  const handleViewOpponent = (opponent) => {
+    soundManager.playButtonClick();
+    setViewingOpponent(opponent);
+  };
+
+  // FIX: Display name uses username priority
+  const playerDisplayName = profile?.username || profile?.display_name || 'Player';
+
   return (
     <div className="min-h-screen bg-slate-950">
-      {/* Grid background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
-        backgroundSize: '40px 40px'
-      }} />
+      {/* Grid background with tier color */}
+      <div 
+        className="fixed inset-0 opacity-30 pointer-events-none" 
+        style={{
+          backgroundImage: `linear-gradient(${hexToRgba(glowColor, 0.4)} 1px, transparent 1px), linear-gradient(90deg, ${hexToRgba(glowColor, 0.4)} 1px, transparent 1px)`,
+          backgroundSize: '40px 40px'
+        }} 
+      />
+      
+      {/* Glowing orbs with tier color */}
+      <div 
+        className="fixed top-10 right-20 w-64 h-64 rounded-full blur-3xl pointer-events-none"
+        style={{ backgroundColor: hexToRgba(glowColor, 0.25) }}
+      />
+      <div 
+        className="fixed bottom-20 left-10 w-48 h-48 rounded-full blur-3xl pointer-events-none"
+        style={{ backgroundColor: hexToRgba(glowColor, 0.2) }}
+      />
 
       {/* Content */}
       <div className="relative min-h-screen px-4 py-8">
@@ -118,20 +192,39 @@ const UserProfile = ({ onBack }) => {
           <div className="flex items-center gap-4 mb-6">
             <button
               onClick={handleBack}
-              className="p-2 text-slate-400 hover:text-cyan-300 transition-colors"
+              className="p-2 transition-colors"
+              style={{ color: glowColor }}
             >
               <ArrowLeft size={24} />
             </button>
             <NeonTitle size="small" />
           </div>
 
-          {/* Profile Card */}
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl p-6 mb-4 border border-cyan-500/30 shadow-[0_0_30px_rgba(34,211,238,0.2)]">
+          {/* Profile Card - Tier themed */}
+          <div 
+            className="backdrop-blur-md rounded-2xl p-6 mb-4"
+            style={{
+              background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, ${hexToRgba(glowColor, 0.1)} 50%, rgba(15, 23, 42, 0.95) 100%)`,
+              border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
+              boxShadow: `0 0 40px ${hexToRgba(glowColor, 0.25)}, inset 0 0 30px ${hexToRgba(glowColor, 0.05)}`
+            }}
+          >
             {/* Avatar and name */}
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg">
-                {profile?.username?.[0]?.toUpperCase() || '?'}
+              {/* Avatar with tier icon */}
+              <div 
+                className="w-20 h-20 rounded-full flex items-center justify-center shadow-lg"
+                style={{
+                  background: `radial-gradient(circle at 30% 30%, ${getTierBackground(glowColor)}, rgba(10, 15, 25, 0.98))`,
+                  border: `3px solid ${hexToRgba(glowColor, 0.6)}`,
+                  boxShadow: `0 0 25px ${hexToRgba(glowColor, 0.4)}`
+                }}
+              >
+                {rankInfo && (
+                  <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="large" />
+                )}
               </div>
+              
               <div className="flex-1">
                 {editing ? (
                   <div className="flex items-center gap-2">
@@ -139,20 +232,22 @@ const UserProfile = ({ onBack }) => {
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-cyan-500 outline-none"
-                      placeholder="Display name"
+                      className="flex-1 px-3 py-2 bg-slate-800 border rounded-lg text-white focus:outline-none transition-colors"
+                      style={{ borderColor: hexToRgba(glowColor, 0.5) }}
+                      placeholder="Username"
                     />
                     <button
                       onClick={handleSave}
                       disabled={saving}
-                      className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 disabled:opacity-50"
+                      className="p-2 text-white rounded-lg disabled:opacity-50"
+                      style={{ backgroundColor: hexToRgba(glowColor, 0.3) }}
                     >
                       <Save size={18} />
                     </button>
                     <button
                       onClick={() => {
                         setEditing(false);
-                        setDisplayName(profile?.display_name || profile?.username);
+                        setDisplayName(profile?.username || profile?.display_name);
                       }}
                       className="p-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600"
                     >
@@ -161,57 +256,124 @@ const UserProfile = ({ onBack }) => {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white text-2xl font-bold">
-                      {profile?.display_name || profile?.username}
+                    <h2 
+                      className="text-2xl font-bold"
+                      style={{ color: '#f1f5f9', textShadow: `0 0 15px ${hexToRgba(glowColor, 0.5)}` }}
+                    >
+                      {playerDisplayName}
                     </h2>
                     <button
                       onClick={() => setEditing(true)}
-                      className="p-1.5 text-slate-500 hover:text-cyan-400 transition-colors"
+                      className="p-1.5 transition-colors"
+                      style={{ color: hexToRgba(glowColor, 0.7) }}
                     >
                       <Edit2 size={16} />
                     </button>
                   </div>
                 )}
-                <p className="text-slate-500">@{profile?.username}</p>
+                {/* Tier name */}
+                {rankInfo && (
+                  <p 
+                    className="text-sm font-bold uppercase tracking-wider"
+                    style={{ color: glowColor, textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
+                  >
+                    {rankInfo.name}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Rating */}
-            <div className="text-center py-4 bg-gradient-to-r from-amber-900/30 to-orange-900/30 rounded-xl border border-amber-500/30 mb-6">
-              <div className="text-4xl font-black text-amber-400 mb-1">
+            {/* Rating - Tier themed */}
+            <div 
+              className="text-center py-4 rounded-xl mb-6"
+              style={{
+                background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.15)} 0%, ${hexToRgba(glowColor, 0.05)} 100%)`,
+                border: `1px solid ${hexToRgba(glowColor, 0.3)}`
+              }}
+            >
+              <div 
+                className="text-4xl font-black mb-1"
+                style={{ color: glowColor, textShadow: `0 0 20px ${hexToRgba(glowColor, 0.6)}` }}
+              >
                 {profile?.rating || 1000}
               </div>
-              <div className="text-amber-600 text-sm font-medium">RATING</div>
+              <div className="text-sm font-medium" style={{ color: hexToRgba(glowColor, 0.7) }}>
+                ELO RATING
+              </div>
             </div>
 
-            {/* Stats grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                <Target size={20} className="text-cyan-400 mx-auto mb-2" />
+            {/* Stats grid - Tier accented */}
+            <div className="grid grid-cols-3 gap-3">
+              <div 
+                className="rounded-lg p-4 text-center"
+                style={{ 
+                  backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                  border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                }}
+              >
+                <Target size={20} className="mx-auto mb-2" style={{ color: glowColor }} />
                 <div className="text-2xl font-bold text-white">{stats.totalGames}</div>
-                <div className="text-slate-500 text-xs">Games Played</div>
+                <div className="text-slate-500 text-xs">Games</div>
               </div>
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+              <div 
+                className="rounded-lg p-4 text-center"
+                style={{ 
+                  backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                  border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                }}
+              >
                 <Percent size={20} className="text-green-400 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-white">{stats.winRate}%</div>
                 <div className="text-slate-500 text-xs">Win Rate</div>
               </div>
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+              <div 
+                className="rounded-lg p-4 text-center"
+                style={{ 
+                  backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                  border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                }}
+              >
                 <Trophy size={20} className="text-amber-400 mx-auto mb-2" />
                 <div className="text-2xl font-bold text-white">{stats.wins}</div>
                 <div className="text-slate-500 text-xs">Victories</div>
               </div>
-              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
-                <div className="text-xl mb-2">🔥</div>
-                <div className="text-2xl font-bold text-white">{stats.bestStreak}</div>
-                <div className="text-slate-500 text-xs">Best Streak</div>
-              </div>
             </div>
+            
+            {/* Streak info */}
+            {(stats.currentStreak > 0 || stats.bestStreak > 0) && (
+              <div className="flex justify-center gap-6 mt-4 pt-4" style={{ borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}` }}>
+                {stats.currentStreak > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">🔥</span>
+                    <div>
+                      <div className="text-white font-bold">{stats.currentStreak}</div>
+                      <div className="text-slate-500 text-xs">Current Streak</div>
+                    </div>
+                  </div>
+                )}
+                {stats.bestStreak > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Award size={20} className="text-amber-400" />
+                    <div>
+                      <div className="text-white font-bold">{stats.bestStreak}</div>
+                      <div className="text-slate-500 text-xs">Best Streak</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Match History */}
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl p-4 border border-slate-700/50">
-            <h3 className="text-slate-400 font-bold text-sm mb-4 flex items-center gap-2">
+          {/* Match History - Tier themed with clickable opponents */}
+          <div 
+            className="backdrop-blur-md rounded-2xl p-4"
+            style={{
+              background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${hexToRgba(glowColor, 0.05)} 100%)`,
+              border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
+              boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.1)}`
+            }}
+          >
+            <h3 className="font-bold text-sm mb-4 flex items-center gap-2" style={{ color: glowColor }}>
               <Calendar size={16} />
               MATCH HISTORY
             </h3>
@@ -222,24 +384,55 @@ const UserProfile = ({ onBack }) => {
               <div className="space-y-2">
                 {recentGames.map(game => {
                   const won = game.winner_id === profile?.id;
+                  const opponent = getOpponentInfo(game);
+                  const opponentRankInfo = getRankInfo(opponent.rating);
+                  
                   return (
-                    <div
+                    <button
                       key={game.id}
-                      className={`p-3 rounded-lg flex items-center justify-between ${
-                        won ? 'bg-green-900/20 border border-green-500/20' : 'bg-red-900/20 border border-red-500/20'
+                      onClick={() => handleViewOpponent(opponent)}
+                      className={`w-full p-3 rounded-lg flex items-center justify-between transition-all hover:scale-[1.02] ${
+                        won 
+                          ? 'bg-green-900/20 border border-green-500/30 hover:border-green-500/50' 
+                          : 'bg-red-900/20 border border-red-500/30 hover:border-red-500/50'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
-                        <div>
-                          <div className="text-slate-300 text-sm">vs {getOpponentName(game)}</div>
-                          <div className="text-slate-600 text-xs">{formatDate(game.created_at)}</div>
+                        
+                        {/* Opponent avatar with tier icon */}
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center"
+                          style={{
+                            background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
+                            border: `2px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
+                          }}
+                        >
+                          {opponentRankInfo ? (
+                            <TierIcon shape={opponentRankInfo.shape} glowColor={opponentRankInfo.glowColor} size="small" />
+                          ) : (
+                            <User size={14} className="text-slate-400" />
+                          )}
+                        </div>
+                        
+                        <div className="text-left">
+                          <div className="text-slate-300 text-sm font-medium">vs {opponent.name}</div>
+                          <div className="text-slate-600 text-xs flex items-center gap-2">
+                            <span>{formatDate(game.created_at)}</span>
+                            <span style={{ color: opponentRankInfo?.glowColor || '#64748b' }}>
+                              {opponent.rating} ELO
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
-                        {won ? 'WIN' : 'LOSS'}
-                      </span>
-                    </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
+                          {won ? 'WIN' : 'LOSS'}
+                        </span>
+                        <div className="text-slate-600">›</div>
+                      </div>
+                    </button>
                   );
                 })}
               </div>
@@ -248,10 +441,20 @@ const UserProfile = ({ onBack }) => {
 
           {/* Member since */}
           <p className="text-center text-slate-600 text-xs mt-6">
-            Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'N/A'}
+            Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
           </p>
         </div>
       </div>
+      
+      {/* View Opponent Profile Modal */}
+      {viewingOpponent && (
+        <ViewPlayerProfile
+          playerId={viewingOpponent.id}
+          playerData={viewingOpponent.data}
+          currentUserId={profile?.id}
+          onClose={() => setViewingOpponent(null)}
+        />
+      )}
     </div>
   );
 };

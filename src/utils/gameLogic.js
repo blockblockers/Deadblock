@@ -2,26 +2,65 @@ import { pieces } from './pieces';
 
 export const BOARD_SIZE = 8;
 
-// Rotate piece 90 degrees clockwise
-export const rotatePiece = (coords) => coords.map(([x, y]) => [-y, x]);
+// ====== CENTER-BASED ROTATION ======
+// Rotate piece 90 degrees clockwise around its center
+export const rotatePiece = (coords) => {
+  // Calculate the center of the piece
+  const xs = coords.map(([x]) => x);
+  const ys = coords.map(([, y]) => y);
+  const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
+  const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
+  
+  // Rotate each coordinate 90 degrees clockwise around the center
+  return coords.map(([x, y]) => {
+    const dx = x - centerX;
+    const dy = y - centerY;
+    // Rotate 90 degrees clockwise: (dx, dy) -> (dy, -dx)
+    const newX = centerX + dy;
+    const newY = centerY - dx;
+    return [Math.round(newX), Math.round(newY)];
+  });
+};
 
-// Flip piece horizontally
-export const flipPiece = (coords) => coords.map(([x, y]) => [-x, y]);
+// Flip piece horizontally around its center
+export const flipPiece = (coords) => {
+  const xs = coords.map(([x]) => x);
+  const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
+  
+  return coords.map(([x, y]) => {
+    const newX = centerX - (x - centerX);
+    return [Math.round(newX), y];
+  });
+};
+
+// Normalize piece coordinates to start from (0,0)
+const normalizePieceCoords = (coords) => {
+  if (!coords || coords.length === 0) return coords;
+  
+  const minX = Math.min(...coords.map(([x]) => x));
+  const minY = Math.min(...coords.map(([, y]) => y));
+  
+  return coords.map(([x, y]) => [x - minX, y - minY]);
+};
 
 // Get piece coordinates with rotation and flip applied
-// rotation can be either 0-3 (count) or 0/90/180/270 (degrees)
 export const getPieceCoords = (pieceType, rotation = 0, flipped = false) => {
   let coords = pieces[pieceType];
   if (!coords) {
     console.error('getPieceCoords: Unknown piece type', pieceType);
     return [];
   }
-  coords = [...coords.map(c => [...c])]; // Deep copy
+  coords = [...coords.map(c => [...c])];
+  
   if (flipped) coords = flipPiece(coords);
   
-  // Handle both rotation count (0-3) and degrees (0, 90, 180, 270)
   const rotationCount = rotation >= 90 ? Math.floor(rotation / 90) : rotation;
-  for (let i = 0; i < rotationCount; i++) coords = rotatePiece(coords);
+  for (let i = 0; i < rotationCount; i++) {
+    coords = rotatePiece(coords);
+  }
+  
+  coords = normalizePieceCoords(coords);
+  
   return coords;
 };
 
@@ -42,7 +81,6 @@ export const canPlacePiece = (board, row, col, pieceCoords) => {
     if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
       return false;
     }
-    // Check if cell is occupied (not null and not 0)
     const cell = board[newRow]?.[newCol];
     if (cell !== null && cell !== 0 && cell !== undefined) {
       return false;
@@ -63,11 +101,26 @@ export const isWithinBounds = (row, col, pieceCoords) => {
   return true;
 };
 
+// Check if piece overlaps with existing pieces on the board
+export const hasOverlap = (board, row, col, pieceCoords) => {
+  for (const [dx, dy] of pieceCoords) {
+    const newRow = row + dy;
+    const newCol = col + dx;
+    if (newRow >= 0 && newRow < BOARD_SIZE && newCol >= 0 && newCol < BOARD_SIZE) {
+      const cell = board[newRow]?.[newCol];
+      if (cell !== null && cell !== 0 && cell !== undefined) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 // Check if any piece can be placed on the board
 export const canAnyPieceBePlaced = (board, usedPieces) => {
   if (!board || !Array.isArray(board)) {
     console.error('canAnyPieceBePlaced: Invalid board');
-    return true; // Default to true to avoid ending game incorrectly
+    return true;
   }
   
   const safeUsedPieces = Array.isArray(usedPieces) ? usedPieces : [];
@@ -88,26 +141,21 @@ export const canAnyPieceBePlaced = (board, usedPieces) => {
   return false;
 };
 
-// Check if the current orientation fits - NO AUTO-ROTATION
-// Returns the same rotation/flip if valid, null if not valid
 export const checkOrientationFits = (row, col, piece, rotation, flipped) => {
   const coords = getPieceCoords(piece, rotation, flipped);
   if (isWithinBounds(row, col, coords)) {
     return { rotation, flipped };
   }
-  return null; // Don't auto-rotate, just return null if it doesn't fit
+  return null;
 };
 
-// Legacy function name for compatibility - now just checks current orientation
 export const findFittingOrientation = (row, col, piece, startRot, startFlip) => {
   return checkOrientationFits(row, col, piece, startRot, startFlip);
 };
 
-// Create an empty board
 export const createEmptyBoard = () => 
   Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
 
-// Place a piece on the board and return new board state
 export const placePiece = (board, boardPieces, row, col, piece, pieceCoords, player) => {
   const newBoard = board.map(r => [...r]);
   const newBoardPieces = Array.isArray(boardPieces) 
@@ -120,4 +168,19 @@ export const placePiece = (board, boardPieces, row, col, piece, pieceCoords, pla
   }
   
   return { newBoard, newBoardPieces };
+};
+
+export default {
+  BOARD_SIZE,
+  rotatePiece,
+  flipPiece,
+  getPieceCoords,
+  canPlacePiece,
+  isWithinBounds,
+  hasOverlap,
+  canAnyPieceBePlaced,
+  checkOrientationFits,
+  findFittingOrientation,
+  createEmptyBoard,
+  placePiece,
 };

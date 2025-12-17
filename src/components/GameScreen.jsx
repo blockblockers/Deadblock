@@ -190,6 +190,7 @@ const GameScreen = ({
   onDifficultySelect
 }) => {
   const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
   const { needsScroll } = useResponsiveLayout(750);
 
   const puzzleDifficulty = currentPuzzle?.difficulty;
@@ -204,12 +205,45 @@ const GameScreen = ({
     }
   }, [gameOver]);
 
-  const canConfirm = pendingMove && canPlacePiece(
+  // Check if pending move is valid
+  const isPendingValid = pendingMove && canPlacePiece(
     board, 
     pendingMove.row, 
     pendingMove.col, 
     getPieceCoords(pendingMove.piece, rotation, flipped)
   );
+  
+  const canConfirm = isPendingValid;
+
+  // UPDATED: Handle error messages for invalid placement
+  useEffect(() => {
+    if (pendingMove && !isPendingValid) {
+      // Check why it's invalid
+      const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+      let isOutOfBounds = false;
+      let isOverlapping = false;
+      
+      for (const [dx, dy] of coords) {
+        const newRow = pendingMove.row + dy;
+        const newCol = pendingMove.col + dx;
+        if (newRow < 0 || newRow >= 8 || newCol < 0 || newCol >= 8) {
+          isOutOfBounds = true;
+        } else if (board[newRow]?.[newCol] !== null && board[newRow]?.[newCol] !== 0) {
+          isOverlapping = true;
+        }
+      }
+      
+      if (isOutOfBounds) {
+        setErrorMessage('Piece extends off the board!');
+      } else if (isOverlapping) {
+        setErrorMessage('Cannot place on existing pieces!');
+      } else {
+        setErrorMessage('Invalid placement');
+      }
+    } else {
+      setErrorMessage(null);
+    }
+  }, [pendingMove, isPendingValid, board, rotation, flipped]);
 
   const handleMenuClick = () => {
     soundManager.playButtonClick();
@@ -247,8 +281,9 @@ const GameScreen = ({
           {/* Header */}
           <div className="flex items-center justify-center mb-2 sm:mb-3 relative flex-shrink-0">
             <div className="text-center">
+              {/* UPDATED: Consistent title size across all game modes */}
               <NeonTitle size="small" />
-              {/* Subtitle based on game mode */}
+              {/* UPDATED: Consistent subtitle sizing - slightly larger for 2 player */}
               {gameMode === 'ai' && (
                 <div className="mt-1">
                   <NeonSubtitle text="VS A.I." size="small" color="purple" />
@@ -256,7 +291,8 @@ const GameScreen = ({
               )}
               {gameMode === '2player' && (
                 <div className="mt-1">
-                  <NeonSubtitle text="2 PLAYER" size="small" color="cyan" />
+                  {/* UPDATED: Larger subtitle for 2 player mode */}
+                  <NeonSubtitle text="2 PLAYER" size="default" color="cyan" />
                 </div>
               )}
               {gameMode === 'puzzle' && (
@@ -273,13 +309,8 @@ const GameScreen = ({
             </button>
           </div>
 
-          {/* Puzzle Info */}
-          {gameMode === 'puzzle' && currentPuzzle && !isGeneratingPuzzle && (
-            <div className={`bg-slate-800/60 border ${theme.panelBorder} rounded-lg p-2 mb-2 text-center flex-shrink-0`}>
-              <span className="font-bold text-slate-200 text-sm">{currentPuzzle.name}</span>
-              <span className="text-slate-400 text-xs ml-2">- {currentPuzzle.description}</span>
-            </div>
-          )}
+          {/* UPDATED: Removed puzzle "moves remaining" info box */}
+          {/* The difficulty was already shown in the menu, no need to repeat */}
 
           {/* Generating Puzzle */}
           {isGeneratingPuzzle && (
@@ -318,10 +349,31 @@ const GameScreen = ({
                 onCellClick={onCellClick}
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
+                selectedPiece={selectedPiece}
               />
             </div>
 
-            {pendingMove && !isGeneratingPuzzle && <DPad onMove={onMovePiece} />}
+            {/* UPDATED: D-Pad and Error Message Layout */}
+            {pendingMove && !isGeneratingPuzzle && (
+              <div className="flex items-start justify-center gap-3 mb-2">
+                {/* Error message box - left of d-pad */}
+                <div className="flex-shrink-0 w-24">
+                  {errorMessage && (
+                    <div className="error-message-box bg-red-900/80 border border-red-500/60 rounded-lg p-2 text-center shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                      <span className="text-red-300 text-xs font-bold leading-tight block">
+                        {errorMessage}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* D-Pad */}
+                <DPad onMove={onMovePiece} />
+                
+                {/* Spacer for symmetry */}
+                <div className="flex-shrink-0 w-24" />
+              </div>
+            )}
 
             <ControlButtons
               selectedPiece={selectedPiece}
@@ -373,6 +425,22 @@ const GameScreen = ({
           onDifficultySelect={onDifficultySelect}
         />
       )}
+      
+      {/* UPDATED: Error message animation styles */}
+      <style>{`
+        .error-message-box {
+          animation: error-shake 0.5s ease-in-out, error-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes error-shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+          20%, 40%, 60%, 80% { transform: translateX(2px); }
+        }
+        @keyframes error-pulse {
+          0%, 100% { box-shadow: 0 0 15px rgba(239,68,68,0.4); }
+          50% { box-shadow: 0 0 25px rgba(239,68,68,0.6); }
+        }
+      `}</style>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 // NeonSubtitle - Smaller neon text with customizable color theme
+// UPDATED: Fixed iOS Safari text box appearance - now transparent on all devices
 
 const NeonSubtitle = ({ text = 'ONLINE', className = '', size = 'default', color = 'amber', inline = false }) => {
   // Size presets
@@ -33,10 +34,24 @@ const NeonSubtitle = ({ text = 'ONLINE', className = '', size = 'default', color
       <span className={`${uniqueClass} font-black tracking-[0.3em] ${sizeClass}`}>
         {text}
       </span>
+      {/* 
+        UPDATED: iOS Safari Fix
+        - Removed any webkit-specific properties that could cause filled backgrounds
+        - Using pure CSS text-shadow for glow effect instead of any filter/backdrop combinations
+        - Explicitly set background to transparent
+        - Added -webkit-background-clip and background-clip for safety
+      */}
       <style>{`
         .${uniqueClass} {
           font-family: system-ui, -apple-system, sans-serif;
           color: #fff;
+          background: transparent;
+          -webkit-background-clip: text;
+          background-clip: text;
+          /* Ensure no filled box appears behind text */
+          -webkit-box-decoration-break: clone;
+          box-decoration-break: clone;
+          /* Pure text-shadow for glow - works consistently across browsers */
           text-shadow:
             0 0 5px #fff,
             0 0 10px #fff,
@@ -44,6 +59,9 @@ const NeonSubtitle = ({ text = 'ONLINE', className = '', size = 'default', color
             0 0 40px ${colors.primary},
             0 0 60px ${colors.secondary};
           animation: ${uniqueClass}-pulse 3s ease-in-out infinite;
+          /* Prevent iOS from adding any background decoration */
+          -webkit-text-fill-color: #fff;
+          paint-order: stroke fill;
         }
         @keyframes ${uniqueClass}-pulse {
           0%, 100% {
@@ -63,6 +81,17 @@ const NeonSubtitle = ({ text = 'ONLINE', className = '', size = 'default', color
               0 0 50px ${colors.primary},
               0 0 70px ${colors.secondary};
             filter: brightness(1.1);
+          }
+        }
+        /* iOS Safari specific fix */
+        @supports (-webkit-touch-callout: none) {
+          .${uniqueClass} {
+            /* Reset any potential iOS-specific rendering issues */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            /* Ensure transparent background on iOS */
+            background-color: transparent !important;
+            -webkit-text-stroke: 0;
           }
         }
       `}</style>

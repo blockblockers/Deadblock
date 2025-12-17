@@ -13,6 +13,9 @@ import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 import { statsService } from '../utils/statsService';
 
+// AI delay in milliseconds for realistic turn-based gameplay
+const AI_MOVE_DELAY = 1500; // 1.5 seconds delay before AI moves
+
 export const useGameState = () => {
   // Core game state
   const [board, setBoard] = useState(() => createEmptyBoard());
@@ -41,6 +44,9 @@ export const useGameState = () => {
   // Use ref to persist puzzle difficulty across resets
   const puzzleDifficultyRef = useRef(PUZZLE_DIFFICULTY.EASY);
   const [puzzleDifficulty, setPuzzleDifficultyState] = useState(PUZZLE_DIFFICULTY.EASY);
+  
+  // UPDATED: Track AI goes first preference for VS AI mode
+  const aiGoesFirstRef = useRef(false);
   
   // Store original puzzle state for retry functionality
   const [originalPuzzleState, setOriginalPuzzleState] = useState(null);
@@ -105,114 +111,116 @@ export const useGameState = () => {
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    const piece = pendingMove ? (selectedPiece || pendingMove.piece) : selectedPiece;
+    const piece = pendingMove ? pendingMove.piece : selectedPiece;
     if (!piece) return;
-
-    const pieceCoords = getPieceCoords(piece, rotation, flipped);
-    setPendingMove({ row, col, piece, rotation, flipped });
     
-    if (isWithinBounds(row, col, pieceCoords)) {
-      soundManager.playPieceMove();
-    } else {
-      soundManager.playError();
+    // Set pending move (for preview)
+    setPendingMove({ piece, row, col });
+  }, [gameOver, gameMode, currentPlayer, pendingMove, selectedPiece]);
+
+  // Select a piece
+  const selectPiece = useCallback((piece) => {
+    if (gameOver) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    if (usedPieces.includes(piece)) return;
+    
+    soundManager.playPieceSelect();
+    setSelectedPiece(piece);
+    setPendingMove(null);
+  }, [gameOver, gameMode, currentPlayer, usedPieces]);
+
+  // Rotate piece
+  const rotatePiece = useCallback(() => {
+    if (!selectedPiece && !pendingMove) return;
+    soundManager.playRotate();
+    setRotation(r => (r + 1) % 4);
+  }, [selectedPiece, pendingMove]);
+
+  // Flip piece
+  const flipPiece = useCallback(() => {
+    if (!selectedPiece && !pendingMove) return;
+    soundManager.playFlip();
+    setFlipped(f => !f);
+  }, [selectedPiece, pendingMove]);
+
+  // Move pending piece
+  const movePendingPiece = useCallback((dir) => {
+    if (!pendingMove) return;
+    
+    soundManager.playMove();
+    
+    let { row, col } = pendingMove;
+    switch (dir) {
+      case 'up': row = Math.max(0, row - 1); break;
+      case 'down': row = Math.min(BOARD_SIZE - 1, row + 1); break;
+      case 'left': col = Math.max(0, col - 1); break;
+      case 'right': col = Math.min(BOARD_SIZE - 1, col + 1); break;
+      default: break;
     }
-  }, [gameOver, gameMode, currentPlayer, pendingMove, selectedPiece, rotation, flipped]);
+    
+    setPendingMove({ ...pendingMove, row, col });
+  }, [pendingMove]);
 
   // Confirm pending move
   const confirmMove = useCallback(() => {
     if (!pendingMove) return;
     
-    // Set player animating move before committing
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
+      soundManager.playInvalid();
+      return;
+    }
+    
+    soundManager.playConfirm();
+    
+    // Animate player piece placement
     setPlayerAnimatingMove({
       piece: pendingMove.piece,
       row: pendingMove.row,
       col: pendingMove.col,
       rot: rotation,
-      flip: flipped
+      flip: flipped,
+      phase: 'placing'
     });
     
-    const success = commitMove(pendingMove.row, pendingMove.col, pendingMove.piece, rotation, flipped);
-    if (success) {
-      soundManager.playConfirm();
-      // Clear animation after a short delay
-      setTimeout(() => setPlayerAnimatingMove(null), 500);
-    } else {
+    // Commit after brief animation
+    setTimeout(() => {
       setPlayerAnimatingMove(null);
-    }
-  }, [pendingMove, rotation, flipped, commitMove]);
+      commitMove(pendingMove.row, pendingMove.col, pendingMove.piece, rotation, flipped);
+    }, 300);
+  }, [pendingMove, rotation, flipped, board, commitMove]);
 
   // Cancel pending move
   const cancelMove = useCallback(() => {
+    soundManager.playCancel();
     setPendingMove(null);
     setSelectedPiece(null);
     setRotation(0);
     setFlipped(false);
-    soundManager.playCancel();
   }, []);
 
-  // Move pending piece
-  const movePendingPiece = useCallback((direction) => {
-    if (!pendingMove) return;
-    
-    let newRow = pendingMove.row;
-    let newCol = pendingMove.col;
-    
-    if (direction === 'up') newRow--;
-    else if (direction === 'down') newRow++;
-    else if (direction === 'left') newCol--;
-    else if (direction === 'right') newCol++;
-
-    const pieceCoords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    
-    const hasAnyCellOnBoard = pieceCoords.some(([dx, dy]) => {
-      const r = newRow + dy, c = newCol + dx;
-      return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
-    });
-    
-    if (hasAnyCellOnBoard) {
-      setPendingMove({ ...pendingMove, row: newRow, col: newCol });
-      if (isWithinBounds(newRow, newCol, pieceCoords)) {
-        soundManager.playPieceMove();
-      } else {
-        soundManager.playError();
-      }
-    }
-  }, [pendingMove, rotation, flipped]);
-
-  // Undo last move
-  const undoMove = useCallback(() => {
-    if (moveHistory.length === 0 || gameOver) return;
-    
-    const lastMove = moveHistory[moveHistory.length - 1];
-    setBoard(lastMove.board);
-    setBoardPieces(lastMove.boardPieces);
-    setUsedPieces(prev => prev.slice(0, -1));
-    setMoveHistory(prev => prev.slice(0, -1));
-    setCurrentPlayer(lastMove.player);
-    setSelectedPiece(null);
-    setRotation(0);
-    setFlipped(false);
-    setPendingMove(null);
-  }, [moveHistory, gameOver]);
-
-  // AI move
+  // Make AI move with DELAY for realistic turn-based gameplay
   const makeAIMove = useCallback(async () => {
-    const possibleMoves = getAllPossibleMoves(board, usedPieces);
+    if (gameOver || currentPlayer !== 2) return;
     
-    if (possibleMoves.length === 0) {
-      setGameOver(true);
-      setWinner(1);
-      return;
-    }
-
     setIsAIThinking(true);
     
     try {
-      const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
-      await new Promise(r => setTimeout(r, 300)); // Shorter thinking delay
+      // UPDATED: Add delay before AI starts thinking (1.5 seconds)
+      // This makes the turn-based gameplay feel more realistic
+      await new Promise(r => setTimeout(r, AI_MOVE_DELAY));
+      
+      // Check if game state changed during delay
+      if (gameOver) {
+        setIsAIThinking(false);
+        return;
+      }
+      
+      const difficulty = gameMode === 'puzzle' ? AI_DIFFICULTY.RANDOM : aiDifficulty;
+      const move = await selectAIMove(board, boardPieces, usedPieces, difficulty);
       
       if (move) {
-        // Start animation - show piece moving to position
+        // Show AI animating to position
         setAiAnimatingMove({
           piece: move.pieceType,
           row: move.row,
@@ -238,7 +246,7 @@ export const useGameState = () => {
     }
     
     setIsAIThinking(false);
-  }, [board, boardPieces, usedPieces, aiDifficulty, commitMove]);
+  }, [board, boardPieces, usedPieces, aiDifficulty, gameMode, gameOver, currentPlayer, commitMove]);
 
   // Trigger AI move
   useEffect(() => {
@@ -256,9 +264,9 @@ export const useGameState = () => {
       if (gameMode === 'ai') {
         // Map AI difficulty to string for stats
         const difficultyMap = {
-          [AI_DIFFICULTY.EASY]: 'easy',
+          [AI_DIFFICULTY.RANDOM]: 'easy',
           [AI_DIFFICULTY.AVERAGE]: 'medium',
-          [AI_DIFFICULTY.HARD]: 'hard',
+          [AI_DIFFICULTY.PROFESSIONAL]: 'hard',
         };
         const difficultyString = difficultyMap[aiDifficulty] || 'medium';
         
@@ -273,91 +281,72 @@ export const useGameState = () => {
         };
         const difficultyString = difficultyMap[puzzleDifficulty] || 'easy';
         
-        console.log('[Stats] Recording puzzle result:', difficultyString, playerWon ? 'solved' : 'failed');
-        statsService.recordPuzzleAttempt(difficultyString);
-        if (playerWon) {
-          statsService.recordPuzzleSolved(difficultyString);
-        }
-      } else if (gameMode === '2player') {
-        // Record local multiplayer game
-        console.log('[Stats] Recording local game');
-        statsService.recordLocalGame();
+        console.log('[Stats] Recording puzzle result:', difficultyString, playerWon ? 'win' : 'loss');
+        statsService.recordPuzzleResult(difficultyString, playerWon);
       }
     }
-  }, [gameOver, gameMode, winner, aiDifficulty, currentPuzzle, puzzleDifficulty]);
+  }, [gameOver, winner, gameMode, aiDifficulty, puzzleDifficulty, currentPuzzle]);
 
-  // Load puzzle from data
+  // Internal puzzle loading
   const loadPuzzleInternal = useCallback((puzzle) => {
-    console.log('Loading puzzle:', puzzle?.id, 'difficulty:', puzzle?.difficulty);
-    
-    if (!puzzle || !puzzle.boardState || puzzle.boardState.length !== 64) {
-      console.error('Invalid puzzle data');
-      setIsGeneratingPuzzle(false);
+    if (!puzzle) {
+      console.error('loadPuzzleInternal: No puzzle provided');
       return;
     }
-
-    try {
-      const newBoard = createEmptyBoard();
-      const newBoardPieces = createEmptyBoard();
-
-      for (let i = 0; i < 64; i++) {
-        const char = puzzle.boardState[i];
-        if (char !== 'G') {
-          const row = Math.floor(i / BOARD_SIZE);
-          const col = i % BOARD_SIZE;
-          newBoard[row][col] = 1;
-          newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
-        }
+    
+    console.log('Loading puzzle:', puzzle.name, 'difficulty:', puzzle.difficulty);
+    
+    // Parse the board state
+    const newBoard = createEmptyBoard();
+    const newBoardPieces = createEmptyBoard();
+    
+    for (let i = 0; i < 64; i++) {
+      const char = puzzle.boardState[i];
+      if (char !== 'G') { // G = empty (Gap)
+        const row = Math.floor(i / 8);
+        const col = i % 8;
+        newBoard[row][col] = 1; // All pre-placed pieces show as player 1
+        newBoardPieces[row][col] = char === 'H' ? 'Y' : char; // H is legacy for Y piece
       }
-      
-      // Store original state for retry functionality
-      setOriginalPuzzleState({
-        board: newBoard.map(r => [...r]),
-        boardPieces: newBoardPieces.map(r => [...r]),
-        usedPieces: puzzle.usedPieces ? [...puzzle.usedPieces] : [],
-        puzzle: { ...puzzle }
-      });
-      
-      setBoard(newBoard);
-      setBoardPieces(newBoardPieces);
-      setUsedPieces(puzzle.usedPieces ? [...puzzle.usedPieces] : []);
-      setCurrentPuzzle(puzzle);
-      setGameMode('puzzle');
-      setCurrentPlayer(1);
-      setSelectedPiece(null);
-      setRotation(0);
-      setFlipped(false);
-      setMoveHistory([]);
-      setPendingMove(null);
-      setGameOver(false);
-      setWinner(null);
-      setIsGeneratingPuzzle(false);
-      
-      // Store the difficulty for reset
-      if (puzzle.difficulty) {
-        setPuzzleDifficulty(puzzle.difficulty);
-      }
-      
-      console.log('Puzzle loaded successfully, difficulty:', puzzle.difficulty);
-    } catch (error) {
-      console.error('Error loading puzzle:', error);
-      setIsGeneratingPuzzle(false);
     }
+    
+    // Store original state for retry
+    setOriginalPuzzleState({
+      board: newBoard.map(r => [...r]),
+      boardPieces: newBoardPieces.map(r => [...r]),
+      usedPieces: [...puzzle.usedPieces],
+      puzzle: { ...puzzle }
+    });
+    
+    // Set difficulty from puzzle
+    if (puzzle.difficulty) {
+      setPuzzleDifficulty(puzzle.difficulty);
+    }
+    
+    setBoard(newBoard);
+    setBoardPieces(newBoardPieces);
+    setUsedPieces(puzzle.usedPieces);
+    setCurrentPuzzle(puzzle);
+    setGameMode('puzzle');
+    setCurrentPlayer(1);
+    setSelectedPiece(null);
+    setRotation(0);
+    setFlipped(false);
+    setMoveHistory([]);
+    setPendingMove(null);
+    setGameOver(false);
+    setWinner(null);
+    setIsGeneratingPuzzle(false);
+    
+    soundManager.playButtonClick();
   }, [setPuzzleDifficulty]);
 
-  // Generate and load a new puzzle with specific difficulty
+  // Generate and load puzzle
   const generateAndLoadPuzzle = useCallback(async (difficulty) => {
-    // Use provided difficulty, or fall back to stored difficulty
-    const diffToUse = difficulty || puzzleDifficultyRef.current;
-    console.log('Generating new puzzle with difficulty:', diffToUse);
-    
     setIsGeneratingPuzzle(true);
     
     try {
-      const puzzle = await getRandomPuzzle(diffToUse, false, (current, total) => {
-        console.log(`Progress: ${current}/${total}`);
-      });
-      
+      const puzzle = await getRandomPuzzle(difficulty);
       if (puzzle) {
         loadPuzzleInternal(puzzle);
       } else {
@@ -409,14 +398,29 @@ export const useGameState = () => {
     soundManager.playButtonClick();
   }, [originalPuzzleState]);
 
-  // Reset game - uses stored difficulty for puzzles
+  // UPDATED: Reset game - preserves AI goes first preference for VS AI mode
   const resetGame = useCallback(() => {
     if (gameMode === 'puzzle') {
       // Generate new puzzle with SAME difficulty
       console.log('Reset: generating new puzzle with difficulty:', puzzleDifficultyRef.current);
       generateAndLoadPuzzle(puzzleDifficultyRef.current);
+    } else if (gameMode === 'ai') {
+      // UPDATED: Preserve AI goes first preference when starting new game
+      console.log('Reset: starting new AI game, aiGoesFirst:', aiGoesFirstRef.current);
+      setBoard(createEmptyBoard());
+      setBoardPieces(createEmptyBoard());
+      // Use the stored preference for who goes first
+      setCurrentPlayer(aiGoesFirstRef.current ? 2 : 1);
+      setSelectedPiece(null);
+      setRotation(0);
+      setFlipped(false);
+      setGameOver(false);
+      setWinner(null);
+      setUsedPieces([]);
+      setMoveHistory([]);
+      setPendingMove(null);
     } else {
-      // Regular reset
+      // Regular reset for 2player mode
       setBoard(createEmptyBoard());
       setBoardPieces(createEmptyBoard());
       setCurrentPlayer(1);
@@ -431,8 +435,14 @@ export const useGameState = () => {
     }
   }, [gameMode, generateAndLoadPuzzle]);
 
-  // Start new game
+  // UPDATED: Start new game - stores AI goes first preference
   const startNewGame = useCallback((mode, aiGoesFirst = false) => {
+    // Store the preference for later resets
+    if (mode === 'ai') {
+      aiGoesFirstRef.current = aiGoesFirst;
+      console.log('Starting AI game, storing aiGoesFirst:', aiGoesFirst);
+    }
+    
     setGameMode(mode);
     setBoard(createEmptyBoard());
     setBoardPieces(createEmptyBoard());
@@ -447,32 +457,27 @@ export const useGameState = () => {
     setMoveHistory([]);
     setPendingMove(null);
     setCurrentPuzzle(null);
-  }, []);
-
-  // Select piece
-  const selectPiece = useCallback((piece) => {
-    if (gameOver) return;
-    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
-    if (usedPieces.includes(piece)) return;
+    setOriginalPuzzleState(null);
     
-    setSelectedPiece(piece);
-    setRotation(0);
-    setFlipped(false);
-    setPendingMove(null);
-    soundManager.playPieceSelect();
-  }, [gameOver, gameMode, currentPlayer, usedPieces]);
-
-  // Rotate piece
-  const rotatePiece = useCallback(() => {
-    setRotation(prev => (prev + 1) % 4);
-    soundManager.playPieceRotate();
+    soundManager.playButtonClick();
   }, []);
 
-  // Flip piece
-  const flipPiece = useCallback(() => {
-    setFlipped(prev => !prev);
-    soundManager.playPieceFlip();
-  }, []);
+  // Undo last move
+  const undoMove = useCallback(() => {
+    if (moveHistory.length === 0) return;
+    
+    const lastMove = moveHistory[moveHistory.length - 1];
+    
+    setBoard(lastMove.board);
+    setBoardPieces(lastMove.boardPieces);
+    setUsedPieces(prev => prev.slice(0, -1));
+    setMoveHistory(prev => prev.slice(0, -1));
+    setCurrentPlayer(lastMove.player);
+    setGameOver(false);
+    setWinner(null);
+    
+    soundManager.playCancel();
+  }, [moveHistory]);
 
   return {
     // State
@@ -493,28 +498,30 @@ export const useGameState = () => {
     showHowToPlay,
     showSettings,
     aiDifficulty,
-    isGeneratingPuzzle,
     puzzleDifficulty,
+    isGeneratingPuzzle,
     aiAnimatingMove,
     playerAnimatingMove,
     
-    // Actions
+    // Setters
     setGameMode,
     setShowHowToPlay,
     setShowSettings,
     setAiDifficulty,
+    setPuzzleDifficulty,
+    
+    // Actions
     handleCellClick,
-    confirmMove,
-    cancelMove,
-    movePendingPiece,
-    undoMove,
-    resetGame,
-    loadPuzzle,
-    startNewGame,
     selectPiece,
     rotatePiece,
     flipPiece,
-    generateAndLoadPuzzle,
+    movePendingPiece,
+    confirmMove,
+    cancelMove,
+    resetGame,
+    startNewGame,
+    undoMove,
+    loadPuzzle,
     resetCurrentPuzzle,
   };
 };

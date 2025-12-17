@@ -1,18 +1,95 @@
 // View Player Profile - View another player's public stats
-// FIXED: Correct tier system, proper stats loading, working challenge button
+// FIXES:
+// 1. Uses username priority
+// 2. Enhanced tier-based theming
+// 3. Match history with clickable opponents
+// 4. Proper stats loading
 import { useState, useEffect } from 'react';
-import { X, User, Trophy, Target, Zap, Gamepad2, TrendingUp, Swords, Clock, Send, UserPlus, Crown, Award, Star } from 'lucide-react';
-import { ratingService } from '../services/ratingService';
+import { X, User, Trophy, Target, Zap, Gamepad2, TrendingUp, Swords, Clock, Send, UserPlus, Crown, Award, Star, Calendar, ChevronRight } from 'lucide-react';
+import { getRankInfo } from '../utils/rankUtils';
 import { friendsService } from '../services/friendsService';
 import { inviteService } from '../services/inviteService';
+import { gameSyncService } from '../services/gameSync';
 import TierIcon from './TierIcon';
 import { soundManager } from '../utils/soundManager';
-import { dbSelect, dbRpc } from '../services/supabaseDirectFetch';
 
-const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, currentUserId }) => {
+// Supabase direct fetch config
+const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Helper to get auth headers
+const getAuthHeaders = () => {
+  try {
+    const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+    if (!authData?.access_token || !ANON_KEY) return null;
+    return {
+      'Authorization': `Bearer ${authData.access_token}`,
+      'apikey': ANON_KEY,
+      'Content-Type': 'application/json'
+    };
+  } catch (e) {
+    return null;
+  }
+};
+
+// Direct fetch helper
+const dbSelect = async (table, options = {}) => {
+  const headers = getAuthHeaders();
+  if (!headers) return { data: null, error: 'Not authenticated' };
+  
+  let url = `${SUPABASE_URL}/rest/v1/${table}?`;
+  if (options.select) url += `select=${encodeURIComponent(options.select)}&`;
+  if (options.eq) {
+    Object.entries(options.eq).forEach(([key, value]) => {
+      url += `${key}=eq.${value}&`;
+    });
+  }
+  if (options.or) url += `or=${encodeURIComponent(options.or)}&`;
+  if (options.order) url += `order=${options.order}&`;
+  if (options.limit) url += `limit=${options.limit}&`;
+  
+  try {
+    const response = await fetch(url, { 
+      headers: options.single 
+        ? { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+        : headers 
+    });
+    if (!response.ok) return { data: null, error: 'Fetch failed' };
+    const data = await response.json();
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err.message };
+  }
+};
+
+// Helper to convert hex to rgba
+const hexToRgba = (hex, alpha) => {
+  if (!hex || !hex.startsWith('#')) return `rgba(34, 211, 238, ${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+// Get contrasting background for tier
+const getTierBackground = (glowColor) => {
+  const backgrounds = {
+    '#f59e0b': 'rgba(30, 20, 60, 0.95)',
+    '#a855f7': 'rgba(20, 40, 40, 0.95)',
+    '#3b82f6': 'rgba(40, 25, 20, 0.95)',
+    '#22d3ee': 'rgba(40, 20, 40, 0.95)',
+    '#22c55e': 'rgba(40, 20, 35, 0.95)',
+    '#38bdf8': 'rgba(35, 25, 45, 0.95)',
+    '#2dd4bf': 'rgba(40, 25, 50, 0.95)',
+  };
+  return backgrounds[glowColor] || 'rgba(15, 23, 42, 0.95)';
+};
+
+const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, currentUserId, onViewPlayer }) => {
   const [profile, setProfile] = useState(playerData || null);
   const [playerStats, setPlayerStats] = useState(null);
-  const [ratingHistory, setRatingHistory] = useState([]);
+  const [recentGames, setRecentGames] = useState([]);
   const [achievementStats, setAchievementStats] = useState(null);
   const [loading, setLoading] = useState(!playerData);
   const [friendStatus, setFriendStatus] = useState(null);
@@ -20,6 +97,10 @@ const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, curr
   const [invitingToGame, setInvitingToGame] = useState(false);
   const [inviteSent, setInviteSent] = useState(false);
   const [inviteError, setInviteError] = useState(null);
+
+  // Get tier info for theming
+  const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
+  const glowColor = rankInfo?.glowColor || '#22d3ee';
 
   useEffect(() => {
     if (playerId) {
@@ -35,7 +116,7 @@ const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, curr
       let profileData = playerData;
       if (!profileData) {
         const { data } = await dbSelect('profiles', {
-          select: 'id,username,display_name,avatar_url,rating,elo_rating,highest_rating,rating_games_played,games_won,games_played,created_at',
+          select: 'id,username,display_name,avatar_url,rating,games_won,games_played,created_at',
           eq: { id: playerId },
           single: true
         });
@@ -57,56 +138,60 @@ const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, curr
           setPlayerStats(stats);
         }
       } catch (e) {
-        console.log('[ViewPlayerProfile] player_stats not available');
+        console.log('Player stats not available');
       }
 
-      // Load rating history
+      // Load recent games for match history
       try {
-        const historyResult = await ratingService.getRatingHistory(playerId, 10);
-        if (historyResult.data) {
-          setRatingHistory(historyResult.data);
+        const { data: games } = await dbSelect('games', {
+          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!games_player1_id_fkey(id,username,display_name,rating),player2:profiles!games_player2_id_fkey(id,username,display_name,rating)',
+          or: `player1_id.eq.${playerId},player2_id.eq.${playerId}`,
+          order: 'created_at.desc',
+          limit: 10
+        });
+        if (games) {
+          setRecentGames(games.filter(g => g.status === 'completed'));
         }
       } catch (e) {
-        console.log('[ViewPlayerProfile] Rating history not available');
+        console.log('Recent games not available');
       }
 
       // Load achievement stats
       try {
-        const { data: achStats } = await dbRpc('get_achievement_stats', { p_user_id: playerId });
-        if (achStats) {
-          setAchievementStats(achStats);
+        const { data: achieveData } = await dbSelect('achievement_stats', {
+          select: '*',
+          eq: { user_id: playerId },
+          single: true
+        });
+        if (achieveData) {
+          setAchievementStats(achieveData);
         }
       } catch (e) {
-        console.log('[ViewPlayerProfile] Achievement stats not available');
+        console.log('Achievement stats not available');
       }
 
-      // Check friendship status
+      // Check friend status
       if (currentUserId && currentUserId !== playerId) {
         try {
-          const { data: friendship } = await friendsService.checkFriendship(currentUserId, playerId);
-          if (friendship) {
-            if (friendship.status === 'accepted') {
-              setFriendStatus('friend');
-            } else if (friendship.status === 'pending') {
-              setFriendStatus(friendship.user_id === currentUserId ? 'pending_sent' : 'pending_received');
-            }
-          }
+          const status = await friendsService.getFriendshipStatus(currentUserId, playerId);
+          setFriendStatus(status);
         } catch (e) {
-          console.log('[ViewPlayerProfile] Friendship check failed');
+          console.log('Friend status not available');
         }
       }
     } catch (err) {
-      console.error('[ViewPlayerProfile] Error loading player data:', err);
+      console.error('Error loading player data:', err);
     }
     
     setLoading(false);
   };
 
-  // Handle sending friend request
   const handleSendFriendRequest = async () => {
     if (!currentUserId || sendingRequest) return;
     
     setSendingRequest(true);
+    soundManager.playButtonClick();
+    
     try {
       const { error } = await friendsService.sendFriendRequest(currentUserId, playerId);
       if (!error) {
@@ -116,60 +201,94 @@ const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, curr
     } catch (err) {
       console.error('Error sending friend request:', err);
     }
+    
     setSendingRequest(false);
   };
 
-  // =====================================================
-  // FIXED: Challenge button now actually sends invite
-  // =====================================================
   const handleInviteToGame = async () => {
-    if (invitingToGame || inviteSent) return;
+    if (!currentUserId || invitingToGame) return;
     
     setInvitingToGame(true);
     setInviteError(null);
+    soundManager.playButtonClick();
     
     try {
-      // If parent provided callback, use it
+      // Use parent callback if provided
       if (onInviteToGame) {
         await onInviteToGame(profile);
         setInviteSent(true);
-        soundManager.playSound('success');
-      } else if (currentUserId) {
-        // Otherwise, send invite directly
-        const { data, error } = await inviteService.sendInvite(currentUserId, playerId);
-        
+      } else {
+        // Direct invite
+        const { error, data } = await inviteService.sendInvite(currentUserId, playerId);
         if (error) {
-          if (error.message === 'Invite already sent') {
-            setInviteError('Invite already sent!');
+          if (error.includes('already') || error.includes('exists')) {
+            setInviteError('Invite already sent');
           } else {
-            setInviteError(error.message || 'Failed to send invite');
+            setInviteError(error);
           }
         } else {
           setInviteSent(true);
           soundManager.playSound('success');
           
-          // If mutual invite created a game, close and notify
-          if (data?.game) {
-            setTimeout(() => {
-              onClose?.();
-            }, 500);
+          // Check if game was created (mutual invite)
+          if (data?.game_id) {
+            setTimeout(() => onClose?.(), 1000);
           }
         }
       }
     } catch (err) {
-      console.error('Error inviting to game:', err);
-      setInviteError('Failed to send invite');
+      setInviteError(err.message || 'Failed to send invite');
     }
     
     setInvitingToGame(false);
   };
 
-  if (!profile && loading) {
+  // Handle viewing opponent profile
+  const handleViewOpponent = (opponent) => {
+    soundManager.playButtonClick();
+    if (onViewPlayer) {
+      onViewPlayer(opponent.id, opponent);
+    }
+  };
+
+  // Get opponent info from game
+  const getOpponentInfo = (game) => {
+    if (game.player1_id === playerId) {
+      return {
+        id: game.player2_id,
+        name: game.player2?.username || game.player2?.display_name || 'Unknown',
+        rating: game.player2?.rating || 1000,
+        data: game.player2
+      };
+    }
+    return {
+      id: game.player1_id,
+      name: game.player1?.username || game.player1?.display_name || 'Unknown',
+      rating: game.player1?.rating || 1000,
+      data: game.player1
+    };
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  if (loading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
-        <div className="bg-slate-900 rounded-xl p-8 text-center">
-          <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-slate-400">Loading profile...</p>
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div 
+          className="rounded-xl p-8"
+          style={{
+            background: getTierBackground(glowColor),
+            border: `2px solid ${hexToRgba(glowColor, 0.4)}`
+          }}
+        >
+          <div 
+            className="w-8 h-8 border-2 rounded-full animate-spin mx-auto"
+            style={{ borderColor: hexToRgba(glowColor, 0.3), borderTopColor: glowColor }}
+          />
+          <p className="text-slate-400 mt-3">Loading profile...</p>
         </div>
       </div>
     );
@@ -177,15 +296,10 @@ const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, curr
 
   if (!profile) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
-        <div className="bg-slate-900 rounded-xl p-6 text-center max-w-sm w-full border border-red-500/30">
-          <X size={48} className="mx-auto text-red-400 mb-4" />
-          <p className="text-white font-medium mb-2">Player Not Found</p>
-          <p className="text-slate-400 text-sm mb-4">This player may have deleted their account.</p>
-          <button
-            onClick={onClose}
-            className="px-6 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
-          >
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div className="bg-slate-900 rounded-xl p-6 border border-slate-700">
+          <p className="text-slate-400">Player not found</p>
+          <button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-800 rounded-lg text-white">
             Close
           </button>
         </div>
@@ -193,209 +307,263 @@ const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, curr
     );
   }
 
-  // Get tier using the CORRECT tier system (shape-based)
-  const rating = profile.rating || profile.elo_rating || 1000;
-  const tier = ratingService.getRatingTier(rating);
+  // FIX: Use username priority
   const displayName = profile.username || profile.display_name || 'Player';
-  
-  // Calculate stats from profile OR player_stats
-  const gamesPlayed = playerStats?.games_played || profile.games_played || 0;
-  const gamesWon = playerStats?.games_won || profile.games_won || 0;
-  const gamesLost = gamesPlayed - gamesWon;
-  const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0;
-  
-  // AI stats from player_stats
-  const aiWins = playerStats ? 
-    (playerStats.ai_easy_wins || 0) + (playerStats.ai_medium_wins || 0) + (playerStats.ai_hard_wins || 0) : 0;
-  
-  // Puzzle stats
-  const puzzlesSolved = playerStats ?
-    (playerStats.puzzles_easy_solved || 0) + (playerStats.puzzles_medium_solved || 0) + (playerStats.puzzles_hard_solved || 0) : 0;
-
-  // Helper to convert hex color to rgba
-  const hexToRgba = (hex, alpha) => {
-    if (!hex || !hex.startsWith('#')) return `rgba(100, 116, 139, ${alpha})`;
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
-  const glowColor = tier?.glowColor || '#22d3ee';
+  const winRate = profile.games_played > 0 
+    ? Math.round((profile.games_won / profile.games_played) * 100) 
+    : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
       <div 
-        className="bg-slate-900 rounded-2xl max-w-md w-full max-h-[85vh] overflow-hidden shadow-2xl"
-        style={{ 
+        className="w-full max-w-sm max-h-[85vh] rounded-2xl overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, rgba(15, 23, 42, 0.98) 50%, ${hexToRgba(glowColor, 0.05)} 100%)`,
           border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
-          boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.2)}`
+          boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}, inset 0 0 40px ${hexToRgba(glowColor, 0.05)}`
         }}
       >
-        {/* Header with tier-based gradient */}
+        {/* Header */}
         <div 
-          className="p-4 flex items-center justify-between"
-          style={{
-            background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)} 0%, rgba(15, 23, 42, 0.95) 100%)`
+          className="p-4 flex-shrink-0"
+          style={{ 
+            background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.15)} 0%, rgba(15, 23, 42, 0.9) 100%)`,
+            borderBottom: `1px solid ${hexToRgba(glowColor, 0.3)}`
           }}
         >
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden"
-              style={{
-                background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.2)} 0%, rgba(15, 23, 42, 0.9) 100%)`,
-                border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
-                boxShadow: `0 0 15px ${hexToRgba(glowColor, 0.3)}`
-              }}
-            >
-              {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-white text-xl font-bold">
-                  {displayName[0]?.toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white">{displayName}</h2>
-              <div className="flex items-center gap-2">
-                <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
-                <span style={{ color: glowColor }} className="font-medium">{tier.name}</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* Avatar with Tier Icon */}
+              <div 
+                className="w-14 h-14 rounded-full flex items-center justify-center"
+                style={{
+                  background: `radial-gradient(circle at 30% 30%, ${getTierBackground(glowColor)}, rgba(10, 15, 25, 0.98))`,
+                  border: `3px solid ${hexToRgba(glowColor, 0.6)}`,
+                  boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.4)}`
+                }}
+              >
+                {profile.avatar_url ? (
+                  <img src={profile.avatar_url} alt="" className="w-full h-full rounded-full object-cover" />
+                ) : rankInfo ? (
+                  <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="medium" />
+                ) : (
+                  <User size={24} className="text-slate-400" />
+                )}
               </div>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white transition-colors">
-            <X size={24} />
-          </button>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="p-4 space-y-4 overflow-y-auto" style={{ maxHeight: 'calc(85vh - 180px)' }}>
-          
-          {/* Rating Card with Tier Styling */}
-          <div 
-            className="rounded-xl p-4"
-            style={{
-              background: `linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, ${hexToRgba(glowColor, 0.1)} 100%)`,
-              border: `1px solid ${hexToRgba(glowColor, 0.3)}`
-            }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Trophy style={{ color: glowColor }} size={20} />
-                <span className="text-slate-400 text-sm">Rating</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div 
-                  className="w-10 h-10 rounded-full flex items-center justify-center"
-                  style={{
-                    background: `radial-gradient(circle, ${hexToRgba(glowColor, 0.2)}, rgba(15, 23, 42, 0.9))`,
-                    border: `2px solid ${hexToRgba(glowColor, 0.5)}`
-                  }}
+              
+              <div>
+                <h2 
+                  className="font-bold text-lg"
+                  style={{ color: '#f1f5f9', textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
                 >
-                  <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="medium" />
-                </div>
-                <span 
-                  className="text-2xl font-bold"
-                  style={{ color: glowColor, textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
-                >
-                  {rating}
-                </span>
+                  {displayName}
+                </h2>
+                {rankInfo && (
+                  <div className="flex items-center gap-2">
+                    <span 
+                      className="text-sm font-bold uppercase tracking-wider"
+                      style={{ color: glowColor, textShadow: `0 0 8px ${hexToRgba(glowColor, 0.5)}` }}
+                    >
+                      {rankInfo.name}
+                    </span>
+                    <span className="text-slate-500 text-sm">{profile.rating || 1000} ELO</span>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-center">
-              <div className="bg-slate-900/50 rounded-lg p-2">
-                <div className="text-slate-500 text-xs">Peak</div>
-                <div style={{ color: glowColor }} className="font-bold">
-                  {profile.highest_rating || rating}
-                </div>
-              </div>
-              <div className="bg-slate-900/50 rounded-lg p-2">
-                <div className="text-slate-500 text-xs">Ranked Games</div>
-                <div className="text-white font-bold">
-                  {profile.rating_games_played || gamesPlayed}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Swords size={14} className="text-cyan-400" />
-                <span className="text-slate-400 text-xs">Online Record</span>
-              </div>
-              <div className="text-white font-bold">
-                {gamesWon}W - {gamesLost}L
-              </div>
-              <div className="text-slate-500 text-xs">{winRate}% win rate</div>
             </div>
             
-            <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Target size={14} className="text-green-400" />
-                <span className="text-slate-400 text-xs">vs AI</span>
-              </div>
-              <div className="text-white font-bold">{aiWins} wins</div>
-              {playerStats?.ai_hard_wins > 0 && (
-                <div className="text-amber-400 text-xs">{playerStats.ai_hard_wins} Expert wins</div>
-              )}
-            </div>
+            <button 
+              onClick={onClose}
+              className="p-1 transition-colors"
+              style={{ color: hexToRgba(glowColor, 0.6) }}
+            >
+              <X size={24} />
+            </button>
+          </div>
+        </div>
 
-            <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-              <div className="flex items-center gap-2 mb-1">
-                <Zap size={14} className="text-purple-400" />
-                <span className="text-slate-400 text-xs">Puzzles Solved</span>
-              </div>
-              <div className="text-white font-bold">{puzzlesSolved}</div>
-              {playerStats?.puzzles_hard_solved > 0 && (
-                <div className="text-purple-400 text-xs">{playerStats.puzzles_hard_solved} Hard</div>
-              )}
+        {/* Content - Scrollable */}
+        <div 
+          className="flex-1 p-4 space-y-4 overflow-y-auto"
+          style={{ 
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            minHeight: 0
+          }}
+        >
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 gap-2">
+            <div 
+              className="rounded-xl p-3 text-center"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <Trophy size={16} className="mx-auto mb-1 text-amber-400" />
+              <div className="text-white font-bold">{profile.games_won || 0}</div>
+              <div className="text-slate-500 text-xs">Wins</div>
             </div>
-
-            {achievementStats && (
-              <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-                <div className="flex items-center gap-2 mb-1">
-                  <Award size={14} className="text-amber-400" />
-                  <span className="text-slate-400 text-xs">Achievements</span>
-                </div>
-                <div className="text-white font-bold">
-                  {achievementStats.unlockedCount || 0}/{achievementStats.totalAchievements || 0}
-                </div>
-                <div className="text-amber-400 text-xs">
-                  {achievementStats.earnedPoints || 0} points
-                </div>
-              </div>
-            )}
+            
+            <div 
+              className="rounded-xl p-3 text-center"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <Target size={16} className="mx-auto mb-1 text-cyan-400" />
+              <div className="text-white font-bold">{profile.games_played || 0}</div>
+              <div className="text-slate-500 text-xs">Games</div>
+            </div>
+            
+            <div 
+              className="rounded-xl p-3 text-center"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <TrendingUp size={16} className="mx-auto mb-1 text-green-400" />
+              <div className="text-white font-bold">{winRate}%</div>
+              <div className="text-slate-500 text-xs">Win Rate</div>
+            </div>
           </div>
 
-          {/* Rating History */}
-          {ratingHistory.length > 0 && (
-            <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp size={14} className="text-cyan-400" />
-                <span className="text-slate-400 text-sm">Recent Games</span>
+          {/* Extra Stats from player_stats */}
+          {playerStats && (
+            <div className="grid grid-cols-2 gap-2">
+              {(playerStats.ai_easy_wins + playerStats.ai_medium_wins + playerStats.ai_hard_wins) > 0 && (
+                <div 
+                  className="rounded-xl p-3"
+                  style={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                    border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Gamepad2 size={14} className="text-purple-400" />
+                    <span className="text-slate-400 text-xs">AI Wins</span>
+                  </div>
+                  <div className="text-white font-bold">
+                    {(playerStats.ai_easy_wins || 0) + (playerStats.ai_medium_wins || 0) + (playerStats.ai_hard_wins || 0)}
+                  </div>
+                </div>
+              )}
+
+              {(playerStats.puzzles_easy_solved + playerStats.puzzles_medium_solved + playerStats.puzzles_hard_solved) > 0 && (
+                <div 
+                  className="rounded-xl p-3"
+                  style={{ 
+                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                    border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Zap size={14} className="text-green-400" />
+                    <span className="text-slate-400 text-xs">Puzzles</span>
+                  </div>
+                  <div className="text-white font-bold">
+                    {(playerStats.puzzles_easy_solved || 0) + (playerStats.puzzles_medium_solved || 0) + (playerStats.puzzles_hard_solved || 0)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Achievements */}
+          {achievementStats && (
+            <div 
+              className="rounded-xl p-3"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Award size={14} className="text-amber-400" />
+                <span className="text-slate-400 text-xs">Achievements</span>
               </div>
-              <div className="flex gap-1 h-8">
-                {ratingHistory.slice(0, 10).map((game, i) => (
-                  <div
-                    key={i}
-                    className={`flex-1 rounded transition-all hover:scale-110 ${
-                      game.result === 'win' ? 'bg-green-500/60' : 'bg-red-500/60'
-                    }`}
-                    title={`${game.result === 'win' ? 'Win' : 'Loss'}: ${game.change > 0 ? '+' : ''}${game.change}`}
-                  />
-                ))}
-                {ratingHistory.length < 10 && 
-                  Array(10 - ratingHistory.length).fill(null).map((_, i) => (
-                    <div key={`empty-${i}`} className="flex-1 h-full rounded bg-slate-700/50" />
-                  ))
-                }
+              <div className="text-white font-bold">
+                {achievementStats.unlocked_count || 0}/{achievementStats.total_achievements || 0}
               </div>
-              <div className="flex justify-between text-xs text-slate-500 mt-1">
-                <span>Oldest</span>
-                <span>Recent</span>
+              <div className="text-amber-400 text-xs">
+                {achievementStats.earned_points || 0} points
+              </div>
+            </div>
+          )}
+
+          {/* Match History with Clickable Opponents */}
+          {recentGames.length > 0 && (
+            <div 
+              className="rounded-xl p-3"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar size={14} style={{ color: glowColor }} />
+                <span className="text-slate-300 text-sm font-medium">Recent Matches</span>
+              </div>
+              
+              <div className="space-y-2">
+                {recentGames.slice(0, 5).map(game => {
+                  const won = game.winner_id === playerId;
+                  const opponent = getOpponentInfo(game);
+                  const opponentRankInfo = getRankInfo(opponent.rating);
+                  const isClickable = opponent.id !== currentUserId && onViewPlayer;
+                  
+                  return (
+                    <button
+                      key={game.id}
+                      onClick={() => isClickable && handleViewOpponent(opponent)}
+                      disabled={!isClickable}
+                      className={`w-full p-2 rounded-lg flex items-center justify-between transition-all ${
+                        won 
+                          ? 'bg-green-900/20 border border-green-500/30' 
+                          : 'bg-red-900/20 border border-red-500/30'
+                      } ${isClickable ? 'hover:scale-[1.02] cursor-pointer' : 'cursor-default'}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
+                        
+                        {/* Opponent mini avatar */}
+                        <div 
+                          className="w-6 h-6 rounded-full flex items-center justify-center"
+                          style={{
+                            background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
+                            border: `1px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
+                          }}
+                        >
+                          {opponentRankInfo ? (
+                            <TierIcon shape={opponentRankInfo.shape} glowColor={opponentRankInfo.glowColor} size="tiny" />
+                          ) : (
+                            <User size={10} className="text-slate-400" />
+                          )}
+                        </div>
+                        
+                        <div className="text-left">
+                          <div className="text-slate-300 text-xs font-medium">vs {opponent.name}</div>
+                          <div className="text-slate-600 text-xs">{formatDate(game.created_at)}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-1">
+                        <span className={`text-xs font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
+                          {won ? 'W' : 'L'}
+                        </span>
+                        {isClickable && (
+                          <ChevronRight size={12} className="text-slate-600" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -408,90 +576,88 @@ const ViewPlayerProfile = ({ playerId, playerData, onClose, onInviteToGame, curr
 
         {/* Action Buttons */}
         {currentUserId && currentUserId !== playerId && (
-          <div className="p-4 border-t border-slate-700/50 space-y-2">
+          <div 
+            className="p-4 space-y-2 flex-shrink-0"
+            style={{ borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}` }}
+          >
             {/* Invite Error/Success Message */}
             {inviteError && (
               <div className="text-red-400 text-sm text-center mb-2">{inviteError}</div>
             )}
             {inviteSent && (
-              <div className="text-green-400 text-sm text-center mb-2">Challenge sent! ⚔️</div>
+              <div className="text-green-400 text-sm text-center mb-2">Challenge sent!</div>
             )}
             
-            <div className="flex gap-2">
-              {friendStatus === 'friend' ? (
+            {/* Challenge Button */}
+            <button
+              onClick={handleInviteToGame}
+              disabled={invitingToGame || inviteSent}
+              className="w-full py-3 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              style={{
+                background: `linear-gradient(135deg, ${glowColor} 0%, ${hexToRgba(glowColor, 0.7)} 100%)`,
+                boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.4)}`
+              }}
+            >
+              {invitingToGame ? (
                 <>
-                  <button
-                    onClick={handleInviteToGame}
-                    disabled={invitingToGame || inviteSent}
-                    className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50"
-                  >
-                    {invitingToGame ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : inviteSent ? (
-                      <>
-                        <Star size={18} />
-                        Sent!
-                      </>
-                    ) : (
-                      <>
-                        <Gamepad2 size={18} />
-                        Challenge
-                      </>
-                    )}
-                  </button>
-                  <div className="px-4 py-3 bg-green-500/20 text-green-400 rounded-xl font-medium flex items-center gap-2">
-                    <User size={18} />
-                    Friends
-                  </div>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Sending...
                 </>
-              ) : friendStatus === 'pending_sent' ? (
-                <div className="flex-1 py-3 bg-slate-700 text-slate-400 rounded-xl font-medium text-center flex items-center justify-center gap-2">
-                  <Clock size={18} />
-                  Friend Request Sent
-                </div>
-              ) : friendStatus === 'pending_received' ? (
-                <div className="flex-1 py-3 bg-amber-500/20 text-amber-400 rounded-xl font-medium text-center flex items-center justify-center gap-2">
-                  <UserPlus size={18} />
-                  Wants to be Friends
-                </div>
+              ) : inviteSent ? (
+                <>
+                  <Star size={18} />
+                  Sent!
+                </>
               ) : (
                 <>
-                  <button
-                    onClick={handleInviteToGame}
-                    disabled={invitingToGame || inviteSent}
-                    className="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:from-amber-400 hover:to-orange-400 transition-all disabled:opacity-50"
-                  >
-                    {invitingToGame ? (
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : inviteSent ? (
-                      <>
-                        <Star size={18} />
-                        Sent!
-                      </>
-                    ) : (
-                      <>
-                        <Gamepad2 size={18} />
-                        Challenge
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleSendFriendRequest}
-                    disabled={sendingRequest}
-                    className="px-4 py-3 bg-slate-700 text-slate-300 rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-slate-600 transition-all disabled:opacity-50"
-                  >
-                    {sendingRequest ? (
-                      <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <>
-                        <UserPlus size={18} />
-                        Add
-                      </>
-                    )}
-                  </button>
+                  <Swords size={18} />
+                  Challenge to Game
                 </>
               )}
-            </div>
+            </button>
+            
+            {/* Friend Request Button */}
+            {friendStatus !== 'friends' && friendStatus !== 'pending_sent' && (
+              <button
+                onClick={handleSendFriendRequest}
+                disabled={sendingRequest || friendStatus === 'pending_received'}
+                className="w-full py-2.5 rounded-xl font-bold text-slate-300 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                style={{
+                  backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                  border: `1px solid ${hexToRgba(glowColor, 0.3)}`
+                }}
+              >
+                {sendingRequest ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-slate-400/30 border-t-slate-400 rounded-full animate-spin" />
+                    Sending...
+                  </>
+                ) : friendStatus === 'pending_received' ? (
+                  <>
+                    <Clock size={16} />
+                    Request Pending
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={16} />
+                    Add Friend
+                  </>
+                )}
+              </button>
+            )}
+            
+            {friendStatus === 'pending_sent' && (
+              <div className="text-center text-slate-500 text-sm">
+                Friend request sent
+              </div>
+            )}
+            
+            {friendStatus === 'friends' && (
+              <div className="text-center text-green-400 text-sm flex items-center justify-center gap-1">
+                <Star size={14} />
+                Friends
+              </div>
+            )}
           </div>
         )}
       </div>
