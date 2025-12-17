@@ -2,14 +2,67 @@
 // FIXED: Removed queries to non-existent tables (player_stats, achievement_stats)
 // FIXED: Fixed games query syntax for PostgREST
 // FIXED: Use achievementService for achievement stats
+// FIXED: Define dbSelect locally instead of importing from non-existent file
 import { useState, useEffect } from 'react';
 import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, Clock, Swords, Calendar, ChevronRight, Loader } from 'lucide-react';
-import { dbSelect } from '../utils/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { friendsService } from '../services/friendsService';
-import { achievementService } from '../services/achievementService';
+import achievementService from '../services/achievementService';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
 import { soundManager } from '../utils/soundManager';
+
+// Supabase config for direct fetch
+const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Helper to get auth headers for direct fetch
+const getAuthHeaders = () => {
+  try {
+    const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+    if (!authData?.access_token || !ANON_KEY) {
+      return null;
+    }
+    return {
+      'Authorization': `Bearer ${authData.access_token}`,
+      'apikey': ANON_KEY,
+      'Content-Type': 'application/json'
+    };
+  } catch (e) {
+    return null;
+  }
+};
+
+// Direct fetch wrapper for database operations
+const dbSelect = async (table, options = {}) => {
+  const headers = getAuthHeaders();
+  if (!headers) return { data: null, error: 'Not authenticated' };
+  
+  let url = `${SUPABASE_URL}/rest/v1/${table}?`;
+  
+  if (options.select) url += `select=${encodeURIComponent(options.select)}&`;
+  if (options.eq) {
+    Object.entries(options.eq).forEach(([key, value]) => {
+      url += `${key}=eq.${value}&`;
+    });
+  }
+  if (options.order) url += `order=${options.order}&`;
+  if (options.limit) url += `limit=${options.limit}&`;
+  
+  try {
+    const response = await fetch(url, { 
+      headers: options.single 
+        ? { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+        : headers 
+    });
+    if (!response.ok) return { data: null, error: response.statusText };
+    const data = await response.json();
+    return { data, error: null };
+  } catch (e) {
+    return { data: null, error: e.message };
+  }
+};
 
 // Helper to convert hex to rgba
 const hexToRgba = (hex, alpha) => {
