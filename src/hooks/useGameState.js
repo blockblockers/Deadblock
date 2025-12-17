@@ -1,4 +1,5 @@
 // useGameState.js - Custom hook for managing local game state
+// FIXED: Changed import from aiPlayer to aiLogic
 // FIXED: Changed soundManager.playMove() to soundManager.playClickSound('move')
 import { useState, useCallback, useRef } from 'react';
 import { 
@@ -9,7 +10,8 @@ import {
   placePiece,
   canAnyPieceBePlaced 
 } from '../utils/gameLogic';
-import { getAIMove } from '../utils/aiPlayer';
+// FIXED: Import from aiLogic, not aiPlayer
+import { selectAIMove, AI_DIFFICULTY } from '../utils/aiLogic';
 import { soundManager } from '../utils/soundManager';
 
 // AI move delay for better UX
@@ -216,13 +218,14 @@ export const useGameState = (initialGameMode = '2player') => {
   }, []);
 
   // Make AI move with DELAY for realistic turn-based gameplay
+  // FIXED: Use selectAIMove from aiLogic instead of getAIMove from aiPlayer
   const makeAIMove = useCallback(async () => {
     if (gameOver || currentPlayer !== 2) return;
     
     setIsAIThinking(true);
     
     try {
-      // UPDATED: Add delay before AI starts thinking (1.5 seconds)
+      // Add delay before AI starts thinking (1.5 seconds)
       // This makes the turn-based gameplay feel more realistic
       await new Promise(r => setTimeout(r, AI_MOVE_DELAY));
       
@@ -232,17 +235,28 @@ export const useGameState = (initialGameMode = '2player') => {
         return;
       }
       
-      const difficulty = gameMode === 'puzzle' ? puzzleDifficultyRef.current : 'medium';
-      const move = await getAIMove(board, usedPieces, difficulty);
+      // Map difficulty string to AI_DIFFICULTY enum
+      const difficultyMap = {
+        'easy': AI_DIFFICULTY.RANDOM,
+        'medium': AI_DIFFICULTY.AVERAGE,
+        'hard': AI_DIFFICULTY.PROFESSIONAL,
+      };
+      const difficulty = gameMode === 'puzzle' 
+        ? AI_DIFFICULTY.AVERAGE 
+        : (difficultyMap[puzzleDifficultyRef.current] || AI_DIFFICULTY.AVERAGE);
+      
+      // FIXED: Use selectAIMove with correct parameters
+      const move = await selectAIMove(board, boardPieces, usedPieces, difficulty);
       
       if (move) {
         // Animate AI piece placement
+        // Note: selectAIMove returns { pieceType, row, col, rot, flip }
         setAiAnimatingMove({
-          piece: move.piece,
+          piece: move.pieceType,
           row: move.row,
           col: move.col,
-          rot: move.rotation,
-          flip: move.flipped
+          rot: move.rot,
+          flip: move.flip
         });
         
         // Brief delay to show animation
@@ -250,16 +264,16 @@ export const useGameState = (initialGameMode = '2player') => {
         
         setAiAnimatingMove(null);
         
-        const pieceCoords = getPieceCoords(move.piece, move.rotation, move.flipped);
+        const pieceCoords = getPieceCoords(move.pieceType, move.rot, move.flip);
         const { newBoard, newBoardPieces } = placePiece(
-          board, boardPieces, move.row, move.col, move.piece, pieceCoords, 2
+          board, boardPieces, move.row, move.col, move.pieceType, pieceCoords, 2
         );
         
         setBoard(newBoard);
         setBoardPieces(newBoardPieces);
-        setUsedPieces(prev => [...prev, move.piece]);
+        setUsedPieces(prev => [...prev, move.pieceType]);
         
-        const newUsedPieces = [...usedPieces, move.piece];
+        const newUsedPieces = [...usedPieces, move.pieceType];
         
         // Check game over
         if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {

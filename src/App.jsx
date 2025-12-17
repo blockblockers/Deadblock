@@ -1103,6 +1103,7 @@ function AppContent() {
       onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}
       onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'difficulty-select')}
+      setPendingMove={setPendingMove}
     />
   );
 }

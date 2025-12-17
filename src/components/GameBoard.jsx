@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import PropTypes from 'prop-types';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
@@ -13,8 +14,9 @@ import { GamePropTypes, CallbackPropTypes } from '../utils/propTypes';
  * - Striped ghost pattern for pieces overlapping existing pieces (same as off-grid)
  * - Valid piece shows actual piece color with animated cyan outline
  * - Invalid piece shows striped red pattern
+ * - ForwardRef support for drag-and-drop positioning
  */
-const GameBoard = ({
+const GameBoard = forwardRef(({
   board,
   boardPieces,
   pendingMove,
@@ -28,7 +30,7 @@ const GameBoard = ({
   playerAnimatingMove,
   selectedPiece,
   customColors,
-}) => {
+}, ref) => {
   // Ensure board is properly formatted
   const safeBoard = Array.isArray(board) 
     ? board.map(row => Array.isArray(row) ? row : Array(BOARD_SIZE).fill(null))
@@ -129,7 +131,7 @@ const GameBoard = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={ref}>
       {/* Main grid */}
       <div className="grid grid-cols-8 gap-0.5 sm:gap-1 bg-slate-800/50 p-1 sm:p-1.5 rounded-lg border border-cyan-500/20">
         {safeBoard.map((row, rowIdx) =>
@@ -377,7 +379,9 @@ const GameBoard = ({
       `}</style>
     </div>
   );
-};
+});
+
+GameBoard.displayName = 'GameBoard';
 
 /**
  * GameBoard PropTypes

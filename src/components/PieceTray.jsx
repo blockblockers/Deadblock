@@ -1,3 +1,5 @@
+// PieceTray.jsx - Piece selection tray with drag-and-drop support
+// UPDATED: Added drag handlers for dragging pieces to the board
 import { pieces, pieceColors } from '../utils/pieces';
 
 // Render a mini piece preview with cyberpunk styling
@@ -40,6 +42,23 @@ const MiniPiece = ({ name, coords }) => {
   );
 };
 
+/**
+ * PieceTray Component
+ * 
+ * @param {Object} props
+ * @param {Array} props.usedPieces - Array of piece names that have been used
+ * @param {string} props.selectedPiece - Currently selected piece name
+ * @param {Object} props.pendingMove - Current pending move (if any)
+ * @param {boolean} props.gameOver - Whether the game is over
+ * @param {string} props.gameMode - Current game mode ('2player', 'ai', 'puzzle', 'online')
+ * @param {number} props.currentPlayer - Current player number
+ * @param {boolean} props.isMobile - Whether on mobile device
+ * @param {boolean} props.isGeneratingPuzzle - Whether puzzle is being generated
+ * @param {Function} props.onSelectPiece - Callback when piece is selected/tapped
+ * @param {Function} props.createDragHandlers - Function to create drag handlers (from useDragAndDrop)
+ * @param {boolean} props.isDragging - Whether a drag is in progress
+ * @param {string} props.draggedPiece - Name of piece being dragged
+ */
 const PieceTray = ({ 
   usedPieces = [], 
   selectedPiece, 
@@ -49,7 +68,11 @@ const PieceTray = ({
   currentPlayer,
   isMobile,
   isGeneratingPuzzle,
-  onSelectPiece 
+  onSelectPiece,
+  // Drag-and-drop props (optional)
+  createDragHandlers,
+  isDragging,
+  draggedPiece,
 }) => {
   // Ensure usedPieces is always an array
   const safeUsedPieces = Array.isArray(usedPieces) ? usedPieces : [];
@@ -62,36 +85,63 @@ const PieceTray = ({
 
   return (
     <div className={`bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-xl p-2 border border-cyan-500/30 shadow-[0_0_25px_rgba(34,211,238,0.15),inset_0_0_30px_rgba(0,0,0,0.3)] mt-2 ${isGeneratingPuzzle ? 'opacity-50' : ''}`}>
-      {/* UPDATED: Piece grid moved to top */}
+      {/* Drag hint */}
+      {!gameOver && !isGeneratingPuzzle && (
+        <div className="text-[10px] text-cyan-400/60 text-center mb-1 font-medium tracking-wide">
+          TAP TO SELECT • DRAG TO PLACE
+        </div>
+      )}
+      
+      {/* Piece grid */}
       <div className="grid grid-cols-6 gap-1.5">
         {pieces && Object.entries(pieces).map(([name, coords]) => {
           const isUsed = safeUsedPieces.includes(name);
           const isSelected = selectedPiece === name;
+          const isBeingDragged = isDragging && draggedPiece === name;
+          
+          // Get drag handlers if available
+          const dragHandlers = createDragHandlers ? createDragHandlers(name) : {};
           
           return (
             <button
               key={name}
-              onClick={() => !isUsed && !isGeneratingPuzzle && onSelectPiece(name)}
-              className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden ${
+              onClick={() => !isUsed && !isGeneratingPuzzle && !isDragging && onSelectPiece(name)}
+              {...dragHandlers}
+              className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden touch-manipulation ${
                 isUsed
                   ? 'bg-slate-800/30 opacity-25 cursor-not-allowed border border-slate-700/30'
-                  : isSelected
-                    ? 'bg-slate-700/80 ring-2 ring-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.7),inset_0_0_15px_rgba(34,211,238,0.2)] border border-cyan-400/50'
-                    : 'bg-slate-800/60 hover:bg-slate-700/70 border border-cyan-500/20 hover:border-cyan-500/40 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)]'
+                  : isBeingDragged
+                    ? 'bg-slate-700/50 ring-2 ring-cyan-400/50 opacity-50 border border-cyan-500/30'
+                    : isSelected
+                      ? 'bg-slate-700/80 ring-2 ring-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.7),inset_0_0_15px_rgba(34,211,238,0.2)] border border-cyan-400/50'
+                      : 'bg-slate-800/60 hover:bg-slate-700/70 border border-cyan-500/20 hover:border-cyan-500/40 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)]'
               }`}
               disabled={isDisabled(name)}
+              style={{
+                // Prevent text selection during drag
+                WebkitUserSelect: 'none',
+                userSelect: 'none',
+                // Prevent context menu on long press
+                WebkitTouchCallout: 'none',
+              }}
             >
               {/* Selection glow effect */}
-              {isSelected && (
+              {isSelected && !isBeingDragged && (
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-transparent pointer-events-none" />
               )}
+              
+              {/* Drag indicator */}
+              {isBeingDragged && (
+                <div className="absolute inset-0 bg-cyan-400/10 pointer-events-none animate-pulse" />
+              )}
+              
               <MiniPiece name={name} coords={coords} />
             </button>
           );
         })}
       </div>
       
-      {/* UPDATED: Counter moved below the pieces grid */}
+      {/* Counter */}
       <div className="text-xs font-semibold text-cyan-300/80 text-center mt-2 tracking-widest relative">
         <span className="relative z-10">PIECES: {safeUsedPieces.length}/12 USED</span>
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent" />

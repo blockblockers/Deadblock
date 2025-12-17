@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+// GameScreen.jsx - Main game screen with drag-and-drop support
+// UPDATED: Added drag-and-drop for pieces from tray to board
+import { useState, useEffect, useRef, useCallback } from 'react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -7,11 +9,16 @@ import ControlButtons from './ControlButtons';
 import DPad from './DPad';
 import GameStatus from './GameStatus';
 import GameOverModal from './GameOverModal';
-import { getPieceCoords, canPlacePiece } from '../utils/gameLogic';
+import DragOverlay from './DragOverlay';
+import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+
+// Drag detection constants
+const DRAG_THRESHOLD = 10;
+const SCROLL_ANGLE_THRESHOLD = 60;
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -63,96 +70,62 @@ const difficultyThemes = {
 
 const getTheme = (gameMode, aiDifficulty, puzzleDifficulty) => {
   if (gameMode === 'ai') {
-    if (aiDifficulty === AI_DIFFICULTY.RANDOM) return difficultyThemes.beginner;
-    if (aiDifficulty === AI_DIFFICULTY.AVERAGE) return difficultyThemes.intermediate;
-    if (aiDifficulty === AI_DIFFICULTY.PROFESSIONAL) return difficultyThemes.expert;
+    switch (aiDifficulty) {
+      case AI_DIFFICULTY.RANDOM: return difficultyThemes.beginner;
+      case AI_DIFFICULTY.AVERAGE: return difficultyThemes.intermediate;
+      case AI_DIFFICULTY.PROFESSIONAL: return difficultyThemes.expert;
+      default: return difficultyThemes.intermediate;
+    }
   }
   if (gameMode === 'puzzle') {
-    if (puzzleDifficulty === PUZZLE_DIFFICULTY.EASY) return difficultyThemes.beginner;
-    if (puzzleDifficulty === PUZZLE_DIFFICULTY.MEDIUM) return difficultyThemes.intermediate;
-    if (puzzleDifficulty === PUZZLE_DIFFICULTY.HARD) return difficultyThemes.expert;
+    switch (puzzleDifficulty) {
+      case PUZZLE_DIFFICULTY.EASY: return difficultyThemes.beginner;
+      case PUZZLE_DIFFICULTY.MEDIUM: return difficultyThemes.intermediate;
+      case PUZZLE_DIFFICULTY.HARD: return difficultyThemes.expert;
+      default: return difficultyThemes.beginner;
+    }
   }
   return difficultyThemes.default;
 };
 
-// Animated player indicator with difficulty in center
+// Player indicator component
 const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking }) => {
-  const is2Player = gameMode === '2player';
-  const isPuzzle = gameMode === 'puzzle';
-  
-  const player1Active = currentPlayer === 1;
-  const player2Active = currentPlayer === 2;
+  const isVsAI = gameMode === 'ai' || gameMode === 'puzzle';
+  const p1Label = isVsAI ? 'YOU' : 'PLAYER 1';
+  const p2Label = isVsAI ? 'AI' : 'PLAYER 2';
   
   return (
-    <div className="flex items-center justify-between mb-3">
-      {/* Player 1 */}
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
-        player1Active 
-          ? 'bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
+    <div className="flex items-center justify-center gap-6 mb-3 py-2">
+      <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
+        currentPlayer === 1 
+          ? `bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]` 
           : 'bg-slate-800/50 border border-slate-700/50'
       }`}>
         <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
-          player1Active ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] animate-pulse' : 'bg-slate-600'
+          currentPlayer === 1 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] animate-pulse' : 'bg-slate-600'
         }`} />
-        <span className={`text-sm font-bold tracking-wide ${player1Active ? 'text-cyan-300' : 'text-slate-500'}`}>
-          {isPuzzle ? 'YOU' : 'P1'}
+        <span className={`text-sm font-bold tracking-wide ${currentPlayer === 1 ? 'text-cyan-300' : 'text-slate-500'}`}>
+          {p1Label}
         </span>
       </div>
       
-      {/* Center - Difficulty Badge (animated) */}
-      {theme.label && (
-        <div className={`relative px-4 py-1.5 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
-          {/* Animated shimmer effect */}
-          <div className="absolute inset-0 rounded-full overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer" />
-          </div>
-          <span className="relative text-xs font-black tracking-widest text-white drop-shadow-lg">
-            {theme.label}
-          </span>
-        </div>
-      )}
+      <span className="text-slate-600 font-bold">VS</span>
       
-      {/* Player 2 / A.I. */}
-      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
-        player2Active 
-          ? is2Player
-            ? 'bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]'
-            : isAIThinking
-              ? 'bg-purple-500/30 border border-purple-400/70 shadow-[0_0_25px_rgba(168,85,247,0.6)]'
-              : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'
+      <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
+        currentPlayer === 2 
+          ? `bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]` 
           : 'bg-slate-800/50 border border-slate-700/50'
       }`}>
-        <span className={`text-sm font-bold tracking-wide ${
-          player2Active 
-            ? is2Player ? 'text-pink-300' : 'text-purple-300'
-            : 'text-slate-500'
-        }`}>
-          {is2Player ? 'P2' : 'A.I.'}
-        </span>
         <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
-          player2Active 
-            ? is2Player 
-              ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse'
-              : isAIThinking
-                ? 'bg-purple-300 shadow-[0_0_15px_rgba(168,85,247,1)]'
-                : 'bg-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.8)] animate-pulse'
-            : 'bg-slate-600'
+          currentPlayer === 2 ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse' : 'bg-slate-600'
         }`} />
-        {isAIThinking && player2Active && (
-          <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin ml-1" />
-        )}
+        <span className={`text-sm font-bold tracking-wide ${currentPlayer === 2 ? 'text-pink-300' : 'text-slate-500'}`}>
+          {p2Label}
+          {isAIThinking && currentPlayer === 2 && (
+            <span className="ml-2 text-xs text-pink-400/70">thinking...</span>
+          )}
+        </span>
       </div>
-      
-      {/* Shimmer animation */}
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        .animate-shimmer {
-          animation: shimmer 2s ease-in-out infinite;
-        }
-      `}</style>
     </div>
   );
 };
@@ -160,20 +133,18 @@ const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking }) => {
 const GameScreen = ({
   board,
   boardPieces,
+  usedPieces,
   currentPlayer,
   selectedPiece,
   rotation,
   flipped,
+  pendingMove,
   gameOver,
   winner,
-  usedPieces,
-  moveHistory,
   gameMode,
-  isAIThinking,
-  pendingMove,
-  currentPuzzle,
   aiDifficulty,
-  isMobile,
+  puzzleDifficulty,
+  isAIThinking,
   isGeneratingPuzzle,
   aiAnimatingMove,
   playerAnimatingMove,
@@ -181,151 +152,335 @@ const GameScreen = ({
   onSelectPiece,
   onRotate,
   onFlip,
+  onMovePiece,
   onConfirm,
   onCancel,
-  onMovePiece,
   onReset,
-  onRetryPuzzle,
   onMenu,
-  onDifficultySelect
+  onRetryPuzzle,
+  onDifficultySelect,
+  // Add setter for pending move (needed for drag-and-drop)
+  setPendingMove,
 }) => {
+  const { needsScroll, viewportHeight } = useResponsiveLayout(850);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
-  const { needsScroll } = useResponsiveLayout(750);
-
-  const puzzleDifficulty = currentPuzzle?.difficulty;
-  const theme = getTheme(gameMode, aiDifficulty, puzzleDifficulty);
-
-  useEffect(() => {
-    if (gameOver) {
-      const timer = setTimeout(() => setShowGameOverModal(true), 500);
-      return () => clearTimeout(timer);
-    } else {
-      setShowGameOverModal(false);
-    }
-  }, [gameOver]);
-
-  // Check if pending move is valid
-  const isPendingValid = pendingMove && canPlacePiece(
-    board, 
-    pendingMove.row, 
-    pendingMove.col, 
-    getPieceCoords(pendingMove.piece, rotation, flipped)
-  );
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   
-  const canConfirm = isPendingValid;
+  // Drag-and-drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedPiece, setDraggedPiece] = useState(null);
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isValidDrop, setIsValidDrop] = useState(false);
+  const boardRef = useRef(null);
+  const boardBoundsRef = useRef(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const hasDragStartedRef = useRef(false);
 
-  // UPDATED: Handle error messages for invalid placement
+  const theme = getTheme(gameMode, aiDifficulty, puzzleDifficulty);
+  const isPuzzle = gameMode === 'puzzle';
+  const playerWon = winner === 1;
+
+  // Calculate if confirm should be enabled
+  const canConfirm = pendingMove && (() => {
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+  })();
+
+  // Show error when placement is invalid
   useEffect(() => {
-    if (pendingMove && !isPendingValid) {
-      // Check why it's invalid
+    if (pendingMove) {
       const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-      let isOutOfBounds = false;
-      let isOverlapping = false;
-      
-      for (const [dx, dy] of coords) {
-        const newRow = pendingMove.row + dy;
-        const newCol = pendingMove.col + dx;
-        if (newRow < 0 || newRow >= 8 || newCol < 0 || newCol >= 8) {
-          isOutOfBounds = true;
-        } else if (board[newRow]?.[newCol] !== null && board[newRow]?.[newCol] !== 0) {
-          isOverlapping = true;
-        }
-      }
-      
-      if (isOutOfBounds) {
-        setErrorMessage('Piece extends off the board!');
-      } else if (isOverlapping) {
-        setErrorMessage('Cannot place on existing pieces!');
+      const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+      if (!isValid) {
+        setErrorMessage('Invalid placement!');
       } else {
-        setErrorMessage('Invalid placement');
+        setErrorMessage(null);
       }
     } else {
       setErrorMessage(null);
     }
-  }, [pendingMove, isPendingValid, board, rotation, flipped]);
+  }, [pendingMove, rotation, flipped, board]);
 
-  const handleMenuClick = () => {
-    soundManager.playButtonClick();
-    onMenu();
+  // Show game over modal when game ends
+  useEffect(() => {
+    if (gameOver && winner !== null) {
+      const delay = setTimeout(() => {
+        setShowGameOverModal(true);
+      }, 500);
+      return () => clearTimeout(delay);
+    }
+  }, [gameOver, winner]);
+
+  const handleCloseModal = () => {
+    setShowGameOverModal(false);
   };
 
-  const handleCloseModal = () => setShowGameOverModal(false);
+  // ==========================================
+  // Drag-and-drop handlers
+  // ==========================================
+  
+  // Calculate which board cell the drag position is over
+  const calculateBoardCell = useCallback((clientX, clientY) => {
+    if (!boardBoundsRef.current) return null;
+    
+    const { left, top, width, height } = boardBoundsRef.current;
+    const cellWidth = width / BOARD_SIZE;
+    const cellHeight = height / BOARD_SIZE;
+    
+    const relX = clientX - left;
+    const relY = clientY - top;
+    
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
+    
+    if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+      return { row, col };
+    }
+    return null;
+  }, []);
 
-  const playerWon = winner === 1;
-  const isPuzzle = gameMode === 'puzzle';
+  // Check if movement is a scroll gesture (mostly vertical)
+  const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
+    const dx = Math.abs(currentX - startX);
+    const dy = Math.abs(currentY - startY);
+    
+    if (dx + dy < DRAG_THRESHOLD) return null;
+    
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    return angle > SCROLL_ANGLE_THRESHOLD;
+  }, []);
+
+  // Start drag from piece tray
+  const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
+    if (gameOver || usedPieces.includes(piece)) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    
+    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
+    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    hasDragStartedRef.current = true;
+    
+    // Also select the piece
+    onSelectPiece?.(piece);
+    soundManager.playPieceSelect();
+    
+    // Prevent scroll while dragging
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
+
+  // Update drag position
+  const updateDrag = useCallback((clientX, clientY) => {
+    if (!isDragging || !draggedPiece) return;
+    
+    setDragPosition({ x: clientX, y: clientY });
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // Calculate which cell we're over
+    const cell = calculateBoardCell(clientX, clientY);
+    
+    if (cell && setPendingMove) {
+      // Update pending move for visual feedback
+      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+      
+      // Check if valid drop position
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
+    } else {
+      setIsValidDrop(false);
+    }
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+
+  // End drag
+  const endDrag = useCallback(() => {
+    if (!isDragging) return;
+    
+    // Keep pending move for user to confirm/adjust
+    // They can still use D-pad and rotate/flip
+    
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setDragPosition({ x: 0, y: 0 });
+    setDragOffset({ x: 0, y: 0 });
+    setIsValidDrop(false);
+    hasDragStartedRef.current = false;
+    
+    // Re-enable scroll
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+  }, [isDragging]);
+
+  // Create drag handlers for PieceTray
+  const createDragHandlers = useCallback((piece) => {
+    if (gameOver || usedPieces.includes(piece)) return {};
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
+
+    let startX = 0;
+    let startY = 0;
+    let elementRect = null;
+    let gestureDecided = false;
+
+    const handleTouchStart = (e) => {
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      elementRect = e.currentTarget.getBoundingClientRect();
+      gestureDecided = false;
+      dragStartRef.current = { x: startX, y: startY };
+    };
+
+    const handleTouchMove = (e) => {
+      if (gestureDecided && !hasDragStartedRef.current) return;
+      
+      const touch = e.touches[0];
+      const currentX = touch.clientX;
+      const currentY = touch.clientY;
+      
+      if (!gestureDecided) {
+        const isScroll = isScrollGesture(startX, startY, currentX, currentY);
+        
+        if (isScroll === null) return;
+        
+        gestureDecided = true;
+        
+        if (isScroll) {
+          return; // It's a scroll
+        } else {
+          e.preventDefault();
+          startDrag(piece, currentX, currentY, elementRect);
+        }
+      }
+      
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        updateDrag(currentX, currentY);
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        endDrag();
+      }
+      gestureDecided = false;
+    };
+
+    // Mouse handlers for desktop
+    const handleMouseDown = (e) => {
+      if (e.button !== 0) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      elementRect = e.currentTarget.getBoundingClientRect();
+      startDrag(piece, e.clientX, e.clientY, elementRect);
+    };
+
+    return {
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
+      onMouseDown: handleMouseDown,
+    };
+  }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
+
+  // Global mouse move/up handlers for desktop drag
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e) => {
+      updateDrag(e.clientX, e.clientY);
+    };
+
+    const handleMouseUp = () => {
+      endDrag();
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        endDrag();
+        onCancel?.();
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDragging, updateDrag, endDrag, onCancel]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, []);
+
+  // Handle cell click (ignore during drag)
+  const handleCellClick = useCallback((row, col) => {
+    if (isDragging) return;
+    onCellClick?.(row, col);
+  }, [isDragging, onCellClick]);
 
   return (
     <div 
       className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? {
-        overflowY: 'auto',
-        overflowX: 'hidden',
+      style={needsScroll ? { 
+        overflowY: 'auto', 
+        overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
+        touchAction: isDragging ? 'none' : 'pan-y',
       } : {}}
     >
-      {/* Themed Grid background */}
-      <div className="fixed inset-0 opacity-25 pointer-events-none transition-all duration-500" style={{
+      {/* Dynamic grid background */}
+      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
-        backgroundSize: '40px 40px'
+        backgroundSize: '30px 30px'
       }} />
       
-      {/* Themed glow effects */}
-      <div className={`fixed top-1/4 left-1/4 w-80 h-80 ${theme.glow1} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
-      <div className={`fixed bottom-1/4 right-1/4 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
-      
-      {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full flex flex-col'} p-2 sm:p-4`}>
-        <div className={`max-w-lg mx-auto w-full ${needsScroll ? '' : 'flex-1 flex flex-col'}`}>
-          {/* Header */}
-          <div className="flex items-center justify-center mb-2 sm:mb-3 relative flex-shrink-0">
-            <div className="text-center">
-              {/* UPDATED: Consistent title size across all game modes */}
-              <NeonTitle size="small" />
-              {/* UPDATED: Consistent subtitle sizing - slightly larger for 2 player */}
-              {gameMode === 'ai' && (
-                <div className="mt-1">
-                  <NeonSubtitle text="VS A.I." size="small" color="purple" />
-                </div>
-              )}
-              {gameMode === '2player' && (
-                <div className="mt-1">
-                  {/* UPDATED: Larger subtitle for 2 player mode */}
-                  <NeonSubtitle text="2 PLAYER" size="default" color="cyan" />
-                </div>
-              )}
-              {gameMode === 'puzzle' && (
-                <div className="mt-1">
-                  <NeonSubtitle text="PUZZLE" size="small" color="green" />
-                </div>
-              )}
-            </div>
-            <button 
-              onClick={handleMenuClick}
-              className="absolute right-0 px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs sm:text-sm border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
-            >
-              MENU
-            </button>
+      {/* Ambient glow effects */}
+      <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
+
+      {/* Main content */}
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
+        <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
+          
+          {/* Compact Title */}
+          <div className="text-center mb-2">
+            <NeonTitle size="small" />
+            {gameMode === 'ai' && theme.label && (
+              <div className={`inline-block mt-1 px-4 py-1 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
+                <span className="text-white text-xs font-black tracking-[0.2em]">{theme.label}</span>
+              </div>
+            )}
+            {gameMode === 'puzzle' && (
+              <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
+            )}
+            {gameMode === '2player' && (
+              <NeonSubtitle text="2 PLAYER" size="small" className="mt-1" />
+            )}
           </div>
 
-          {/* UPDATED: Removed puzzle "moves remaining" info box */}
-          {/* The difficulty was already shown in the menu, no need to repeat */}
-
-          {/* Generating Puzzle */}
-          {isGeneratingPuzzle && (
-            <div className={`bg-slate-800/60 border ${theme.panelBorder} rounded-lg p-3 mb-2 text-center flex-shrink-0`}>
-              <div className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-                <span className="font-bold text-cyan-300 text-sm">Generating Puzzle...</span>
-              </div>
-            </div>
-          )}
-
-          {/* Main Game Panel */}
-          <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border ${theme.panelBorder} ${theme.panelShadow} ${needsScroll ? '' : 'flex-shrink-0'}`}>
+          {/* Game Area */}
+          <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
             
-            {/* Player Bar with centered difficulty */}
+            {/* Player Bar */}
             <PlayerBar 
               currentPlayer={currentPlayer} 
               gameMode={gameMode} 
@@ -335,9 +490,10 @@ const GameScreen = ({
             
             <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
 
-            {/* Game Board */}
+            {/* Game Board with ref for drag positioning */}
             <div className="flex justify-center pb-4">
               <GameBoard
+                ref={boardRef}
                 board={board}
                 boardPieces={boardPieces}
                 pendingMove={pendingMove}
@@ -346,17 +502,17 @@ const GameScreen = ({
                 gameOver={gameOver}
                 gameMode={gameMode}
                 currentPlayer={currentPlayer}
-                onCellClick={onCellClick}
+                onCellClick={handleCellClick}
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
               />
             </div>
 
-            {/* UPDATED: D-Pad and Error Message Layout */}
-            {pendingMove && !isGeneratingPuzzle && (
+            {/* D-Pad and Error Message Layout */}
+            {pendingMove && !isGeneratingPuzzle && !isDragging && (
               <div className="flex items-start justify-center gap-3 mb-2">
-                {/* Error message box - left of d-pad */}
+                {/* Error message box */}
                 <div className="flex-shrink-0 w-24">
                   {errorMessage && (
                     <div className="error-message-box bg-red-900/80 border border-red-500/60 rounded-lg p-2 text-center shadow-[0_0_15px_rgba(239,68,68,0.4)]">
@@ -392,7 +548,7 @@ const GameScreen = ({
             />
           </div>
 
-          {/* Piece Tray */}
+          {/* Piece Tray with drag handlers */}
           <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
             <PieceTray
               usedPieces={usedPieces}
@@ -404,12 +560,26 @@ const GameScreen = ({
               isMobile={isMobile}
               isGeneratingPuzzle={isGeneratingPuzzle}
               onSelectPiece={onSelectPiece}
+              createDragHandlers={createDragHandlers}
+              isDragging={isDragging}
+              draggedPiece={draggedPiece}
             />
           </div>
           
           {needsScroll && <div className="h-8" />}
         </div>
       </div>
+
+      {/* Drag Overlay - floating piece following cursor/finger */}
+      <DragOverlay
+        isDragging={isDragging}
+        piece={draggedPiece}
+        position={dragPosition}
+        offset={dragOffset}
+        rotation={rotation}
+        flipped={flipped}
+        isValid={isValidDrop}
+      />
 
       {/* Game Over Modal */}
       {showGameOverModal && (
@@ -426,7 +596,7 @@ const GameScreen = ({
         />
       )}
       
-      {/* UPDATED: Error message animation styles */}
+      {/* Error message animation styles */}
       <style>{`
         .error-message-box {
           animation: error-shake 0.5s ease-in-out, error-pulse 1.5s ease-in-out infinite;
