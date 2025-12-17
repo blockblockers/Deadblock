@@ -232,6 +232,24 @@ function AppContent() {
     resetCurrentPuzzle,
   } = useGameState();
 
+  // Reset state when user signs out
+  useEffect(() => {
+    // If auth loading is complete and user is not authenticated, 
+    // check if we need to reset entry auth state
+    if (!authLoading && !isAuthenticated && !isOAuthCallback) {
+      const storedEntryAuth = localStorage.getItem('deadblock_entry_auth_passed');
+      // If localStorage was cleared (by signOut) but state is still true, reset it
+      if (hasPassedEntryAuth && storedEntryAuth !== 'true') {
+        console.log('App: User signed out, resetting entry auth state');
+        setHasPassedEntryAuth(false);
+        setIsOfflineMode(false);
+        setGameMode(null);
+        // Clear any pending invite state too
+        clearPendingInvite();
+      }
+    }
+  }, [authLoading, isAuthenticated, isOAuthCallback, hasPassedEntryAuth, clearPendingInvite, setGameMode]);
+
   // Accept invite after successful authentication
   useEffect(() => {
     const acceptPendingInvite = async () => {
@@ -242,8 +260,7 @@ function AppContent() {
       console.log('App: User authenticated with pending invite, accepting...');
       
       try {
-        const { getSupabase } = await import('./utils/supabase');
-        const supabase = getSupabase();
+        const { supabase } = await import('./utils/supabase');
         
         if (!supabase) {
           console.error('App: Supabase not available');
