@@ -452,9 +452,22 @@ class InviteService {
       )
       .subscribe();
 
-    return () => {
+    // Store the unsubscribe handler
+    this.unsubscribeHandler = () => {
       supabase.removeChannel(channel);
     };
+
+    return this.unsubscribeHandler;
+  }
+
+  // =====================================================
+  // Unsubscribe from invite updates
+  // =====================================================
+  unsubscribeFromInvites() {
+    if (this.unsubscribeHandler) {
+      this.unsubscribeHandler();
+      this.unsubscribeHandler = null;
+    }
   }
 
   // =====================================================

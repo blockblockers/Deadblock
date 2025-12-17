@@ -869,28 +869,51 @@ const EntryAuthScreen = ({
   // ============================================
   // MAIN RENDER
   // ============================================
+  
+  // Theme configuration - matching PuzzleSelect style
+  const theme = {
+    gridColor: 'rgba(34,211,238,0.4)',
+    glow1: { color: 'bg-cyan-500/35', pos: 'top-20 left-10' },
+    glow2: { color: 'bg-blue-500/30', pos: 'bottom-32 right-10' },
+    glow3: { color: 'bg-purple-500/20', pos: 'top-1/2 left-1/2' },
+    cardBg: 'bg-gradient-to-br from-slate-900/95 via-cyan-950/40 to-slate-900/95',
+    cardBorder: 'border-cyan-500/40',
+    cardShadow: 'shadow-[0_0_50px_rgba(34,211,238,0.3),inset_0_0_20px_rgba(34,211,238,0.05)]',
+  };
+  
+  // Invite theme - amber glow when invite is present
+  const inviteTheme = isInviteFlow ? {
+    gridColor: 'rgba(251,191,36,0.4)',
+    glow1: { color: 'bg-amber-500/35', pos: 'top-20 left-10' },
+    glow2: { color: 'bg-orange-500/30', pos: 'bottom-32 right-10' },
+    glow3: { color: 'bg-yellow-500/20', pos: 'top-1/2 left-1/2' },
+    cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/40 to-slate-900/95',
+    cardBorder: 'border-amber-500/40',
+    cardShadow: 'shadow-[0_0_50px_rgba(251,191,36,0.3),inset_0_0_20px_rgba(251,191,36,0.05)]',
+  } : theme;
+  
+  const activeTheme = isInviteFlow ? inviteTheme : theme;
+
   return (
     <div 
       className="min-h-screen bg-slate-950 flex flex-col"
       style={scrollStyles}
     >
-      {/* Grid Background */}
-      <div className="fixed inset-0 opacity-25 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+      {/* Themed Grid Background - matching PuzzleSelect */}
+      <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
+        backgroundImage: `linear-gradient(${activeTheme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${activeTheme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Glow Effects */}
-      <div className="fixed top-1/4 right-1/4 w-80 h-80 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 left-1/4 w-72 h-72 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
-      {isInviteFlow && (
-        <div className="fixed top-1/3 left-1/3 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-      )}
+      {/* Multiple themed glow orbs - matching PuzzleSelect */}
+      <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       
       {/* Content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
-        {/* Title - Large size */}
-        <div className="mb-4">
+        {/* Title - Large size matching PuzzleSelect */}
+        <div className="text-center mb-4">
           <NeonTitle size="large" />
         </div>
         
@@ -902,8 +925,8 @@ const EntryAuthScreen = ({
           }
         </p>
         
-        {/* Auth Card */}
-        <div className="w-full max-w-sm bg-slate-900/70 backdrop-blur-md rounded-2xl p-5 border border-slate-700/50 shadow-[0_0_40px_rgba(0,0,0,0.4)]">
+        {/* Auth Card - with dramatic PuzzleSelect-style theme */}
+        <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
           {mode === 'select' && renderSelectMode()}
           {mode === 'login' && renderLoginMode()}
           {mode === 'signup' && renderSignupMode()}

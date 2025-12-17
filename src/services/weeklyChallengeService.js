@@ -1,5 +1,6 @@
 // Weekly Challenge Service - Handles weekly puzzle challenges
-// FIXED: Uses direct fetch to bypass Supabase client timeout issues
+// FIXED: Added missing getUserChallengeStats method
+// Uses direct fetch to bypass Supabase client timeout issues
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 // Helper to get auth data and make direct fetch calls
@@ -265,6 +266,29 @@ class WeeklyChallengeService {
       console.error('Error getting user result:', err);
       return { data: null, error: err.message };
     }
+  }
+  
+  // =====================================================
+  // getUserChallengeStats - ALIAS for getUserResult
+  // Used by WeeklyChallengeMenu to get user's challenge stats
+  // =====================================================
+  async getUserChallengeStats(challengeId) {
+    const result = await this.getUserResult(challengeId);
+    
+    // Transform the result to match expected format used by WeeklyChallengeMenu
+    if (result.data) {
+      return {
+        data: {
+          ...result.data,
+          best_time: result.data.best_time_ms || result.data.completion_time_ms,
+          first_attempt_time: result.data.first_attempt_time_ms,
+          attempts: result.data.attempts || 1
+        },
+        error: null
+      };
+    }
+    
+    return result;
   }
   
   // Get user's rank in a challenge (based on first_attempt_time)
