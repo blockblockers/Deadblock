@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import FloatingPieces from './FloatingPieces';
 
 const EntryAuthScreen = ({ 
   onComplete, 
@@ -909,6 +910,9 @@ const EntryAuthScreen = ({
       <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      
+      {/* Floating pieces background */}
+      <FloatingPieces count={8} theme="cyan" minOpacity={0.04} maxOpacity={0.12} />
       
       {/* Content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">

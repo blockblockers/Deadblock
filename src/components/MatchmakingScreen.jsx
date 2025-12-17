@@ -6,6 +6,7 @@ import { matchmakingService } from '../services/matchmaking';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import FloatingPieces from './FloatingPieces';
 
 // Online theme - amber/orange to match the menu button
 const theme = {
@@ -188,6 +189,9 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none animate-pulse`} />
       <div className={`fixed ${theme.glow2.pos} w-80 h-80 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDelay: '1s' }} />
+
+      {/* Floating pieces background */}
+      <FloatingPieces count={8} theme="amber" minOpacity={0.05} maxOpacity={0.12} />
 
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>

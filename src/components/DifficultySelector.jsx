@@ -5,6 +5,7 @@ import NeonSubtitle from './NeonSubtitle';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import FloatingPieces from './FloatingPieces';
 
 // Dramatically different themes for each difficulty
 const themes = {
@@ -127,6 +128,9 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      
+      {/* Floating pieces background */}
+      <FloatingPieces count={8} theme="purple" minOpacity={0.05} maxOpacity={0.12} />
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-6' : 'py-3'}`}>
