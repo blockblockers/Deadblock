@@ -2,14 +2,13 @@
 // Invite Service - Handles game invites and invite links
 // =====================================================
 
-import { isSupabaseConfigured, getSupabase } from '../utils/supabase';
+import { isSupabaseConfigured, supabase } from '../utils/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Helper to get auth headers
 const getAuthHeaders = () => {
-  const supabase = getSupabase();
   if (!supabase) return null;
   
   const token = supabase.auth.session?.()?.access_token 
@@ -421,7 +420,6 @@ class InviteService {
   subscribeToInvites(userId, onNewInvite, onInviteUpdate) {
     if (!isSupabaseConfigured()) return () => {};
 
-    const supabase = getSupabase();
     if (!supabase) return () => {};
 
     const channel = supabase

@@ -265,7 +265,6 @@ const EntryAuthScreen = ({
     touchAction: 'pan-y pinch-zoom',
     overscrollBehavior: 'contain',
     height: '100%',
-    minHeight: '100vh',
     minHeight: '100dvh',
   } : {};
 
