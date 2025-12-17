@@ -1,5 +1,4 @@
 import { Settings, HelpCircle, Globe } from 'lucide-react';
-import { useMemo } from 'react';
 import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
@@ -8,7 +7,6 @@ import FloatingPieces from './FloatingPieces';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { isSupabaseConfigured } from '../utils/supabase';
-import { pieces } from '../utils/pieces';
 
 // Custom pentomino shapes for buttons
 const buttonShapes = {

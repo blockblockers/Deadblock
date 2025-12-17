@@ -1,5 +1,4 @@
 // FloatingPieces.jsx - Animated floating pentomino pieces background
-// Use this component to add visual interest to menus and screens
 import { memo, useMemo } from 'react';
 
 // Pentomino piece definitions
@@ -36,35 +35,33 @@ const getRandomPiece = () => {
 };
 
 // Get random color from palette
-const getRandomColor = (theme = 'cyan') => {
+const getRandomColor = (theme) => {
   const colors = PALETTES[theme] || PALETTES.mixed;
   return colors[Math.floor(Math.random() * colors.length)];
 };
 
-// Single floating piece component
-const FloatingPiece = memo(({ 
+// Single floating piece component (internal only)
+const SinglePiece = memo(function SinglePiece({ 
   pieceName, 
-  size = 8,
+  size,
   color,
   initialX,
   initialY,
   duration,
   delay,
   rotation,
-  opacity = 0.15,
-}) => {
+  opacity,
+  uniqueKey,
+}) {
   const coords = PIECES[pieceName];
   if (!coords) return null;
 
-  // Calculate bounding box
   const minX = Math.min(...coords.map(([x]) => x));
   const maxX = Math.max(...coords.map(([x]) => x));
   const minY = Math.min(...coords.map(([, y]) => y));
   const maxY = Math.max(...coords.map(([, y]) => y));
   const width = maxX - minX + 1;
   const height = maxY - minY + 1;
-
-  const uniqueId = `fp-${pieceName}-${Math.random().toString(36).substr(2, 9)}`;
 
   return (
     <div
@@ -76,13 +73,13 @@ const FloatingPiece = memo(({
         height: `${height * size}px`,
         transform: `rotate(${rotation}deg)`,
         opacity,
-        animation: `float-${uniqueId} ${duration}s ease-in-out infinite`,
+        animation: `floatAnim${uniqueKey} ${duration}s ease-in-out infinite`,
         animationDelay: `${delay}s`,
       }}
     >
       <style>
         {`
-          @keyframes float-${uniqueId} {
+          @keyframes floatAnim${uniqueKey} {
             0%, 100% {
               transform: rotate(${rotation}deg) translateY(0px) translateX(0px);
               opacity: ${opacity};
@@ -124,23 +121,10 @@ const FloatingPiece = memo(({
   );
 });
 
-FloatingPieces.displayName = 'FloatingPiece';
-
 /**
  * FloatingPieces - Animated background with floating pentomino pieces
- * 
- * @param {Object} props
- * @param {number} props.count - Number of floating pieces (default: 12)
- * @param {string} props.theme - Color theme: 'cyan', 'amber', 'purple', 'pink', 'green', 'red', 'mixed'
- * @param {number} props.minSize - Minimum piece size in pixels (default: 6)
- * @param {number} props.maxSize - Maximum piece size in pixels (default: 14)
- * @param {number} props.minOpacity - Minimum opacity (default: 0.06)
- * @param {number} props.maxOpacity - Maximum opacity (default: 0.18)
- * @param {number} props.minDuration - Minimum animation duration in seconds (default: 15)
- * @param {number} props.maxDuration - Maximum animation duration in seconds (default: 35)
- * @param {string} props.className - Additional CSS classes
  */
-const FloatingPieces = memo(({ 
+function FloatingPieces({ 
   count = 12,
   theme = 'cyan',
   minSize = 6,
@@ -150,8 +134,7 @@ const FloatingPieces = memo(({
   minDuration = 15,
   maxDuration = 35,
   className = '',
-}) => {
-  // Generate pieces only once using useMemo with stable seed
+}) {
   const floatingPieces = useMemo(() => {
     return Array.from({ length: count }, (_, i) => ({
       id: i,
@@ -164,13 +147,14 @@ const FloatingPieces = memo(({
       delay: Math.random() * 10,
       rotation: Math.random() * 360,
       opacity: minOpacity + Math.random() * (maxOpacity - minOpacity),
+      uniqueKey: `${i}_${Math.random().toString(36).substr(2, 5)}`,
     }));
   }, [count, theme, minSize, maxSize, minOpacity, maxOpacity, minDuration, maxDuration]);
 
   return (
     <div className={`fixed inset-0 overflow-hidden pointer-events-none z-0 ${className}`}>
       {floatingPieces.map((piece) => (
-        <FloatingPiece
+        <SinglePiece
           key={piece.id}
           pieceName={piece.pieceName}
           size={piece.size}
@@ -181,13 +165,11 @@ const FloatingPieces = memo(({
           delay={piece.delay}
           rotation={piece.rotation}
           opacity={piece.opacity}
+          uniqueKey={piece.uniqueKey}
         />
       ))}
     </div>
   );
-});
-
-FloatingPieces.displayName = 'FloatingPieces';
+}
 
 export default FloatingPieces;
-export { FloatingPiece, PIECES, PALETTES };
