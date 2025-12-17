@@ -54,12 +54,8 @@ function AppContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [onlineGameId, setOnlineGameId] = useState(null);
   const [hasRedirectedAfterOAuth, setHasRedirectedAfterOAuth] = useState(false);
-  
-  // Invite link state
   const [pendingInviteCode, setPendingInviteCode] = useState(null);
   const [inviteInfo, setInviteInfo] = useState(null);
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteError, setInviteError] = useState(null);
   
   // Entry auth and offline mode state
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -112,36 +108,20 @@ function AppContent() {
     }
   }, [isNewUser, profile, showWelcomeModal]);
 
-  // Helper to clear all pending invite state
-  const clearPendingInvite = useCallback(() => {
-    setPendingInviteCode(null);
-    setInviteInfo(null);
-    setInviteError(null);
-    setInviteLoading(false);
-    localStorage.removeItem('deadblock_pending_invite');
-    localStorage.removeItem('deadblock_pending_invite_info');
-  }, []);
-
-  // Detect invite code from URL on mount
+  // Check for invite code in URL
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const inviteCode = urlParams.get('invite');
+    const params = new URLSearchParams(window.location.search);
+    const inviteCode = params.get('invite');
     
     if (inviteCode) {
       console.log('App: Found invite code in URL:', inviteCode);
-      
-      // Store invite code in both state and localStorage for persistence through OAuth
       setPendingInviteCode(inviteCode);
-      localStorage.setItem('deadblock_pending_invite', inviteCode);
       
-      // Clean up URL but keep the code in state/localStorage
+      // Clean up URL but keep the code in state
       window.history.replaceState({}, document.title, '/');
       
       // Fetch invite info
       const fetchInviteInfo = async () => {
-        setInviteLoading(true);
-        setInviteError(null);
-        
         try {
           const { inviteService } = await import('./services/inviteService');
           const { data, error } = await inviteService.getInviteByCode(inviteCode);
@@ -149,45 +129,74 @@ function AppContent() {
           if (data && !error) {
             setInviteInfo(data);
             console.log('App: Invite info loaded:', data);
-            localStorage.setItem('deadblock_pending_invite_info', JSON.stringify(data));
           } else {
             console.log('App: Invite not found or expired');
-            setInviteError('This invite link has expired or is invalid.');
             setPendingInviteCode(null);
-            localStorage.removeItem('deadblock_pending_invite');
-            localStorage.removeItem('deadblock_pending_invite_info');
           }
         } catch (err) {
           console.error('App: Error fetching invite info:', err);
-          setInviteError('Could not load invite details.');
-        } finally {
-          setInviteLoading(false);
         }
       };
       
       if (isOnlineEnabled) {
         fetchInviteInfo();
       }
-    } else {
-      // Check localStorage for invite code (persisted through OAuth redirect)
-      const storedInviteCode = localStorage.getItem('deadblock_pending_invite');
-      const storedInviteInfo = localStorage.getItem('deadblock_pending_invite_info');
-      
-      if (storedInviteCode) {
-        console.log('App: Restoring invite code from localStorage:', storedInviteCode);
-        setPendingInviteCode(storedInviteCode);
-        
-        if (storedInviteInfo) {
-          try {
-            setInviteInfo(JSON.parse(storedInviteInfo));
-          } catch (e) {
-            console.error('App: Failed to parse stored invite info');
-          }
-        }
-      }
     }
   }, [isOnlineEnabled]);
 
+  // Handle accepting the invite after user logs in
+  // NOTE: This effect is defined early but uses setGameMode which is defined later
+  // We handle this by checking if setGameMode exists
+  const acceptInviteRef = React.useRef(null);
+  acceptInviteRef.current = async (setGameModeFn) => {
+    if (pendingInviteCode && isAuthenticated && profile?.id && isOnlineEnabled) {
+      console.log('App: User logged in with pending invite, accepting...');
+      
+      try {
+        const { getSupabase } = await import('./utils/supabase');
+        const supabase = getSupabase();
+        
+        if (supabase) {
+          const { data, error } = await supabase.rpc('accept_invite_link', {
+            code: pendingInviteCode,
+            accepting_user_id: profile.id
+          });
+          
+          if (data?.success) {
+            console.log('App: Invite accepted successfully!');
+            // Clear the pending invite
+            setPendingInviteCode(null);
+            setInviteInfo(null);
+            // Go to online menu to see the game invite
+            if (setGameModeFn) setGameModeFn('online-menu');
+          } else if (data?.error) {
+            console.log('App: Could not accept invite:', data.error);
+            if (data.error !== 'Cannot accept your own invite') {
+              alert(data.error);
+            }
+            setPendingInviteCode(null);
+            setInviteInfo(null);
+          }
+        }
+      } catch (err) {
+        console.error('App: Error accepting invite:', err);
+      }
+    }
+  };
+
+  // Clean up stale OAuth callback URLs
+  useEffect(() => {
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    const hasRealAuthData = hash.includes('access_token=') || window.location.search.includes('code=');
+    
+    // If we're on /auth/callback but there's no actual auth data, clean up the URL
+    if (path.includes('/auth/callback') && !hasRealAuthData) {
+      console.log('App: Cleaning up stale OAuth callback URL');
+      window.history.replaceState({}, document.title, '/');
+    }
+  }, []); // Run once on mount
+  
   // Get all game state and actions from custom hook
   const {
     // State
@@ -218,6 +227,7 @@ function AppContent() {
     setShowHowToPlay,
     setShowSettings,
     setAiDifficulty,
+    setPendingMove,
     handleCellClick,
     confirmMove,
     cancelMove,
@@ -232,101 +242,12 @@ function AppContent() {
     resetCurrentPuzzle,
   } = useGameState();
 
-  // Reset state when user signs out
-  useEffect(() => {
-    // If auth loading is complete and user is not authenticated, 
-    // check if we need to reset entry auth state
-    if (!authLoading && !isAuthenticated && !isOAuthCallback) {
-      const storedEntryAuth = localStorage.getItem('deadblock_entry_auth_passed');
-      // If localStorage was cleared (by signOut) but state is still true, reset it
-      if (hasPassedEntryAuth && storedEntryAuth !== 'true') {
-        console.log('App: User signed out, resetting entry auth state');
-        setHasPassedEntryAuth(false);
-        setIsOfflineMode(false);
-        setGameMode(null);
-        // Clear any pending invite state too
-        clearPendingInvite();
-      }
-    }
-  }, [authLoading, isAuthenticated, isOAuthCallback, hasPassedEntryAuth, clearPendingInvite, setGameMode]);
-
-  // Accept invite after successful authentication
-  useEffect(() => {
-    const acceptPendingInvite = async () => {
-      if (!pendingInviteCode || !isAuthenticated || !profile?.id || !isOnlineEnabled || authLoading) {
-        return;
-      }
-      
-      console.log('App: User authenticated with pending invite, accepting...');
-      
-      try {
-        const { supabase } = await import('./utils/supabase');
-        
-        if (!supabase) {
-          console.error('App: Supabase not available');
-          return;
-        }
-        
-        const { data, error } = await supabase.rpc('accept_invite_link', {
-          code: pendingInviteCode,
-          accepting_user_id: profile.id
-        });
-        
-        if (error) {
-          console.error('App: Error accepting invite:', error);
-          setInviteError('Could not accept invite: ' + error.message);
-          clearPendingInvite();
-          return;
-        }
-        
-        if (data?.success) {
-          console.log('App: Invite accepted successfully!', data);
-          clearPendingInvite();
-          
-          if (data.game_id) {
-            console.log('App: Navigating to game:', data.game_id);
-            // Small delay to ensure state is settled
-            setTimeout(() => {
-              setOnlineGameId(data.game_id);
-              setGameMode('online-game');
-            }, 300);
-          } else {
-            // No game yet, go to online menu where they can see the pending invite
-            setGameMode('online-menu');
-          }
-        } else if (data?.error) {
-          console.log('App: Could not accept invite:', data.error);
-          if (data.error !== 'Cannot accept your own invite') {
-            setInviteError(data.error);
-          }
-          clearPendingInvite();
-        } else {
-          console.log('App: Invite acceptance returned unexpected response');
-          setInviteError('Could not join game. The invite may have expired.');
-          clearPendingInvite();
-        }
-      } catch (err) {
-        console.error('App: Exception accepting invite:', err);
-        setInviteError('An error occurred while joining the game.');
-        clearPendingInvite();
-      }
-    };
-    
-    acceptPendingInvite();
-  }, [pendingInviteCode, isAuthenticated, profile?.id, isOnlineEnabled, authLoading, setGameMode, clearPendingInvite]);
-
   // Check if user was already authenticated (skip entry screen)
   // This handles page refresh, OAuth return, and any other case where user is authenticated
   useEffect(() => {
     if (!authLoading && isAuthenticated && !hasPassedEntryAuth) {
       console.log('App: User authenticated, marking entry auth as passed');
       setHasPassedEntryAuth(true);
-      
-      // If there's a pending invite, the invite acceptance effect will handle navigation
-      if (pendingInviteCode) {
-        console.log('App: Has pending invite, letting invite effect handle navigation');
-        return;
-      }
       
       // If there was a pending online intent, clear it and go to online menu
       if (pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true') {
@@ -337,38 +258,27 @@ function AppContent() {
         setGameMode('online-menu');
       }
     }
-  }, [authLoading, isAuthenticated, hasPassedEntryAuth, pendingOnlineIntent, pendingInviteCode, setGameMode]);
+  }, [authLoading, isAuthenticated, hasPassedEntryAuth, pendingOnlineIntent, setGameMode]);
 
-  // Clean up stale OAuth callback URLs
+  // Effect to accept pending invite after login (needs setGameMode from useGameState)
   useEffect(() => {
-    const path = window.location.pathname;
-    const hash = window.location.hash;
-    const hasRealAuthData = hash.includes('access_token=') || window.location.search.includes('code=');
-    
-    // If we're on /auth/callback but there's no actual auth data, clean up the URL
-    if (path.includes('/auth/callback') && !hasRealAuthData) {
-      console.log('App: Cleaning up stale OAuth callback URL');
-      window.history.replaceState({}, document.title, '/');
+    if (acceptInviteRef.current) {
+      acceptInviteRef.current(setGameMode);
     }
-  }, []); // Run once on mount
+  }, [pendingInviteCode, isAuthenticated, profile?.id, isOnlineEnabled, setGameMode]);
+
+  // If user has invite code but isn't logged in, redirect to auth
+  useEffect(() => {
+    if (inviteInfo && !isAuthenticated && !authLoading && isOnlineEnabled && gameMode === null) {
+      console.log('App: Invite detected but user not logged in, redirecting to auth');
+      setGameMode('auth');
+    }
+  }, [inviteInfo, isAuthenticated, authLoading, isOnlineEnabled, gameMode, setGameMode]);
 
   // Redirect after OAuth completes - go to game menu from entry screen
   useEffect(() => {
-    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, hasProfile: !!profile, pendingOnlineIntent, pendingInviteCode });
+    console.log('OAuth redirect check:', { isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, hasProfile: !!profile, pendingOnlineIntent });
     if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
-      // Check if we have a pending invite to process
-      const storedInviteCode = localStorage.getItem('deadblock_pending_invite');
-      
-      if (storedInviteCode) {
-        console.log('App: OAuth complete with pending invite - letting invite effect handle navigation');
-        setHasRedirectedAfterOAuth(true);
-        clearOAuthCallback?.();
-        setHasPassedEntryAuth(true);
-        setIsOfflineMode(false);
-        // Don't navigate here - let the invite acceptance effect handle it
-        return;
-      }
-      
       // Wait a moment for profile to load
       const doRedirect = () => {
         setHasRedirectedAfterOAuth(true);
@@ -404,7 +314,7 @@ function AppContent() {
         doRedirect();
       }
     }
-  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, profile, pendingOnlineIntent, pendingInviteCode, setGameMode, clearOAuthCallback]);
+  }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, profile, pendingOnlineIntent, setGameMode, clearOAuthCallback]);
   
   // Detect mobile device
   useEffect(() => {
@@ -629,8 +539,6 @@ function AppContent() {
     isOnlineEnabled,
     gameMode,
     hasProfile: !!profile,
-    pendingInviteCode,
-    inviteInfo: !!inviteInfo,
   });
   
   // INLINE OAuth completion handling - if we're in OAuth callback but user is authenticated,
@@ -643,13 +551,6 @@ function AppContent() {
       clearOAuthCallback?.();
       setHasPassedEntryAuth(true);
       setIsOfflineMode(false);
-      
-      // Check for pending invite - if so, let the invite effect handle navigation
-      const storedInviteCode = localStorage.getItem('deadblock_pending_invite');
-      if (storedInviteCode) {
-        console.log('OAuth complete with pending invite - letting invite effect handle');
-        return;
-      }
       
       const hadOnlineIntent = pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true';
       localStorage.removeItem('deadblock_pending_online_intent');
@@ -712,9 +613,6 @@ function AppContent() {
                 });
                 // Clear pending online intent
                 localStorage.removeItem('deadblock_pending_online_intent');
-                // Clear pending invite
-                localStorage.removeItem('deadblock_pending_invite');
-                localStorage.removeItem('deadblock_pending_invite_info');
                 // Clear session storage too
                 sessionStorage.clear();
                 // Force reload to root
@@ -741,9 +639,7 @@ function AppContent() {
     isOfflineMode,
     showOnlineAuthPrompt,
     isOnlineEnabled,
-    hasProfile: !!profile,
-    pendingInviteCode,
-    inviteInfo: !!inviteInfo,
+    hasProfile: !!profile
   });
 
   // Show Entry Auth Screen first (before anything else)
@@ -756,19 +652,11 @@ function AppContent() {
   console.log('Entry auth check:', { shouldShowEntryAuth, hasPassedEntryAuth, authLoading, isOAuthCallback, isAuthenticated });
   
   if (shouldShowEntryAuth) {
-    const hasInvite = !!pendingInviteCode && !!inviteInfo;
-    console.log('Rendering: EntryAuthScreen', { hasInvite, inviteInfo, inviteLoading, inviteError });
-    
+    console.log('Rendering: EntryAuthScreen');
     return (
       <EntryAuthScreen
         onComplete={handleEntryAuthComplete}
-        onOfflineMode={hasInvite ? undefined : handleOfflineMode}
-        forceOnlineOnly={hasInvite}
-        intendedDestination={hasInvite ? 'game-invite' : 'online-menu'}
-        inviteInfo={inviteInfo}
-        inviteLoading={inviteLoading}
-        inviteError={inviteError}
-        onCancelInvite={clearPendingInvite}
+        onOfflineMode={handleOfflineMode}
       />
     );
   }
@@ -1092,6 +980,7 @@ function AppContent() {
       isGeneratingPuzzle={isGeneratingPuzzle}
       aiAnimatingMove={aiAnimatingMove}
       playerAnimatingMove={playerAnimatingMove}
+      setPendingMove={setPendingMove}
       onCellClick={handleCellClick}
       onSelectPiece={selectPiece}
       onRotate={rotatePiece}
@@ -1103,7 +992,6 @@ function AppContent() {
       onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}
       onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'difficulty-select')}
-      setPendingMove={setPendingMove}
     />
   );
 }

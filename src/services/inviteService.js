@@ -475,7 +475,7 @@ class InviteService {
   // =====================================================
 
   // Create an invite link
-  async createInviteLink(fromUserId, toEmail = null) {
+  async createInviteLink(fromUserId, recipientName = null) {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
@@ -485,13 +485,16 @@ class InviteService {
       // Generate a unique code
       const code = this.generateInviteCode();
       
+      // Store the recipient name in to_email field (used for display name, not actual email)
+      const displayName = recipientName?.trim() || null;
+      
       // Create the invite in email_invites table
       const response = await fetch(`${SUPABASE_URL}/rest/v1/email_invites`, {
         method: 'POST',
         headers: { ...headers, 'Prefer': 'return=representation' },
         body: JSON.stringify({
           from_user_id: fromUserId,
-          to_email: toEmail,
+          to_email: displayName,
           code: code,
           status: 'pending',
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
@@ -514,7 +517,11 @@ class InviteService {
       return { 
         data: { 
           ...invite, 
-          invite_url: inviteUrl 
+          id: invite.id,
+          inviteLink: inviteUrl,
+          invite_url: inviteUrl,
+          recipientName: displayName || 'Anyone',
+          status: invite.status || 'pending'
         }, 
         error: null 
       };
@@ -549,11 +556,13 @@ class InviteService {
 
       const invites = await response.json();
       
-      // Add invite URLs
+      // Add invite URLs and normalize property names
       const baseUrl = window.location.origin;
       const invitesWithLinks = invites.map(invite => ({
         ...invite,
+        inviteLink: `${baseUrl}/?invite=${invite.code}`,
         invite_url: `${baseUrl}/?invite=${invite.code}`,
+        recipientName: invite.to_email || (invite.accepted_by ? 'Friend' : 'Anyone'),
         recipient_name: invite.to_email || (invite.accepted_by ? 'Friend' : 'Anyone')
       }));
 

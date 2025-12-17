@@ -106,11 +106,12 @@ const ViewPlayerProfile = ({
   const [friendStatus, setFriendStatus] = useState(null);
   const [sendingRequest, setSendingRequest] = useState(false);
   const [achievementStats, setAchievementStats] = useState(null);
+  const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
 
-  // Calculate win rate
-  const winRate = profile?.games_played > 0 
-    ? Math.round((profile.games_won / profile.games_played) * 100) 
-    : 0;
+  // Use calculated stats from actual games (more accurate than profile.games_won)
+  const displayWins = calculatedStats.totalGames > 0 ? calculatedStats.wins : (profile?.games_won || 0);
+  const displayGames = calculatedStats.totalGames > 0 ? calculatedStats.totalGames : (profile?.games_played || 0);
+  const winRate = displayGames > 0 ? Math.round((displayWins / displayGames) * 100) : 0;
 
   // Get rank info
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
@@ -143,26 +144,33 @@ const ViewPlayerProfile = ({
 
       // FIXED: Load recent games with correct PostgREST filter syntax
       // Using two separate queries and merging results instead of 'or' filter
+      // Increased limit to get accurate stats
+      // FIXED: Query online_games table (not 'games' which doesn't exist)
       try {
         // Get games where player is player1
-        const { data: gamesAsPlayer1 } = await dbSelect('games', {
-          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!games_player1_id_fkey(id,username,display_name,rating),player2:profiles!games_player2_id_fkey(id,username,display_name,rating)',
+        const { data: gamesAsPlayer1 } = await dbSelect('online_games', {
+          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
           eq: { player1_id: playerId, status: 'completed' },
           order: 'created_at.desc',
-          limit: 5
+          limit: 100
         });
         
         // Get games where player is player2
-        const { data: gamesAsPlayer2 } = await dbSelect('games', {
-          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!games_player1_id_fkey(id,username,display_name,rating),player2:profiles!games_player2_id_fkey(id,username,display_name,rating)',
+        const { data: gamesAsPlayer2 } = await dbSelect('online_games', {
+          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
           eq: { player2_id: playerId, status: 'completed' },
           order: 'created_at.desc',
-          limit: 5
+          limit: 100
         });
         
         // Merge and sort by created_at
         const allGames = [...(gamesAsPlayer1 || []), ...(gamesAsPlayer2 || [])];
         allGames.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        // Calculate actual wins from games (this is more accurate than profile.games_won)
+        const wins = allGames.filter(g => g.winner_id === playerId).length;
+        setCalculatedStats({ wins, totalGames: allGames.length });
+        
         setRecentGames(allGames.slice(0, 10));
       } catch (e) {
         console.log('Recent games not available:', e);
@@ -355,7 +363,7 @@ const ViewPlayerProfile = ({
               }}
             >
               <Trophy size={16} className="mx-auto mb-1 text-amber-400" />
-              <div className="text-white font-bold">{profile.games_won || 0}</div>
+              <div className="text-white font-bold">{displayWins}</div>
               <div className="text-slate-500 text-xs">Wins</div>
             </div>
             
@@ -367,7 +375,7 @@ const ViewPlayerProfile = ({
               }}
             >
               <Target size={16} className="mx-auto mb-1 text-cyan-400" />
-              <div className="text-white font-bold">{profile.games_played || 0}</div>
+              <div className="text-white font-bold">{displayGames}</div>
               <div className="text-slate-500 text-xs">Games</div>
             </div>
             

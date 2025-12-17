@@ -15,7 +15,6 @@ import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import FloatingPieces from './FloatingPieces';
 
 // Drag detection constants
 const DRAG_THRESHOLD = 10;
@@ -457,14 +456,6 @@ const GameScreen = ({
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
-
-      {/* Floating pieces background */}
-      <FloatingPieces 
-        count={6} 
-        theme={gameMode === 'ai' ? 'purple' : gameMode === 'puzzle' ? 'green' : 'cyan'} 
-        minOpacity={0.04} 
-        maxOpacity={0.10} 
-      />
 
       {/* Main content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>

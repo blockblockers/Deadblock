@@ -7,6 +7,7 @@ import { inviteService } from '../services/inviteService';
 import { notificationService } from '../services/notificationService';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
+import { matchmakingService } from '../services/matchmaking';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import TierIcon from './TierIcon';
@@ -230,6 +231,7 @@ const OnlineMenu = ({
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
+  const [lobbyCount, setLobbyCount] = useState(0);
 
   // Initialize notifications
   useEffect(() => {
@@ -239,6 +241,22 @@ const OnlineMenu = ({
       setShowNotificationPrompt(notificationService.shouldPrompt());
     };
     initNotifications();
+  }, []);
+
+  // Fetch lobby count periodically
+  useEffect(() => {
+    const fetchLobbyCount = async () => {
+      try {
+        const { count } = await matchmakingService.getQueueStatus();
+        setLobbyCount(count || 0);
+      } catch (err) {
+        // Silently fail - lobby count is not critical
+      }
+    };
+    
+    fetchLobbyCount();
+    const interval = setInterval(fetchLobbyCount, 10000); // Update every 10 seconds
+    return () => clearInterval(interval);
   }, []);
 
   // Load friend requests function
@@ -341,6 +359,7 @@ const OnlineMenu = ({
       
       setReceivedInvites(received.data || []);
       setSentInvites(sent.data || []);
+      // inviteService now returns properly formatted data with recipientName and inviteLink
       setInviteLinks(links.data || []);
     } catch (err) {
       console.error('Error loading invites:', err);
@@ -706,6 +725,24 @@ const OnlineMenu = ({
     return game.player1?.username || 'Unknown';
   };
 
+  // Get opponent ID from game
+  const getOpponentId = (game) => {
+    if (!game) return null;
+    if (game.player1_id === profile?.id) {
+      return game.player2_id;
+    }
+    return game.player1_id;
+  };
+
+  // Get opponent data from game
+  const getOpponentData = (game) => {
+    if (!game) return null;
+    if (game.player1_id === profile?.id) {
+      return game.player2;
+    }
+    return game.player1;
+  };
+
   const getGameResult = (game) => {
     if (!game) return { text: 'Unknown', color: 'text-slate-400' };
     if (!game.winner_id) return { text: 'Draw', color: 'text-slate-400' };
@@ -741,7 +778,7 @@ const OnlineMenu = ({
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
       {/* Floating pieces background animation */}
-      <FloatingPieces count={10} theme="amber" minOpacity={0.05} maxOpacity={0.15} />
+      <FloatingPieces count={10} theme="online" minOpacity={0.08} maxOpacity={0.2} />
 
       {/* Active Game Prompt Modal */}
       {showActivePrompt && hasMyTurnGames && !loading && (
@@ -946,45 +983,57 @@ const OnlineMenu = ({
             <div className="flex gap-2 mb-4">
               <button
                 onClick={() => { soundManager.playButtonClick(); onViewProfile(); }}
-                className="flex-1 py-2 bg-slate-800/60 rounded-lg text-slate-400 hover:bg-slate-700/60 hover:text-amber-400 transition-all flex items-center justify-center gap-1.5 border border-slate-700/40 text-xs"
+                className="flex-1 py-3 bg-gradient-to-b from-amber-900/40 to-amber-950/60 rounded-lg text-amber-200 hover:text-amber-100 transition-all flex flex-col items-center justify-center gap-1 border border-amber-700/50 hover:border-amber-500 text-xs font-medium shadow-lg hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] group"
               >
-                <User size={14} />
-                Profile
+                <div className="p-1.5 rounded-full bg-amber-500/20 group-hover:bg-amber-500/40 transition-colors">
+                  <User size={16} className="drop-shadow-[0_0_4px_rgba(251,191,36,0.6)]" />
+                </div>
+                <span>Profile</span>
               </button>
               <button
                 onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
-                className="flex-1 py-2 bg-slate-800/60 rounded-lg text-slate-400 hover:bg-slate-700/60 hover:text-purple-400 transition-all flex items-center justify-center gap-1.5 border border-slate-700/40 text-xs"
+                className="flex-1 py-3 bg-gradient-to-b from-purple-900/40 to-purple-950/60 rounded-lg text-purple-200 hover:text-purple-100 transition-all flex flex-col items-center justify-center gap-1 border border-purple-700/50 hover:border-purple-500 text-xs font-medium shadow-lg hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98] group"
               >
-                <Award size={14} />
-                Awards
+                <div className="p-1.5 rounded-full bg-purple-500/20 group-hover:bg-purple-500/40 transition-colors">
+                  <Award size={16} className="drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
+                </div>
+                <span>Awards</span>
               </button>
               <button
                 onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
-                className="flex-1 py-2 bg-slate-800/60 rounded-lg text-slate-400 hover:bg-slate-700/60 hover:text-cyan-400 transition-all flex items-center justify-center gap-1.5 border border-slate-700/40 text-xs relative"
+                className="flex-1 py-3 bg-gradient-to-b from-cyan-900/40 to-cyan-950/60 rounded-lg text-cyan-200 hover:text-cyan-100 transition-all flex flex-col items-center justify-center gap-1 border border-cyan-700/50 hover:border-cyan-500 text-xs font-medium shadow-lg hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98] group relative"
               >
-                <Users size={14} />
-                Friends
+                <div className="p-1.5 rounded-full bg-cyan-500/20 group-hover:bg-cyan-500/40 transition-colors">
+                  <Users size={16} className="drop-shadow-[0_0_4px_rgba(6,182,212,0.6)]" />
+                </div>
+                <span>Friends</span>
                 {pendingFriendRequests > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-lg shadow-red-500/50 animate-pulse border border-red-400">
                     {pendingFriendRequests}
                   </span>
                 )}
               </button>
               <button
                 onClick={() => { soundManager.playButtonClick(); setShowSpectateList(true); }}
-                className="flex-1 py-2 bg-slate-800/60 rounded-lg text-slate-400 hover:bg-slate-700/60 hover:text-green-400 transition-all flex items-center justify-center gap-1.5 border border-slate-700/40 text-xs"
+                className="flex-1 py-3 bg-gradient-to-b from-green-900/40 to-green-950/60 rounded-lg text-green-200 hover:text-green-100 transition-all flex flex-col items-center justify-center gap-1 border border-green-700/50 hover:border-green-500 text-xs font-medium shadow-lg hover:shadow-green-500/30 hover:scale-[1.02] active:scale-[0.98] group"
               >
-                <Eye size={14} />
-                Watch
+                <div className="p-1.5 rounded-full bg-green-500/20 group-hover:bg-green-500/40 transition-colors">
+                  <Eye size={16} className="drop-shadow-[0_0_4px_rgba(34,197,94,0.6)]" />
+                </div>
+                <span>Watch</span>
               </button>
             </div>
 
-            {/* Find Match - Primary CTA */}
+            {/* Find Match - Compact with Lobby Info */}
             <button
               onClick={handleFindMatch}
-              className="w-full p-4 mb-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl font-black tracking-wider text-lg text-white hover:from-amber-400 hover:to-orange-500 transition-all shadow-[0_0_30px_rgba(251,191,36,0.5)] active:scale-[0.98]"
+              className="w-full py-3 px-4 mb-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl font-bold tracking-wider text-white hover:from-amber-400 hover:to-orange-500 transition-all shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-[0.98] flex items-center justify-between"
             >
-              FIND MATCH
+              <span className="text-sm">⚔️ FIND MATCH</span>
+              <span className="text-xs bg-black/30 px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-white/20">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]"></span>
+                {lobbyCount > 0 ? `${lobbyCount} in lobby` : 'Online'}
+              </span>
             </button>
 
             {/* Challenge a Player Section */}
@@ -1667,23 +1716,36 @@ const OnlineMenu = ({
                   {recentGames.filter(g => g).map(game => {
                     const result = getGameResult(game);
                     const opponentName = getOpponentName(game);
+                    const opponentId = getOpponentId(game);
+                    const opponentData = getOpponentData(game);
                     return (
                       <div
                         key={game.id}
                         className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition-all"
                       >
                         <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold">
+                          <button
+                            onClick={() => {
+                              if (opponentId) {
+                                soundManager.playButtonClick();
+                                setShowRecentGames(false);
+                                setViewingPlayerId(opponentId);
+                                setViewingPlayerData(opponentData || null);
+                              }
+                            }}
+                            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                            disabled={!opponentId}
+                          >
+                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold hover:bg-slate-600 transition-colors">
                               {opponentName?.[0]?.toUpperCase() || '?'}
                             </div>
-                            <div>
-                              <div className="text-slate-200 font-medium">vs {opponentName}</div>
+                            <div className="text-left">
+                              <div className="text-slate-200 font-medium hover:text-amber-300 transition-colors">vs {opponentName}</div>
                               <div className="text-slate-500 text-xs">
                                 {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'Unknown date'}
                               </div>
                             </div>
-                          </div>
+                          </button>
                           <span className={`text-lg font-bold ${result.color}`}>
                             {result.text}
                           </span>

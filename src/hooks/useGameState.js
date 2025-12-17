@@ -505,6 +505,7 @@ export const useGameState = () => {
     setShowSettings,
     setAiDifficulty,
     setPuzzleDifficulty,
+    setPendingMove,
     
     // Actions - CRITICAL: startNewGame must be exported
     handleCellClick,

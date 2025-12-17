@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Trophy, Clock, Target, Loader, ArrowLeft, Play, Medal, Users, ChevronRight } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
+import FloatingPieces from './FloatingPieces';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
 
@@ -113,6 +114,9 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
+      
+      {/* Floating Pentomino Pieces */}
+      <FloatingPieces count={8} theme="weekly" minOpacity={0.06} maxOpacity={0.15} />
       
       {/* Glow orbs */}
       <div className="fixed top-20 left-10 w-80 h-80 bg-red-500/30 rounded-full blur-3xl pointer-events-none" />
