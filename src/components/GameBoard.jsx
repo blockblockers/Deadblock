@@ -10,10 +10,9 @@ import { GamePropTypes, CallbackPropTypes } from '../utils/propTypes';
  * Handles cell clicks and displays game state including valid/invalid move indicators.
  * 
  * UPDATED: 
- * - Ghost outline for pieces overlapping existing pieces (same as off-grid)
- * - Red highlight for entire domino when placement is invalid
- * - Themed color outline for active valid piece
- * - Enhanced animations for visual feedback
+ * - Striped ghost pattern for pieces overlapping existing pieces (same as off-grid)
+ * - Valid piece shows actual piece color with animated cyan outline
+ * - Invalid piece shows striped red pattern
  */
 const GameBoard = ({
   board,
@@ -57,6 +56,10 @@ const GameBoard = ({
   let outOfBoundsCells = [];
   let overlappingCells = [];
   let isPendingValid = false;
+  
+  // Get the piece being placed for color
+  const pendingPieceName = pendingMove?.piece || selectedPiece;
+  const pendingPieceColor = pendingPieceName ? pieceColors[pendingPieceName] : null;
   
   if (pendingMove) {
     const pieceCoords = getPieceCoords(pendingMove.piece, rotation, flipped);
@@ -115,11 +118,6 @@ const GameBoard = ({
   const cellSize = isMobile ? 36 : 48;
   const gapSize = isMobile ? 2 : 4;
 
-  // UPDATED: Determine if the entire pending piece is invalid
-  const isEntirePieceInvalid = pendingMove && !isPendingValid;
-  const hasOverlap = overlappingCells.length > 0;
-  const hasOutOfBounds = outOfBoundsCells.length > 0;
-
   // Get cell colors based on player and custom colors
   const getPlayerColor = (player) => {
     if (customColors && customColors[player]) {
@@ -153,9 +151,6 @@ const GameBoard = ({
                     ? `${pieceColor || getPlayerColor(cell)} shadow-lg` 
                     : 'bg-slate-700/50 hover:bg-slate-600/50'
                   }
-                  ${isPending && isPendingValid ? 'pending-valid-cell ring-2 ring-cyan-400 bg-cyan-500/30' : ''}
-                  ${isPending && !isPendingValid ? 'pending-invalid-cell ring-2 ring-red-500 bg-red-500/30' : ''}
-                  ${isOverlapping ? 'overlap-cell ring-2 ring-red-500 bg-red-500/40' : ''}
                   ${isAiAnimating ? 'ai-placing-cell ring-2 ring-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.7)]' : ''}
                   ${isPlayerAnimating ? 'player-placing-cell ring-2 ring-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.7)]' : ''}
                   ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
@@ -178,19 +173,21 @@ const GameBoard = ({
                   <div className="absolute inset-0 bg-cyan-400/50 animate-pulse" />
                 )}
                 
-                {/* Pending valid indicator */}
+                {/* VALID pending - show actual piece color with cyan outline */}
                 {isPending && isPendingValid && (
-                  <div className="absolute inset-0 bg-cyan-400/40 valid-piece-glow" />
+                  <div 
+                    className={`absolute inset-0 ${pendingPieceColor || 'bg-cyan-500/60'} valid-piece-glow ring-2 ring-cyan-400`}
+                  />
                 )}
                 
-                {/* Pending invalid indicator */}
+                {/* INVALID pending (empty cell but piece overall invalid) - show striped pattern */}
                 {isPending && !isPendingValid && (
-                  <div className="absolute inset-0 bg-red-500/40 invalid-piece-pulse" />
+                  <div className="absolute inset-0 invalid-ghost-cell" />
                 )}
                 
-                {/* UPDATED: Overlap indicator - same style as ghost for out of bounds */}
+                {/* OVERLAPPING cell - show striped pattern over existing piece */}
                 {isOverlapping && (
-                  <div className="absolute inset-0 bg-red-500/50 invalid-piece-pulse border-2 border-red-400/80 border-dashed" />
+                  <div className="absolute inset-0 overlap-ghost-cell" />
                 )}
               </button>
             );
@@ -198,7 +195,7 @@ const GameBoard = ({
         )}
       </div>
 
-      {/* UPDATED: Ghost cells for out-of-bounds pieces */}
+      {/* Ghost cells for out-of-bounds pieces - striped pattern */}
       {outOfBoundsCells.length > 0 && pendingMove && (
         <div className="absolute inset-0 pointer-events-none">
           {outOfBoundsCells.map((cell, idx) => {
@@ -215,7 +212,7 @@ const GameBoard = ({
             return (
               <div
                 key={`ghost-${idx}`}
-                className="absolute rounded-md sm:rounded-lg border-2 border-dashed border-red-500/80 bg-red-500/20 ghost-cell-pulse"
+                className="absolute rounded-md sm:rounded-lg out-of-bounds-ghost-cell"
                 style={{
                   width: cellSize,
                   height: cellSize,
@@ -228,13 +225,13 @@ const GameBoard = ({
         </div>
       )}
 
-      {/* UPDATED: Full piece outline when piece is active - different color for valid vs invalid */}
+      {/* Full piece outline when piece is active */}
       {pendingMove && (
         <div 
           className={`absolute inset-0 pointer-events-none rounded-lg ${
             isPendingValid 
-              ? 'ring-2 ring-cyan-400/50 shadow-[0_0_20px_rgba(34,211,238,0.3)] active-piece-valid'
-              : 'ring-2 ring-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.4)] active-piece-invalid'
+              ? 'ring-2 ring-cyan-400/70 shadow-[0_0_25px_rgba(34,211,238,0.4)] active-piece-valid'
+              : 'ring-2 ring-red-500/70 shadow-[0_0_25px_rgba(239,68,68,0.5)] active-piece-invalid'
           }`}
           style={{ margin: '-2px' }}
         />
@@ -242,49 +239,101 @@ const GameBoard = ({
 
       {/* Animation styles */}
       <style>{`
-        /* Valid piece glow animation */
+        /* Valid piece glow animation - pulses cyan */
         .valid-piece-glow {
-          animation: valid-glow 1.5s ease-in-out infinite;
+          animation: valid-glow 1.2s ease-in-out infinite;
         }
         @keyframes valid-glow {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.6; }
-        }
-        
-        /* Invalid piece pulse animation */
-        .invalid-piece-pulse {
-          animation: invalid-pulse 0.5s ease-in-out infinite;
-        }
-        @keyframes invalid-pulse {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.7; }
-        }
-        
-        /* Ghost cell out-of-bounds pulse */
-        .ghost-cell-pulse {
-          animation: ghost-pulse 0.8s ease-in-out infinite;
-        }
-        @keyframes ghost-pulse {
           0%, 100% { 
-            border-color: rgba(239, 68, 68, 0.8);
-            background-color: rgba(239, 68, 68, 0.2);
+            opacity: 0.7;
+            box-shadow: inset 0 0 10px rgba(34, 211, 238, 0.3);
           }
           50% { 
+            opacity: 0.9;
+            box-shadow: inset 0 0 15px rgba(34, 211, 238, 0.5);
+          }
+        }
+        
+        /* Invalid ghost cell - striped red pattern */
+        .invalid-ghost-cell {
+          background: repeating-linear-gradient(
+            45deg,
+            rgba(239, 68, 68, 0.3),
+            rgba(239, 68, 68, 0.3) 4px,
+            rgba(239, 68, 68, 0.1) 4px,
+            rgba(239, 68, 68, 0.1) 8px
+          );
+          border: 2px dashed rgba(239, 68, 68, 0.8);
+          animation: invalid-pulse 0.8s ease-in-out infinite;
+        }
+        
+        /* Overlap ghost cell - striped pattern over existing piece */
+        .overlap-ghost-cell {
+          background: repeating-linear-gradient(
+            45deg,
+            rgba(239, 68, 68, 0.5),
+            rgba(239, 68, 68, 0.5) 4px,
+            rgba(239, 68, 68, 0.2) 4px,
+            rgba(239, 68, 68, 0.2) 8px
+          );
+          border: 2px dashed rgba(239, 68, 68, 0.9);
+          animation: overlap-pulse 0.6s ease-in-out infinite;
+        }
+        
+        /* Out of bounds ghost cell - striped pattern */
+        .out-of-bounds-ghost-cell {
+          background: repeating-linear-gradient(
+            45deg,
+            rgba(239, 68, 68, 0.4),
+            rgba(239, 68, 68, 0.4) 4px,
+            rgba(239, 68, 68, 0.15) 4px,
+            rgba(239, 68, 68, 0.15) 8px
+          );
+          border: 2px dashed rgba(239, 68, 68, 0.8);
+          animation: ghost-pulse 0.8s ease-in-out infinite;
+        }
+        
+        @keyframes invalid-pulse {
+          0%, 100% { 
+            opacity: 0.7;
+            border-color: rgba(239, 68, 68, 0.7);
+          }
+          50% { 
+            opacity: 1;
             border-color: rgba(239, 68, 68, 1);
-            background-color: rgba(239, 68, 68, 0.35);
+          }
+        }
+        
+        @keyframes overlap-pulse {
+          0%, 100% { 
+            opacity: 0.6;
+          }
+          50% { 
+            opacity: 0.9;
+          }
+        }
+        
+        @keyframes ghost-pulse {
+          0%, 100% { 
+            opacity: 0.7;
+            border-color: rgba(239, 68, 68, 0.7);
+          }
+          50% { 
+            opacity: 1;
+            border-color: rgba(239, 68, 68, 1);
           }
         }
         
         /* Active valid piece outline animation */
         .active-piece-valid {
-          animation: active-valid-pulse 2s ease-in-out infinite;
+          animation: active-valid-pulse 1.5s ease-in-out infinite;
         }
         @keyframes active-valid-pulse {
           0%, 100% { 
             box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
           }
           50% { 
-            box-shadow: 0 0 35px rgba(34, 211, 238, 0.5);
+            box-shadow: 0 0 35px rgba(34, 211, 238, 0.6);
           }
         }
         
@@ -302,7 +351,7 @@ const GameBoard = ({
             box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
           }
           50% { 
-            box-shadow: 0 0 35px rgba(239, 68, 68, 0.6);
+            box-shadow: 0 0 35px rgba(239, 68, 68, 0.7);
           }
         }
         

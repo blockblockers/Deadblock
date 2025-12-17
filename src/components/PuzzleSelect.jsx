@@ -197,35 +197,33 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
           </div>
 
           {/* Card with dramatic theme */}
-          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-500`}>
-
+          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-700`}>
+            
             {/* Difficulty Selection */}
             <div className="space-y-2 mb-4">
-              {difficulties.map((diff) => {
+              {difficulties.map(diff => {
                 const isSelected = selectedDifficulty === diff.id;
                 const isSpeedMode = diff.isSpeed;
+                
                 return (
-                  <button 
-                    key={diff.id} 
-                    onClick={() => handleSelectDifficulty(diff.id)} 
-                    disabled={isLoading}
-                    className={`w-full p-3 rounded-xl border-2 transition-all duration-300 text-left relative overflow-hidden ${
+                  <button
+                    key={diff.id}
+                    onClick={() => handleSelectDifficulty(diff.id)}
+                    className={`w-full p-3 rounded-xl transition-all relative overflow-hidden ${
                       isSelected 
-                        ? `bg-gradient-to-r ${diff.colors.gradient} border-white/40 ring-4 ${diff.colors.ring}` 
-                        : `${diff.colors.bg} ${diff.colors.border} hover:bg-opacity-50`
-                    } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    style={isSelected ? { boxShadow: `0 0 40px ${diff.colors.glow}` } : {}}
+                        ? `bg-gradient-to-r ${diff.colors.gradient} text-white shadow-lg` 
+                        : `${diff.colors.bg} ${diff.colors.border} border hover:scale-[1.02]`
+                    }`}
+                    style={isSelected ? { boxShadow: `0 0 25px ${diff.colors.glow}` } : {}}
                   >
-                    {/* Animated shine on selected */}
-                    {isSelected && !isLoading && (
-                      <div className="absolute inset-0 overflow-hidden rounded-xl">
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shine" />
-                      </div>
+                    {/* Shine effect for selected */}
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shine" />
                     )}
                     
-                    {/* Speed mode pulse effect when not selected */}
-                    {isSpeedMode && !isSelected && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 via-orange-500/10 to-red-500/5 animate-speed-pulse" />
+                    {/* Speed mode pulse effect */}
+                    {isSpeedMode && isSelected && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 via-orange-500/20 to-red-500/20 animate-speed-pulse" />
                     )}
                     
                     <div className="relative flex items-center justify-between">
@@ -269,33 +267,15 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
               })}
             </div>
 
-            {/* Turn order info - Enhanced styling (hide for speed mode) */}
-            {!selectedDiff.isSpeed && (
-              <div className="mb-4 p-2.5 bg-slate-800/50 rounded-xl border border-slate-700/50">
-                {/* Styled header */}
-                <div className="text-center mb-2">
-                  <span className="turn-order-title font-black tracking-[0.2em] text-[10px]">TURN ORDER</span>
-                </div>
-                <div className="flex items-center justify-center gap-1 text-xs flex-wrap">
-                  {Array.from({ length: selectedDiff.moves }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-1">
-                      <span className={`px-2 py-1 rounded font-medium ${i % 2 === 0 ? 'bg-cyan-900/50 text-cyan-400' : 'bg-purple-900/50 text-purple-400'}`}>
-                        {i % 2 === 0 ? 'You' : 'A.I.'}
-                      </span>
-                      {i < selectedDiff.moves - 1 && <span className="text-slate-600">→</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* REMOVED: Turn order info - no longer shown */}
             
-            {/* Speed mode info */}
+            {/* Speed mode info - UPDATED text */}
             {selectedDiff.isSpeed && (
               <div className="mb-5 p-3 bg-slate-800/50 rounded-xl border border-red-500/30">
                 <div className="text-center">
                   <span className="speed-info-title font-black tracking-[0.2em] text-xs">HOW IT WORKS</span>
                   <div className="mt-2 text-sm text-slate-400 space-y-1">
-                    <p>Solve easy puzzles as fast as you can!</p>
+                    <p>Find the <span className="text-white font-medium">ONE winning move</span> before time runs out!</p>
                     <p className="text-red-300">⏱ 10 seconds per puzzle</p>
                     <p>Build your streak - how far can you go?</p>
                   </div>
@@ -303,19 +283,8 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
               </div>
             )}
             
-            {/* Turn Order title styling */}
+            {/* Speed mode title styling */}
             <style>{`
-              .turn-order-title {
-                font-family: system-ui, -apple-system, sans-serif;
-                color: #fff;
-                text-shadow:
-                  0 0 5px #fff,
-                  0 0 10px #fff,
-                  0 0 20px #a855f7,
-                  0 0 40px #a855f7,
-                  0 0 60px #ec4899;
-                animation: turn-order-pulse 3s ease-in-out infinite;
-              }
               .speed-info-title {
                 font-family: system-ui, -apple-system, sans-serif;
                 color: #fff;
@@ -332,18 +301,18 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                   text-shadow:
                     0 0 5px #fff,
                     0 0 10px #fff,
-                    0 0 20px #a855f7,
-                    0 0 40px #a855f7,
-                    0 0 60px #ec4899;
+                    0 0 20px #ef4444,
+                    0 0 40px #ef4444,
+                    0 0 60px #f97316;
                   filter: brightness(1);
                 }
                 50% {
                   text-shadow:
                     0 0 5px #fff,
                     0 0 15px #fff,
-                    0 0 30px #a855f7,
-                    0 0 50px #a855f7,
-                    0 0 70px #ec4899;
+                    0 0 30px #ef4444,
+                    0 0 50px #ef4444,
+                    0 0 70px #f97316;
                   filter: brightness(1.1);
                 }
               }
