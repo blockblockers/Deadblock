@@ -114,14 +114,22 @@ const EntryAuthScreen = ({
       if (result.error) {
         setError(result.error.message);
       } else if (result.needsEmailConfirmation) {
-        setSuccess('Account created! Check your email and click the verification link, then come back and sign in.');
+        // Email confirmation is still enabled in Supabase
+        setSuccess('Account created! Check your email to verify, then sign in.');
+        setTimeout(() => switchMode('login'), 2000);
+      } else if (result.message) {
+        // Edge case: account created but auto-login failed
+        setSuccess(result.message);
+        setTimeout(() => switchMode('login'), 1500);
       } else {
-        setSuccess('Account created! Signing you in...');
+        // Success - user is now logged in
+        setSuccess('Account created! Welcome to Deadblock!');
         setTimeout(() => {
           onComplete?.();
-        }, 1000);
+        }, 800);
       }
     } catch (err) {
+      console.error('Signup error:', err);
       setError('An unexpected error occurred');
     }
     

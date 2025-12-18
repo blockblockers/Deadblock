@@ -491,16 +491,22 @@ export const AuthProvider = ({ children }) => {
       return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
     }
 
-    // Check if username is taken
-    const { data: existing } = await supabase
+    // Check if username is taken - use maybeSingle to avoid 406 error
+    const { data: existing, error: checkError } = await supabase
       .from('profiles')
       .select('username')
-      .eq('username', username)
-      .single();
+      .eq('username', username.toLowerCase())
+      .maybeSingle();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('[AuthContext] Username check error:', checkError);
+    }
 
     if (existing) {
       return { error: { message: 'Username already taken' } };
     }
+
+    console.log('[AuthContext] Creating account for:', email, 'username:', username);
 
     // Sign up the user
     const { data, error } = await supabase.auth.signUp({
@@ -508,7 +514,7 @@ export const AuthProvider = ({ children }) => {
       password,
       options: {
         data: { 
-          username, 
+          username: username.toLowerCase(), 
           display_name: username 
         },
         // Don't require email verification redirect
@@ -516,45 +522,103 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    // If signup succeeded but we got a database error, try to manually create profile
+    console.log('[AuthContext] Signup response:', { 
+      hasUser: !!data?.user, 
+      hasSession: !!data?.session,
+      userId: data?.user?.id,
+      error: error?.message 
+    });
+
+    // If signup succeeded
     if (!error && data?.user) {
-      // Wait a moment for the trigger to run
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait a moment for the database trigger to run
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Check if profile was created
-      const { data: profileCheck } = await supabase
+      // Check if profile was created by trigger - use maybeSingle to avoid 406
+      const { data: profileCheck, error: profileCheckError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, username')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
+      
+      console.log('[AuthContext] Profile check:', { 
+        hasProfile: !!profileCheck, 
+        username: profileCheck?.username,
+        error: profileCheckError?.message 
+      });
       
       // If no profile exists, create it manually
       if (!profileCheck) {
-        console.log('Profile not created by trigger, creating manually...');
+        console.log('[AuthContext] Profile not created by trigger, creating manually...');
         const { error: profileError } = await supabase
           .from('profiles')
-          .insert({
+          .upsert({
             id: data.user.id,
-            username: username,
+            username: username.toLowerCase(),
             display_name: username
-          });
+          }, { onConflict: 'id' });
         
         if (profileError) {
-          console.error('Failed to create profile manually:', profileError);
+          console.error('[AuthContext] Failed to create profile:', profileError);
+        } else {
+          console.log('[AuthContext] Profile created manually');
         }
       }
       
-      // Check if email confirmation is required
-      // If session exists, user is auto-confirmed
-      const needsEmailConfirmation = !data.session;
+      // Check if we got a session (means email confirmation is disabled)
+      if (data.session) {
+        console.log('[AuthContext] Session received - user is logged in');
+        setUser(data.user);
+        await fetchProfile(data.user.id);
+        setIsNewUser(true);
+        
+        return { 
+          data, 
+          error: null, 
+          needsEmailConfirmation: false,
+          isNewUser: true
+        };
+      }
       
-      // Mark as new user to show welcome modal
+      // No session - email confirmation might still be enabled in Supabase
+      // Try to sign them in directly (works if email confirmation is disabled)
+      console.log('[AuthContext] No session after signup, attempting direct sign-in...');
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (signInError) {
+        console.log('[AuthContext] Auto sign-in failed:', signInError.message);
+        // Email confirmation is likely still enabled in Supabase
+        if (signInError.message.includes('Email not confirmed')) {
+          return { 
+            data, 
+            error: null, 
+            needsEmailConfirmation: true,
+            isNewUser: true
+          };
+        }
+        // Other error - account created but can't sign in
+        return { 
+          data, 
+          error: null, 
+          needsEmailConfirmation: false,
+          isNewUser: true,
+          message: 'Account created! Please sign in with your credentials.'
+        };
+      }
+      
+      // Successfully signed in after signup
+      console.log('[AuthContext] Auto sign-in successful');
+      setUser(signInData.user);
+      await fetchProfile(signInData.user.id);
       setIsNewUser(true);
       
       return { 
-        data, 
+        data: signInData, 
         error: null, 
-        needsEmailConfirmation,
+        needsEmailConfirmation: false,
         isNewUser: true
       };
     }
