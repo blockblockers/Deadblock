@@ -47,23 +47,6 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
     return game.player1?.username || 'Unknown';
   };
 
-// NEW: Get full opponent data including ID for profile viewing
-const getOpponentData = (game) => {
-  if (!game || !profile?.id) return { id: null, username: 'Unknown', data: null };
-  if (game.player1_id === profile.id) {
-    return { 
-      id: game.player2_id,
-      username: game.player2?.username || 'Unknown',
-      data: game.player2
-    };
-  }
-  return { 
-    id: game.player1_id,
-    username: game.player1?.username || 'Unknown',
-    data: game.player1
-  };
-};
-
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
@@ -251,7 +234,6 @@ const OnlineMenu = ({
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
-  const [lobbyCount, setLobbyCount] = useState(0);
 
   // Initialize notifications
   useEffect(() => {
@@ -263,36 +245,36 @@ const OnlineMenu = ({
     initNotifications();
   }, []);
 
-// Auto-scroll when Challenge section expands
-useEffect(() => {
-  if (showSearch) {
-    // Small delay to let the content render
-    setTimeout(() => {
-      const challengeSection = document.getElementById('challenge-section');
-      if (challengeSection) {
-        challengeSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      }
-    }, 100);
-  }
-}, [showSearch]);
+  // Auto-scroll when Challenge section expands
+  useEffect(() => {
+    if (showSearch) {
+      // Small delay to let the content render
+      setTimeout(() => {
+        const challengeSection = document.getElementById('challenge-section');
+        if (challengeSection) {
+          challengeSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 100);
+    }
+  }, [showSearch]);
 
   // Fetch lobby/matchmaking count periodically
-useEffect(() => {
-  const fetchLobbyCount = async () => {
-    if (!profile?.id) return;
-    try {
-      // Get count of players currently in matchmaking queue
-      const { data } = await gameSyncService.getMatchmakingCount?.();
-      setLobbyCount(data?.count || 0);
-    } catch (e) {
-      console.log('Lobby count unavailable');
-    }
-  };
-  
-  fetchLobbyCount();
-  const interval = setInterval(fetchLobbyCount, 30000); // Every 30 seconds
-  return () => clearInterval(interval);
-}, [profile?.id]);
+  useEffect(() => {
+    const fetchLobbyCount = async () => {
+      if (!profile?.id) return;
+      try {
+        // Get count of players currently in matchmaking queue
+        const { data } = await gameSyncService.getMatchmakingCount?.();
+        setLobbyCount(data?.count || 0);
+      } catch (e) {
+        console.log('Lobby count unavailable');
+      }
+    };
+    
+    fetchLobbyCount();
+    const interval = setInterval(fetchLobbyCount, 30000); // Every 30 seconds
+    return () => clearInterval(interval);
+  }, [profile?.id]);
 
   // Load friend requests function
   const loadFriendRequests = async () => {
@@ -1095,15 +1077,14 @@ useEffect(() => {
 </button>
 
             {/* Challenge a Player Section */}
-          <div 
-  className="bg-slate-800/40 rounded-xl p-4 mb-4 border border-slate-700/50"
-  style={{ 
-    // Ensure this section doesn't break scroll
-    position: 'relative',
-    zIndex: 1
-  }}
->
-
+            <div 
+              id="challenge-section"
+              className="bg-slate-800/40 rounded-xl p-4 mb-4 border border-slate-700/50"
+              style={{ 
+                position: 'relative',
+                zIndex: 1
+              }}
+            >
               {/* Header */}
               <button
                 onClick={() => {
