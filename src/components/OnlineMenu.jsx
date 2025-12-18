@@ -63,7 +63,6 @@ const getOpponentData = (game) => {
     data: game.player1
   };
 };
-*/
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
