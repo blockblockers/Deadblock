@@ -191,7 +191,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
       <div className={`fixed ${theme.glow2.pos} w-80 h-80 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDelay: '1s' }} />
 
       {/* Floating pieces background */}
-      <FloatingPieces count={8} theme="online" minOpacity={0.06} maxOpacity={0.15} />
+      <FloatingPieces count={12} theme="online" minOpacity={0.2} maxOpacity={0.4} />
 
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>

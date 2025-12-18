@@ -778,7 +778,7 @@ const OnlineMenu = ({
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
       {/* Floating pieces background animation */}
-      <FloatingPieces count={10} theme="online" minOpacity={0.08} maxOpacity={0.2} />
+      <FloatingPieces count={15} theme="online" minOpacity={0.2} maxOpacity={0.45} />
 
       {/* Active Game Prompt Modal */}
       {showActivePrompt && hasMyTurnGames && !loading && (

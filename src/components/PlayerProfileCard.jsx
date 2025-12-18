@@ -1,111 +1,14 @@
 // Player Profile Card - Enhanced display for main menu with rating info, username editing, and achievements
-// FIXES:
-// 1. Uses synchronous cache loading for instant display
-// 2. Uses username as priority (same as online menu)
-// 3. Uses direct fetch instead of Supabase client (no timeout)
-// 4. Original tier styling with contrasting backgrounds
 import { useState, useEffect } from 'react';
 import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
+import { supabase } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
 import achievementService from '../services/achievementService';
 
-// =====================================================
-// LOCAL STORAGE KEYS (same as AuthContext)
-// =====================================================
-const STORAGE_KEYS = {
-  CACHED_PROFILE: 'deadblock_cached_profile',
-};
-
-// Supabase config for direct fetch
-const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-// Helper to safely get cached profile from localStorage SYNCHRONOUSLY
-const getCachedProfileSync = () => {
-  try {
-    const cached = localStorage.getItem(STORAGE_KEYS.CACHED_PROFILE);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-  } catch (e) {
-    console.warn('[PlayerProfileCard] Error reading cached profile:', e);
-  }
-  return null;
-};
-
-// Helper to get auth headers for direct fetch
-const getAuthHeaders = () => {
-  try {
-    const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
-    if (!authData?.access_token || !ANON_KEY) {
-      return null;
-    }
-    return {
-      'Authorization': `Bearer ${authData.access_token}`,
-      'apikey': ANON_KEY,
-      'Content-Type': 'application/json'
-    };
-  } catch (e) {
-    return null;
-  }
-};
-
-// Direct fetch wrapper for database operations
-const dbSelect = async (table, options = {}) => {
-  const headers = getAuthHeaders();
-  if (!headers) return { data: null, error: 'Not authenticated' };
-  
-  let url = `${SUPABASE_URL}/rest/v1/${table}?`;
-  
-  if (options.select) url += `select=${options.select}&`;
-  if (options.eq) {
-    Object.entries(options.eq).forEach(([key, value]) => {
-      url += `${key}=eq.${value}&`;
-    });
-  }
-  if (options.limit) url += `limit=${options.limit}&`;
-  
-  try {
-    const response = await fetch(url, { headers });
-    if (!response.ok) return { data: null, error: 'Fetch failed' };
-    const data = await response.json();
-    return { data, error: null };
-  } catch (err) {
-    return { data: null, error: err.message };
-  }
-};
-
-const dbUpdate = async (table, updates, options = {}) => {
-  const headers = getAuthHeaders();
-  if (!headers) return { data: null, error: 'Not authenticated' };
-  
-  let url = `${SUPABASE_URL}/rest/v1/${table}?`;
-  
-  if (options.eq) {
-    Object.entries(options.eq).forEach(([key, value]) => {
-      url += `${key}=eq.${value}&`;
-    });
-  }
-  
-  try {
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: { ...headers, 'Prefer': 'return=representation' },
-      body: JSON.stringify(updates)
-    });
-    if (!response.ok) return { data: null, error: 'Update failed' };
-    const data = await response.json();
-    return { data: Array.isArray(data) ? data[0] : data, error: null };
-  } catch (err) {
-    return { data: null, error: err.message };
-  }
-};
-
-// Rating Info Modal - Shows tier list with proper styling
+// Rating Info Modal
 const RatingInfoModal = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
@@ -173,7 +76,7 @@ const RatingInfoModal = ({ onClose }) => {
   );
 };
 
-// Username Edit Modal - Uses direct fetch instead of Supabase client
+// Username Edit Modal
 const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
   const [newUsername, setNewUsername] = useState(currentUsername || '');
   const [error, setError] = useState('');
@@ -201,20 +104,20 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
       return;
     }
     
-    // Check if username is available using direct fetch
+    // Check if username is available
     const checkUsername = async () => {
       setChecking(true);
       setError('');
       
       try {
-        const { data, error: fetchError } = await dbSelect('profiles', {
-          select: 'id',
-          eq: { username: newUsername.toLowerCase() },
-          limit: 1
-        });
+        const { data, error: fetchError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', newUsername.toLowerCase())
+          .maybeSingle();
         
-        if (fetchError) throw new Error(fetchError);
-        if (data && data.length > 0) {
+        if (fetchError) throw fetchError;
+        if (data) {
           setError('Username is already taken');
         }
       } catch (err) {
@@ -315,39 +218,61 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
 };
 
 const PlayerProfileCard = ({ onClick, isOffline = false }) => {
-  const { profile, isAuthenticated, updateProfile, refreshProfile } = useAuth();
+  const { profile, isAuthenticated, updateProfile, refreshProfile, sessionReady } = useAuth();
   const [imageError, setImageError] = useState(false);
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [showUsernameEdit, setShowUsernameEdit] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
-  
-  // =====================================================
-  // FIX: Load cached profile synchronously on mount
-  // This ensures profile displays immediately when app reopens
-  // =====================================================
-  const [localCachedProfile] = useState(() => getCachedProfileSync());
-  
-  // Use cached profile as fallback when AuthContext profile isn't loaded yet
-  const effectiveProfile = profile || localCachedProfile;
+  const [hasRefreshed, setHasRefreshed] = useState(false);
   
   // DEBUG: Log which render path we're taking
   console.log('[PlayerProfileCard] Render state:', { 
     isOffline, 
     isAuthenticated, 
     hasProfile: !!profile, 
-    hasLocalCache: !!localCachedProfile,
-    hasEffectiveProfile: !!effectiveProfile,
-    profileUsername: effectiveProfile?.username,
-    willRenderOffline: isOffline && !effectiveProfile,
-    willRenderLoading: !effectiveProfile && !isOffline,
-    willRenderAuthenticated: !!effectiveProfile
+    profileUsername: profile?.username,
+    sessionReady,
+    hasRefreshed,
+    // New conditions: show offline only if explicitly offline AND no cached profile
+    willRenderOffline: isOffline && !profile,
+    willRenderLoading: !profile && !(isOffline && !profile),
+    willRenderAuthenticated: !!profile
   });
   
   // Get rank info for authenticated users
-  const rankInfo = effectiveProfile ? getRankInfo(effectiveProfile.rating || 1000) : null;
+  const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
   
-  // Retry profile fetch if authenticated but no profile AND no cache
+  // Refresh profile when session becomes ready (handles app restart with cached profile)
+  useEffect(() => {
+    let mounted = true;
+    
+    const refreshOnReady = async () => {
+      if (!mounted) return;
+      
+      // When sessionReady is true and we have a profile (could be cached), refresh to get latest data
+      if (sessionReady && isAuthenticated && profile && !hasRefreshed && refreshProfile) {
+        console.log('[PlayerProfileCard] Session ready, refreshing profile to get latest data...');
+        setHasRefreshed(true);
+        try {
+          const result = await refreshProfile();
+          console.log('[PlayerProfileCard] Background refresh result:', !!result, result?.username);
+        } catch (err) {
+          console.error('[PlayerProfileCard] Background refresh error:', err);
+        }
+      }
+    };
+    
+    // Small delay to avoid race conditions with AuthContext
+    const timer = setTimeout(refreshOnReady, 500);
+    
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, [sessionReady, isAuthenticated, profile, hasRefreshed, refreshProfile]);
+  
+  // Retry profile fetch if authenticated but no profile
   useEffect(() => {
     let retryCount = 0;
     const maxRetries = 5;
@@ -356,13 +281,14 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     const attemptFetch = async () => {
       if (!mounted) return;
       
-      if (isAuthenticated && !profile && !localCachedProfile && retryCount < maxRetries && refreshProfile) {
+      if (isAuthenticated && !profile && retryCount < maxRetries && refreshProfile) {
         retryCount++;
         console.log(`[PlayerProfileCard] Profile missing, retry attempt ${retryCount}/${maxRetries}...`);
         try {
           const result = await refreshProfile();
           console.log('[PlayerProfileCard] Profile retry result:', !!result);
           if (!result && retryCount < maxRetries && mounted) {
+            // Wait and try again with exponential backoff
             setTimeout(attemptFetch, 500 * retryCount);
           }
         } catch (err) {
@@ -374,8 +300,9 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       }
     };
     
-    // Only start retrying if authenticated but no profile AND no cache
-    if (isAuthenticated && !profile && !localCachedProfile) {
+    // Only start retrying if authenticated but no profile
+    if (isAuthenticated && !profile) {
+      // Small delay to let AuthContext finish its initialization
       const startDelay = setTimeout(() => {
         attemptFetch();
       }, 300);
@@ -389,45 +316,43 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     return () => {
       mounted = false;
     };
-  }, [isAuthenticated, profile, localCachedProfile, refreshProfile]);
+  }, [isAuthenticated, profile, refreshProfile]);
   
-  // Load achievement count (gracefully handle missing RPC)
+  // Load achievement count
   useEffect(() => {
-    if (effectiveProfile?.id) {
-      const loadAchievements = async () => {
-        try {
-          if (typeof achievementService?.getAchievementStats === 'function') {
-            const result = await achievementService.getAchievementStats(effectiveProfile.id);
-            if (result.data) {
-              setAchievementCount({
-                unlocked: result.data.unlockedCount || 0,
-                total: result.data.totalAchievements || 0
-              });
-            }
+    if (profile?.id) {
+      // Check if getAchievementStats exists before calling
+      if (typeof achievementService?.getAchievementStats === 'function') {
+        achievementService.getAchievementStats(profile.id).then(result => {
+          if (result.data) {
+            setAchievementCount({
+              unlocked: result.data.unlockedCount || 0,
+              total: result.data.totalAchievements || 0
+            });
           }
-        } catch (err) {
-          // Silently fail - achievements are optional
-          console.log('[PlayerProfileCard] Achievements not available');
-        }
-      };
-      loadAchievements();
+        }).catch((err) => {
+          console.warn('[PlayerProfileCard] Achievement stats error:', err);
+          // Achievements may not be available
+        });
+      } else {
+        console.warn('[PlayerProfileCard] achievementService.getAchievementStats is not available');
+      }
     }
-  }, [effectiveProfile?.id]);
+  }, [profile?.id]);
   
-  // Handle username save - Uses direct fetch
+  // Handle username save
   const handleSaveUsername = async (newUsername) => {
-    if (!effectiveProfile?.id) return false;
+    if (!profile?.id) return false;
     
     try {
-      const { error } = await dbUpdate(
-        'profiles',
-        { username: newUsername.toLowerCase(), display_name: newUsername },
-        { eq: { id: effectiveProfile.id } }
-      );
+      const { error } = await supabase
+        .from('profiles')
+        .update({ username: newUsername.toLowerCase(), display_name: newUsername })
+        .eq('id', profile.id);
       
       if (error) throw error;
       
-      // Update local profile via AuthContext
+      // Update local profile
       if (updateProfile) {
         await updateProfile({ username: newUsername.toLowerCase(), display_name: newUsername });
       }
@@ -440,7 +365,8 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   };
   
   // Offline mode display - only show if explicitly offline AND no cached profile
-  if (isOffline && !effectiveProfile) {
+  // If we have a profile (even from cache), show the authenticated view
+  if (isOffline && !profile) {
     console.log('[PlayerProfileCard] Rendering: OFFLINE mode button (no profile)');
     return (
       <button
@@ -473,8 +399,8 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     );
   }
   
-  // Loading state - only show if no effective profile
-  if (!effectiveProfile) {
+  // Loading state - clickable to retry
+  if (!profile) {
     console.log('[PlayerProfileCard] Rendering: LOADING state button');
     return (
       <button 
@@ -500,14 +426,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     );
   }
   
-  // =====================================================
-  // FIX: Use username as priority (same as online menu)
-  // =====================================================
-  const displayName = effectiveProfile.username || effectiveProfile.display_name || 'Player';
-  
-  // =====================================================
-  // ORIGINAL TIER STYLING
-  // =====================================================
+  const displayName = profile.username || profile.display_name || 'Player';
   
   // Get contrasting background color for tier icon circle based on tier color
   const getTierIconBackground = () => {
@@ -571,6 +490,10 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   console.log('[PlayerProfileCard] Rendering: AUTHENTICATED button with', { 
     displayName, 
     glowColor, 
+    glowRgba,
+    borderRgba,
+    buttonStyleBackground: buttonStyle.background,
+    buttonStyleBorder: buttonStyle.border,
     rankName: rankInfo?.name 
   });
   
@@ -614,7 +537,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
                 </span>
               )}
               <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
-                {effectiveProfile.rating || 1000} ELO
+                {profile.rating || 1000} ELO
               </span>
             </div>
           </div>
@@ -635,7 +558,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       
       {showUsernameEdit && (
         <UsernameEditModal
-          currentUsername={effectiveProfile.username}
+          currentUsername={profile.username}
           onSave={handleSaveUsername}
           onClose={() => setShowUsernameEdit(false)}
         />
@@ -643,7 +566,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
       
       {showAchievements && (
         <Achievements
-          userId={effectiveProfile.id}
+          userId={profile.id}
           onClose={() => setShowAchievements(false)}
         />
       )}

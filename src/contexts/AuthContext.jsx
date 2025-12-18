@@ -1,76 +1,147 @@
-// AuthContext - Authentication state and methods
-// FIXES:
-// 1. Better error handling for sign in with specific error messages
-// 2. Password recovery detection and redirect to settings
-// 3. Better debugging for login issues (400 Bad Request)
-// 4. New user detection for Google OAuth
-// 5. Resend confirmation email function
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+// Authentication Context with Local Profile Caching
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
-const AuthContext = createContext(null);
+// Local storage keys for persistent auth
+const STORAGE_KEYS = {
+  CACHED_USER_ID: 'deadblock_cached_user_id',
+  CACHED_PROFILE: 'deadblock_cached_profile',
+  CACHED_TIMESTAMP: 'deadblock_cached_timestamp',
+};
 
-// Cache helpers for instant profile loading
-const PROFILE_CACHE_KEY = 'deadblock_profile_cache';
-const CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+// Cache expiry time (7 days in milliseconds) - profile will still work but will be refreshed
+const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
-const loadCachedProfile = () => {
+// Helper to safely get from localStorage
+const safeGetStorage = (key) => {
   try {
-    const cached = localStorage.getItem(PROFILE_CACHE_KEY);
-    if (!cached) return null;
-    const { profile, timestamp, userId } = JSON.parse(cached);
-    if (Date.now() - timestamp > CACHE_MAX_AGE) {
-      localStorage.removeItem(PROFILE_CACHE_KEY);
-      return null;
-    }
-    return { profile, userId };
+    return localStorage.getItem(key);
   } catch (e) {
+    console.warn('[AuthContext] localStorage read error:', e);
     return null;
   }
 };
 
+// Helper to safely set localStorage
+const safeSetStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage write error:', e);
+  }
+};
+
+// Helper to safely remove from localStorage
+const safeRemoveStorage = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage remove error:', e);
+  }
+};
+
+// Load cached profile from localStorage
+const loadCachedProfile = () => {
+  try {
+    const cachedUserId = safeGetStorage(STORAGE_KEYS.CACHED_USER_ID);
+    const cachedProfileStr = safeGetStorage(STORAGE_KEYS.CACHED_PROFILE);
+    const cachedTimestamp = safeGetStorage(STORAGE_KEYS.CACHED_TIMESTAMP);
+    
+    if (!cachedUserId || !cachedProfileStr) {
+      return null;
+    }
+    
+    const profile = JSON.parse(cachedProfileStr);
+    const timestamp = parseInt(cachedTimestamp, 10) || 0;
+    const age = Date.now() - timestamp;
+    
+    console.log('[AuthContext] Loaded cached profile:', { 
+      username: profile?.username, 
+      userId: cachedUserId,
+      ageMinutes: Math.round(age / 60000)
+    });
+    
+    return { userId: cachedUserId, profile, isExpired: age > CACHE_EXPIRY_MS };
+  } catch (e) {
+    console.warn('[AuthContext] Error loading cached profile:', e);
+    return null;
+  }
+};
+
+// Save profile to localStorage cache
 const saveCachedProfile = (userId, profile) => {
   try {
-    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
-      profile,
-      userId,
-      timestamp: Date.now()
-    }));
+    if (!userId || !profile) return;
+    
+    safeSetStorage(STORAGE_KEYS.CACHED_USER_ID, userId);
+    safeSetStorage(STORAGE_KEYS.CACHED_PROFILE, JSON.stringify(profile));
+    safeSetStorage(STORAGE_KEYS.CACHED_TIMESTAMP, Date.now().toString());
+    
+    console.log('[AuthContext] Saved profile to cache:', { username: profile.username });
   } catch (e) {
-    console.error('Failed to cache profile:', e);
+    console.warn('[AuthContext] Error saving profile to cache:', e);
   }
 };
 
+// Clear cached profile (on sign out)
 const clearCachedProfile = () => {
-  try {
-    localStorage.removeItem(PROFILE_CACHE_KEY);
-  } catch (e) {
-    // Ignore
-  }
+  safeRemoveStorage(STORAGE_KEYS.CACHED_USER_ID);
+  safeRemoveStorage(STORAGE_KEYS.CACHED_PROFILE);
+  safeRemoveStorage(STORAGE_KEYS.CACHED_TIMESTAMP);
+  console.log('[AuthContext] Cleared cached profile');
 };
+
+const AuthContext = createContext({
+  user: null,
+  profile: null,
+  loading: true,
+  sessionReady: false,
+  isAuthenticated: false,
+  isOnlineEnabled: false,
+  isOAuthCallback: false,
+  isNewUser: false,
+  signUp: async () => {},
+  signIn: async () => {},
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
+  updateProfile: async () => {},
+  clearOAuthCallback: () => {},
+  clearNewUser: () => {},
+  refreshProfile: async () => {},
+});
 
 export const AuthProvider = ({ children }) => {
+  // Load cached data immediately for instant display
+  const cachedData = loadCachedProfile();
+  
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  // Start with cached profile if available - instant load!
+  const [profile, setProfile] = useState(cachedData?.profile || null);
+  // If we have cached data, don't show loading state for UI
+  const [loading, setLoading] = useState(!cachedData?.profile);
+  // Session ready tracks if we've verified the Supabase session (separate from UI loading)
   const [sessionReady, setSessionReady] = useState(false);
   const [isOAuthCallback, setIsOAuthCallback] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
-  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  
+  // Track if we've done the initial server fetch
   const initialFetchDone = useRef(false);
 
   const isOnlineEnabled = isSupabaseConfigured();
 
-  // Fetch profile with retry logic
   const fetchProfile = useCallback(async (userId, retryCount = 0) => {
-    const maxRetries = 3;
-    
-    if (!supabase || !userId) {
-      console.log('[AuthContext] fetchProfile: No supabase or userId');
+    if (!supabase) {
+      console.log('[AuthContext] fetchProfile: supabase not configured');
       return null;
     }
     
-    console.log('[AuthContext] fetchProfile: Starting for', userId, 'retry:', retryCount);
+    if (!userId) {
+      console.log('[AuthContext] fetchProfile: no userId provided');
+      return null;
+    }
+    
+    const maxRetries = 3;
+    console.log(`[AuthContext] fetchProfile: fetching for ${userId}, attempt ${retryCount + 1}`);
     
     try {
       const { data, error } = await supabase
@@ -81,8 +152,10 @@ export const AuthProvider = ({ children }) => {
       
       if (error) {
         console.error('[AuthContext] fetchProfile error:', error);
+        // Try to create profile if it doesn't exist
         if (error.code === 'PGRST116') {
           console.log('[AuthContext] Profile not found, may need to create one');
+          // Retry a few times in case of race condition
           if (retryCount < maxRetries) {
             console.log(`[AuthContext] Profile retry ${retryCount + 1}/${maxRetries}...`);
             await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
@@ -94,6 +167,8 @@ export const AuthProvider = ({ children }) => {
       
       console.log('[AuthContext] fetchProfile success:', { username: data?.username, id: data?.id });
       setProfile(data);
+      
+      // Cache the profile for instant loading next time
       saveCachedProfile(userId, data);
       
       return data;
@@ -113,26 +188,17 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    // Check URL for OAuth callback or recovery
+    // Check if this is an OAuth callback - must have actual token data, not just the path
     const url = window.location.href;
     const hash = window.location.hash;
     const search = window.location.search;
     
+    // Only treat as OAuth callback if there's actual auth data
     const hasAccessToken = hash.includes('access_token=') || search.includes('access_token=');
     const hasCode = search.includes('code=');
     const hasAuthData = hasAccessToken || hasCode;
     
-    // Check for password recovery type
-    const urlParams = new URLSearchParams(search);
-    const hashParams = new URLSearchParams(hash.replace('#', ''));
-    const authType = urlParams.get('type') || hashParams.get('type');
-    
-    if (authType === 'recovery') {
-      console.log('[AuthContext] Password recovery detected');
-      setIsPasswordRecovery(true);
-    }
-    
-    // Clean up empty callback URLs
+    // Clean up empty callback URLs (leftover from previous OAuth)
     if (url.includes('/auth/callback') && !hasAuthData) {
       console.log('Cleaning up empty OAuth callback URL');
       window.history.replaceState({}, document.title, '/');
@@ -143,22 +209,21 @@ export const AuthProvider = ({ children }) => {
       setIsOAuthCallback(true);
     }
 
-    // Handle OAuth callback
+    // Handle OAuth callback - extract session from URL
     const handleOAuthCallback = async () => {
       if (hasAuthData) {
         console.log('=== OAuth Callback Processing Started ===');
         try {
+          // Set a timeout for OAuth processing
           const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('OAuth timeout')), 8000)
           );
           
+          // This extracts the session from the URL hash/params
           console.log('OAuth: Getting session from Supabase...');
           const sessionPromise = supabase.auth.getSession();
           
-          const { data, error } = await Promise.race([
-            sessionPromise, 
-            timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))
-          ]);
+          const { data, error } = await Promise.race([sessionPromise, timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))]);
           
           console.log('OAuth: Session response:', { 
             hasData: !!data, 
@@ -169,15 +234,15 @@ export const AuthProvider = ({ children }) => {
           
           if (error) {
             console.error('OAuth: Error getting session:', error);
-            setIsOAuthCallback(false);
+            setIsOAuthCallback(false); // Clear flag on error only
           } else if (data?.session) {
             console.log('OAuth: Session established successfully', {
               userId: data.session.user?.id,
-              email: data.session.user?.email,
-              provider: data.session.user?.app_metadata?.provider
+              email: data.session.user?.email
             });
             setUser(data.session.user);
             
+            // Try to fetch profile, but don't block on it
             try {
               console.log('OAuth: Fetching profile...');
               const profileResult = await fetchProfile(data.session.user.id);
@@ -195,22 +260,22 @@ export const AuthProvider = ({ children }) => {
               }
             } catch (profileError) {
               console.error('OAuth: Profile fetch failed:', profileError);
+              // Don't fail the OAuth - profile will be retried later
             }
             
-            console.log('OAuth: Callback processed successfully');
+            // DON'T clear isOAuthCallback here - let App.jsx handle it after redirect
+            console.log('OAuth: Callback processed successfully, waiting for App.jsx to handle redirect');
           } else {
             console.log('OAuth: No session in response');
-            setIsOAuthCallback(false);
+            setIsOAuthCallback(false); // Clear flag when no session
           }
           
-          // Clean up URL after processing (but keep recovery type for settings)
+          // Clean up URL after processing
           console.log('OAuth: Cleaning up URL');
-          if (!authType) {
-            window.history.replaceState({}, document.title, '/');
-          }
+          window.history.replaceState({}, document.title, '/');
         } catch (err) {
           console.error('OAuth: Callback error:', err);
-          setIsOAuthCallback(false);
+          setIsOAuthCallback(false); // Clear flag on error
           window.history.replaceState({}, document.title, '/');
         }
         console.log('=== OAuth Callback Processing Finished ===');
@@ -221,22 +286,25 @@ export const AuthProvider = ({ children }) => {
     const initAuth = async () => {
       console.log('=== Auth Init Started ===');
       
+      // Check if we have cached profile data for instant loading
       const cached = loadCachedProfile();
       if (cached?.profile && !initialFetchDone.current) {
         console.log('Auth init: Using cached profile for instant display:', cached.profile.username);
         setProfile(cached.profile);
+        // Don't show loading if we have cached data
         setLoading(false);
       }
       
       let timeoutCleared = false;
       
+      // Shorter timeout since we have cached data as fallback
       const timeout = setTimeout(() => {
         if (!timeoutCleared) {
           console.log('Auth init: TIMEOUT - completing with current state');
-          setSessionReady(true);
+          setSessionReady(true); // Mark as ready even on timeout
           setLoading(false);
         }
-      }, cached?.profile ? 3000 : 8000);
+      }, cached?.profile ? 3000 : 8000); // 3s if cached, 8s if not
       
       const clearTimeoutSafe = () => {
         timeoutCleared = true;
@@ -244,17 +312,19 @@ export const AuthProvider = ({ children }) => {
       };
       
       try {
+        // First handle any OAuth callback
         console.log('Auth init: Handling OAuth callback (if any)...');
         await handleOAuthCallback();
         console.log('Auth init: OAuth callback handling complete');
         
+        // Then get the current session
         console.log('Auth init: Getting current session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Auth init: Error getting session:', error);
           clearTimeoutSafe();
-          setSessionReady(true);
+          setSessionReady(true); // Mark session check as complete even on error
           setLoading(false);
           return;
         }
@@ -266,9 +336,10 @@ export const AuthProvider = ({ children }) => {
         });
         
         setUser(session?.user ?? null);
-        setSessionReady(true);
+        setSessionReady(true); // Session has been verified with Supabase
         console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user, ', sessionReady: true');
         
+        // Validate cached data matches current session
         if (cached?.profile && session?.user) {
           if (cached.userId !== session.user.id) {
             console.log('Auth init: Cached profile is for different user, clearing');
@@ -277,6 +348,7 @@ export const AuthProvider = ({ children }) => {
           }
         }
         
+        // If no session, clear any cached data
         if (!session?.user) {
           if (cached?.profile) {
             console.log('Auth init: No session but have cached profile, clearing');
@@ -284,11 +356,12 @@ export const AuthProvider = ({ children }) => {
             setProfile(null);
           }
           clearTimeoutSafe();
-          setSessionReady(true);
+          setSessionReady(true); // Mark session check as complete
           setLoading(false);
           return;
         }
         
+        // Fetch fresh profile from server (in background if we have cache)
         console.log('Auth init: Fetching fresh profile for', session.user.id);
         initialFetchDone.current = true;
         
@@ -298,6 +371,7 @@ export const AuthProvider = ({ children }) => {
           username: profileResult?.username 
         });
         
+        // Only retry if we don't have cached data and server fetch failed
         if (!profileResult && !cached?.profile) {
           console.log('Auth init: Profile not found and no cache, starting retry...');
           for (let i = 0; i < 3; i++) {
@@ -327,6 +401,7 @@ export const AuthProvider = ({ children }) => {
         console.log('[AuthContext] Auth event:', event, session?.user?.email);
         setUser(session?.user ?? null);
         
+        // Set sessionReady when we have a valid session from any auth event
         if (session?.user) {
           console.log('[AuthContext] Setting sessionReady=true from', event);
           setSessionReady(true);
@@ -335,16 +410,15 @@ export const AuthProvider = ({ children }) => {
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('[AuthContext] SIGNED_IN - fetching profile');
           await fetchProfile(session.user.id);
+          // Don't set isOAuthCallback to false here - let App.jsx handle it after redirect
           
+          // Clean up URL - always redirect to root after sign in
           const currentPath = window.location.pathname;
           if (currentPath.includes('/auth/callback') || window.location.hash || window.location.search) {
-            // Don't clear URL if it's a recovery - let App.jsx handle it
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('type') !== 'recovery') {
-              window.history.replaceState({}, document.title, '/');
-            }
+            window.history.replaceState({}, document.title, '/');
           }
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          // Token was refreshed (e.g., on app reopen) - always fetch profile to ensure it's loaded
           console.log('[AuthContext] TOKEN_REFRESHED - fetching profile for', session.user.id);
           const result = await fetchProfile(session.user.id);
           console.log('[AuthContext] TOKEN_REFRESHED - profile fetch result:', { 
@@ -352,6 +426,7 @@ export const AuthProvider = ({ children }) => {
             username: result?.username 
           });
           
+          // If profile fetch failed, retry a few times
           if (!result) {
             console.log('[AuthContext] TOKEN_REFRESHED - profile not found, retrying...');
             for (let i = 0; i < 3; i++) {
@@ -362,6 +437,7 @@ export const AuthProvider = ({ children }) => {
             }
           }
         } else if (event === 'INITIAL_SESSION' && session?.user) {
+          // Initial session restored from storage - always fetch profile
           console.log('[AuthContext] INITIAL_SESSION - fetching profile for', session.user.id);
           const result = await fetchProfile(session.user.id);
           console.log('[AuthContext] INITIAL_SESSION - profile fetch result:', { 
@@ -369,6 +445,7 @@ export const AuthProvider = ({ children }) => {
             username: result?.username 
           });
           
+          // If profile fetch failed, retry
           if (!result) {
             console.log('[AuthContext] INITIAL_SESSION - profile not found, retrying...');
             for (let i = 0; i < 3; i++) {
@@ -379,8 +456,10 @@ export const AuthProvider = ({ children }) => {
             }
           }
         } else if (event === 'INITIAL_SESSION' && !session) {
+          // No session - user is not logged in
           console.log('[AuthContext] INITIAL_SESSION - no session, user not logged in');
           setSessionReady(true);
+          // Clear any stale cached profile
           if (loadCachedProfile()?.profile) {
             console.log('[AuthContext] Clearing stale cached profile');
             clearCachedProfile();
@@ -389,13 +468,11 @@ export const AuthProvider = ({ children }) => {
         } else if (event === 'SIGNED_OUT') {
           setProfile(null);
           setIsOAuthCallback(false);
-          setIsPasswordRecovery(false);
+          // Keep sessionReady true - we know the session state (logged out)
           setSessionReady(true);
+          // Clear cached profile on sign out
           clearCachedProfile();
           console.log('[AuthContext] SIGNED_OUT - cleared profile and cache');
-        } else if (event === 'PASSWORD_RECOVERY') {
-          console.log('[AuthContext] PASSWORD_RECOVERY event detected');
-          setIsPasswordRecovery(true);
         }
       }
     );
@@ -403,7 +480,7 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
-  const signUp = useCallback(async (email, password, username) => {
+  const signUp = async (email, password, username) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
     // Validate username format
@@ -418,7 +495,7 @@ export const AuthProvider = ({ children }) => {
     const { data: existing } = await supabase
       .from('profiles')
       .select('username')
-      .ilike('username', username)
+      .eq('username', username)
       .single();
 
     if (existing) {
@@ -427,33 +504,38 @@ export const AuthProvider = ({ children }) => {
 
     // Sign up the user
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim().toLowerCase(),
+      email,
       password,
       options: {
         data: { 
-          username: username.toLowerCase(), 
+          username, 
           display_name: username 
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        // Don't require email verification redirect
+        emailRedirectTo: undefined
       }
     });
 
+    // If signup succeeded but we got a database error, try to manually create profile
     if (!error && data?.user) {
+      // Wait a moment for the trigger to run
       await new Promise(resolve => setTimeout(resolve, 500));
       
+      // Check if profile was created
       const { data: profileCheck } = await supabase
         .from('profiles')
         .select('id')
         .eq('id', data.user.id)
         .single();
       
+      // If no profile exists, create it manually
       if (!profileCheck) {
         console.log('Profile not created by trigger, creating manually...');
         const { error: profileError } = await supabase
           .from('profiles')
           .insert({
             id: data.user.id,
-            username: username.toLowerCase(),
+            username: username,
             display_name: username
           });
         
@@ -462,7 +544,11 @@ export const AuthProvider = ({ children }) => {
         }
       }
       
+      // Check if email confirmation is required
+      // If session exists, user is auto-confirmed
       const needsEmailConfirmation = !data.session;
+      
+      // Mark as new user to show welcome modal
       setIsNewUser(true);
       
       return { 
@@ -473,6 +559,7 @@ export const AuthProvider = ({ children }) => {
       };
     }
 
+    // Handle specific error messages
     if (error) {
       let friendlyMessage = error.message;
       
@@ -490,58 +577,20 @@ export const AuthProvider = ({ children }) => {
     }
 
     return { data, error };
-  }, []);
+  };
 
-  // =====================================================
-  // ENHANCED signIn with better error handling for 400 errors
-  // =====================================================
-  const signIn = useCallback(async (email, password) => {
+  const signIn = async (email, password) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
-    console.log('[AuthContext] signIn: Attempting login for', email);
-    
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(), // Normalize email
+      email,
       password
     });
 
-    if (error) {
-      console.error('[AuthContext] signIn error:', error);
-      
-      let friendlyMessage = error.message;
-      let needsEmailConfirmation = false;
-      
-      // Parse specific error types
-      if (error.message.includes('Invalid login credentials')) {
-        friendlyMessage = 'Invalid email or password. If you just signed up, please verify your email first.';
-        needsEmailConfirmation = true; // Could be unverified email
-      } else if (error.message.includes('Email not confirmed')) {
-        friendlyMessage = 'Please verify your email before signing in. Check your inbox for the confirmation link.';
-        needsEmailConfirmation = true;
-      } else if (error.message.includes('Invalid email')) {
-        friendlyMessage = 'Please enter a valid email address.';
-      } else if (error.message.includes('rate limit') || error.message.includes('too many')) {
-        friendlyMessage = 'Too many login attempts. Please wait a moment and try again.';
-      } else if (error.message.includes('User not found')) {
-        friendlyMessage = 'No account found with this email. Please sign up first.';
-      } else if (error.status === 400 || error.message.includes('400')) {
-        // Generic 400 error - most commonly unconfirmed email
-        friendlyMessage = 'Login failed. If you recently signed up, please check your email and click the verification link first.';
-        needsEmailConfirmation = true;
-      }
-      
-      return { 
-        data, 
-        error: { ...error, message: friendlyMessage },
-        needsEmailConfirmation
-      };
-    }
-
-    console.log('[AuthContext] signIn: Success', { userId: data?.user?.id });
     return { data, error };
-  }, []);
+  };
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = async () => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
     console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
@@ -551,7 +600,7 @@ export const AuthProvider = ({ children }) => {
         provider: 'google',
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: false, // Ensure redirect happens
         }
       });
       
@@ -562,8 +611,11 @@ export const AuthProvider = ({ children }) => {
         return { data, error };
       }
       
+      // If we get here without redirect, there might be an issue
+      // The browser should be redirecting, so wait a moment
       if (data?.url) {
         console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
+        // Manually redirect if the auto-redirect didn't work
         window.location.href = data.url;
       }
       
@@ -572,78 +624,72 @@ export const AuthProvider = ({ children }) => {
       console.error('[AuthContext] Google OAuth exception:', err);
       return { data: null, error: { message: err.message || 'Failed to start Google Sign In' } };
     }
-  }, []);
+  };
 
-  const signInWithMagicLink = useCallback(async (email) => {
-    if (!supabase) return { error: { message: 'Online features not configured' } };
-
-    const { data, error } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?type=magiclink`
-      }
-    });
-
-    return { data, error };
-  }, []);
-
-  const signOut = useCallback(async () => {
+  const signOut = async () => {
     if (!supabase) return;
     
     const { error } = await supabase.auth.signOut();
     if (!error) {
       setUser(null);
       setProfile(null);
-      setIsPasswordRecovery(false);
+      // Clear entry auth flag so user sees auth screen on next visit
       localStorage.removeItem('deadblock_entry_auth_passed');
+      // Clear cached profile
       clearCachedProfile();
       console.log('[AuthContext] signOut: Cleared user, profile, and cache');
     }
     return { error };
-  }, []);
+  };
 
-  const resetPassword = useCallback(async (email) => {
+  // Send password reset email
+  const resetPassword = async (email) => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
-    const { data, error } = await supabase.auth.resetPasswordForEmail(
-      email.trim().toLowerCase(), 
-      {
-        // Redirect to callback with recovery type so we know to open settings
-        redirectTo: `${window.location.origin}/auth/callback?type=recovery`
-      }
-    );
-
-    return { data, error };
-  }, []);
-
-  const updateEmail = useCallback(async (newEmail) => {
-    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
-
-    const { data, error } = await supabase.auth.updateUser({
-      email: newEmail.trim().toLowerCase()
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery`
     });
 
     return { data, error };
-  }, [user]);
+  };
 
-  const updatePassword = useCallback(async (newPassword) => {
+  // Sign in with magic link (passwordless)
+  const signInWithMagicLink = async (email) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?type=magiclink`
+      }
+    });
+
+    return { data, error };
+  };
+
+  // Update user email (requires re-authentication)
+  const updateEmail = async (newEmail) => {
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+
+    const { data, error } = await supabase.auth.updateUser({
+      email: newEmail
+    });
+
+    return { data, error };
+  };
+
+  // Update user password
+  const updatePassword = async (newPassword) => {
     if (!supabase || !user) return { error: { message: 'Not authenticated' } };
 
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword
     });
-    
-    // Clear recovery flag after successful password update
-    if (!error) {
-      setIsPasswordRecovery(false);
-      // Clean up URL if it had recovery type
-      window.history.replaceState({}, document.title, '/');
-    }
 
     return { data, error };
-  }, [user]);
+  };
 
-  const updateProfile = useCallback(async (updates) => {
+  const updateProfile = async (updates) => {
     if (!supabase || !user) return { error: { message: 'Not authenticated' } };
 
     const { data, error } = await supabase
@@ -655,15 +701,18 @@ export const AuthProvider = ({ children }) => {
 
     if (!error && data) {
       setProfile(data);
+      // Update cache with new profile data
       saveCachedProfile(user.id, data);
     }
 
     return { data, error };
-  }, [user]);
+  };
 
-  const checkUsernameAvailable = useCallback(async (username) => {
+  // Check if username is available
+  const checkUsernameAvailable = async (username) => {
     if (!supabase) return { available: false, error: { message: 'Not configured' } };
     
+    // Don't check if it's the current user's username
     if (profile?.username?.toLowerCase() === username.toLowerCase()) {
       return { available: true, error: null };
     }
@@ -674,6 +723,7 @@ export const AuthProvider = ({ children }) => {
       .ilike('username', username)
       .single();
 
+    // If no data found (PGRST116 = no rows), username is available
     if (error?.code === 'PGRST116') {
       return { available: true, error: null };
     }
@@ -682,120 +732,47 @@ export const AuthProvider = ({ children }) => {
       return { available: false, error };
     }
 
+    // Data found = username taken
     return { available: false, error: null };
-  }, [profile?.username]);
+  };
 
-  // =====================================================
-  // NEW: Resend confirmation email
-  // =====================================================
-  const resendConfirmationEmail = useCallback(async (email) => {
-    if (!supabase) return { error: { message: 'Online features not configured' } };
-
-    console.log('[AuthContext] Resending confirmation email to', email);
-    
-    // Use resend method if available, otherwise use magic link
-    const { data, error } = await supabase.auth.resend({
-      type: 'signup',
-      email: email.trim().toLowerCase(),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
-      }
-    });
-
-    if (error) {
-      console.error('[AuthContext] Resend confirmation error:', error);
-      
-      // Fallback: try magic link which also confirms email
-      const { error: magicError } = await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-      
-      if (magicError) {
-        return { data: null, error: magicError };
-      }
-      
-      return { data: { message: 'Confirmation email sent' }, error: null };
-    }
-
-    return { data, error };
-  }, []);
-
-  const clearOAuthCallback = useCallback(() => {
+  const clearOAuthCallback = () => {
     setIsOAuthCallback(false);
-  }, []);
+  };
   
-  const clearNewUser = useCallback(() => {
+  const clearNewUser = () => {
     setIsNewUser(false);
-  }, []);
-
-  const clearPasswordRecovery = useCallback(() => {
-    setIsPasswordRecovery(false);
-    window.history.replaceState({}, document.title, '/');
-  }, []);
-
-  const refreshProfile = useCallback(async () => {
-    if (user) {
-      return await fetchProfile(user.id);
-    }
-    return null;
-  }, [user, fetchProfile]);
-
-  const contextValue = useMemo(() => ({
-    user,
-    profile,
-    loading,
-    sessionReady,
-    isAuthenticated: !!user,
-    isOnlineEnabled,
-    isOAuthCallback,
-    isNewUser,
-    isPasswordRecovery,
-    signUp,
-    signIn,
-    signInWithGoogle,
-    signInWithMagicLink,
-    signOut,
-    resetPassword,
-    updateEmail,
-    updatePassword,
-    updateProfile,
-    checkUsernameAvailable,
-    resendConfirmationEmail,
-    refreshProfile,
-    clearOAuthCallback,
-    clearNewUser,
-    clearPasswordRecovery,
-  }), [
-    user,
-    profile,
-    loading,
-    sessionReady,
-    isOnlineEnabled,
-    isOAuthCallback,
-    isNewUser,
-    isPasswordRecovery,
-    signUp,
-    signIn,
-    signInWithGoogle,
-    signInWithMagicLink,
-    signOut,
-    resetPassword,
-    updateEmail,
-    updatePassword,
-    updateProfile,
-    checkUsernameAvailable,
-    resendConfirmationEmail,
-    refreshProfile,
-    clearOAuthCallback,
-    clearNewUser,
-    clearPasswordRecovery,
-  ]);
+  };
 
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={{
+      user,
+      profile,
+      loading,
+      sessionReady,
+      isAuthenticated: !!user,
+      isOnlineEnabled,
+      isOAuthCallback,
+      isNewUser,
+      signUp,
+      signIn,
+      signInWithGoogle,
+      signInWithMagicLink,
+      signOut,
+      resetPassword,
+      updateEmail,
+      updatePassword,
+      updateProfile,
+      checkUsernameAvailable,
+      refreshProfile: async () => {
+        if (user) {
+          return await fetchProfile(user.id);
+        }
+        return null;
+      },
+      clearOAuthCallback,
+      clearNewUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );

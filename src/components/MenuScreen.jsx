@@ -161,7 +161,7 @@ const MenuScreen = ({
       `}</style>
       
       {/* Floating pentomino pieces */}
-      <FloatingPieces count={12} theme="mixed" minOpacity={0.06} maxOpacity={0.18} />
+      <FloatingPieces count={18} theme="mixed" minOpacity={0.2} maxOpacity={0.45} />
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-full' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>

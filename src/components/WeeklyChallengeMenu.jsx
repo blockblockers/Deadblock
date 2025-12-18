@@ -116,7 +116,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
       }} />
       
       {/* Floating Pentomino Pieces */}
-      <FloatingPieces count={8} theme="weekly" minOpacity={0.06} maxOpacity={0.15} />
+      <FloatingPieces count={12} theme="weekly" minOpacity={0.2} maxOpacity={0.4} />
       
       {/* Glow orbs */}
       <div className="fixed top-20 left-10 w-80 h-80 bg-red-500/30 rounded-full blur-3xl pointer-events-none" />

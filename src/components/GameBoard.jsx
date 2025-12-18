@@ -1,26 +1,20 @@
-import { forwardRef } from 'react';
+import { useState, useEffect, useCallback, forwardRef } from 'react';
 import PropTypes from 'prop-types';
-import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
+import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { GamePropTypes, CallbackPropTypes } from '../utils/propTypes';
 
+// Animation types for ambient effects
+const AMBIENT_EFFECTS = ['shimmer', 'edgeGlow', 'trace', 'breathe'];
+
 /**
- * GameBoard Component
- * 
- * Renders the 8x8 game grid with placed pieces and pending move preview.
- * Handles cell clicks and displays game state including valid/invalid move indicators.
- * 
- * UPDATED: 
- * - Striped ghost pattern for pieces overlapping existing pieces (same as off-grid)
- * - Valid piece shows actual piece color with animated cyan outline
- * - Invalid piece shows striped red pattern
- * - ForwardRef support for drag-and-drop positioning
+ * GameBoard Component - Enhanced with cyberpunk styling and visible ghost pieces
  */
-const GameBoard = forwardRef(({
-  board,
-  boardPieces,
-  pendingMove,
-  rotation = 0,
+const GameBoard = forwardRef(({ 
+  board, 
+  boardPieces = {}, 
+  pendingMove, 
+  rotation = 0, 
   flipped = false,
   gameOver = false,
   gameMode,
@@ -31,20 +25,71 @@ const GameBoard = forwardRef(({
   selectedPiece,
   customColors,
 }, ref) => {
-  // Ensure board is properly formatted
-  const safeBoard = Array.isArray(board) 
+  // Track active ambient animations per cell
+  const [activeEffects, setActiveEffects] = useState({});
+  
+  // Get list of placed piece cells
+  const getPlacedCells = useCallback(() => {
+    const cells = [];
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        const pieceName = Array.isArray(boardPieces) 
+          ? boardPieces[row]?.[col] 
+          : boardPieces[`${row},${col}`];
+        if (board[row]?.[col] !== null && pieceName) {
+          cells.push(`${row},${col}`);
+        }
+      }
+    }
+    return cells;
+  }, [board, boardPieces]);
+  
+  // Randomly trigger ambient effects on placed pieces
+  useEffect(() => {
+    const triggerRandomEffect = () => {
+      const placedCells = getPlacedCells();
+      if (placedCells.length === 0) return;
+      
+      if (Math.random() < 0.25) {
+        const randomCell = placedCells[Math.floor(Math.random() * placedCells.length)];
+        const randomEffect = AMBIENT_EFFECTS[Math.floor(Math.random() * AMBIENT_EFFECTS.length)];
+        
+        setActiveEffects(prev => ({ ...prev, [randomCell]: randomEffect }));
+        
+        const duration = randomEffect === 'trace' ? 2000 : randomEffect === 'breathe' ? 1500 : 800;
+        setTimeout(() => {
+          setActiveEffects(prev => {
+            const next = { ...prev };
+            if (next[randomCell] === randomEffect) {
+              delete next[randomCell];
+            }
+            return next;
+          });
+        }, duration);
+      }
+    };
+    
+    const interval = setInterval(triggerRandomEffect, 2000);
+    const initialTimeout = setTimeout(triggerRandomEffect, 1000);
+    
+    return () => {
+      clearInterval(interval);
+      clearTimeout(initialTimeout);
+    };
+  }, [getPlacedCells]);
+  
+  // Ensure board is valid
+  const safeBoard = Array.isArray(board) && board.length === BOARD_SIZE 
     ? board.map(row => Array.isArray(row) ? row : Array(BOARD_SIZE).fill(null))
     : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
   
   const safeBoardPieces = boardPieces || {};
   
-  // Helper to get piece name - handles both 2D array and object formats
+  // Helper to get piece name
   const getPieceName = (rowIdx, colIdx) => {
-    // Check if it's a 2D array format (offline games)
     if (Array.isArray(safeBoardPieces) && safeBoardPieces[rowIdx]) {
       return safeBoardPieces[rowIdx][colIdx];
     }
-    // Check if it's an object format with "row,col" keys (online games)
     if (typeof safeBoardPieces === 'object') {
       return safeBoardPieces[`${rowIdx},${colIdx}`];
     }
@@ -53,13 +98,12 @@ const GameBoard = forwardRef(({
   
   const isDisabled = gameOver || ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
 
-  // Calculate pending piece cells (both in-bounds and out-of-bounds)
+  // Calculate pending piece cells
   let pendingCells = [];
   let outOfBoundsCells = [];
   let overlappingCells = [];
   let isPendingValid = false;
   
-  // Get the piece being placed for color
   const pendingPieceName = pendingMove?.piece || selectedPiece;
   const pendingPieceColor = pendingPieceName ? pieceColors[pendingPieceName] : null;
   
@@ -71,7 +115,6 @@ const GameBoard = forwardRef(({
       const cellCol = pendingMove.col + dx;
       
       if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-        // Check if this cell overlaps with an existing piece
         const existingCell = safeBoard[cellRow]?.[cellCol];
         if (existingCell !== null && existingCell !== 0 && existingCell !== undefined) {
           overlappingCells.push({ row: cellRow, col: cellCol });
@@ -83,12 +126,11 @@ const GameBoard = forwardRef(({
       }
     });
     
-    // Valid only if all cells in bounds AND no overlaps
     isPendingValid = outOfBoundsCells.length === 0 && overlappingCells.length === 0 &&
       canPlacePiece(safeBoard, pendingMove.row, pendingMove.col, pieceCoords);
   }
 
-  // Calculate AI animating piece cells
+  // AI animating cells
   let aiAnimatingCells = [];
   if (aiAnimatingMove) {
     const pieceCoords = getPieceCoords(aiAnimatingMove.piece, aiAnimatingMove.rot, aiAnimatingMove.flip);
@@ -101,7 +143,7 @@ const GameBoard = forwardRef(({
     });
   }
 
-  // Calculate player animating piece cells
+  // Player animating cells
   let playerAnimatingCells = [];
   if (playerAnimatingMove) {
     const pieceCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rot, playerAnimatingMove.flip);
@@ -114,267 +156,343 @@ const GameBoard = forwardRef(({
     });
   }
 
-  // Cell dimensions for positioning ghost cells
-  // Mobile: 36px (w-9) + 2px gap, Desktop: 48px (sm:w-12) + 4px gap
+  // Cell dimensions
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   const cellSize = isMobile ? 36 : 48;
   const gapSize = isMobile ? 2 : 4;
-
-  // Get cell colors based on player and custom colors
-  const getPlayerColor = (player) => {
-    if (customColors && customColors[player]) {
-      return customColors[player];
-    }
-    return player === 1 
-      ? 'bg-gradient-to-br from-cyan-400 to-blue-500' 
-      : 'bg-gradient-to-br from-pink-400 to-rose-500';
-  };
+  const padding = 8;
 
   return (
-    <div className="relative" ref={ref}>
-      {/* Main grid */}
-      <div className="grid grid-cols-8 gap-0.5 sm:gap-1 bg-slate-800/50 p-1 sm:p-1.5 rounded-lg border border-cyan-500/20">
-        {safeBoard.map((row, rowIdx) =>
-          row.map((cell, colIdx) => {
-            const isPending = pendingCells.some(p => p.row === rowIdx && p.col === colIdx);
-            const isOverlapping = overlappingCells.some(p => p.row === rowIdx && p.col === colIdx);
-            const isAiAnimating = aiAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
-            const isPlayerAnimating = playerAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
-            const pieceName = getPieceName(rowIdx, colIdx);
-            const pieceColor = pieceName ? pieceColors[pieceName] : null;
-            
-            return (
-              <button
-                key={`${rowIdx}-${colIdx}`}
-                className={`
-                  w-9 h-9 sm:w-12 sm:h-12 rounded-md sm:rounded-lg relative
-                  transition-all duration-150 overflow-hidden
-                  ${cell 
-                    ? `${pieceColor || getPlayerColor(cell)} shadow-lg` 
-                    : 'bg-slate-700/50 hover:bg-slate-600/50'
-                  }
-                  ${isAiAnimating ? 'ai-placing-cell ring-2 ring-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.7)]' : ''}
-                  ${isPlayerAnimating ? 'player-placing-cell ring-2 ring-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.7)]' : ''}
-                  ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-                `}
-                onClick={() => !isDisabled && onCellClick(rowIdx, colIdx)}
-                disabled={isDisabled}
-              >
-                {/* Scan line effect for placed pieces */}
-                {cell && (
-                  <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.1)_2px,rgba(255,255,255,0.1)_4px)]" />
-                )}
-                
-                {/* AI placing animation */}
-                {isAiAnimating && (
-                  <div className="absolute inset-0 bg-purple-400/50 animate-pulse" />
-                )}
-                
-                {/* Player placing animation */}
-                {isPlayerAnimating && (
-                  <div className="absolute inset-0 bg-cyan-400/50 animate-pulse" />
-                )}
-                
-                {/* VALID pending - show actual piece color with cyan outline */}
-                {isPending && isPendingValid && (
-                  <div 
-                    className={`absolute inset-0 ${pendingPieceColor || 'bg-cyan-500/60'} valid-piece-glow ring-2 ring-cyan-400`}
-                  />
-                )}
-                
-                {/* INVALID pending (empty cell but piece overall invalid) - show striped pattern */}
-                {isPending && !isPendingValid && (
-                  <div className="absolute inset-0 invalid-ghost-cell" />
-                )}
-                
-                {/* OVERLAPPING cell - show striped pattern over existing piece */}
-                {isOverlapping && (
-                  <div className="absolute inset-0 overlap-ghost-cell" />
-                )}
-              </button>
-            );
-          })
-        )}
+    <div className="relative inline-block mx-auto touch-none" ref={ref}>
+      {/* Main board with cyberpunk frame */}
+      <div className="relative inline-grid gap-0.5 sm:gap-1 bg-slate-950 p-2 rounded-xl shadow-[0_0_40px_rgba(34,211,238,0.25),0_0_80px_rgba(34,211,238,0.1),inset_0_0_40px_rgba(0,0,0,0.6)] border border-cyan-500/40">
+        {/* Corner accents */}
+        <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400/60 rounded-tl-xl" />
+        <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400/60 rounded-tr-xl" />
+        <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-cyan-400/60 rounded-bl-xl" />
+        <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-cyan-400/60 rounded-br-xl" />
+        
+        {/* Subtle background grid pattern */}
+        <div className="absolute inset-2 opacity-5 pointer-events-none bg-[repeating-linear-gradient(0deg,rgba(34,211,238,0.3),rgba(34,211,238,0.3)_1px,transparent_1px,transparent_8px),repeating-linear-gradient(90deg,rgba(34,211,238,0.3),rgba(34,211,238,0.3)_1px,transparent_1px,transparent_8px)]" />
+        
+        {safeBoard.map((row, rowIdx) => (
+          <div key={rowIdx} className="flex gap-0.5 sm:gap-1">
+            {(row || []).map((cell, colIdx) => {
+              const pieceName = getPieceName(rowIdx, colIdx);
+              const isInBoundsPendingCell = pendingCells.some(c => c.row === rowIdx && c.col === colIdx);
+              const isOverlappingCell = overlappingCells.some(c => c.row === rowIdx && c.col === colIdx);
+              const hasOutOfBounds = outOfBoundsCells.length > 0;
+              const isAiAnimatingCell = aiAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
+              const isPlayerAnimatingCell = playerAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
+              
+              // Determine background color
+              let bgClass;
+              let extraClass = '';
+              
+              if (isAiAnimatingCell) {
+                bgClass = pieceColors[aiAnimatingMove.piece];
+                extraClass = 'animate-ai-place';
+              } else if (isPlayerAnimatingCell) {
+                bgClass = pieceColors[playerAnimatingMove.piece];
+                extraClass = 'animate-player-place';
+              } else if (isOverlappingCell) {
+                // Overlapping - show existing piece with striped overlay
+                bgClass = pieceColors[pieceName];
+              } else if (isInBoundsPendingCell) {
+                if (hasOutOfBounds || !isPendingValid) {
+                  // Invalid placement - show piece color but dimmed
+                  bgClass = `${pendingPieceColor} opacity-70`;
+                } else {
+                  // Valid placement - show piece color with glow
+                  bgClass = pendingPieceColor;
+                }
+              } else if (cell !== null && pieceName) {
+                bgClass = pieceColors[pieceName];
+              } else {
+                bgClass = 'bg-slate-800/80 hover:bg-slate-700/80 border border-cyan-500/30 shadow-[inset_0_0_15px_rgba(0,0,0,0.6),inset_0_0_2px_rgba(34,211,238,0.1)]';
+              }
+              
+              // Determine ring/glow style
+              let ringClass = '';
+              if (isAiAnimatingCell) {
+                ringClass = 'ring-2 ring-purple-300 shadow-[0_0_30px_rgba(168,85,247,1),0_0_60px_rgba(168,85,247,0.6)]';
+              } else if (isPlayerAnimatingCell) {
+                ringClass = 'ring-2 ring-cyan-300 shadow-[0_0_30px_rgba(34,211,238,1),0_0_60px_rgba(34,211,238,0.6)]';
+              } else if (isOverlappingCell) {
+                // EXTREMELY VISIBLE overlap indicator - bright red with thick dashed border
+                ringClass = 'ring-4 ring-red-500 shadow-[0_0_40px_rgba(239,68,68,1),0_0_60px_rgba(239,68,68,0.8)]';
+              } else if (isInBoundsPendingCell) {
+                if (hasOutOfBounds || !isPendingValid) {
+                  // Invalid - orange warning
+                  ringClass = 'ring-3 ring-orange-400 shadow-[0_0_25px_rgba(251,146,60,0.8)]';
+                } else {
+                  // VALID - bright green pulse animation
+                  ringClass = 'ring-3 ring-green-400 shadow-[0_0_30px_rgba(74,222,128,1),0_0_50px_rgba(74,222,128,0.6)] animate-valid-pulse';
+                }
+              }
+              
+              const isPlacedPiece = cell !== null && pieceName && !isInBoundsPendingCell && !isAiAnimatingCell && !isPlayerAnimatingCell && !isOverlappingCell;
+              const cellKey = `${rowIdx},${colIdx}`;
+              const activeEffect = isPlacedPiece ? activeEffects[cellKey] : null;
+              
+              return (
+                <button
+                  key={colIdx}
+                  onClick={() => onCellClick(rowIdx, colIdx)}
+                  className={`w-9 h-9 sm:w-12 sm:h-12 rounded-lg transition-all relative overflow-hidden ${bgClass} ${ringClass} ${extraClass} ${activeEffect === 'breathe' ? 'animate-random-breathe' : ''}`}
+                  disabled={isDisabled}
+                >
+                  {/* AI placing effect */}
+                  {isAiAnimatingCell && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute inset-0 animate-ai-burst bg-gradient-radial from-white/60 via-purple-400/30 to-transparent" />
+                      <div className="absolute inset-0 opacity-40 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(168,85,247,0.3)_2px,rgba(168,85,247,0.3)_4px)] animate-ai-scan" />
+                      <div className="absolute top-0 left-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '0ms' }} />
+                      <div className="absolute top-0 right-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '100ms' }} />
+                      <div className="absolute bottom-0 left-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '200ms' }} />
+                      <div className="absolute bottom-0 right-0 w-2 h-2 bg-white rounded-full animate-ai-spark" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  )}
+                  
+                  {/* Player placing effect */}
+                  {isPlayerAnimatingCell && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute inset-0 animate-player-ripple-1 rounded-lg border-2 border-cyan-400/80" />
+                      <div className="absolute inset-0 animate-player-ripple-2 rounded-lg border-2 border-green-400/60" />
+                      <div className="absolute inset-0 animate-player-glow bg-gradient-radial from-cyan-400/40 via-green-400/20 to-transparent" />
+                    </div>
+                  )}
+                  
+                  {/* OVERLAP INDICATOR - Very visible striped pattern */}
+                  {isOverlappingCell && (
+                    <div className="absolute inset-0 pointer-events-none z-20">
+                      <div 
+                        className="absolute inset-0 animate-overlap-flash"
+                        style={{
+                          background: 'repeating-linear-gradient(45deg, rgba(239,68,68,0.7), rgba(239,68,68,0.7) 4px, rgba(0,0,0,0.8) 4px, rgba(0,0,0,0.8) 8px)',
+                        }}
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white drop-shadow-[0_0_8px_rgba(239,68,68,1)] animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Valid placement glow overlay */}
+                  {isInBoundsPendingCell && isPendingValid && !isOverlappingCell && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute inset-0 animate-valid-glow rounded-lg" 
+                        style={{ boxShadow: 'inset 0 0 15px rgba(74,222,128,0.5)' }} 
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Invalid placement warning overlay (but in bounds) */}
+                  {isInBoundsPendingCell && !isPendingValid && !isOverlappingCell && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute inset-0 bg-orange-500/20 animate-pulse rounded-lg" />
+                    </div>
+                  )}
+                  
+                  {/* Ambient effects for placed pieces */}
+                  {isPlacedPiece && activeEffect && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-md">
+                      {activeEffect === 'shimmer' && (
+                        <div 
+                          className="absolute inset-0 animate-random-shimmer"
+                          style={{
+                            background: 'linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)',
+                            backgroundSize: '300% 300%',
+                          }}
+                        />
+                      )}
+                      {activeEffect === 'edgeGlow' && (
+                        <div 
+                          className="absolute inset-0 rounded-md animate-random-edge-glow"
+                          style={{ boxShadow: 'inset 0 0 12px rgba(255,255,255,0.3), inset 0 0 4px rgba(34,211,238,0.2)' }}
+                        />
+                      )}
+                      {activeEffect === 'trace' && (
+                        <div className="absolute inset-0">
+                          <div 
+                            className="absolute animate-random-trace"
+                            style={{
+                              width: '4px',
+                              height: '4px',
+                              background: 'radial-gradient(circle, rgba(34,211,238,0.9) 0%, rgba(255,255,255,0.6) 40%, transparent 70%)',
+                              boxShadow: '0 0 6px rgba(34,211,238,0.8)',
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
 
-      {/* Ghost cells for out-of-bounds pieces - striped pattern */}
-      {outOfBoundsCells.length > 0 && pendingMove && (
-        <div className="absolute inset-0 pointer-events-none">
-          {outOfBoundsCells.map((cell, idx) => {
-            // Calculate position relative to the grid
-            const offsetRow = cell.row - pendingMove.row;
-            const offsetCol = cell.col - pendingMove.col;
-            
-            // Find a reference cell that IS on the board to calculate position
-            const refCell = pendingCells[0] || { row: pendingMove.row, col: pendingMove.col };
-            
-            const top = (refCell.row + offsetRow - refCell.row + pendingMove.row) * (cellSize + gapSize) + (isMobile ? 4 : 6);
-            const left = (refCell.col + offsetCol - refCell.col + pendingMove.col) * (cellSize + gapSize) + (isMobile ? 4 : 6);
-            
-            return (
-              <div
-                key={`ghost-${idx}`}
-                className="absolute rounded-md sm:rounded-lg out-of-bounds-ghost-cell"
-                style={{
-                  width: cellSize,
-                  height: cellSize,
-                  top: `${top}px`,
-                  left: `${left}px`,
-                }}
-              />
-            );
-          })}
-        </div>
-      )}
+      {/* Out-of-bounds ghost cells - VERY VISIBLE */}
+      {outOfBoundsCells.map(({ row, col }, idx) => {
+        const left = padding + col * (cellSize + gapSize);
+        const top = padding + row * (cellSize + gapSize);
+        
+        return (
+          <div
+            key={`ghost-${idx}`}
+            className="absolute pointer-events-none z-30"
+            style={{
+              left: `${left}px`,
+              top: `${top}px`,
+              width: `${cellSize}px`,
+              height: `${cellSize}px`,
+            }}
+          >
+            <div className="w-full h-full rounded-lg bg-red-500/50 border-3 border-dashed border-red-400 shadow-[0_0_25px_rgba(239,68,68,0.9),0_0_50px_rgba(239,68,68,0.5)] animate-out-of-bounds flex items-center justify-center backdrop-blur-sm">
+              <svg 
+                className="w-5 h-5 sm:w-6 sm:h-6 text-white drop-shadow-[0_0_6px_rgba(239,68,68,1)]" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          </div>
+        );
+      })}
 
-      {/* Full piece outline when piece is active */}
-      {pendingMove && (
-        <div 
-          className={`absolute inset-0 pointer-events-none rounded-lg ${
-            isPendingValid 
-              ? 'ring-2 ring-cyan-400/70 shadow-[0_0_25px_rgba(34,211,238,0.4)] active-piece-valid'
-              : 'ring-2 ring-red-500/70 shadow-[0_0_25px_rgba(239,68,68,0.5)] active-piece-invalid'
-          }`}
-          style={{ margin: '-2px' }}
-        />
+      {/* Warning message when piece extends out of bounds */}
+      {outOfBoundsCells.length > 0 && (
+        <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 whitespace-nowrap z-20">
+          <span className="text-xs text-orange-300 font-bold tracking-wide bg-slate-900/95 px-4 py-1.5 rounded-full border-2 border-orange-500/50 shadow-[0_0_20px_rgba(251,146,60,0.5)] animate-pulse">
+            ⚠️ ROTATE or FLIP to fit
+          </span>
+        </div>
       )}
 
       {/* Animation styles */}
       <style>{`
-        /* Valid piece glow animation - pulses cyan */
-        .valid-piece-glow {
-          animation: valid-glow 1.2s ease-in-out infinite;
+        /* Valid piece pulse */
+        @keyframes valid-pulse {
+          0%, 100% { box-shadow: 0 0 20px rgba(74,222,128,0.8), 0 0 40px rgba(74,222,128,0.4); }
+          50% { box-shadow: 0 0 35px rgba(74,222,128,1), 0 0 60px rgba(74,222,128,0.6); }
         }
+        .animate-valid-pulse { animation: valid-pulse 0.8s ease-in-out infinite; }
+        
         @keyframes valid-glow {
-          0%, 100% { 
-            opacity: 0.7;
-            box-shadow: inset 0 0 10px rgba(34, 211, 238, 0.3);
-          }
-          50% { 
-            opacity: 0.9;
-            box-shadow: inset 0 0 15px rgba(34, 211, 238, 0.5);
-          }
+          0%, 100% { opacity: 0.6; }
+          50% { opacity: 1; }
         }
+        .animate-valid-glow { animation: valid-glow 0.6s ease-in-out infinite; }
         
-        /* Invalid ghost cell - striped red pattern */
-        .invalid-ghost-cell {
-          background: repeating-linear-gradient(
-            45deg,
-            rgba(239, 68, 68, 0.3),
-            rgba(239, 68, 68, 0.3) 4px,
-            rgba(239, 68, 68, 0.1) 4px,
-            rgba(239, 68, 68, 0.1) 8px
-          );
-          border: 2px dashed rgba(239, 68, 68, 0.8);
-          animation: invalid-pulse 0.8s ease-in-out infinite;
+        /* Overlap flash */
+        @keyframes overlap-flash {
+          0%, 100% { opacity: 0.8; }
+          50% { opacity: 1; }
         }
+        .animate-overlap-flash { animation: overlap-flash 0.3s ease-in-out infinite; }
         
-        /* Overlap ghost cell - striped pattern over existing piece */
-        .overlap-ghost-cell {
-          background: repeating-linear-gradient(
-            45deg,
-            rgba(239, 68, 68, 0.5),
-            rgba(239, 68, 68, 0.5) 4px,
-            rgba(239, 68, 68, 0.2) 4px,
-            rgba(239, 68, 68, 0.2) 8px
-          );
-          border: 2px dashed rgba(239, 68, 68, 0.9);
-          animation: overlap-pulse 0.6s ease-in-out infinite;
+        /* Out of bounds animation */
+        @keyframes out-of-bounds {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          50% { transform: scale(1.05); opacity: 1; }
         }
+        .animate-out-of-bounds { animation: out-of-bounds 0.5s ease-in-out infinite; }
         
-        /* Out of bounds ghost cell - striped pattern */
-        .out-of-bounds-ghost-cell {
-          background: repeating-linear-gradient(
-            45deg,
-            rgba(239, 68, 68, 0.4),
-            rgba(239, 68, 68, 0.4) 4px,
-            rgba(239, 68, 68, 0.15) 4px,
-            rgba(239, 68, 68, 0.15) 8px
-          );
-          border: 2px dashed rgba(239, 68, 68, 0.8);
-          animation: ghost-pulse 0.8s ease-in-out infinite;
-        }
-        
-        @keyframes invalid-pulse {
-          0%, 100% { 
-            opacity: 0.7;
-            border-color: rgba(239, 68, 68, 0.7);
-          }
-          50% { 
-            opacity: 1;
-            border-color: rgba(239, 68, 68, 1);
-          }
-        }
-        
-        @keyframes overlap-pulse {
-          0%, 100% { 
-            opacity: 0.6;
-          }
-          50% { 
-            opacity: 0.9;
-          }
-        }
-        
-        @keyframes ghost-pulse {
-          0%, 100% { 
-            opacity: 0.7;
-            border-color: rgba(239, 68, 68, 0.7);
-          }
-          50% { 
-            opacity: 1;
-            border-color: rgba(239, 68, 68, 1);
-          }
-        }
-        
-        /* Active valid piece outline animation */
-        .active-piece-valid {
-          animation: active-valid-pulse 1.5s ease-in-out infinite;
-        }
-        @keyframes active-valid-pulse {
-          0%, 100% { 
-            box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
-          }
-          50% { 
-            box-shadow: 0 0 35px rgba(34, 211, 238, 0.6);
-          }
-        }
-        
-        /* Active invalid piece outline animation */
-        .active-piece-invalid {
-          animation: active-invalid-shake 0.3s ease-in-out, active-invalid-pulse 1s ease-in-out infinite;
-        }
-        @keyframes active-invalid-shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-2px); }
-          75% { transform: translateX(2px); }
-        }
-        @keyframes active-invalid-pulse {
-          0%, 100% { 
-            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
-          }
-          50% { 
-            box-shadow: 0 0 35px rgba(239, 68, 68, 0.7);
-          }
-        }
-        
-        /* AI placing cell animation */
-        .ai-placing-cell {
-          animation: ai-place 0.5s ease-out;
-        }
+        /* AI animations */
         @keyframes ai-place {
-          0% { transform: scale(0.8); opacity: 0; }
-          50% { transform: scale(1.1); }
+          0% { transform: scale(0) rotate(-15deg); opacity: 0; filter: brightness(3); }
+          15% { transform: scale(1.3) rotate(8deg); opacity: 1; filter: brightness(2.5); }
+          30% { transform: scale(0.85) rotate(-5deg); filter: brightness(2); }
+          45% { transform: scale(1.15) rotate(3deg); filter: brightness(1.5); }
+          60% { transform: scale(0.95) rotate(-2deg); filter: brightness(1.3); }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; filter: brightness(1); }
+        }
+        .animate-ai-place { animation: ai-place 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        
+        @keyframes ai-burst {
+          0% { transform: scale(0); opacity: 1; }
+          50% { transform: scale(1.5); opacity: 0.6; }
+          100% { transform: scale(2); opacity: 0; }
+        }
+        .animate-ai-burst { animation: ai-burst 0.5s ease-out forwards; }
+        
+        @keyframes ai-scan {
+          0% { transform: translateY(-100%); }
+          100% { transform: translateY(100%); }
+        }
+        .animate-ai-scan { animation: ai-scan 0.4s linear; }
+        
+        @keyframes ai-spark {
+          0% { transform: scale(0); opacity: 1; }
+          50% { transform: scale(1.5); opacity: 1; }
+          100% { transform: scale(0); opacity: 0; }
+        }
+        .animate-ai-spark { animation: ai-spark 0.4s ease-out forwards; }
+        
+        /* Player animations */
+        @keyframes player-place {
+          0% { transform: scale(1.2); opacity: 0; }
+          50% { transform: scale(0.95); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
+        .animate-player-place { animation: player-place 0.4s ease-out forwards; }
         
-        /* Player placing cell animation */
-        .player-placing-cell {
-          animation: player-place 0.3s ease-out;
+        @keyframes player-ripple-1 {
+          0% { transform: scale(0.8); opacity: 1; }
+          100% { transform: scale(1.3); opacity: 0; }
         }
-        @keyframes player-place {
-          0% { transform: scale(0.9); }
-          50% { transform: scale(1.05); }
-          100% { transform: scale(1); }
+        .animate-player-ripple-1 { animation: player-ripple-1 0.6s ease-out forwards; }
+        
+        @keyframes player-ripple-2 {
+          0% { transform: scale(0.9); opacity: 0.8; }
+          100% { transform: scale(1.4); opacity: 0; }
+        }
+        .animate-player-ripple-2 { animation: player-ripple-2 0.7s ease-out forwards; }
+        
+        @keyframes player-glow {
+          0% { opacity: 0.8; }
+          100% { opacity: 0; }
+        }
+        .animate-player-glow { animation: player-glow 0.5s ease-out forwards; }
+        
+        /* Ambient effects */
+        @keyframes random-shimmer {
+          0% { opacity: 0; background-position: 150% 150%; }
+          20%, 80% { opacity: 1; }
+          100% { opacity: 0; background-position: -50% -50%; }
+        }
+        .animate-random-shimmer { animation: random-shimmer 0.8s ease-in-out forwards; }
+        
+        @keyframes random-edge-glow {
+          0%, 100% { opacity: 0; }
+          30%, 70% { opacity: 1; }
+        }
+        .animate-random-edge-glow { animation: random-edge-glow 0.8s ease-in-out forwards; }
+        
+        @keyframes random-trace {
+          0% { opacity: 0; top: 0; left: 0; }
+          5%, 95% { opacity: 1; }
+          25% { top: 0; left: calc(100% - 4px); }
+          50% { top: calc(100% - 4px); left: calc(100% - 4px); }
+          75% { top: calc(100% - 4px); left: 0; }
+          100% { opacity: 0; top: 0; left: 0; }
+        }
+        .animate-random-trace { animation: random-trace 2s linear forwards; }
+        
+        @keyframes random-breathe {
+          0%, 100% { transform: scale(1); filter: brightness(1); }
+          50% { transform: scale(1.02); filter: brightness(1.15); }
+        }
+        .animate-random-breathe { animation: random-breathe 1.5s ease-in-out; }
+        
+        .bg-gradient-radial {
+          background: radial-gradient(circle, var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to));
         }
       `}</style>
     </div>
@@ -383,54 +501,20 @@ const GameBoard = forwardRef(({
 
 GameBoard.displayName = 'GameBoard';
 
-/**
- * GameBoard PropTypes
- */
 GameBoard.propTypes = {
-  /** Current board state - 8x8 grid of player numbers or null */
   board: GamePropTypes.board.isRequired,
-  /** Map of piece positions to piece names */
-  boardPieces: PropTypes.oneOfType([
-    PropTypes.object,
-    PropTypes.arrayOf(PropTypes.array),
-  ]),
-  /** Currently pending move awaiting confirmation */
+  boardPieces: PropTypes.oneOfType([PropTypes.object, PropTypes.array]),
   pendingMove: GamePropTypes.pendingMove,
-  /** Current piece rotation (0, 90, 180, 270) */
   rotation: PropTypes.number,
-  /** Whether current piece is flipped */
   flipped: PropTypes.bool,
-  /** Whether the game has ended */
   gameOver: PropTypes.bool,
-  /** Current game mode */
-  gameMode: GamePropTypes.gameMode,
-  /** Current player's turn (1 or 2) */
-  currentPlayer: GamePropTypes.player,
-  /** Callback when a cell is clicked */
-  onCellClick: CallbackPropTypes.onClick,
-  /** AI animating move data */
+  gameMode: PropTypes.string,
+  currentPlayer: PropTypes.number,
+  onCellClick: CallbackPropTypes.onCellClick,
   aiAnimatingMove: PropTypes.object,
-  /** Player animating move data */
   playerAnimatingMove: PropTypes.object,
-  /** Currently selected piece */
   selectedPiece: PropTypes.string,
-  /** Custom colors for players */
   customColors: PropTypes.object,
-};
-
-GameBoard.defaultProps = {
-  boardPieces: {},
-  pendingMove: null,
-  rotation: 0,
-  flipped: false,
-  gameOver: false,
-  gameMode: null,
-  currentPlayer: 1,
-  onCellClick: () => {},
-  aiAnimatingMove: null,
-  playerAnimatingMove: null,
-  selectedPiece: null,
-  customColors: null,
 };
 
 export default GameBoard;

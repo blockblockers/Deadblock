@@ -472,6 +472,22 @@ const EntryAuthScreen = ({
           </p>
         </div>
       )}
+      
+      {/* Back to Menu - only when forced online (from online menu/weekly challenge) */}
+      {forceOnlineOnly && !isInviteFlow && (
+        <div className="pt-3 border-t border-slate-700/50">
+          <button
+            onClick={handleOfflineMode}
+            className="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-600 text-slate-200 font-semibold rounded-xl hover:from-slate-600 hover:to-slate-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] active:scale-[0.98] border border-slate-500/30"
+          >
+            <ArrowLeft size={16} />
+            Back to Menu
+          </button>
+          <p className="text-slate-500 text-xs text-center mt-2">
+            Return without signing in
+          </p>
+        </div>
+      )}
     </div>
   );
 
@@ -912,20 +928,27 @@ const EntryAuthScreen = ({
       <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       
       {/* Floating pieces background */}
-      <FloatingPieces count={8} theme="cyan" minOpacity={0.04} maxOpacity={0.12} />
+      <FloatingPieces count={15} theme="cyan" minOpacity={0.15} maxOpacity={0.35} />
       
       {/* Content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
         {/* Title - Large size matching PuzzleSelect */}
         <div className="text-center mb-4">
           <NeonTitle size="large" />
+          {forceOnlineOnly && !isInviteFlow && (
+            <p className="text-cyan-400 text-sm font-semibold mt-2 tracking-wide">
+              {intendedDestination === 'weekly-menu' ? '🏆 WEEKLY CHALLENGE' : '⚔️ ONLINE MODE'}
+            </p>
+          )}
         </div>
         
         {/* Subtitle */}
         <p className="text-slate-400 text-sm mb-6 text-center max-w-xs">
           {isInviteFlow 
             ? '🎮 Sign in to accept your game challenge!'
-            : 'Strategic pentomino puzzle battles. Challenge the AI, solve puzzles, or compete online!'
+            : forceOnlineOnly
+              ? 'Sign in to access online features and compete with players worldwide!'
+              : 'Strategic pentomino puzzle battles. Challenge the AI, solve puzzles, or compete online!'
           }
         </p>
         
