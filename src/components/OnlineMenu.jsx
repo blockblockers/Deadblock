@@ -47,6 +47,24 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
     return game.player1?.username || 'Unknown';
   };
 
+// NEW: Get full opponent data including ID for profile viewing
+const getOpponentData = (game) => {
+  if (!game || !profile?.id) return { id: null, username: 'Unknown', data: null };
+  if (game.player1_id === profile.id) {
+    return { 
+      id: game.player2_id,
+      username: game.player2?.username || 'Unknown',
+      data: game.player2
+    };
+  }
+  return { 
+    id: game.player1_id,
+    username: game.player1?.username || 'Unknown',
+    data: game.player1
+  };
+};
+*/
+
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
@@ -203,6 +221,9 @@ const OnlineMenu = ({
   const [searching, setSearching] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   
+  // Lobby
+  const [lobbyCount, setLobbyCount] = useState(0);
+
   // Invite state
   const [receivedInvites, setReceivedInvites] = useState([]);
   const [sentInvites, setSentInvites] = useState([]);
@@ -243,21 +264,36 @@ const OnlineMenu = ({
     initNotifications();
   }, []);
 
-  // Fetch lobby count periodically
-  useEffect(() => {
-    const fetchLobbyCount = async () => {
-      try {
-        const { count } = await matchmakingService.getQueueStatus();
-        setLobbyCount(count || 0);
-      } catch (err) {
-        // Silently fail - lobby count is not critical
+// Auto-scroll when Challenge section expands
+useEffect(() => {
+  if (showSearch) {
+    // Small delay to let the content render
+    setTimeout(() => {
+      const challengeSection = document.getElementById('challenge-section');
+      if (challengeSection) {
+        challengeSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
-    };
-    
-    fetchLobbyCount();
-    const interval = setInterval(fetchLobbyCount, 10000); // Update every 10 seconds
-    return () => clearInterval(interval);
-  }, []);
+    }, 100);
+  }
+}, [showSearch]);
+
+  // Fetch lobby/matchmaking count periodically
+useEffect(() => {
+  const fetchLobbyCount = async () => {
+    if (!profile?.id) return;
+    try {
+      // Get count of players currently in matchmaking queue
+      const { data } = await gameSyncService.getMatchmakingCount?.();
+      setLobbyCount(data?.count || 0);
+    } catch (e) {
+      console.log('Lobby count unavailable');
+    }
+  };
+  
+  fetchLobbyCount();
+  const interval = setInterval(fetchLobbyCount, 30000); // Every 30 seconds
+  return () => clearInterval(interval);
+}, [profile?.id]);
 
   // Load friend requests function
   const loadFriendRequests = async () => {
@@ -736,12 +772,20 @@ const OnlineMenu = ({
 
   // Get opponent data from game
   const getOpponentData = (game) => {
-    if (!game) return null;
-    if (game.player1_id === profile?.id) {
-      return game.player2;
-    }
-    return game.player1;
+  if (!game || !profile?.id) return { id: null, username: 'Unknown' };
+  if (game.player1_id === profile.id) {
+    return { 
+      id: game.player2_id,
+      username: game.player2?.username || 'Unknown',
+      data: game.player2
+    };
+  }
+  return { 
+    id: game.player1_id,
+    username: game.player1?.username || 'Unknown',
+    data: game.player1
   };
+};
 
   const getGameResult = (game) => {
     if (!game) return { text: 'Unknown', color: 'text-slate-400' };
@@ -979,65 +1023,88 @@ const OnlineMenu = ({
 })()}
             </div>
             
-            {/* Compact Quick Actions - Under Player Box */}
-            <div className="flex gap-2 mb-4">
-              <button
-                onClick={() => { soundManager.playButtonClick(); onViewProfile(); }}
-                className="flex-1 py-3 bg-gradient-to-b from-amber-900/40 to-amber-950/60 rounded-lg text-amber-200 hover:text-amber-100 transition-all flex flex-col items-center justify-center gap-1 border border-amber-700/50 hover:border-amber-500 text-xs font-medium shadow-lg hover:shadow-amber-500/30 hover:scale-[1.02] active:scale-[0.98] group"
-              >
-                <div className="p-1.5 rounded-full bg-amber-500/20 group-hover:bg-amber-500/40 transition-colors">
-                  <User size={16} className="drop-shadow-[0_0_4px_rgba(251,191,36,0.6)]" />
-                </div>
-                <span>Profile</span>
-              </button>
-              <button
-                onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
-                className="flex-1 py-3 bg-gradient-to-b from-purple-900/40 to-purple-950/60 rounded-lg text-purple-200 hover:text-purple-100 transition-all flex flex-col items-center justify-center gap-1 border border-purple-700/50 hover:border-purple-500 text-xs font-medium shadow-lg hover:shadow-purple-500/30 hover:scale-[1.02] active:scale-[0.98] group"
-              >
-                <div className="p-1.5 rounded-full bg-purple-500/20 group-hover:bg-purple-500/40 transition-colors">
-                  <Award size={16} className="drop-shadow-[0_0_4px_rgba(168,85,247,0.6)]" />
-                </div>
-                <span>Awards</span>
-              </button>
-              <button
-                onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
-                className="flex-1 py-3 bg-gradient-to-b from-cyan-900/40 to-cyan-950/60 rounded-lg text-cyan-200 hover:text-cyan-100 transition-all flex flex-col items-center justify-center gap-1 border border-cyan-700/50 hover:border-cyan-500 text-xs font-medium shadow-lg hover:shadow-cyan-500/30 hover:scale-[1.02] active:scale-[0.98] group relative"
-              >
-                <div className="p-1.5 rounded-full bg-cyan-500/20 group-hover:bg-cyan-500/40 transition-colors">
-                  <Users size={16} className="drop-shadow-[0_0_4px_rgba(6,182,212,0.6)]" />
-                </div>
-                <span>Friends</span>
-                {pendingFriendRequests > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] rounded-full w-5 h-5 flex items-center justify-center font-bold shadow-lg shadow-red-500/50 animate-pulse border border-red-400">
-                    {pendingFriendRequests}
-                  </span>
-                )}
-              </button>
-              <button
-                onClick={() => { soundManager.playButtonClick(); setShowSpectateList(true); }}
-                className="flex-1 py-3 bg-gradient-to-b from-green-900/40 to-green-950/60 rounded-lg text-green-200 hover:text-green-100 transition-all flex flex-col items-center justify-center gap-1 border border-green-700/50 hover:border-green-500 text-xs font-medium shadow-lg hover:shadow-green-500/30 hover:scale-[1.02] active:scale-[0.98] group"
-              >
-                <div className="p-1.5 rounded-full bg-green-500/20 group-hover:bg-green-500/40 transition-colors">
-                  <Eye size={16} className="drop-shadow-[0_0_4px_rgba(34,197,94,0.6)]" />
-                </div>
-                <span>Watch</span>
-              </button>
-            </div>
+           {/* Compact Quick Actions - Under Player Box */}
+<div className="flex gap-2 mb-4">
+  <button
+    onClick={() => { soundManager.playButtonClick(); onViewProfile(); }}
+    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
+    style={{
+      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+      borderColor: 'rgba(59, 130, 246, 0.3)',
+      boxShadow: '0 0 15px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+    }}
+  >
+    <User size={14} className="text-blue-400 group-hover:scale-110 transition-transform" />
+    <span className="text-slate-300 group-hover:text-blue-300 transition-colors">Profile</span>
+  </button>
+  <button
+    onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
+    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
+    style={{
+      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+      borderColor: 'rgba(168, 85, 247, 0.3)',
+      boxShadow: '0 0 15px rgba(168, 85, 247, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+    }}
+  >
+    <Award size={14} className="text-purple-400 group-hover:scale-110 transition-transform" />
+    <span className="text-slate-300 group-hover:text-purple-300 transition-colors">Awards</span>
+  </button>
+  <button
+    onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
+    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group relative"
+    style={{
+      background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+      borderColor: 'rgba(34, 211, 238, 0.3)',
+      boxShadow: '0 0 15px rgba(34, 211, 238, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+    }}
+  >
+    <Users size={14} className="text-cyan-400 group-hover:scale-110 transition-transform" />
+    <span className="text-slate-300 group-hover:text-cyan-300 transition-colors">Friends</span>
+    {pendingFriendRequests > 0 && (
+      <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-[10px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold px-1 shadow-lg shadow-red-500/50">
+        {pendingFriendRequests}
+      </span>
+    )}
+  </button>
+  <button
+    onClick={() => { soundManager.playButtonClick(); setShowSpectateList(true); }}
+    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
+    style={{
+      background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+      borderColor: 'rgba(34, 197, 94, 0.3)',
+      boxShadow: '0 0 15px rgba(34, 197, 94, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+    }}
+  >
+    <Eye size={14} className="text-green-400 group-hover:scale-110 transition-transform" />
+    <span className="text-slate-300 group-hover:text-green-300 transition-colors">Watch</span>
+  </button>
+</div>
 
-            {/* Find Match - Compact with Lobby Info */}
-            <button
-              onClick={handleFindMatch}
-              className="w-full py-3 px-4 mb-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl font-bold tracking-wider text-white hover:from-amber-400 hover:to-orange-500 transition-all shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-[0.98] flex items-center justify-between"
-            >
-              <span className="text-sm">⚔️ FIND MATCH</span>
-              <span className="text-xs bg-black/30 px-2.5 py-1 rounded-full flex items-center gap-1.5 border border-white/20">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]"></span>
-                {lobbyCount > 0 ? `${lobbyCount} in lobby` : 'Online'}
-              </span>
-            </button>
+
+           {/* Find Match - Compact with Lobby Count */}
+<button
+  onClick={handleFindMatch}
+  className="w-full p-3 mb-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl font-bold tracking-wide text-white hover:from-amber-400 hover:to-orange-500 transition-all shadow-[0_0_25px_rgba(251,191,36,0.4)] active:scale-[0.98] flex items-center justify-center gap-3"
+>
+  <Swords size={20} />
+  <span>FIND MATCH</span>
+  {lobbyCount > 0 && (
+    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-normal">
+      {lobbyCount} in queue
+    </span>
+  )}
+</button>
 
             {/* Challenge a Player Section */}
-            <div className="bg-slate-800/40 rounded-xl p-4 mb-4 border border-slate-700/50">
+          <div 
+  className="bg-slate-800/40 rounded-xl p-4 mb-4 border border-slate-700/50"
+  style={{ 
+    // Ensure this section doesn't break scroll
+    position: 'relative',
+    zIndex: 1
+  }}
+>
+
               {/* Header */}
               <button
                 onClick={() => {
@@ -1713,59 +1780,62 @@ const OnlineMenu = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {recentGames.filter(g => g).map(game => {
-                    const result = getGameResult(game);
-                    const opponentName = getOpponentName(game);
-                    const opponentId = getOpponentId(game);
-                    const opponentData = getOpponentData(game);
-                    return (
-                      <div
-                        key={game.id}
-                        className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition-all"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <button
-                            onClick={() => {
-                              if (opponentId) {
-                                soundManager.playButtonClick();
-                                setShowRecentGames(false);
-                                setViewingPlayerId(opponentId);
-                                setViewingPlayerData(opponentData || null);
-                              }
-                            }}
-                            className="flex items-center gap-3 hover:opacity-80 transition-opacity"
-                            disabled={!opponentId}
-                          >
-                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold hover:bg-slate-600 transition-colors">
-                              {opponentName?.[0]?.toUpperCase() || '?'}
-                            </div>
-                            <div className="text-left">
-                              <div className="text-slate-200 font-medium hover:text-amber-300 transition-colors">vs {opponentName}</div>
-                              <div className="text-slate-500 text-xs">
-                                {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'Unknown date'}
-                              </div>
-                            </div>
-                          </button>
-                          <span className={`text-lg font-bold ${result.color}`}>
-                            {result.text}
-                          </span>
-                        </div>
-                        <div className="flex justify-end">
-                          <button
-                            onClick={() => {
-                              soundManager.playButtonClick();
-                              setShowRecentGames(false);
-                              onViewReplay?.(game.id);
-                            }}
-                            className="flex items-center gap-2 px-3 py-1.5 bg-pink-500/20 text-pink-300 rounded-lg hover:bg-pink-500/30 transition-colors text-sm"
-                          >
-                            <PlayCircle size={16} />
-                            Watch Replay
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+             {recentGames.filter(g => g).map(game => {
+  const result = getGameResult(game);
+  const opponent = getOpponentData(game);  // Changed from getOpponentName
+  return (
+    <div
+      key={game.id}
+      className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition-all"
+    >
+      <div className="flex items-center justify-between mb-2">
+        {/* CHANGED: Wrapped opponent info in a clickable button */}
+        <button 
+          onClick={() => {
+            if (opponent.id) {
+              soundManager.playButtonClick();
+              setShowRecentGames(false);
+              setViewingPlayerId(opponent.id);
+              setViewingPlayerData(opponent.data || null);
+            }
+          }}
+          className={`flex items-center gap-3 text-left ${opponent.id ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'} transition-opacity`}
+          disabled={!opponent.id}
+        >
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-slate-300 font-bold border border-slate-600/50">
+            {opponent.username?.[0]?.toUpperCase() || '?'}
+          </div>
+          <div>
+            <div className="text-slate-200 font-medium flex items-center gap-1">
+              vs {opponent.username}
+              {opponent.id && <ChevronRight size={14} className="text-slate-500" />}
+            </div>
+            <div className="text-slate-500 text-xs">
+              {game.created_at ? new Date(game.created_at).toLocaleDateString() : 'Unknown date'}
+            </div>
+          </div>
+        </button>
+        <span className={`text-lg font-bold ${result.color}`}>
+          {result.text}
+        </span>
+      </div>
+      <div className="flex justify-end">
+        <button
+          onClick={() => {
+            soundManager.playButtonClick();
+            setShowRecentGames(false);
+            onViewReplay?.(game.id);
+          }}
+          className="flex items-center gap-2 px-3 py-1.5 bg-pink-500/20 text-pink-300 rounded-lg hover:bg-pink-500/30 transition-colors text-sm"
+        >
+          <PlayCircle size={16} />
+          Watch Replay
+        </button>
+      </div>
+    </div>
+  );
+})}
+
                 </div>
               )}
             </div>

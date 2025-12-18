@@ -1,8 +1,10 @@
 // =====================================================
 // Invite Service - Handles game invites and invite links
+// UPDATED: Now uses RealtimeManager for subscriptions (2 channels max)
 // =====================================================
 
 import { isSupabaseConfigured, supabase } from '../utils/supabase';
+import { realtimeManager } from './realtimeManager';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -415,46 +417,45 @@ class InviteService {
   }
 
   // =====================================================
-  // Subscribe to invite updates (realtime)
+  // Subscribe to invite updates (uses RealtimeManager)
+  // UPDATED: No longer creates own channel - uses consolidated user channel
   // =====================================================
   subscribeToInvites(userId, onNewInvite, onInviteUpdate) {
     if (!isSupabaseConfigured()) return () => {};
 
-    if (!supabase) return () => {};
+    // Register handlers with RealtimeManager (uses existing user channel)
+    const unsubscribeInvite = realtimeManager.on('gameInvite', (invite) => {
+      console.log('[InviteService] New invite via RealtimeManager:', invite?.id);
+      onNewInvite?.(invite);
+    });
 
-    const channel = supabase
-      .channel(`invites:${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'game_invites',
-          filter: `to_user_id=eq.${userId}`
-        },
-        (payload) => {
-          console.log('[InviteService] New invite received:', payload.new);
-          onNewInvite?.(payload.new);
+    // For sent invite updates, we still need to poll since realtimeManager
+    // only tracks invites TO the user, not FROM the user
+    // This is a rare event so polling is acceptable
+    let updateInterval = null;
+    if (onInviteUpdate) {
+      let lastChecked = Date.now();
+      updateInterval = setInterval(async () => {
+        const { data } = await this.getSentInvites(userId);
+        if (data?.length > 0) {
+          // Check for recently updated invites
+          const recentUpdates = data.filter(inv => {
+            const updatedAt = new Date(inv.updated_at || inv.created_at);
+            return updatedAt.getTime() > lastChecked;
+          });
+          recentUpdates.forEach(inv => {
+            console.log('[InviteService] Sent invite updated:', inv.id, inv.status);
+            onInviteUpdate?.(inv);
+          });
         }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'game_invites',
-          filter: `from_user_id=eq.${userId}`
-        },
-        (payload) => {
-          console.log('[InviteService] Sent invite updated:', payload.new);
-          onInviteUpdate?.(payload.new);
-        }
-      )
-      .subscribe();
+        lastChecked = Date.now();
+      }, 5000); // Poll every 5 seconds for sent invite status
+    }
 
     // Store the unsubscribe handler
     this.unsubscribeHandler = () => {
-      supabase.removeChannel(channel);
+      unsubscribeInvite();
+      if (updateInterval) clearInterval(updateInterval);
     };
 
     return this.unsubscribeHandler;
