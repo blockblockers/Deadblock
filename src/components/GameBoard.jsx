@@ -20,6 +20,7 @@ const GameBoard = forwardRef(({
   gameMode,
   currentPlayer = 1,
   onCellClick,
+  onStartDragFromBoard,
   aiAnimatingMove,
   playerAnimatingMove,
   selectedPiece,
@@ -235,11 +236,26 @@ const GameBoard = forwardRef(({
               const cellKey = `${rowIdx},${colIdx}`;
               const activeEffect = isPlacedPiece ? activeEffects[cellKey] : null;
               
+              // Create touch/mouse handlers for pending cells (to allow drag repositioning)
+              const pendingDragHandlers = (isInBoundsPendingCell && onStartDragFromBoard && pendingMove) ? {
+                onTouchStart: (e) => {
+                  const touch = e.touches[0];
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onStartDragFromBoard(pendingMove.piece, touch.clientX, touch.clientY, rect);
+                },
+                onMouseDown: (e) => {
+                  if (e.button !== 0) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onStartDragFromBoard(pendingMove.piece, e.clientX, e.clientY, rect);
+                },
+              } : {};
+              
               return (
                 <button
                   key={colIdx}
-                  onClick={() => onCellClick(rowIdx, colIdx)}
-                  className={`w-9 h-9 sm:w-12 sm:h-12 rounded-lg transition-all relative overflow-hidden ${bgClass} ${ringClass} ${extraClass} ${activeEffect === 'breathe' ? 'animate-random-breathe' : ''}`}
+                  onClick={() => !isInBoundsPendingCell && onCellClick(rowIdx, colIdx)}
+                  {...pendingDragHandlers}
+                  className={`w-9 h-9 sm:w-12 sm:h-12 rounded-lg transition-all relative overflow-hidden ${bgClass} ${ringClass} ${extraClass} ${activeEffect === 'breathe' ? 'animate-random-breathe' : ''} ${isInBoundsPendingCell ? 'cursor-grab active:cursor-grabbing' : ''}`}
                   disabled={isDisabled}
                 >
                   {/* AI placing effect */}
@@ -366,14 +382,7 @@ const GameBoard = forwardRef(({
         );
       })}
 
-      {/* Warning message when piece extends out of bounds */}
-      {outOfBoundsCells.length > 0 && (
-        <div className="absolute -bottom-10 left-1/2 transform -translate-x-1/2 whitespace-nowrap z-20">
-          <span className="text-xs text-orange-300 font-bold tracking-wide bg-slate-900/95 px-4 py-1.5 rounded-full border-2 border-orange-500/50 shadow-[0_0_20px_rgba(251,146,60,0.5)] animate-pulse">
-            ⚠️ ROTATE or FLIP to fit
-          </span>
-        </div>
-      )}
+      {/* Warning message removed - error now shows in GameScreen via errorMessage prop */}
 
       {/* Animation styles */}
       <style>{`

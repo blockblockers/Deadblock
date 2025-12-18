@@ -386,7 +386,7 @@ const EntryAuthScreen = ({
   // SELECT MODE - Main entry screen
   // ============================================
   const renderSelectMode = () => (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Invite Banner */}
       <InviteBanner />
       
@@ -401,7 +401,7 @@ const EntryAuthScreen = ({
       )}
       
       {/* Google Sign In - Recommended */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex items-center gap-2 mb-1">
           <Globe size={12} className="text-cyan-400" />
           <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Recommended</span>
@@ -409,7 +409,7 @@ const EntryAuthScreen = ({
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full py-3.5 bg-white text-gray-800 font-bold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(255,255,255,0.15)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait border border-white/20"
+          className="w-full py-3 bg-white text-gray-800 font-bold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(255,255,255,0.15)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait border border-white/20"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -423,13 +423,10 @@ const EntryAuthScreen = ({
           )}
           <span>Continue with Google</span>
         </button>
-        <p className="text-slate-500 text-xs text-center">
-          Quick & secure - uses your existing Google account
-        </p>
       </div>
 
       {/* Divider */}
-      <div className="flex items-center gap-3 py-1">
+      <div className="flex items-center gap-3">
         <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
         <span className="text-slate-500 text-xs font-medium">OR</span>
         <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
@@ -445,7 +442,7 @@ const EntryAuthScreen = ({
         {/* Sign In - for existing accounts */}
         <button
           onClick={() => switchMode('login')}
-          className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] active:scale-[0.98] border border-cyan-400/30"
+          className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] active:scale-[0.98] border border-cyan-400/30"
         >
           <LogIn size={18} />
           Sign In with Email
@@ -454,28 +451,24 @@ const EntryAuthScreen = ({
         {/* Create Account */}
         <button
           onClick={() => switchMode('signup')}
-          className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] active:scale-[0.98] border border-purple-400/30"
+          className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] active:scale-[0.98] border border-purple-400/30"
         >
           <UserPlus2 size={18} />
           Create New Account
         </button>
-        
-        <p className="text-slate-500 text-xs text-center">
-          Create a local account with email & password
-        </p>
       </div>
 
       {/* Offline Mode - only if not forced online and no invite */}
       {!forceOnlineOnly && !isInviteFlow && (
-        <div className="pt-3 border-t border-slate-700/50">
+        <div className="pt-2 border-t border-slate-700/50">
           <button
             onClick={handleOfflineMode}
-            className="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-600 text-slate-200 font-semibold rounded-xl hover:from-slate-600 hover:to-slate-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] active:scale-[0.98] border border-slate-500/30"
+            className="w-full py-2.5 bg-gradient-to-r from-emerald-700 to-teal-600 text-white font-bold rounded-xl hover:from-emerald-600 hover:to-teal-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-[0.98] border border-emerald-400/40"
           >
             <WifiOff size={16} />
             Play Offline
           </button>
-          <p className="text-slate-500 text-xs text-center mt-2">
+          <p className="text-emerald-400/70 text-xs text-center mt-1.5">
             Skip sign in - play vs AI without an account
           </p>
         </div>
@@ -483,17 +476,14 @@ const EntryAuthScreen = ({
       
       {/* Back to Menu - only when forced online (from online menu/weekly challenge) */}
       {forceOnlineOnly && !isInviteFlow && (
-        <div className="pt-3 border-t border-slate-700/50">
+        <div className="pt-2 border-t border-slate-700/50">
           <button
             onClick={handleOfflineMode}
-            className="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-600 text-slate-200 font-semibold rounded-xl hover:from-slate-600 hover:to-slate-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] active:scale-[0.98] border border-slate-500/30"
+            className="w-full py-2.5 bg-gradient-to-r from-slate-700 to-slate-600 text-slate-200 font-semibold rounded-xl hover:from-slate-600 hover:to-slate-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] active:scale-[0.98] border border-slate-500/30"
           >
             <ArrowLeft size={16} />
             Back to Menu
           </button>
-          <p className="text-slate-500 text-xs text-center mt-2">
-            Return without signing in
-          </p>
         </div>
       )}
     </div>
@@ -939,10 +929,10 @@ const EntryAuthScreen = ({
       <FloatingPieces count={15} theme="cyan" minOpacity={0.15} maxOpacity={0.35} />
       
       {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
-        {/* Title - Large size matching PuzzleSelect */}
-        <div className="text-center mb-4">
-          <NeonTitle size="large" />
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-3">
+        {/* Title - Extra Large */}
+        <div className="text-center mb-3">
+          <NeonTitle size="xlarge" />
           {forceOnlineOnly && !isInviteFlow && (
             <p className="text-cyan-400 text-sm font-semibold mt-2 tracking-wide">
               {intendedDestination === 'weekly-menu' ? '🏆 WEEKLY CHALLENGE' : '⚔️ ONLINE MODE'}
@@ -951,7 +941,7 @@ const EntryAuthScreen = ({
         </div>
         
         {/* Subtitle */}
-        <p className="text-slate-400 text-sm mb-6 text-center max-w-xs">
+        <p className="text-slate-400 text-sm mb-4 text-center max-w-xs">
           {isInviteFlow 
             ? '🎮 Sign in to accept your game challenge!'
             : forceOnlineOnly
@@ -961,7 +951,7 @@ const EntryAuthScreen = ({
         </p>
         
         {/* Auth Card - with dramatic PuzzleSelect-style theme */}
-        <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
+        <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-4 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
           {mode === 'select' && renderSelectMode()}
           {mode === 'login' && renderLoginMode()}
           {mode === 'signup' && renderSignupMode()}

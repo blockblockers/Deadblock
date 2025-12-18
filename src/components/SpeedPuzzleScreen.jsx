@@ -1133,7 +1133,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       {/* Content */}
       <div className={`relative ${needsScroll ? 'pb-safe min-h-full' : 'h-full'} flex flex-col items-center px-2 py-2`}>
         {/* Header */}
-        <div className="w-full max-w-md mb-1 flex-shrink-0">
+        <div className="w-full max-w-md mb-2 flex-shrink-0">
           <div className="flex items-center justify-between">
             <button
               onClick={handleMenu}
@@ -1143,8 +1143,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             </button>
             
             <div className="text-center flex-1">
-              <div className="speed-subtitle font-black tracking-[0.15em] text-xs">
-                SPEED MODE
+              <div className="speed-subtitle font-black tracking-[0.2em] text-base sm:text-lg">
+                ⚡ SPEED MODE ⚡
               </div>
             </div>
             
@@ -1205,27 +1205,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               )}
             </div>
             
-            {/* Piece tray */}
-            <div className="mt-2 w-full max-w-md flex-shrink-0">
-              <PieceTray
-                usedPieces={usedPieces}
-                currentPlayer={1}
-                isPlayerTurn={true}
-                selectedPiece={selectedPiece}
-                onSelectPiece={selectPiece}
-                rotation={rotation}
-                flipped={flipped}
-              />
-            </div>
-            
-            {/* D-Pad */}
+            {/* D-Pad - matches GameScreen order */}
             {gameState === GAME_STATES.PLAYING && pendingMove && (
-              <div className="flex justify-center mt-2 flex-shrink-0">
+              <div className="flex justify-center mt-3 flex-shrink-0">
                 <DPad onMove={movePendingPiece} />
               </div>
             )}
             
-            {/* Control Buttons */}
+            {/* Control Buttons (Rotate/Flip/Confirm/Cancel) - matches GameScreen order */}
             {gameState === GAME_STATES.PLAYING && (
               <div className="mt-2 w-full max-w-md flex-shrink-0">
                 <ControlButtons
@@ -1244,6 +1231,19 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                 />
               </div>
             )}
+            
+            {/* Piece tray - at the bottom like GameScreen */}
+            <div className="mt-2 w-full max-w-md flex-shrink-0">
+              <PieceTray
+                usedPieces={usedPieces}
+                currentPlayer={1}
+                isPlayerTurn={true}
+                selectedPiece={selectedPiece}
+                onSelectPiece={selectPiece}
+                rotation={rotation}
+                flipped={flipped}
+              />
+            </div>
             
             {needsScroll && <div className="h-12 flex-shrink-0" />}
           </>

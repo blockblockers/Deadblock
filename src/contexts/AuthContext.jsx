@@ -693,17 +693,48 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     if (!supabase) return;
     
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
+    console.log('[AuthContext] signOut: Starting sign out...');
+    
+    try {
+      // Add timeout to prevent hanging
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sign out timeout')), 5000)
+      );
+      
+      const { error } = await Promise.race([signOutPromise, timeoutPromise])
+        .catch(err => {
+          console.warn('[AuthContext] signOut: Timeout or error, forcing local cleanup:', err.message);
+          return { error: null }; // Continue with local cleanup even on timeout
+        });
+      
+      // Always clear local state regardless of server response
       setUser(null);
       setProfile(null);
+      setSessionReady(false);
+      
       // Clear entry auth flag so user sees auth screen on next visit
       localStorage.removeItem('deadblock_entry_auth_passed');
+      
       // Clear cached profile
       clearCachedProfile();
+      
       console.log('[AuthContext] signOut: Cleared user, profile, and cache');
+      
+      return { error };
+    } catch (err) {
+      console.error('[AuthContext] signOut: Exception:', err);
+      
+      // Force cleanup on any error
+      setUser(null);
+      setProfile(null);
+      setSessionReady(false);
+      localStorage.removeItem('deadblock_entry_auth_passed');
+      clearCachedProfile();
+      
+      console.log('[AuthContext] signOut: Forced cleanup after error');
+      return { error: err };
     }
-    return { error };
   };
 
   // Send password reset email

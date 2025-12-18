@@ -218,105 +218,115 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
 };
 
 const PlayerProfileCard = ({ onClick, isOffline = false }) => {
-  const { profile, isAuthenticated, updateProfile, refreshProfile, sessionReady } = useAuth();
+  const { user, profile, isAuthenticated, updateProfile, refreshProfile, sessionReady } = useAuth();
   const [imageError, setImageError] = useState(false);
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [showUsernameEdit, setShowUsernameEdit] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
-  const [hasRefreshed, setHasRefreshed] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // DEBUG: Log which render path we're taking
+  const renderDecision = (() => {
+    if ((isOffline && !profile) || (sessionReady && !isAuthenticated && !profile)) return 'SIGN_IN';
+    if (!profile && isAuthenticated) return 'LOADING';
+    if (!profile) return 'SIGN_IN_FALLBACK';
+    return 'AUTHENTICATED';
+  })();
+  
   console.log('[PlayerProfileCard] Render state:', { 
     isOffline, 
     isAuthenticated, 
+    hasUser: !!user,
+    userId: user?.id,
     hasProfile: !!profile, 
     profileUsername: profile?.username,
     sessionReady,
-    hasRefreshed,
-    // New conditions: show offline only if explicitly offline AND no cached profile
-    willRenderOffline: isOffline && !profile,
-    willRenderLoading: !profile && !(isOffline && !profile),
-    willRenderAuthenticated: !!profile
+    isRefreshing,
+    renderDecision
   });
   
   // Get rank info for authenticated users
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
   
-  // Refresh profile when session becomes ready (handles app restart with cached profile)
+  // Refresh profile when user changes or session becomes ready
   useEffect(() => {
     let mounted = true;
     
-    const refreshOnReady = async () => {
-      if (!mounted) return;
+    const loadProfile = async () => {
+      if (!mounted || isRefreshing) return;
       
-      // When sessionReady is true and we have a profile (could be cached), refresh to get latest data
-      if (sessionReady && isAuthenticated && profile && !hasRefreshed && refreshProfile) {
-        console.log('[PlayerProfileCard] Session ready, refreshing profile to get latest data...');
-        setHasRefreshed(true);
-        try {
-          const result = await refreshProfile();
-          console.log('[PlayerProfileCard] Background refresh result:', !!result, result?.username);
-        } catch (err) {
-          console.error('[PlayerProfileCard] Background refresh error:', err);
+      // If we have a user but no profile, or session just became ready, refresh
+      if (user?.id && refreshProfile && sessionReady) {
+        // Check if profile matches user
+        if (!profile || profile.id !== user.id) {
+          console.log('[PlayerProfileCard] Profile missing or mismatched, refreshing...', {
+            userId: user.id,
+            profileId: profile?.id
+          });
+          setIsRefreshing(true);
+          try {
+            const result = await refreshProfile();
+            console.log('[PlayerProfileCard] Refresh result:', !!result, result?.username);
+          } catch (err) {
+            console.error('[PlayerProfileCard] Refresh error:', err);
+          } finally {
+            if (mounted) setIsRefreshing(false);
+          }
         }
       }
     };
     
-    // Small delay to avoid race conditions with AuthContext
-    const timer = setTimeout(refreshOnReady, 500);
+    // Small delay to let AuthContext settle
+    const timer = setTimeout(loadProfile, 200);
     
     return () => {
       mounted = false;
       clearTimeout(timer);
     };
-  }, [sessionReady, isAuthenticated, profile, hasRefreshed, refreshProfile]);
+  }, [user?.id, profile?.id, sessionReady, refreshProfile, isRefreshing]);
   
-  // Retry profile fetch if authenticated but no profile
+  // Additional retry if authenticated but still no profile after initial load
   useEffect(() => {
     let retryCount = 0;
     const maxRetries = 5;
     let mounted = true;
+    let retryTimer = null;
     
     const attemptFetch = async () => {
-      if (!mounted) return;
+      if (!mounted || isRefreshing) return;
       
-      if (isAuthenticated && !profile && retryCount < maxRetries && refreshProfile) {
+      if (isAuthenticated && user?.id && !profile && retryCount < maxRetries && refreshProfile) {
         retryCount++;
-        console.log(`[PlayerProfileCard] Profile missing, retry attempt ${retryCount}/${maxRetries}...`);
+        console.log(`[PlayerProfileCard] Profile still missing, retry ${retryCount}/${maxRetries}...`);
+        setIsRefreshing(true);
         try {
           const result = await refreshProfile();
-          console.log('[PlayerProfileCard] Profile retry result:', !!result);
+          console.log('[PlayerProfileCard] Retry result:', !!result);
           if (!result && retryCount < maxRetries && mounted) {
-            // Wait and try again with exponential backoff
-            setTimeout(attemptFetch, 500 * retryCount);
+            retryTimer = setTimeout(attemptFetch, 800 * retryCount);
           }
         } catch (err) {
-          console.error('[PlayerProfileCard] Profile retry failed:', err);
+          console.error('[PlayerProfileCard] Retry failed:', err);
           if (retryCount < maxRetries && mounted) {
-            setTimeout(attemptFetch, 500 * retryCount);
+            retryTimer = setTimeout(attemptFetch, 800 * retryCount);
           }
+        } finally {
+          if (mounted) setIsRefreshing(false);
         }
       }
     };
     
-    // Only start retrying if authenticated but no profile
-    if (isAuthenticated && !profile) {
-      // Small delay to let AuthContext finish its initialization
-      const startDelay = setTimeout(() => {
-        attemptFetch();
-      }, 300);
-      
-      return () => {
-        mounted = false;
-        clearTimeout(startDelay);
-      };
+    // Start retrying after a delay if no profile
+    if (isAuthenticated && user?.id && !profile && sessionReady) {
+      retryTimer = setTimeout(attemptFetch, 500);
     }
     
     return () => {
       mounted = false;
+      if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [isAuthenticated, profile, refreshProfile]);
+  }, [isAuthenticated, user?.id, profile, sessionReady, refreshProfile, isRefreshing]);
   
   // Load achievement count
   useEffect(() => {
@@ -364,10 +374,10 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     }
   };
   
-  // Offline mode display - only show if explicitly offline AND no cached profile
-  // If we have a profile (even from cache), show the authenticated view
-  if (isOffline && !profile) {
-    console.log('[PlayerProfileCard] Rendering: OFFLINE mode button (no profile)');
+  // Offline mode display OR not authenticated - show sign in button
+  // Show sign-in if explicitly offline, OR if session is ready but not authenticated
+  if ((isOffline && !profile) || (sessionReady && !isAuthenticated && !profile)) {
+    console.log('[PlayerProfileCard] Rendering: SIGN IN button', { isOffline, sessionReady, isAuthenticated, hasProfile: !!profile });
     return (
       <button
         onClick={onClick}
@@ -399,9 +409,10 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
     );
   }
   
-  // Loading state - clickable to retry
-  if (!profile) {
-    console.log('[PlayerProfileCard] Rendering: LOADING state button');
+  // Loading state - only show when authenticated but profile not yet loaded
+  // This happens during initial auth or after sign-in while profile is being fetched
+  if (!profile && isAuthenticated) {
+    console.log('[PlayerProfileCard] Rendering: LOADING state button (authenticated, waiting for profile)');
     return (
       <button 
         onClick={() => {
@@ -422,6 +433,40 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
           <div className="h-4 w-24 bg-slate-700 rounded animate-pulse mb-1.5" />
           <div style={{ fontSize: '12px', color: '#64748b' }}>Loading profile... tap to retry</div>
         </div>
+      </button>
+    );
+  }
+  
+  // Fallback: If we somehow get here without a profile and not authenticated, show sign-in
+  if (!profile) {
+    console.log('[PlayerProfileCard] Rendering: SIGN IN fallback (no profile, unknown state)');
+    return (
+      <button
+        onClick={onClick}
+        data-testid="profile-card-fallback"
+        className="w-full flex items-center gap-3 p-3 transition-all group"
+        style={{
+          background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
+          border: '2px solid rgba(34, 211, 238, 0.4)',
+          borderRadius: '12px',
+          boxShadow: '0 0 25px rgba(34, 211, 238, 0.15), 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)'
+        }}
+      >
+        <div 
+          className="w-12 h-12 rounded-full flex items-center justify-center"
+          style={{
+            background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.2) 0%, rgba(15, 23, 42, 0.95) 100%)',
+            border: '2px solid rgba(34, 211, 238, 0.5)',
+            boxShadow: '0 0 15px rgba(34, 211, 238, 0.3), inset 0 1px 0 rgba(255,255,255,0.1)'
+          }}
+        >
+          <LogIn size={20} style={{ color: '#22d3ee' }} />
+        </div>
+        <div className="flex-1 text-left">
+          <div style={{ color: '#22d3ee', fontWeight: '900', fontSize: '14px', letterSpacing: '0.05em', textShadow: '0 0 10px rgba(34, 211, 238, 0.5)' }}>SIGN IN</div>
+          <div style={{ color: '#94a3b8', fontSize: '12px' }}>Track stats & compete online</div>
+        </div>
+        <ChevronRight size={20} style={{ color: '#22d3ee' }} className="group-hover:translate-x-1 transition-all" />
       </button>
     );
   }

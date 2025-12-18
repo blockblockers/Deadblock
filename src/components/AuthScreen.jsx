@@ -1,634 +1,884 @@
-// Authentication Screen - Login/Signup/Reset/Magic Link
-import { useState } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, ArrowLeft, UserPlus, LogIn, UserPlus2, Globe, KeyRound, Wand2, Key, ArrowRight, CheckCircle } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import NeonTitle from './NeonTitle';
-import { soundManager } from '../utils/soundManager';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+// Authentication Context with Local Profile Caching
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
+import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
-const AuthScreen = ({ onBack, onSuccess, inviteInfo }) => {
-  const { signIn, signUp, signInWithGoogle, signInWithMagicLink, resetPassword } = useAuth();
-  const { needsScroll } = useResponsiveLayout(700);
+// Local storage keys for persistent auth
+const STORAGE_KEYS = {
+  CACHED_USER_ID: 'deadblock_cached_user_id',
+  CACHED_PROFILE: 'deadblock_cached_profile',
+  CACHED_TIMESTAMP: 'deadblock_cached_timestamp',
+};
+
+// Cache expiry time (7 days in milliseconds) - profile will still work but will be refreshed
+const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Helper to safely get from localStorage
+const safeGetStorage = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage read error:', e);
+    return null;
+  }
+};
+
+// Helper to safely set localStorage
+const safeSetStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage write error:', e);
+  }
+};
+
+// Helper to safely remove from localStorage
+const safeRemoveStorage = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.warn('[AuthContext] localStorage remove error:', e);
+  }
+};
+
+// Load cached profile from localStorage
+const loadCachedProfile = () => {
+  try {
+    const cachedUserId = safeGetStorage(STORAGE_KEYS.CACHED_USER_ID);
+    const cachedProfileStr = safeGetStorage(STORAGE_KEYS.CACHED_PROFILE);
+    const cachedTimestamp = safeGetStorage(STORAGE_KEYS.CACHED_TIMESTAMP);
+    
+    if (!cachedUserId || !cachedProfileStr) {
+      return null;
+    }
+    
+    const profile = JSON.parse(cachedProfileStr);
+    const timestamp = parseInt(cachedTimestamp, 10) || 0;
+    const age = Date.now() - timestamp;
+    
+    console.log('[AuthContext] Loaded cached profile:', { 
+      username: profile?.username, 
+      userId: cachedUserId,
+      ageMinutes: Math.round(age / 60000)
+    });
+    
+    return { userId: cachedUserId, profile, isExpired: age > CACHE_EXPIRY_MS };
+  } catch (e) {
+    console.warn('[AuthContext] Error loading cached profile:', e);
+    return null;
+  }
+};
+
+// Save profile to localStorage cache
+const saveCachedProfile = (userId, profile) => {
+  try {
+    if (!userId || !profile) return;
+    
+    safeSetStorage(STORAGE_KEYS.CACHED_USER_ID, userId);
+    safeSetStorage(STORAGE_KEYS.CACHED_PROFILE, JSON.stringify(profile));
+    safeSetStorage(STORAGE_KEYS.CACHED_TIMESTAMP, Date.now().toString());
+    
+    console.log('[AuthContext] Saved profile to cache:', { username: profile.username });
+  } catch (e) {
+    console.warn('[AuthContext] Error saving profile to cache:', e);
+  }
+};
+
+// Clear cached profile (on sign out)
+const clearCachedProfile = () => {
+  safeRemoveStorage(STORAGE_KEYS.CACHED_USER_ID);
+  safeRemoveStorage(STORAGE_KEYS.CACHED_PROFILE);
+  safeRemoveStorage(STORAGE_KEYS.CACHED_TIMESTAMP);
+  console.log('[AuthContext] Cleared cached profile');
+};
+
+const AuthContext = createContext({
+  user: null,
+  profile: null,
+  loading: true,
+  sessionReady: false,
+  isAuthenticated: false,
+  isOnlineEnabled: false,
+  isOAuthCallback: false,
+  isNewUser: false,
+  signUp: async () => {},
+  signIn: async () => {},
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
+  updateProfile: async () => {},
+  clearOAuthCallback: () => {},
+  clearNewUser: () => {},
+  refreshProfile: async () => {},
+});
+
+export const AuthProvider = ({ children }) => {
+  // Load cached data immediately for instant display
+  const cachedData = loadCachedProfile();
   
-  // Modes: login, signup, forgot-password, magic-link
-  const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [user, setUser] = useState(null);
+  // Start with cached profile if available - instant load!
+  const [profile, setProfile] = useState(cachedData?.profile || null);
+  // If we have cached data, don't show loading state for UI
+  const [loading, setLoading] = useState(!cachedData?.profile);
+  // Session ready tracks if we've verified the Supabase session (separate from UI loading)
+  const [sessionReady, setSessionReady] = useState(false);
+  const [isOAuthCallback, setIsOAuthCallback] = useState(false);
+  const [isNewUser, setIsNewUser] = useState(false);
+  
+  // Track if we've done the initial server fetch
+  const initialFetchDone = useRef(false);
 
-  const clearMessages = () => {
-    setError('');
-    setSuccess('');
-  };
+  const isOnlineEnabled = isSupabaseConfigured();
 
-  const switchMode = (newMode) => {
-    soundManager.playClickSound('select');
-    setMode(newMode);
-    clearMessages();
-  };
-
-  // Handle email/password sign in
-  const handleSignIn = async (e) => {
-    e.preventDefault();
-    clearMessages();
-    setLoading(true);
-    soundManager.playButtonClick();
-
-    try {
-      const { error } = await signIn(email, password);
-      if (error) {
-        setError(error.message);
-      } else {
-        onSuccess?.();
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
+  const fetchProfile = useCallback(async (userId, retryCount = 0) => {
+    if (!supabase) {
+      console.log('[AuthContext] fetchProfile: supabase not configured');
+      return null;
     }
     
-    setLoading(false);
-  };
-
-  // Handle sign up
-  const handleSignUp = async (e) => {
-    e.preventDefault();
-    clearMessages();
-    setLoading(true);
-    soundManager.playButtonClick();
-
-    try {
-      // Validations
-      if (!username || username.length < 3) {
-        setError('Username must be at least 3 characters');
-        setLoading(false);
-        return;
-      }
-      if (username.length > 20) {
-        setError('Username must be 20 characters or less');
-        setLoading(false);
-        return;
-      }
-      if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        setError('Username can only contain letters, numbers, and underscores');
-        setLoading(false);
-        return;
-      }
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters');
-        setLoading(false);
-        return;
-      }
-      if (!email || !email.includes('@')) {
-        setError('Please enter a valid email address');
-        setLoading(false);
-        return;
-      }
-
-      const { error, needsEmailConfirmation } = await signUp(email, password, username);
-      if (error) {
-        setError(error.message);
-      } else if (needsEmailConfirmation) {
-        // Email confirmation required - user needs to check email first
-        setSuccess('Account created! Check your email to confirm, then sign in.');
-      } else {
-        // User is auto-logged in (email confirmation disabled)
-        setSuccess('Account created! Signing you in...');
-        setTimeout(() => {
-          onSuccess?.();
-        }, 1000);
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
+    if (!userId) {
+      console.log('[AuthContext] fetchProfile: no userId provided');
+      return null;
     }
     
-    setLoading(false);
-  };
-
-  // Handle password reset
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
-    clearMessages();
-    setLoading(true);
-    soundManager.playButtonClick();
-
+    const maxRetries = 3;
+    console.log(`[AuthContext] fetchProfile: fetching for ${userId}, attempt ${retryCount + 1}`);
+    
     try {
-      if (!email || !email.includes('@')) {
-        setError('Please enter a valid email address');
-        setLoading(false);
-        return;
-      }
-
-      const { error } = await resetPassword(email);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
       if (error) {
-        setError(error.message);
-      } else {
-        setSuccess('Password reset email sent! Check your inbox (and junk/spam folder).');
+        console.error('[AuthContext] fetchProfile error:', error);
+        // Try to create profile if it doesn't exist
+        if (error.code === 'PGRST116') {
+          console.log('[AuthContext] Profile not found, may need to create one');
+          // Retry a few times in case of race condition
+          if (retryCount < maxRetries) {
+            console.log(`[AuthContext] Profile retry ${retryCount + 1}/${maxRetries}...`);
+            await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
+            return fetchProfile(userId, retryCount + 1);
+          }
+        }
+        return null;
       }
+      
+      console.log('[AuthContext] fetchProfile success:', { username: data?.username, id: data?.id });
+      setProfile(data);
+      
+      // Cache the profile for instant loading next time
+      saveCachedProfile(userId, data);
+      
+      return data;
     } catch (err) {
-      setError('An unexpected error occurred');
+      console.error('[AuthContext] fetchProfile exception:', err);
+      if (retryCount < maxRetries) {
+        await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
+        return fetchProfile(userId, retryCount + 1);
+      }
+      return null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
+    // Check if this is an OAuth callback - must have actual token data, not just the path
+    const url = window.location.href;
+    const hash = window.location.hash;
+    const search = window.location.search;
+    
+    // Only treat as OAuth callback if there's actual auth data
+    const hasAccessToken = hash.includes('access_token=') || search.includes('access_token=');
+    const hasCode = search.includes('code=');
+    const hasAuthData = hasAccessToken || hasCode;
+    
+    // Clean up empty callback URLs (leftover from previous OAuth)
+    if (url.includes('/auth/callback') && !hasAuthData) {
+      console.log('Cleaning up empty OAuth callback URL');
+      window.history.replaceState({}, document.title, '/');
     }
     
-    setLoading(false);
-  };
-
-  // Handle magic link
-  const handleMagicLink = async (e) => {
-    e.preventDefault();
-    clearMessages();
-    setLoading(true);
-    soundManager.playButtonClick();
-
-    try {
-      if (!email || !email.includes('@')) {
-        setError('Please enter a valid email address');
-        setLoading(false);
-        return;
-      }
-
-      const { error } = await signInWithMagicLink(email);
-      if (error) {
-        setError(error.message);
-      } else {
-        setSuccess('Magic link sent! Check your email (and junk/spam folder) to sign in.');
-      }
-    } catch (err) {
-      setError('An unexpected error occurred');
+    if (hasAuthData) {
+      console.log('OAuth callback detected with auth data, processing...');
+      setIsOAuthCallback(true);
     }
-    
-    setLoading(false);
-  };
 
-  const handleGoogleSignIn = async () => {
-    clearMessages();
-    soundManager.playButtonClick();
-    const { error } = await signInWithGoogle();
+    // Handle OAuth callback - extract session from URL
+    const handleOAuthCallback = async () => {
+      if (hasAuthData) {
+        console.log('=== OAuth Callback Processing Started ===');
+        try {
+          // Set a timeout for OAuth processing
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('OAuth timeout')), 8000)
+          );
+          
+          // This extracts the session from the URL hash/params
+          console.log('OAuth: Getting session from Supabase...');
+          const sessionPromise = supabase.auth.getSession();
+          
+          const { data, error } = await Promise.race([sessionPromise, timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))]);
+          
+          console.log('OAuth: Session response:', { 
+            hasData: !!data, 
+            hasSession: !!data?.session,
+            hasUser: !!data?.session?.user,
+            error: error?.message 
+          });
+          
+          if (error) {
+            console.error('OAuth: Error getting session:', error);
+            setIsOAuthCallback(false); // Clear flag on error only
+          } else if (data?.session) {
+            console.log('OAuth: Session established successfully', {
+              userId: data.session.user?.id,
+              email: data.session.user?.email
+            });
+            setUser(data.session.user);
+            
+            // Try to fetch profile, but don't block on it
+            try {
+              console.log('OAuth: Fetching profile...');
+              const profileResult = await fetchProfile(data.session.user.id);
+              console.log('OAuth: Profile result:', { hasProfile: !!profileResult });
+              
+              // Check if this is a new user (profile created within last 60 seconds)
+              if (profileResult?.created_at) {
+                const createdAt = new Date(profileResult.created_at);
+                const now = new Date();
+                const diffSeconds = (now - createdAt) / 1000;
+                if (diffSeconds < 60) {
+                  console.log('OAuth: New user detected (profile created', diffSeconds, 'seconds ago)');
+                  setIsNewUser(true);
+                }
+              }
+            } catch (profileError) {
+              console.error('OAuth: Profile fetch failed:', profileError);
+              // Don't fail the OAuth - profile will be retried later
+            }
+            
+            // DON'T clear isOAuthCallback here - let App.jsx handle it after redirect
+            console.log('OAuth: Callback processed successfully, waiting for App.jsx to handle redirect');
+          } else {
+            console.log('OAuth: No session in response');
+            setIsOAuthCallback(false); // Clear flag when no session
+          }
+          
+          // Clean up URL after processing
+          console.log('OAuth: Cleaning up URL');
+          window.history.replaceState({}, document.title, '/');
+        } catch (err) {
+          console.error('OAuth: Callback error:', err);
+          setIsOAuthCallback(false); // Clear flag on error
+          window.history.replaceState({}, document.title, '/');
+        }
+        console.log('=== OAuth Callback Processing Finished ===');
+      }
+    };
+
+    // Get initial session
+    const initAuth = async () => {
+      console.log('=== Auth Init Started ===');
+      
+      // Check if we have cached profile data for instant loading
+      const cached = loadCachedProfile();
+      if (cached?.profile && !initialFetchDone.current) {
+        console.log('Auth init: Using cached profile for instant display:', cached.profile.username);
+        setProfile(cached.profile);
+        // Don't show loading if we have cached data
+        setLoading(false);
+      }
+      
+      let timeoutCleared = false;
+      
+      // Shorter timeout since we have cached data as fallback
+      const timeout = setTimeout(() => {
+        if (!timeoutCleared) {
+          console.log('Auth init: TIMEOUT - completing with current state');
+          setSessionReady(true); // Mark as ready even on timeout
+          setLoading(false);
+        }
+      }, cached?.profile ? 3000 : 8000); // 3s if cached, 8s if not
+      
+      const clearTimeoutSafe = () => {
+        timeoutCleared = true;
+        clearTimeout(timeout);
+      };
+      
+      try {
+        // First handle any OAuth callback
+        console.log('Auth init: Handling OAuth callback (if any)...');
+        await handleOAuthCallback();
+        console.log('Auth init: OAuth callback handling complete');
+        
+        // Then get the current session
+        console.log('Auth init: Getting current session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Auth init: Error getting session:', error);
+          clearTimeoutSafe();
+          setSessionReady(true); // Mark session check as complete even on error
+          setLoading(false);
+          return;
+        }
+        
+        console.log('Auth init: Session result', { 
+          hasSession: !!session, 
+          userId: session?.user?.id,
+          email: session?.user?.email 
+        });
+        
+        setUser(session?.user ?? null);
+        setSessionReady(true); // Session has been verified with Supabase
+        console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user, ', sessionReady: true');
+        
+        // Validate cached data matches current session
+        if (cached?.profile && session?.user) {
+          if (cached.userId !== session.user.id) {
+            console.log('Auth init: Cached profile is for different user, clearing');
+            clearCachedProfile();
+            setProfile(null);
+          }
+        }
+        
+        // If no session, clear any cached data
+        if (!session?.user) {
+          if (cached?.profile) {
+            console.log('Auth init: No session but have cached profile, clearing');
+            clearCachedProfile();
+            setProfile(null);
+          }
+          clearTimeoutSafe();
+          setSessionReady(true); // Mark session check as complete
+          setLoading(false);
+          return;
+        }
+        
+        // Fetch fresh profile from server (in background if we have cache)
+        console.log('Auth init: Fetching fresh profile for', session.user.id);
+        initialFetchDone.current = true;
+        
+        const profileResult = await fetchProfile(session.user.id);
+        console.log('Auth init: Profile fetch result', { 
+          hasProfile: !!profileResult,
+          username: profileResult?.username 
+        });
+        
+        // Only retry if we don't have cached data and server fetch failed
+        if (!profileResult && !cached?.profile) {
+          console.log('Auth init: Profile not found and no cache, starting retry...');
+          for (let i = 0; i < 3; i++) {
+            await new Promise(r => setTimeout(r, 500 * (i + 1)));
+            const retryResult = await fetchProfile(session.user.id);
+            console.log(`Auth init: Retry ${i + 1} result:`, { hasProfile: !!retryResult });
+            if (retryResult) break;
+          }
+        }
+        
+        clearTimeoutSafe();
+        console.log('Auth init: Setting loading to false');
+        setLoading(false);
+        console.log('=== Auth Init Complete ===');
+      } catch (err) {
+        console.error('Auth init: Error:', err);
+        clearTimeoutSafe();
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('[AuthContext] Auth event:', event, session?.user?.email);
+        setUser(session?.user ?? null);
+        
+        // Set sessionReady when we have a valid session from any auth event
+        if (session?.user) {
+          console.log('[AuthContext] Setting sessionReady=true from', event);
+          setSessionReady(true);
+        }
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('[AuthContext] SIGNED_IN - fetching profile');
+          await fetchProfile(session.user.id);
+          // Don't set isOAuthCallback to false here - let App.jsx handle it after redirect
+          
+          // Clean up URL - always redirect to root after sign in
+          const currentPath = window.location.pathname;
+          if (currentPath.includes('/auth/callback') || window.location.hash || window.location.search) {
+            window.history.replaceState({}, document.title, '/');
+          }
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          // Token was refreshed (e.g., on app reopen) - always fetch profile to ensure it's loaded
+          console.log('[AuthContext] TOKEN_REFRESHED - fetching profile for', session.user.id);
+          const result = await fetchProfile(session.user.id);
+          console.log('[AuthContext] TOKEN_REFRESHED - profile fetch result:', { 
+            hasProfile: !!result, 
+            username: result?.username 
+          });
+          
+          // If profile fetch failed, retry a few times
+          if (!result) {
+            console.log('[AuthContext] TOKEN_REFRESHED - profile not found, retrying...');
+            for (let i = 0; i < 3; i++) {
+              await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+              const retryResult = await fetchProfile(session.user.id);
+              console.log(`[AuthContext] TOKEN_REFRESHED - retry ${i + 1}:`, { hasProfile: !!retryResult });
+              if (retryResult) break;
+            }
+          }
+        } else if (event === 'INITIAL_SESSION' && session?.user) {
+          // Initial session restored from storage - always fetch profile
+          console.log('[AuthContext] INITIAL_SESSION - fetching profile for', session.user.id);
+          const result = await fetchProfile(session.user.id);
+          console.log('[AuthContext] INITIAL_SESSION - profile fetch result:', { 
+            hasProfile: !!result, 
+            username: result?.username 
+          });
+          
+          // If profile fetch failed, retry
+          if (!result) {
+            console.log('[AuthContext] INITIAL_SESSION - profile not found, retrying...');
+            for (let i = 0; i < 3; i++) {
+              await new Promise(r => setTimeout(r, 1000 * (i + 1)));
+              const retryResult = await fetchProfile(session.user.id);
+              console.log(`[AuthContext] INITIAL_SESSION - retry ${i + 1}:`, { hasProfile: !!retryResult });
+              if (retryResult) break;
+            }
+          }
+        } else if (event === 'INITIAL_SESSION' && !session) {
+          // No session - user is not logged in
+          console.log('[AuthContext] INITIAL_SESSION - no session, user not logged in');
+          setSessionReady(true);
+          // Clear any stale cached profile
+          if (loadCachedProfile()?.profile) {
+            console.log('[AuthContext] Clearing stale cached profile');
+            clearCachedProfile();
+            setProfile(null);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setProfile(null);
+          setIsOAuthCallback(false);
+          // Keep sessionReady true - we know the session state (logged out)
+          setSessionReady(true);
+          // Clear cached profile on sign out
+          clearCachedProfile();
+          console.log('[AuthContext] SIGNED_OUT - cleared profile and cache');
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [fetchProfile]);
+
+  const signUp = async (email, password, username) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    // Validate username format
+    if (!username || username.length < 3 || username.length > 20) {
+      return { error: { message: 'Username must be 3-20 characters' } };
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
+    }
+
+    // Check if username is taken - use maybeSingle to avoid 406 error
+    const { data: existing, error: checkError } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username.toLowerCase())
+      .maybeSingle();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('[AuthContext] Username check error:', checkError);
+    }
+
+    if (existing) {
+      return { error: { message: 'Username already taken' } };
+    }
+
+    console.log('[AuthContext] Creating account for:', email, 'username:', username);
+
+    // Sign up the user
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { 
+          username: username.toLowerCase(), 
+          display_name: username 
+        },
+        // Don't require email verification redirect
+        emailRedirectTo: undefined
+      }
+    });
+
+    console.log('[AuthContext] Signup response:', { 
+      hasUser: !!data?.user, 
+      hasSession: !!data?.session,
+      userId: data?.user?.id,
+      error: error?.message 
+    });
+
+    // If signup succeeded
+    if (!error && data?.user) {
+      // Wait a moment for the database trigger to run
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // Check if profile was created by trigger - use maybeSingle to avoid 406
+      const { data: profileCheck, error: profileCheckError } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      
+      console.log('[AuthContext] Profile check:', { 
+        hasProfile: !!profileCheck, 
+        username: profileCheck?.username,
+        error: profileCheckError?.message 
+      });
+      
+      // If no profile exists, create it manually
+      if (!profileCheck) {
+        console.log('[AuthContext] Profile not created by trigger, creating manually...');
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            username: username.toLowerCase(),
+            display_name: username
+          }, { onConflict: 'id' });
+        
+        if (profileError) {
+          console.error('[AuthContext] Failed to create profile:', profileError);
+        } else {
+          console.log('[AuthContext] Profile created manually');
+        }
+      }
+      
+      // Check if we got a session (means email confirmation is disabled)
+      if (data.session) {
+        console.log('[AuthContext] Session received - user is logged in');
+        setUser(data.user);
+        await fetchProfile(data.user.id);
+        setIsNewUser(true);
+        
+        return { 
+          data, 
+          error: null, 
+          needsEmailConfirmation: false,
+          isNewUser: true
+        };
+      }
+      
+      // No session - email confirmation might still be enabled in Supabase
+      // Try to sign them in directly (works if email confirmation is disabled)
+      console.log('[AuthContext] No session after signup, attempting direct sign-in...');
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (signInError) {
+        console.log('[AuthContext] Auto sign-in failed:', signInError.message);
+        // Email confirmation is likely still enabled in Supabase
+        if (signInError.message.includes('Email not confirmed')) {
+          return { 
+            data, 
+            error: null, 
+            needsEmailConfirmation: true,
+            isNewUser: true
+          };
+        }
+        // Other error - account created but can't sign in
+        return { 
+          data, 
+          error: null, 
+          needsEmailConfirmation: false,
+          isNewUser: true,
+          message: 'Account created! Please sign in with your credentials.'
+        };
+      }
+      
+      // Successfully signed in after signup
+      console.log('[AuthContext] Auto sign-in successful');
+      setUser(signInData.user);
+      await fetchProfile(signInData.user.id);
+      setIsNewUser(true);
+      
+      return { 
+        data: signInData, 
+        error: null, 
+        needsEmailConfirmation: false,
+        isNewUser: true
+      };
+    }
+
+    // Handle specific error messages
     if (error) {
-      setError(error.message);
+      let friendlyMessage = error.message;
+      
+      if (error.message.includes('database error')) {
+        friendlyMessage = 'Account created but profile setup failed. Please try signing in.';
+      } else if (error.message.includes('already registered')) {
+        friendlyMessage = 'An account with this email already exists';
+      } else if (error.message.includes('invalid email')) {
+        friendlyMessage = 'Please enter a valid email address';
+      } else if (error.message.includes('weak password')) {
+        friendlyMessage = 'Password is too weak. Use at least 6 characters';
+      }
+      
+      return { data, error: { ...error, message: friendlyMessage } };
+    }
+
+    return { data, error };
+  };
+
+  const signIn = async (email, password) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    return { data, error };
+  };
+
+  const signInWithGoogle = async () => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: false, // Ensure redirect happens
+        }
+      });
+      
+      console.log('[AuthContext] Google OAuth result:', { data, error });
+      
+      if (error) {
+        console.error('[AuthContext] Google OAuth error:', error);
+        return { data, error };
+      }
+      
+      // If we get here without redirect, there might be an issue
+      // The browser should be redirecting, so wait a moment
+      if (data?.url) {
+        console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
+        // Manually redirect if the auto-redirect didn't work
+        window.location.href = data.url;
+      }
+      
+      return { data, error };
+    } catch (err) {
+      console.error('[AuthContext] Google OAuth exception:', err);
+      return { data: null, error: { message: err.message || 'Failed to start Google Sign In' } };
     }
   };
 
-  const handleBack = () => {
-    soundManager.playButtonClick();
-    onBack();
+  const signOut = async () => {
+    if (!supabase) return;
+    
+    console.log('[AuthContext] signOut: Starting sign out...');
+    
+    try {
+      // Add timeout to prevent hanging
+      const signOutPromise = supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sign out timeout')), 5000)
+      );
+      
+      const { error } = await Promise.race([signOutPromise, timeoutPromise])
+        .catch(err => {
+          console.warn('[AuthContext] signOut: Timeout or error, forcing local cleanup:', err.message);
+          return { error: null }; // Continue with local cleanup even on timeout
+        });
+      
+      // Always clear local state regardless of server response
+      setUser(null);
+      setProfile(null);
+      setSessionReady(false);
+      
+      // Clear entry auth flag so user sees auth screen on next visit
+      localStorage.removeItem('deadblock_entry_auth_passed');
+      
+      // Clear cached profile
+      clearCachedProfile();
+      
+      console.log('[AuthContext] signOut: Cleared user, profile, and cache');
+      
+      return { error };
+    } catch (err) {
+      console.error('[AuthContext] signOut: Exception:', err);
+      
+      // Force cleanup on any error
+      setUser(null);
+      setProfile(null);
+      setSessionReady(false);
+      localStorage.removeItem('deadblock_entry_auth_passed');
+      clearCachedProfile();
+      
+      console.log('[AuthContext] signOut: Forced cleanup after error');
+      return { error: err };
+    }
   };
 
-  // Scroll styles for mobile
-  const scrollStyles = needsScroll ? {
-    overflowY: 'auto',
-    overflowX: 'hidden',
-    WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y',
-  } : {};
+  // Send password reset email
+  const resetPassword = async (email) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?type=recovery`
+    });
+
+    return { data, error };
+  };
+
+  // Sign in with magic link (passwordless)
+  const signInWithMagicLink = async (email) => {
+    if (!supabase) return { error: { message: 'Online features not configured' } };
+
+    const { data, error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?type=magiclink`
+      }
+    });
+
+    return { data, error };
+  };
+
+  // Update user email (requires re-authentication)
+  const updateEmail = async (newEmail) => {
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+
+    const { data, error } = await supabase.auth.updateUser({
+      email: newEmail
+    });
+
+    return { data, error };
+  };
+
+  // Update user password
+  const updatePassword = async (newPassword) => {
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword
+    });
+
+    return { data, error };
+  };
+
+  const updateProfile = async (updates) => {
+    if (!supabase || !user) return { error: { message: 'Not authenticated' } };
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      setProfile(data);
+      // Update cache with new profile data
+      saveCachedProfile(user.id, data);
+    }
+
+    return { data, error };
+  };
+
+  // Check if username is available
+  const checkUsernameAvailable = async (username) => {
+    if (!supabase) return { available: false, error: { message: 'Not configured' } };
+    
+    // Don't check if it's the current user's username
+    if (profile?.username?.toLowerCase() === username.toLowerCase()) {
+      return { available: true, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id')
+      .ilike('username', username)
+      .single();
+
+    // If no data found (PGRST116 = no rows), username is available
+    if (error?.code === 'PGRST116') {
+      return { available: true, error: null };
+    }
+    
+    if (error) {
+      return { available: false, error };
+    }
+
+    // Data found = username taken
+    return { available: false, error: null };
+  };
+
+  const clearOAuthCallback = () => {
+    setIsOAuthCallback(false);
+  };
+  
+  const clearNewUser = () => {
+    setIsNewUser(false);
+  };
 
   return (
-    <div 
-      className="min-h-screen bg-slate-950 flex flex-col"
-      style={scrollStyles}
-    >
-      {/* Grid background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
-        backgroundSize: '40px 40px'
-      }} />
-      
-      {/* Glow effects */}
-      <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl pointer-events-none" />
-
-      {/* Content */}
-      <div className="relative flex-1 flex flex-col items-center px-4 py-4">
-        <div className="w-full max-w-sm">
-          {/* Back button */}
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-slate-900/50 border border-slate-700/50 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/50 transition-all group"
-          >
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-medium">Menu</span>
-          </button>
-
-          {/* Title */}
-          <div className="text-center mb-3">
-            <NeonTitle size="xlarge" />
-            <div className="online-subtitle font-black tracking-[0.25em] text-sm mt-3">
-              ONLINE PLAY
-            </div>
-          </div>
-
-          {/* Invite Banner */}
-          {inviteInfo && (
-            <div className="mb-3 p-3 bg-gradient-to-r from-amber-900/40 to-orange-900/40 border border-amber-500/50 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.2)]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold">
-                  <UserPlus size={20} />
-                </div>
-                <div>
-                  <p className="text-amber-300 font-medium text-sm">🎮 You've been invited!</p>
-                  <p className="text-amber-100/80 text-xs">
-                    <span className="font-bold">{inviteInfo.from_display_name || inviteInfo.from_username}</span> wants to challenge you!
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Google Sign In - Primary Option (only for login/signup) */}
-          {(mode === 'login' || mode === 'signup') && (
-            <div className="mb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Globe size={14} className="text-cyan-400" />
-                <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Quick Sign In</span>
-              </div>
-              <button
-                onClick={handleGoogleSignIn}
-                className="w-full py-3.5 bg-white text-gray-800 font-semibold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_30px_rgba(255,255,255,0.15)] active:scale-[0.98]"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                </svg>
-                Continue with Google
-              </button>
-            </div>
-          )}
-
-          {/* Divider (only for login/signup) */}
-          {(mode === 'login' || mode === 'signup') && (
-            <div className="flex items-center gap-3 my-3">
-              <div className="flex-1 h-px bg-slate-700" />
-              <span className="text-slate-500 text-xs">OR</span>
-              <div className="flex-1 h-px bg-slate-700" />
-            </div>
-          )}
-
-          {/* Main Auth Card */}
-          <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl p-4 border border-slate-700/50 shadow-[0_0_30px_rgba(0,0,0,0.3)]">
-            
-            {/* Section header - changes based on mode */}
-            <div className="flex items-center gap-2 mb-3">
-              {mode === 'login' && <KeyRound size={14} className="text-cyan-400" />}
-              {mode === 'signup' && <UserPlus2 size={14} className="text-purple-400" />}
-              {mode === 'forgot-password' && <Key size={14} className="text-amber-400" />}
-              {mode === 'magic-link' && <Wand2 size={14} className="text-violet-400" />}
-              <span className={`text-xs font-bold uppercase tracking-wider ${
-                mode === 'login' ? 'text-cyan-400' :
-                mode === 'signup' ? 'text-purple-400' :
-                mode === 'forgot-password' ? 'text-amber-400' :
-                'text-violet-400'
-              }`}>
-                {mode === 'login' && 'Email & Password'}
-                {mode === 'signup' && 'Create Account'}
-                {mode === 'forgot-password' && 'Reset Password'}
-                {mode === 'magic-link' && 'Magic Link'}
-              </span>
-            </div>
-            
-            {/* Mode Toggle Tabs - Only for login/signup */}
-            {(mode === 'login' || mode === 'signup') && (
-              <div className="flex mb-3 bg-slate-800/50 rounded-lg p-1">
-                <button
-                  type="button"
-                  onClick={() => switchMode('login')}
-                  className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                    mode === 'login' 
-                      ? 'bg-cyan-500/20 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]' 
-                      : 'text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  <LogIn size={14} />
-                  Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchMode('signup')}
-                  className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                    mode === 'signup' 
-                      ? 'bg-purple-500/20 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]' 
-                      : 'text-slate-400 hover:text-slate-300'
-                  }`}
-                >
-                  <UserPlus2 size={14} />
-                  Sign Up
-                </button>
-              </div>
-            )}
-
-            {/* Back to Sign In - for reset/magic link modes */}
-            {(mode === 'forgot-password' || mode === 'magic-link') && (
-              <button
-                type="button"
-                onClick={() => switchMode('login')}
-                className="flex items-center gap-2 mb-3 text-slate-400 hover:text-cyan-300 text-sm transition-colors"
-              >
-                <ArrowLeft size={14} />
-                Back to Sign In
-              </button>
-            )}
-            
-            {/* Error/Success messages */}
-            {error && (
-              <div className="mb-3 p-2.5 bg-red-900/50 border border-red-500/50 rounded-lg text-red-300 text-sm">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="mb-3 p-2.5 bg-green-900/50 border border-green-500/50 rounded-lg text-green-300 text-sm flex items-start gap-2">
-                <CheckCircle size={16} className="flex-shrink-0 mt-0.5" />
-                <span>{success}</span>
-              </div>
-            )}
-
-            {/* LOGIN FORM */}
-            {mode === 'login' && (
-              <form onSubmit={handleSignIn} className="space-y-3">
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Email</label>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Password</label>
-                  <div className="relative">
-                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter password"
-                      className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 outline-none transition-all"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                    >
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Forgot Password Link */}
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => switchMode('forgot-password')}
-                    className="text-xs text-slate-400 hover:text-amber-400 transition-colors"
-                  >
-                    Forgot password?
-                  </button>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 shadow-[0_0_20px_rgba(34,211,238,0.4)] text-white"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Signing in...
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      <LogIn size={16} />
-                      Sign In
-                    </span>
-                  )}
-                </button>
-              </form>
-            )}
-
-            {/* SIGNUP FORM */}
-            {mode === 'signup' && (
-              <form onSubmit={handleSignUp} className="space-y-3">
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Username</label>
-                  <div className="relative">
-                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Choose a username"
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Email</label>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Password</label>
-                  <div className="relative">
-                    <Lock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Create password (6+ chars)"
-                      className="w-full pl-9 pr-10 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                    >
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-purple-500 to-pink-600 hover:from-purple-400 hover:to-pink-500 shadow-[0_0_20px_rgba(168,85,247,0.4)] text-white"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Creating...
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      <UserPlus2 size={16} />
-                      Create Account
-                    </span>
-                  )}
-                </button>
-              </form>
-            )}
-
-            {/* FORGOT PASSWORD FORM */}
-            {mode === 'forgot-password' && (
-              <form onSubmit={handleResetPassword} className="space-y-3">
-                <p className="text-slate-400 text-sm mb-3">
-                  Enter your email and we'll send you a link to reset your password.
-                </p>
-                
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Email</label>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 shadow-[0_0_20px_rgba(245,158,11,0.4)] text-white"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Sending...
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      <Mail size={16} />
-                      Send Reset Link
-                    </span>
-                  )}
-                </button>
-              </form>
-            )}
-
-            {/* MAGIC LINK FORM */}
-            {mode === 'magic-link' && (
-              <form onSubmit={handleMagicLink} className="space-y-3">
-                <p className="text-slate-400 text-sm mb-3">
-                  Enter your email and we'll send you a magic link to sign in instantly - no password needed!
-                </p>
-                
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Email</label>
-                  <div className="relative">
-                    <Mail size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:border-violet-500 focus:ring-1 focus:ring-violet-500 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] bg-gradient-to-r from-violet-500 to-purple-600 hover:from-violet-400 hover:to-purple-500 shadow-[0_0_20px_rgba(139,92,246,0.4)] text-white"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Sending...
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      <Wand2 size={16} />
-                      Send Magic Link
-                    </span>
-                  )}
-                </button>
-              </form>
-            )}
-
-            {/* Alternative sign-in option - Magic Link (only on login) */}
-            {mode === 'login' && (
-              <div className="mt-4 pt-3 border-t border-slate-700/50">
-                <button
-                  type="button"
-                  onClick={() => switchMode('magic-link')}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm text-slate-400 hover:text-violet-300 transition-colors group"
-                >
-                  <Wand2 size={14} className="group-hover:rotate-12 transition-transform" />
-                  Sign in with Magic Link
-                  <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            )}
-          </div>
-          
-          {/* Bottom safe area spacer */}
-          {needsScroll && <div className="h-8 flex-shrink-0" />}
-        </div>
-      </div>
-      
-      {/* Styles */}
-      <style>{`
-        .online-subtitle {
-          color: #fff;
-          text-shadow:
-            0 0 5px #fff,
-            0 0 10px #fff,
-            0 0 20px #22d3ee,
-            0 0 40px #22d3ee,
-            0 0 60px #a855f7;
-          animation: online-pulse 3s ease-in-out infinite;
+    <AuthContext.Provider value={{
+      user,
+      profile,
+      loading,
+      sessionReady,
+      isAuthenticated: !!user,
+      isOnlineEnabled,
+      isOAuthCallback,
+      isNewUser,
+      signUp,
+      signIn,
+      signInWithGoogle,
+      signInWithMagicLink,
+      signOut,
+      resetPassword,
+      updateEmail,
+      updatePassword,
+      updateProfile,
+      checkUsernameAvailable,
+      refreshProfile: async () => {
+        if (user) {
+          return await fetchProfile(user.id);
         }
-        @keyframes online-pulse {
-          0%, 100% {
-            text-shadow:
-              0 0 5px #fff,
-              0 0 10px #fff,
-              0 0 20px #22d3ee,
-              0 0 40px #22d3ee,
-              0 0 60px #a855f7;
-            filter: brightness(1);
-          }
-          50% {
-            text-shadow:
-              0 0 5px #fff,
-              0 0 15px #fff,
-              0 0 30px #22d3ee,
-              0 0 50px #22d3ee,
-              0 0 70px #a855f7;
-            filter: brightness(1.1);
-          }
-        }
-      `}</style>
-    </div>
+        return null;
+      },
+      clearOAuthCallback,
+      clearNewUser,
+    }}>
+      {children}
+    </AuthContext.Provider>
   );
 };
 
-export default AuthScreen;
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export default AuthContext;

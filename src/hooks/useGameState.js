@@ -253,6 +253,11 @@ export const useGameState = () => {
       }
     } catch (err) {
       console.error('AI move error:', err);
+      // Reset AI state on error to prevent blank screen
+      setAiAnimatingMove(null);
+      setIsAIThinking(false);
+      // Give turn back to player if AI crashes
+      setCurrentPlayer(1);
     }
     
     setIsAIThinking(false);

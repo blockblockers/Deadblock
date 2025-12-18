@@ -471,7 +471,7 @@ const GameScreen = ({
         <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
           
           {/* Header with Menu Button */}
-          <div className="w-full max-w-md flex items-center justify-between mb-2">
+          <div className="w-full max-w-md flex items-center justify-between mb-3">
             {/* Menu/Back Button */}
             <button
               onClick={() => { soundManager.playButtonClick(); onMenu?.(); }}
@@ -481,9 +481,9 @@ const GameScreen = ({
               <span className="text-xs font-medium">Menu</span>
             </button>
             
-            {/* Title - Centered */}
+            {/* Title - Centered and larger */}
             <div className="text-center flex-1">
-              <NeonTitle size="small" />
+              <NeonTitle size="medium" />
             </div>
             
             {/* Spacer for symmetry */}
@@ -531,6 +531,7 @@ const GameScreen = ({
                 gameMode={gameMode}
                 currentPlayer={currentPlayer}
                 onCellClick={handleCellClick}
+                onStartDragFromBoard={startDrag}
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
