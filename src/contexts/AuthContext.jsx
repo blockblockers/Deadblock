@@ -298,7 +298,7 @@ export const AuthProvider = ({ children }) => {
       let timeoutCleared = false;
       
       // Shorter timeout since we have cached data as fallback
-      const timeout = setTimeout(() => {
+      const timeout = setTimeout(async () => {
         if (!timeoutCleared) {
           console.log('Auth init: TIMEOUT - completing with current state');
           
@@ -308,12 +308,36 @@ export const AuthProvider = ({ children }) => {
             console.log('Auth init: Timeout with valid cache - trusting cached auth state');
             // Create a minimal user object from cached data to maintain isAuthenticated
             setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
+            
+            // CRITICAL: Schedule a background profile refresh to get fresh data
+            // This ensures the profile gets updated even if the initial fetch timed out
+            const userIdToRefresh = cached.userId;
+            setTimeout(async () => {
+              // Check if user is still supposed to be logged in before refreshing
+              const currentCache = loadCachedProfile();
+              if (!currentCache?.userId || currentCache.userId !== userIdToRefresh) {
+                console.log('Auth init: Background refresh skipped - user state changed');
+                return;
+              }
+              
+              console.log('Auth init: Background refresh triggered after timeout');
+              try {
+                const freshProfile = await fetchProfile(userIdToRefresh);
+                if (freshProfile) {
+                  console.log('Auth init: Background refresh successful:', freshProfile.username);
+                } else {
+                  console.log('Auth init: Background refresh returned no data');
+                }
+              } catch (err) {
+                console.error('Auth init: Background refresh error:', err);
+              }
+            }, 500);
           }
           
           setSessionReady(true); // Mark as ready even on timeout
           setLoading(false);
         }
-      }, cached?.profile ? 3000 : 8000); // 3s if cached, 8s if not
+      }, cached?.profile ? 4000 : 10000); // Increased: 4s if cached, 10s if not
       
       const clearTimeoutSafe = () => {
         timeoutCleared = true;
@@ -475,13 +499,15 @@ export const AuthProvider = ({ children }) => {
             setProfile(null);
           }
         } else if (event === 'SIGNED_OUT') {
+          setUser(null);
           setProfile(null);
           setIsOAuthCallback(false);
           // Keep sessionReady true - we know the session state (logged out)
           setSessionReady(true);
           // Clear cached profile on sign out
           clearCachedProfile();
-          console.log('[AuthContext] SIGNED_OUT - cleared profile and cache');
+          localStorage.removeItem('deadblock_entry_auth_passed');
+          console.log('[AuthContext] SIGNED_OUT - cleared user, profile, and cache');
         }
       }
     );
@@ -638,17 +664,32 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     if (!supabase) return;
     
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
-      setUser(null);
-      setProfile(null);
-      // Clear entry auth flag so user sees auth screen on next visit
-      localStorage.removeItem('deadblock_entry_auth_passed');
-      // Clear cached profile
-      clearCachedProfile();
-      console.log('[AuthContext] signOut: Cleared user, profile, and cache');
+    console.log('[AuthContext] signOut: Starting sign out process');
+    
+    // Clear state FIRST before calling Supabase (in case it times out)
+    setUser(null);
+    setProfile(null);
+    setSessionReady(false);
+    
+    // Clear all cached data immediately
+    clearCachedProfile();
+    localStorage.removeItem('deadblock_entry_auth_passed');
+    localStorage.removeItem('deadblock_pending_invite_code');
+    
+    // Now try to sign out from Supabase
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[AuthContext] signOut: Supabase error:', error);
+      } else {
+        console.log('[AuthContext] signOut: Supabase sign out successful');
+      }
+    } catch (err) {
+      console.error('[AuthContext] signOut: Exception:', err);
     }
-    return { error };
+    
+    console.log('[AuthContext] signOut: Complete - cleared user, profile, and cache');
+    return { error: null };
   };
 
   // Send password reset email

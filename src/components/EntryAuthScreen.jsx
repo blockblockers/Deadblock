@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
+import FloatingPiecesBackground from './FloatingPiecesBackground';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -377,7 +378,7 @@ const EntryAuthScreen = ({
   // SELECT MODE - Main entry screen
   // ============================================
   const renderSelectMode = () => (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Invite Banner */}
       <InviteBanner />
       
@@ -401,7 +402,7 @@ const EntryAuthScreen = ({
         {/* Sign In - for existing accounts */}
         <button
           onClick={() => switchMode('login')}
-          className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] active:scale-[0.98] border border-cyan-400/30"
+          className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] active:scale-[0.98] border border-cyan-400/30"
         >
           <LogIn size={18} />
           Sign In with Email
@@ -410,22 +411,11 @@ const EntryAuthScreen = ({
         {/* Create Account */}
         <button
           onClick={() => switchMode('signup')}
-          className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] active:scale-[0.98] border border-purple-400/30"
+          className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] active:scale-[0.98] border border-purple-400/30"
         >
           <UserPlus2 size={18} />
           Create New Account
         </button>
-        
-        <p className="text-slate-500 text-xs text-center">
-          Create a local account with email & password
-        </p>
-      </div>
-
-      {/* Divider */}
-      <div className="flex items-center gap-3 py-1">
-        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
-        <span className="text-slate-500 text-xs font-medium">OR</span>
-        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
       </div>
 
       {/* Google Sign In */}
@@ -437,7 +427,7 @@ const EntryAuthScreen = ({
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full py-3.5 bg-white text-gray-800 font-bold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(255,255,255,0.15)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait border border-white/20"
+          className="w-full py-2.5 bg-white text-gray-800 font-bold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(255,255,255,0.15)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait border border-white/20"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -451,38 +441,23 @@ const EntryAuthScreen = ({
           )}
           <span>Continue with Google</span>
         </button>
-        <p className="text-slate-500 text-xs text-center">
-          Quick & secure - uses your existing Google account
-        </p>
       </div>
 
       {/* No Sign-in / Offline Mode - only if not forced online and no invite */}
       {!forceOnlineOnly && !isInviteFlow && (
-        <>
-          {/* Divider */}
-          <div className="flex items-center gap-3 py-1">
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
-            <span className="text-slate-500 text-xs font-medium">OR</span>
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 mb-1">
+            <WifiOff size={12} className="text-orange-400" />
+            <span className="text-orange-400 text-xs font-bold uppercase tracking-wider">No Account</span>
           </div>
-          
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <WifiOff size={12} className="text-slate-400" />
-              <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">No Sign-In</span>
-            </div>
-            <button
-              onClick={handleOfflineMode}
-              className="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-600 text-slate-200 font-semibold rounded-xl hover:from-slate-600 hover:to-slate-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] active:scale-[0.98] border border-slate-500/30"
-            >
-              <WifiOff size={16} />
-              Play Offline
-            </button>
-            <p className="text-slate-500 text-xs text-center">
-              Skip sign in - play vs AI without an account
-            </p>
-          </div>
-        </>
+          <button
+            onClick={handleOfflineMode}
+            className="w-full py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-semibold rounded-xl hover:from-orange-500 hover:to-amber-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(249,115,22,0.3)] active:scale-[0.98] border border-orange-400/30"
+          >
+            <WifiOff size={16} />
+            Play Offline
+          </button>
+        </div>
       )}
     </div>
   );
@@ -922,6 +897,9 @@ const EntryAuthScreen = ({
       <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      
+      {/* Floating Pentomino Pieces Background Animation */}
+      <FloatingPiecesBackground count={10} colorPreset="default" />
       
       {/* Content */}
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">

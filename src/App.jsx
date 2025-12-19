@@ -125,7 +125,7 @@ function AppContent() {
       // Clean up URL but keep the code in state
       window.history.replaceState({}, document.title, '/');
       
-      // Fetch invite info
+      // Fetch invite info (for display purposes only - don't clear on failure)
       const fetchInviteInfo = async () => {
         try {
           const { inviteService } = await import('./services/inviteService');
@@ -135,12 +135,12 @@ function AppContent() {
             setInviteInfo(data);
             console.log('App: Invite info loaded:', data);
           } else {
-            console.log('App: Invite not found or expired');
-            setPendingInviteCode(null);
-            localStorage.removeItem('deadblock_pending_invite_code');
+            // Don't clear the invite code - let acceptInvite handle validation
+            console.log('App: Could not fetch invite preview (will try to accept anyway)');
           }
         } catch (err) {
           console.error('App: Error fetching invite info:', err);
+          // Don't clear - let acceptInvite handle it
         }
       };
       
@@ -161,44 +161,39 @@ function AppContent() {
       console.log('App: User logged in with pending invite, accepting...', inviteCode);
       
       try {
-        const { getSupabase } = await import('./utils/supabase');
-        const supabase = getSupabase();
+        const { inviteService } = await import('./services/inviteService');
         
-        if (supabase) {
-          const { data, error } = await supabase.rpc('accept_invite_link', {
-            code: inviteCode,
-            accepting_user_id: profile.id
-          });
-          
-          console.log('App: accept_invite_link result:', { data, error });
-          
-          if (data?.success && data?.game_id) {
-            console.log('App: Invite accepted! Game ID:', data.game_id);
-            // Clear the pending invite from both state and localStorage
-            setPendingInviteCode(null);
-            setInviteInfo(null);
-            localStorage.removeItem('deadblock_pending_invite_code');
-            // Go directly to the game
-            setOnlineGameId(data.game_id);
-            if (setGameModeFn) setGameModeFn('online-game');
-          } else if (data?.error) {
-            console.log('App: Could not accept invite:', data.error);
-            if (data.error !== 'Cannot accept your own invite') {
-              alert(data.error);
-            }
-            setPendingInviteCode(null);
-            setInviteInfo(null);
-            localStorage.removeItem('deadblock_pending_invite_code');
-            // Fall back to online menu
-            if (setGameModeFn) setGameModeFn('online-menu');
-          } else {
-            // No success and no error - something went wrong
-            console.log('App: Unexpected response from accept_invite_link');
-            setPendingInviteCode(null);
-            setInviteInfo(null);
-            localStorage.removeItem('deadblock_pending_invite_code');
-            if (setGameModeFn) setGameModeFn('online-menu');
+        // Use inviteService to accept the invite (creates game directly)
+        const { data, error } = await inviteService.acceptInviteByCode(inviteCode, profile.id);
+        
+        console.log('App: acceptInviteByCode result:', { data, error });
+        
+        if (data?.success && data?.game_id) {
+          console.log('App: Invite accepted! Game ID:', data.game_id);
+          // Clear the pending invite from both state and localStorage
+          setPendingInviteCode(null);
+          setInviteInfo(null);
+          localStorage.removeItem('deadblock_pending_invite_code');
+          // Go directly to the game
+          setOnlineGameId(data.game_id);
+          if (setGameModeFn) setGameModeFn('online-game');
+        } else if (error) {
+          console.log('App: Could not accept invite:', error.message);
+          if (error.message !== 'Cannot accept your own invite') {
+            alert(error.message);
           }
+          setPendingInviteCode(null);
+          setInviteInfo(null);
+          localStorage.removeItem('deadblock_pending_invite_code');
+          // Fall back to online menu
+          if (setGameModeFn) setGameModeFn('online-menu');
+        } else {
+          // No success and no error - something went wrong
+          console.log('App: Unexpected response from acceptInviteByCode');
+          setPendingInviteCode(null);
+          setInviteInfo(null);
+          localStorage.removeItem('deadblock_pending_invite_code');
+          if (setGameModeFn) setGameModeFn('online-menu');
         }
       } catch (err) {
         console.error('App: Error accepting invite:', err);
@@ -293,11 +288,12 @@ function AppContent() {
 
   // If user has invite code but isn't logged in, redirect to auth
   useEffect(() => {
-    if (inviteInfo && !isAuthenticated && !authLoading && isOnlineEnabled && gameMode === null) {
-      console.log('App: Invite detected but user not logged in, redirecting to auth');
+    const inviteCode = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
+    if (inviteCode && !isAuthenticated && !authLoading && isOnlineEnabled && gameMode === null) {
+      console.log('App: Invite code detected but user not logged in, redirecting to auth');
       setGameMode('auth');
     }
-  }, [inviteInfo, isAuthenticated, authLoading, isOnlineEnabled, gameMode, setGameMode]);
+  }, [pendingInviteCode, isAuthenticated, authLoading, isOnlineEnabled, gameMode, setGameMode]);
 
   // Redirect after OAuth completes - handle invite links and normal flow
   useEffect(() => {
@@ -336,34 +332,28 @@ function AppContent() {
         if (inviteCode && profile?.id) {
           console.log('OAuth complete with pending invite - processing invite...', inviteCode);
           try {
-            const { getSupabase } = await import('./utils/supabase');
-            const supabase = getSupabase();
+            const { inviteService } = await import('./services/inviteService');
             
-            if (supabase) {
-              const { data, error } = await supabase.rpc('accept_invite_link', {
-                code: inviteCode,
-                accepting_user_id: profile.id
-              });
-              
-              console.log('OAuth invite accept result:', { data, error });
-              
-              if (data?.success && data?.game_id) {
-                console.log('Invite accepted! Starting game:', data.game_id);
-                // Clear invite state
-                setPendingInviteCode(null);
-                setInviteInfo(null);
-                localStorage.removeItem('deadblock_pending_invite_code');
-                // Mark as redirected AFTER successful invite processing
-                setHasRedirectedAfterOAuth(true);
-                // Go directly to the game
-                setOnlineGameId(data.game_id);
-                setGameMode('online-game');
-                return; // Don't continue to other redirects
-              } else if (data?.error) {
-                console.log('Invite error:', data.error);
-                if (data.error !== 'Cannot accept your own invite') {
-                  alert(data.error);
-                }
+            const { data, error } = await inviteService.acceptInviteByCode(inviteCode, profile.id);
+            
+            console.log('OAuth invite accept result:', { data, error });
+            
+            if (data?.success && data?.game_id) {
+              console.log('Invite accepted! Starting game:', data.game_id);
+              // Clear invite state
+              setPendingInviteCode(null);
+              setInviteInfo(null);
+              localStorage.removeItem('deadblock_pending_invite_code');
+              // Mark as redirected AFTER successful invite processing
+              setHasRedirectedAfterOAuth(true);
+              // Go directly to the game
+              setOnlineGameId(data.game_id);
+              setGameMode('online-game');
+              return; // Don't continue to other redirects
+            } else if (error) {
+              console.log('Invite error:', error.message);
+              if (error.message !== 'Cannot accept your own invite') {
+                alert(error.message);
               }
             }
           } catch (err) {
@@ -752,7 +742,7 @@ function AppContent() {
           setPendingAuthDestination('online-menu');
           setShowOnlineAuthPrompt(false);
         }}
-        forceOnlineOnly={true}
+        forceOnlineOnly={false}
         intendedDestination={pendingAuthDestination}
       />
     );

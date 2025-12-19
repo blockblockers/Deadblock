@@ -1,4 +1,4 @@
-import { RotateCw, FlipHorizontal, RefreshCw, Check, X, Loader, RotateCcw } from 'lucide-react';
+import { RotateCw, FlipHorizontal, RefreshCw, Check, X, Loader, RotateCcw, Home } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 const ControlButtons = ({
@@ -15,7 +15,8 @@ const ControlButtons = ({
   onCancel,
   onReset,
   onRetryPuzzle,
-  hideResetButtons = false  // New prop to hide reset/retry for speed mode
+  onMenu,  // NEW: Menu button handler
+  hideResetButtons = false  // Hide reset/retry for speed mode
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
@@ -33,8 +34,25 @@ const ControlButtons = ({
     }
   };
 
+  const handleMenu = () => {
+    soundManager.playButtonClick();
+    if (onMenu) onMenu();
+  };
+
   return (
     <div className="flex gap-1 justify-between mt-2 flex-wrap">
+      {/* Menu Button - NEW: Cool cyberpunk style */}
+      {onMenu && (
+        <button
+          onClick={handleMenu}
+          className="px-2 py-1.5 bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-slate-300 rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/50 shadow-[0_0_10px_rgba(100,116,139,0.3)] transition-all active:scale-95"
+          title="Back to menu"
+        >
+          <Home size={14} className="text-cyan-400" />
+          <span className="hidden sm:inline text-cyan-400 font-bold">MENU</span>
+        </button>
+      )}
+
       {/* Rotate Button */}
       <button
         onClick={onRotate}
@@ -94,7 +112,7 @@ const ControlButtons = ({
                       title="Retry this puzzle from the beginning"
                     >
                       <RotateCcw size={12} />
-                      <span className="hidden sm:inline">RETRY</span>
+                      <span>RETRY</span>
                     </button>
                   )}
                   {onReset && (
@@ -104,12 +122,12 @@ const ControlButtons = ({
                       title="Generate a new puzzle"
                     >
                       <RefreshCw size={12} />
-                      <span className="hidden sm:inline">NEW</span>
+                      <span>NEW</span>
                     </button>
                   )}
                 </>
               ) : (
-                /* Non-puzzle mode: Just show reset */
+                /* Non-puzzle mode: Show reset with RESET text */
                 onReset && (
                   <button
                     onClick={handleReset}
@@ -117,6 +135,7 @@ const ControlButtons = ({
                     title="Reset game"
                   >
                     <RefreshCw size={12} />
+                    <span>RESET</span>
                   </button>
                 )
               )}

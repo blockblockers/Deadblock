@@ -188,8 +188,14 @@ const GameScreen = ({
     return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
   })();
 
-  // Show error when placement is invalid
+  // Show error when placement is invalid (but not while actively dragging)
   useEffect(() => {
+    // Don't show error messages while actively dragging - it's distracting
+    if (isDragging) {
+      setErrorMessage(null);
+      return;
+    }
+    
     if (pendingMove) {
       const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
       const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
@@ -201,7 +207,7 @@ const GameScreen = ({
     } else {
       setErrorMessage(null);
     }
-  }, [pendingMove, rotation, flipped, board]);
+  }, [pendingMove, rotation, flipped, board, isDragging]);
 
   // Show game over modal when game ends
   useEffect(() => {
@@ -469,13 +475,18 @@ const GameScreen = ({
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
         <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
           
-          {/* Compact Title */}
+          {/* Title - Larger for better visibility */}
           <div className="text-center mb-2">
-            <NeonTitle size="small" />
-            {gameMode === 'ai' && theme.label && (
-              <div className={`inline-block mt-1 px-4 py-1 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
-                <span className="text-white text-xs font-black tracking-[0.2em]">{theme.label}</span>
-              </div>
+            <NeonTitle size="medium" />
+            {gameMode === 'ai' && (
+              <>
+                <NeonSubtitle text="VS AI" size="small" className="mt-1" />
+                {theme.label && (
+                  <div className={`inline-block mt-1 px-4 py-1 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
+                    <span className="text-white text-xs font-black tracking-[0.2em]">{theme.label}</span>
+                  </div>
+                )}
+              </>
             )}
             {gameMode === 'puzzle' && (
               <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
@@ -520,13 +531,19 @@ const GameScreen = ({
             {/* D-Pad and Error Message Layout */}
             {pendingMove && !isGeneratingPuzzle && !isDragging && (
               <div className="flex items-start justify-center gap-3 mb-2">
-                {/* Error message box */}
-                <div className="flex-shrink-0 w-24">
+                {/* Error message box - Enhanced with animation */}
+                <div className="flex-shrink-0 w-28">
                   {errorMessage && (
-                    <div className="error-message-box bg-red-900/80 border border-red-500/60 rounded-lg p-2 text-center shadow-[0_0_15px_rgba(239,68,68,0.4)]">
-                      <span className="text-red-300 text-xs font-bold leading-tight block">
-                        {errorMessage}
-                      </span>
+                    <div className="error-message-box animate-error-shake">
+                      <div className="bg-gradient-to-r from-red-900/90 via-red-800/90 to-red-900/90 border-2 border-red-500/80 rounded-lg p-2 text-center shadow-[0_0_20px_rgba(239,68,68,0.6),inset_0_0_15px_rgba(239,68,68,0.2)]">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <span className="text-red-400 text-lg animate-pulse">⚠</span>
+                        </div>
+                        <span className="text-red-200 text-xs font-black tracking-wide leading-tight block uppercase">
+                          {errorMessage === 'Invalid placement!' ? 'PIECES OVERLAP!' : errorMessage}
+                        </span>
+                        <span className="text-red-400/70 text-[10px] block mt-0.5">Move to empty space</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -535,9 +552,21 @@ const GameScreen = ({
                 <DPad onMove={onMovePiece} />
                 
                 {/* Spacer for symmetry */}
-                <div className="flex-shrink-0 w-24" />
+                <div className="flex-shrink-0 w-28" />
               </div>
             )}
+            
+            {/* Error shake animation */}
+            <style>{`
+              @keyframes error-shake {
+                0%, 100% { transform: translateX(0); }
+                10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
+                20%, 40%, 60%, 80% { transform: translateX(3px); }
+              }
+              .animate-error-shake {
+                animation: error-shake 0.5s ease-in-out;
+              }
+            `}</style>
 
             <ControlButtons
               selectedPiece={selectedPiece}
@@ -553,6 +582,7 @@ const GameScreen = ({
               onCancel={onCancel}
               onReset={onReset}
               onRetryPuzzle={onRetryPuzzle}
+              onMenu={onMenu}
             />
           </div>
 

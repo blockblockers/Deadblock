@@ -1,31 +1,72 @@
-// =====================================================
-// Invite Service - Handles game invites and invite links
-// UPDATED: Now uses RealtimeManager for subscriptions (2 channels max)
-// =====================================================
-
-import { isSupabaseConfigured, supabase } from '../utils/supabase';
+// Invite Service - Handle friend search and game invitations
+// FIXES:
+// 1. Fixed getInviteByCode to use direct query instead of non-existent RPC
+// 2. Added acceptInviteByCode function for invite link flow
+// 3. Fixed cancelInviteLink to properly update status
+// 4. Enhanced search to include username AND display_name
+import { isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+// Supabase direct fetch config
+const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Helper to get auth headers
 const getAuthHeaders = () => {
-  if (!supabase) return null;
-  
-  const token = supabase.auth.session?.()?.access_token 
-    || JSON.parse(localStorage.getItem(`sb-${SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`) || '{}')?.access_token;
-  
-  if (!token) return null;
-  
-  return {
-    'apikey': ANON_KEY,
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
+  try {
+    const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+    if (!authData?.access_token || !ANON_KEY) return null;
+    return {
+      'Authorization': `Bearer ${authData.access_token}`,
+      'apikey': ANON_KEY,
+      'Content-Type': 'application/json'
+    };
+  } catch (e) {
+    return null;
+  }
 };
 
-// Helper for database inserts
+// Direct fetch helpers
+const dbSelect = async (table, options = {}) => {
+  const headers = getAuthHeaders();
+  if (!headers) return { data: null, error: 'Not authenticated' };
+  
+  let url = `${SUPABASE_URL}/rest/v1/${table}?`;
+  if (options.select) url += `select=${encodeURIComponent(options.select)}&`;
+  if (options.eq) {
+    Object.entries(options.eq).forEach(([key, value]) => {
+      url += `${key}=eq.${value}&`;
+    });
+  }
+  if (options.or) url += `or=(${encodeURIComponent(options.or)})&`;
+  if (options.neq) {
+    Object.entries(options.neq).forEach(([key, value]) => {
+      url += `${key}=neq.${value}&`;
+    });
+  }
+  if (options.gt) {
+    Object.entries(options.gt).forEach(([key, value]) => {
+      url += `${key}=gt.${value}&`;
+    });
+  }
+  if (options.order) url += `order=${options.order}&`;
+  if (options.limit) url += `limit=${options.limit}&`;
+  
+  try {
+    const response = await fetch(url, { 
+      headers: options.single 
+        ? { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+        : headers 
+    });
+    if (!response.ok) return { data: null, error: 'Fetch failed' };
+    const data = await response.json();
+    return { data, error: null };
+  } catch (err) {
+    return { data: null, error: err.message };
+  }
+};
+
 const dbInsert = async (table, data, options = {}) => {
   const headers = getAuthHeaders();
   if (!headers) return { data: null, error: 'Not authenticated' };
@@ -49,7 +90,6 @@ const dbInsert = async (table, data, options = {}) => {
   }
 };
 
-// Helper for database updates
 const dbUpdate = async (table, data, where = {}, options = {}) => {
   const headers = getAuthHeaders();
   if (!headers) return { data: null, error: 'Not authenticated' };
@@ -60,16 +100,25 @@ const dbUpdate = async (table, data, where = {}, options = {}) => {
       url += `${key}=eq.${value}&`;
     });
   }
+  if (where.in) {
+    Object.entries(where.in).forEach(([key, values]) => {
+      url += `${key}=in.(${values.join(',')})&`;
+    });
+  }
   
   try {
     const response = await fetch(url, {
       method: 'PATCH',
       headers: options.returning 
         ? { ...headers, 'Prefer': 'return=representation' }
-        : headers,
+        : { ...headers, 'Prefer': 'return=minimal' },
       body: JSON.stringify(data)
     });
-    if (!response.ok) return { data: null, error: 'Update failed' };
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[dbUpdate] Error:', response.status, errorText);
+      return { data: null, error: 'Update failed' };
+    }
     if (options.returning) {
       const result = await response.json();
       return { data: options.single ? result[0] : result, error: null };
@@ -86,38 +135,7 @@ class InviteService {
   }
 
   // =====================================================
-  // Get invite by code (for invite links)
-  // This can be called without authentication
-  // =====================================================
-  async getInviteByCode(code) {
-    if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
-
-    try {
-      // Try to get auth headers, but fall back to anon key for public access
-      const headers = getAuthHeaders() || {
-        'apikey': ANON_KEY,
-        'Content-Type': 'application/json'
-      };
-      
-      // Call the RPC function to get invite details
-      const url = `${SUPABASE_URL}/rest/v1/rpc/get_email_invite_by_code`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ code })
-      });
-
-      if (!response.ok) return { data: null, error: { message: 'Invite not found' } };
-      const data = await response.json();
-      return { data: data?.[0] || data || null, error: null };
-    } catch (e) {
-      console.error('getInviteByCode exception:', e);
-      return { data: null, error: { message: e.message } };
-    }
-  }
-
-  // =====================================================
-  // Search users by username OR display_name
+  // USER SEARCH
   // =====================================================
   async searchUsers(query, currentUserId, limit = 10) {
     if (!isSupabaseConfigured() || !query || query.length < 2) {
@@ -128,10 +146,7 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { data: [], error: { message: 'Not authenticated' } };
 
-      // Clean up the search query
       const searchQuery = query.trim().toLowerCase();
-      
-      // Search by username OR display_name (partial match, case insensitive)
       const orFilter = `username.ilike.*${searchQuery}*,display_name.ilike.*${searchQuery}*`;
       
       const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,display_name,rating,games_played,games_won&or=(${encodeURIComponent(orFilter)})&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
@@ -155,16 +170,16 @@ class InviteService {
   }
 
   // =====================================================
-  // Send game invite to another user
+  // GAME INVITES (direct user-to-user)
   // =====================================================
   async sendInvite(fromUserId, toUserId) {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
-      // Check existing invites between these users
       const headers = getAuthHeaders();
       if (!headers) return { data: null, error: { message: 'Not authenticated' } };
       
+      // Check existing invites
       const existingUrl = `${SUPABASE_URL}/rest/v1/game_invites?select=id,status,from_user_id&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
       
       const existingResponse = await fetch(existingUrl, { headers });
@@ -172,7 +187,6 @@ class InviteService {
         const existing = await existingResponse.json();
         if (existing?.length > 0) {
           const existingInvite = existing[0];
-          // If the other user already invited us, accept their invite
           if (existingInvite.from_user_id === toUserId) {
             return await this.acceptInvite(existingInvite.id, fromUserId);
           }
@@ -180,7 +194,6 @@ class InviteService {
         }
       }
 
-      // Create new invite
       return await dbInsert('game_invites', {
         from_user_id: fromUserId,
         to_user_id: toUserId,
@@ -193,9 +206,6 @@ class InviteService {
     }
   }
 
-  // =====================================================
-  // Get received invites
-  // =====================================================
   async getReceivedInvites(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
@@ -211,7 +221,6 @@ class InviteService {
       const invites = await response.json();
       if (!invites?.length) return { data: [], error: null };
 
-      // Get sender profiles
       const senderIds = invites.map(i => i.from_user_id);
       const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${senderIds.join(',')})&select=id,username,display_name,rating`;
 
@@ -233,9 +242,6 @@ class InviteService {
     }
   }
 
-  // =====================================================
-  // Get sent invites
-  // =====================================================
   async getSentInvites(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
@@ -251,7 +257,6 @@ class InviteService {
       const invites = await response.json();
       if (!invites?.length) return { data: [], error: null };
 
-      // Get recipient profiles
       const recipientIds = invites.map(i => i.to_user_id);
       const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${recipientIds.join(',')})&select=id,username,display_name,rating`;
 
@@ -273,10 +278,7 @@ class InviteService {
     }
   }
 
-  // =====================================================
-  // Accept an invite and create a game
-  // =====================================================
-  async acceptInvite(inviteId, userId) {
+  async acceptInvite(inviteId, userId, firstMoveOption = 'random') {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
@@ -284,43 +286,26 @@ class InviteService {
       if (!headers) return { data: null, error: { message: 'Not authenticated' } };
 
       // Get the invite
-      const inviteUrl = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&status=eq.pending&select=*`;
-      const inviteResponse = await fetch(inviteUrl, { headers });
+      const inviteUrl = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&select=*`;
+      const inviteResponse = await fetch(inviteUrl, { 
+        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+      });
       
-      if (!inviteResponse.ok) {
-        return { data: null, error: { message: 'Invite not found' } };
-      }
+      if (!inviteResponse.ok) return { data: null, error: { message: 'Invite not found' } };
       
-      const invites = await inviteResponse.json();
-      const invite = invites?.[0];
-      
-      if (!invite) {
-        return { data: null, error: { message: 'Invite not found or expired' } };
+      const invite = await inviteResponse.json();
+
+      if (!invite) return { data: null, error: { message: 'Invite not found' } };
+      if (invite.status !== 'pending') return { data: null, error: { message: 'Invite already processed' } };
+      if (invite.to_user_id !== userId && invite.from_user_id !== userId) {
+        return { data: null, error: { message: 'Not authorized' } };
       }
 
-      // Verify the user is the recipient
-      if (invite.to_user_id !== userId) {
-        return { data: null, error: { message: 'Not authorized to accept this invite' } };
-      }
+      // Create game
+      const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
+      let firstPlayer = firstMoveOption === 'inviter' ? 1 : firstMoveOption === 'invitee' ? 2 : Math.random() < 0.5 ? 1 : 2;
 
-      // Create empty board
-      const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(null));
-      
-      // Randomly select who goes first (based on invite first_move_option if set)
-      let firstPlayer = 1;
-      const firstMoveOption = invite.first_move_option || 'random';
-      if (firstMoveOption === 'random') {
-        firstPlayer = Math.random() < 0.5 ? 1 : 2;
-      } else if (firstMoveOption === 'inviter') {
-        firstPlayer = 1;
-      } else if (firstMoveOption === 'invitee') {
-        firstPlayer = 2;
-      }
-      
-      console.log('[InviteService] Creating game with firstPlayer:', firstPlayer, 'option:', firstMoveOption);
-
-      // Create the game
-      const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/games`, {
+      const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/online_games`, {
         method: 'POST',
         headers: { ...headers, 'Prefer': 'return=representation' },
         body: JSON.stringify({
@@ -335,81 +320,78 @@ class InviteService {
       });
 
       if (!createResponse.ok) {
-        const errorText = await createResponse.text();
-        console.error('Failed to create game:', errorText);
+        console.error('Failed to create game');
         return { data: null, error: { message: 'Failed to create game' } };
       }
 
       const games = await createResponse.json();
       const game = games[0];
 
-      // Update invite with game_id
+      // Update invite
       await dbUpdate('game_invites', 
         { status: 'accepted', game_id: game.id },
         { eq: { id: inviteId } }
       );
 
-      // Fetch full game with profiles
-      const gameUrl = `${SUPABASE_URL}/rest/v1/games?id=eq.${game.id}&select=*,player1:profiles!games_player1_id_fkey(*),player2:profiles!games_player2_id_fkey(*)`;
-      const gameResponse = await fetch(gameUrl, { 
-        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
-      });
-      
-      const fullGame = gameResponse.ok ? await gameResponse.json() : game;
-
-      return { data: { game: fullGame }, error: null };
+      return { data: { invite: { ...invite, status: 'accepted', game_id: game.id }, game }, error: null };
     } catch (e) {
       console.error('acceptInvite exception:', e);
       return { data: null, error: { message: e.message } };
     }
   }
 
-  // =====================================================
-  // Decline an invite
-  // =====================================================
   async declineInvite(inviteId, userId) {
     if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
     try {
       const headers = getAuthHeaders();
       if (!headers) return { error: { message: 'Not authenticated' } };
-
-      const url = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&to_user_id=eq.${userId}&status=eq.pending`;
-
-      const response = await fetch(url, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ status: 'declined' })
+      
+      const inviteUrl = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&select=to_user_id`;
+      const inviteResponse = await fetch(inviteUrl, { 
+        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
       });
+      
+      if (inviteResponse.ok) {
+        const invite = await inviteResponse.json();
+        if (invite?.to_user_id !== userId) {
+          return { error: { message: 'Not authorized' } };
+        }
+      }
 
-      if (!response.ok) return { error: { message: response.statusText } };
-      return { error: null };
+      return await dbUpdate('game_invites',
+        { status: 'declined' },
+        { eq: { id: inviteId } }
+      );
     } catch (e) {
       console.error('declineInvite exception:', e);
       return { error: { message: e.message } };
     }
   }
 
-  // =====================================================
-  // Cancel a sent invite
-  // =====================================================
   async cancelInvite(inviteId, userId) {
     if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
     try {
       const headers = getAuthHeaders();
       if (!headers) return { error: { message: 'Not authenticated' } };
-
-      const url = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&from_user_id=eq.${userId}&status=eq.pending`;
-
-      const response = await fetch(url, {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ status: 'cancelled' })
+      
+      const inviteUrl = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&select=from_user_id`;
+      const inviteResponse = await fetch(inviteUrl, { 
+        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
       });
+      
+      if (inviteResponse.ok) {
+        const invite = await inviteResponse.json();
+        if (invite?.from_user_id !== userId) {
+          return { error: { message: 'Not authorized' } };
+        }
+      }
 
-      if (!response.ok) return { error: { message: response.statusText } };
-      return { error: null };
+      return await dbUpdate('game_invites',
+        { status: 'cancelled' },
+        { eq: { id: inviteId } }
+      );
     } catch (e) {
       console.error('cancelInvite exception:', e);
       return { error: { message: e.message } };
@@ -417,114 +399,30 @@ class InviteService {
   }
 
   // =====================================================
-  // Subscribe to invite updates (uses RealtimeManager)
-  // UPDATED: No longer creates own channel - uses consolidated user channel
+  // EMAIL/LINK INVITES (shareable links)
   // =====================================================
-  subscribeToInvites(userId, onNewInvite, onInviteUpdate) {
-    if (!isSupabaseConfigured()) return () => {};
-
-    // Register handlers with RealtimeManager (uses existing user channel)
-    const unsubscribeInvite = realtimeManager.on('gameInvite', (invite) => {
-      console.log('[InviteService] New invite via RealtimeManager:', invite?.id);
-      onNewInvite?.(invite);
-    });
-
-    // For sent invite updates, we still need to poll since realtimeManager
-    // only tracks invites TO the user, not FROM the user
-    // This is a rare event so polling is acceptable
-    let updateInterval = null;
-    if (onInviteUpdate) {
-      let lastChecked = Date.now();
-      updateInterval = setInterval(async () => {
-        const { data } = await this.getSentInvites(userId);
-        if (data?.length > 0) {
-          // Check for recently updated invites
-          const recentUpdates = data.filter(inv => {
-            const updatedAt = new Date(inv.updated_at || inv.created_at);
-            return updatedAt.getTime() > lastChecked;
-          });
-          recentUpdates.forEach(inv => {
-            console.log('[InviteService] Sent invite updated:', inv.id, inv.status);
-            onInviteUpdate?.(inv);
-          });
-        }
-        lastChecked = Date.now();
-      }, 5000); // Poll every 5 seconds for sent invite status
-    }
-
-    // Store the unsubscribe handler
-    this.unsubscribeHandler = () => {
-      unsubscribeInvite();
-      if (updateInterval) clearInterval(updateInterval);
-    };
-
-    return this.unsubscribeHandler;
-  }
-
-  // =====================================================
-  // Unsubscribe from invite updates
-  // =====================================================
-  unsubscribeFromInvites() {
-    if (this.unsubscribeHandler) {
-      this.unsubscribeHandler();
-      this.unsubscribeHandler = null;
-    }
-  }
-
-  // =====================================================
-  // INVITE LINK FUNCTIONS (for sharing via URL)
-  // =====================================================
-
-  // Create an invite link
-  async createInviteLink(fromUserId, recipientName = null) {
+  async createInviteLink(fromUserId, recipientName = '') {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
-      const headers = getAuthHeaders();
-      if (!headers) return { data: null, error: { message: 'Not authenticated' } };
+      const { data: invite, error: createError } = await dbInsert('email_invites', {
+        from_user_id: fromUserId,
+        to_email: recipientName.trim() || `friend_${Date.now()}`,
+        status: 'pending',
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      }, { returning: true, single: true });
 
-      // Generate a unique code
-      const code = this.generateInviteCode();
-      
-      // Store the recipient name in to_email field (used for display name, not actual email)
-      const displayName = recipientName?.trim() || null;
-      
-      // Create the invite in email_invites table
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/email_invites`, {
-        method: 'POST',
-        headers: { ...headers, 'Prefer': 'return=representation' },
-        body: JSON.stringify({
-          from_user_id: fromUserId,
-          to_email: displayName,
-          code: code,
-          status: 'pending',
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
-        })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to create invite link:', errorText);
-        return { data: null, error: { message: 'Failed to create invite link' } };
+      if (createError) {
+        console.error('Error creating invite link:', createError);
+        return { data: null, error: createError };
       }
 
-      const invites = await response.json();
-      const invite = invites[0];
-      
-      // Generate the full invite URL
-      const baseUrl = window.location.origin;
-      const inviteUrl = `${baseUrl}/?invite=${code}`;
+      const appUrl = window.location.origin;
+      const inviteLink = `${appUrl}/?invite=${invite.invite_code}`;
 
-      return { 
-        data: { 
-          ...invite, 
-          id: invite.id,
-          inviteLink: inviteUrl,
-          invite_url: inviteUrl,
-          recipientName: displayName || 'Anyone',
-          status: invite.status || 'pending'
-        }, 
-        error: null 
+      return {
+        data: { ...invite, inviteLink, recipientName: recipientName.trim() || 'Friend' },
+        error: null
       };
     } catch (e) {
       console.error('createInviteLink exception:', e);
@@ -532,17 +430,6 @@ class InviteService {
     }
   }
 
-  // Generate a random invite code
-  generateInviteCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed confusing characters
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  }
-
-  // Get invite links created by user
   async getInviteLinks(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
@@ -550,21 +437,18 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { data: [], error: null };
 
-      const url = `${SUPABASE_URL}/rest/v1/email_invites?from_user_id=eq.${userId}&order=created_at.desc&limit=20`;
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${new Date().toISOString()}&order=created_at.desc`;
 
       const response = await fetch(url, { headers });
       if (!response.ok) return { data: [], error: null };
 
-      const invites = await response.json();
+      const data = await response.json();
+      const appUrl = window.location.origin;
       
-      // Add invite URLs and normalize property names
-      const baseUrl = window.location.origin;
-      const invitesWithLinks = invites.map(invite => ({
+      const invitesWithLinks = (data || []).map(invite => ({
         ...invite,
-        inviteLink: `${baseUrl}/?invite=${invite.code}`,
-        invite_url: `${baseUrl}/?invite=${invite.code}`,
-        recipientName: invite.to_email || (invite.accepted_by ? 'Friend' : 'Anyone'),
-        recipient_name: invite.to_email || (invite.accepted_by ? 'Friend' : 'Anyone')
+        inviteLink: `${appUrl}/?invite=${invite.invite_code}`,
+        recipientName: invite.to_email?.startsWith('friend_') ? 'Friend' : invite.to_email
       }));
 
       return { data: invitesWithLinks, error: null };
@@ -574,7 +458,7 @@ class InviteService {
     }
   }
 
-  // Cancel an invite link
+  // FIXED: Cancel invite link now uses proper PATCH with Prefer header
   async cancelInviteLink(inviteId, userId) {
     if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
@@ -582,15 +466,23 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { error: { message: 'Not authenticated' } };
 
-      const url = `${SUPABASE_URL}/rest/v1/email_invites?id=eq.${inviteId}&from_user_id=eq.${userId}&status=in.(pending,sent)`;
+      console.log('[InviteService] Canceling invite link:', inviteId);
+
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?id=eq.${inviteId}&from_user_id=eq.${userId}`;
 
       const response = await fetch(url, {
         method: 'PATCH',
-        headers,
+        headers: { ...headers, 'Prefer': 'return=minimal' },
         body: JSON.stringify({ status: 'expired' })
       });
 
-      if (!response.ok) return { error: { message: response.statusText } };
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[InviteService] Cancel failed:', response.status, errorText);
+        return { error: { message: response.statusText } };
+      }
+      
+      console.log('[InviteService] Invite link cancelled successfully');
       return { error: null };
     } catch (e) {
       console.error('cancelInviteLink exception:', e);
@@ -598,7 +490,6 @@ class InviteService {
     }
   }
 
-  // Mark invite link as shared
   async markInviteLinkShared(inviteId, userId) {
     if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
@@ -611,6 +502,198 @@ class InviteService {
       console.error('markInviteLinkShared exception:', e);
       return { error: { message: e.message } };
     }
+  }
+
+  // FIXED: Get invite by code using direct query (not RPC)
+  async getInviteByCode(code) {
+    if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
+
+    try {
+      // Use ANON_KEY for public access (user may not be logged in yet)
+      const headers = {
+        'apikey': ANON_KEY,
+        'Content-Type': 'application/json'
+      };
+      
+      // Add auth if available
+      const authHeaders = getAuthHeaders();
+      if (authHeaders) {
+        headers['Authorization'] = authHeaders['Authorization'];
+      }
+      
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?invite_code=eq.${code}&status=in.(pending,sent)&expires_at=gt.${new Date().toISOString()}&select=*`;
+      
+      console.log('[InviteService] Getting invite by code:', code);
+      
+      const response = await fetch(url, { 
+        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+      });
+
+      if (!response.ok) {
+        console.log('[InviteService] Invite not found or expired');
+        return { data: null, error: { message: 'Invite not found' } };
+      }
+      
+      const data = await response.json();
+      
+      if (!data || !data.id) {
+        console.log('[InviteService] No valid invite data');
+        return { data: null, error: { message: 'Invite not found' } };
+      }
+      
+      // Get the inviter's profile
+      const profileUrl = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${data.from_user_id}&select=id,username,display_name,rating`;
+      const profileResponse = await fetch(profileUrl, { 
+        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+      });
+      
+      let inviterProfile = null;
+      if (profileResponse.ok) {
+        inviterProfile = await profileResponse.json();
+      }
+      
+      console.log('[InviteService] Found invite:', { id: data.id, from: inviterProfile?.username });
+      
+      return { 
+        data: { 
+          ...data, 
+          from_user: inviterProfile 
+        }, 
+        error: null 
+      };
+    } catch (e) {
+      console.error('getInviteByCode exception:', e);
+      return { data: null, error: { message: e.message } };
+    }
+  }
+
+  // NEW: Accept invite by code (for shareable links)
+  async acceptInviteByCode(code, acceptingUserId) {
+    if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
+
+    try {
+      const headers = getAuthHeaders();
+      if (!headers) return { data: null, error: { message: 'Not authenticated' } };
+
+      console.log('[InviteService] Accepting invite by code:', code, 'user:', acceptingUserId);
+
+      // First get the invite
+      const { data: invite, error: getError } = await this.getInviteByCode(code);
+      
+      if (getError || !invite) {
+        console.log('[InviteService] Invite not found');
+        return { data: null, error: { message: 'Invite not found or expired' } };
+      }
+      
+      // Check if user is trying to accept their own invite
+      if (invite.from_user_id === acceptingUserId) {
+        console.log('[InviteService] Cannot accept own invite');
+        return { data: null, error: { message: 'Cannot accept your own invite' } };
+      }
+      
+      // Check if invite is still valid
+      if (invite.status !== 'pending' && invite.status !== 'sent') {
+        console.log('[InviteService] Invite already used');
+        return { data: null, error: { message: 'Invite already used' } };
+      }
+      
+      // Create the game
+      const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
+      const firstPlayer = Math.random() < 0.5 ? 1 : 2;
+
+      const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/online_games`, {
+        method: 'POST',
+        headers: { ...headers, 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          player1_id: invite.from_user_id,
+          player2_id: acceptingUserId,
+          board: emptyBoard,
+          board_pieces: {},
+          used_pieces: [],
+          current_player: firstPlayer,
+          status: 'active'
+        })
+      });
+
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
+        console.error('[InviteService] Failed to create game:', errorText);
+        return { data: null, error: { message: 'Failed to create game' } };
+      }
+
+      const games = await createResponse.json();
+      const game = games[0];
+      
+      console.log('[InviteService] Game created:', game.id);
+
+      // Update the invite to mark it as accepted
+      const updateUrl = `${SUPABASE_URL}/rest/v1/email_invites?id=eq.${invite.id}`;
+      await fetch(updateUrl, {
+        method: 'PATCH',
+        headers: { ...headers, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ 
+          status: 'accepted', 
+          game_id: game.id,
+          accepted_by: acceptingUserId,
+          accepted_at: new Date().toISOString()
+        })
+      });
+
+      console.log('[InviteService] Invite accepted successfully, game:', game.id);
+
+      return { 
+        data: { 
+          success: true, 
+          game_id: game.id,
+          game,
+          invite: { ...invite, status: 'accepted', game_id: game.id }
+        }, 
+        error: null 
+      };
+    } catch (e) {
+      console.error('acceptInviteByCode exception:', e);
+      return { data: null, error: { message: e.message } };
+    }
+  }
+
+  // =====================================================
+  // REALTIME SUBSCRIPTIONS
+  // =====================================================
+  subscribeToInvites(userId, onNewInvite, onInviteUpdated) {
+    this.unsubscribeHandler = realtimeManager.subscribeToTable(
+      'game_invites',
+      (payload) => {
+        const invite = payload.new || payload.old;
+        if (!invite) return;
+
+        const isRecipient = invite.to_user_id === userId;
+        const isSender = invite.from_user_id === userId;
+
+        if (!isRecipient && !isSender) return;
+
+        if (payload.eventType === 'INSERT' && isRecipient) {
+          onNewInvite?.(invite);
+        } else if (payload.eventType === 'UPDATE') {
+          onInviteUpdated?.(invite);
+        }
+      },
+      (error) => {
+        console.error('Invite subscription error:', error);
+      }
+    );
+
+    return {
+      unsubscribe: () => {
+        if (this.unsubscribeHandler) {
+          this.unsubscribeHandler();
+          this.unsubscribeHandler = null;
+        }
+      }
+    };
+  }
+
+  unsubscribeFromInvites(subscription) {
+    if (subscription?.unsubscribe) subscription.unsubscribe();
   }
 }
 

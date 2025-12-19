@@ -156,16 +156,14 @@ const ViewPlayerProfile = ({
         setProfile(profileData);
       }
 
-      // FIXED: Load recent games with correct PostgREST filter syntax
-      // Using two separate queries and merging results instead of 'or' filter
-      // Increased limit to get accurate stats
-      // FIXED: Query online_games table (not 'games' which doesn't exist)
+      // FIXED: Load recent games - simplified query without foreign key joins
+      // The database doesn't have FK relationships with those names
       try {
         console.log('[ViewPlayerProfile] Loading games for player:', playerId);
         
-        // Get games where player is player1
+        // Get games where player is player1 (simple query, no joins)
         const { data: gamesAsPlayer1, error: err1 } = await dbSelect('online_games', {
-          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
+          select: 'id,player1_id,player2_id,winner_id,status,created_at',
           eq: { player1_id: playerId, status: 'completed' },
           order: 'created_at.desc',
           limit: 100
@@ -176,7 +174,7 @@ const ViewPlayerProfile = ({
         
         // Get games where player is player2
         const { data: gamesAsPlayer2, error: err2 } = await dbSelect('online_games', {
-          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
+          select: 'id,player1_id,player2_id,winner_id,status,created_at',
           eq: { player2_id: playerId, status: 'completed' },
           order: 'created_at.desc',
           limit: 100
@@ -200,7 +198,51 @@ const ViewPlayerProfile = ({
         
         setCalculatedStats({ wins, totalGames: allGames.length });
         
-        setRecentGames(allGames.slice(0, 10));
+        // For recent games, we need to fetch opponent profiles separately
+        const recentGamesList = allGames.slice(0, 10);
+        
+        // Collect unique opponent IDs
+        const opponentIds = new Set();
+        recentGamesList.forEach(game => {
+          if (game.player1_id !== playerId) opponentIds.add(game.player1_id);
+          if (game.player2_id !== playerId) opponentIds.add(game.player2_id);
+        });
+        
+        // Fetch opponent profiles if we have any games
+        let opponentProfiles = {};
+        if (opponentIds.size > 0) {
+          try {
+            // Fetch each opponent profile individually (simpler and more reliable)
+            for (const oppId of opponentIds) {
+              const { data: oppProfile } = await dbSelect('profiles', {
+                select: 'id,username,display_name,rating',
+                eq: { id: oppId },
+                single: true
+              });
+              if (oppProfile) {
+                opponentProfiles[oppId] = oppProfile;
+              }
+            }
+            console.log('[ViewPlayerProfile] Fetched opponent profiles:', Object.keys(opponentProfiles).length);
+          } catch (e) {
+            console.warn('[ViewPlayerProfile] Error fetching opponent profiles:', e);
+          }
+        }
+        
+        // Attach opponent data to games
+        const gamesWithOpponents = recentGamesList.map(game => {
+          const isPlayer1 = game.player1_id === playerId;
+          const opponentId = isPlayer1 ? game.player2_id : game.player1_id;
+          const opponent = opponentProfiles[opponentId] || { id: opponentId, username: 'Unknown' };
+          return {
+            ...game,
+            player1: isPlayer1 ? profileData : opponentProfiles[game.player1_id],
+            player2: isPlayer1 ? opponentProfiles[game.player2_id] : profileData,
+            opponent
+          };
+        });
+        
+        setRecentGames(gamesWithOpponents);
       } catch (e) {
         console.log('Recent games not available:', e);
       }
