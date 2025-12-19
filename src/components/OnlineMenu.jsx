@@ -1062,18 +1062,57 @@ const OnlineMenu = ({
 </div>
 
 
-           {/* Find Match - Compact with Lobby Count */}
+           {/* Find Match - Glowing Orb Style */}
 <button
   onClick={handleFindMatch}
-  className="w-full p-3 mb-4 bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl font-bold tracking-wide text-white hover:from-amber-400 hover:to-orange-500 transition-all shadow-[0_0_25px_rgba(251,191,36,0.4)] active:scale-[0.98] flex items-center justify-center gap-3"
+  className="w-full p-3 mb-4 rounded-xl transition-all duration-300 relative overflow-hidden group
+    bg-amber-900/30 border-2 border-amber-500/40
+    hover:border-white/40 hover:ring-4 ring-amber-500/50
+    active:scale-[0.98]"
+  style={{ 
+    boxShadow: '0 0 25px rgba(251,191,36,0.3)',
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.boxShadow = '0 0 40px rgba(251,191,36,0.6)';
+    e.currentTarget.style.background = 'linear-gradient(to right, #f59e0b, #ea580c)';
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.boxShadow = '0 0 25px rgba(251,191,36,0.3)';
+    e.currentTarget.style.background = '';
+  }}
 >
-  <Swords size={20} />
-  <span>FIND MATCH</span>
-  {lobbyCount > 0 && (
-    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-normal">
-      {lobbyCount} in queue
+  {/* Animated shine effect on hover */}
+  <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
+  </div>
+  
+  <div className="relative flex items-center justify-center gap-3">
+    {/* Icon Circle with Glow */}
+    <div 
+      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
+        bg-gradient-to-br from-amber-500 to-orange-600 group-hover:scale-110"
+      style={{ boxShadow: '0 0 15px rgba(251,191,36,0.6)' }}
+    >
+      <Swords size={20} className="text-white" />
+    </div>
+    
+    {/* Text Content */}
+    <span className="font-black tracking-wide text-sm text-amber-300 group-hover:text-white transition-colors">
+      FIND MATCH
     </span>
-  )}
+    
+    {lobbyCount > 0 && (
+      <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-normal text-white">
+        {lobbyCount} in queue
+      </span>
+    )}
+    
+    {/* Arrow indicator */}
+    <ChevronRight 
+      size={20} 
+      className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-amber-300" 
+    />
+  </div>
 </button>
 
             {/* Challenge a Player Section */}
@@ -1897,6 +1936,17 @@ const OnlineMenu = ({
           onClose={() => setUnlockedAchievement(null)}
         />
       )}
+      
+      {/* Shine animation for glowing orb buttons */}
+      <style>{`
+        @keyframes shine {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
+        .group:hover .group-hover\\:animate-shine {
+          animation: shine 1.5s ease-in-out;
+        }
+      `}</style>
     </div>
   );
 };

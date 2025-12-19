@@ -56,8 +56,8 @@ const DPad = ({ onMove }) => {
   });
   
   return (
-    // SMALLER CONTAINER: Reduced from w-28 h-28 / w-32 h-32 to w-24 h-24 / w-28 h-28
-    <div className="flex justify-center mt-2 mb-1">
+    // Reduced margin-top from mt-2 to mt-0 for tighter spacing with board
+    <div className="flex justify-center mt-0 mb-1">
       <div className="relative w-24 h-24 sm:w-28 sm:h-28">
         {/* Up */}
         <button

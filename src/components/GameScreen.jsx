@@ -10,6 +10,7 @@ import DPad from './DPad';
 import GameStatus from './GameStatus';
 import GameOverModal from './GameOverModal';
 import DragOverlay from './DragOverlay';
+import FloatingPiecesBackground from './FloatingPiecesBackground';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
@@ -17,8 +18,8 @@ import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Drag detection constants
-const DRAG_THRESHOLD = 5; // Reduced from 10 for more responsive dragging
-const SCROLL_ANGLE_THRESHOLD = 65; // Slightly higher to favor drag over scroll
+const DRAG_THRESHOLD = 10;
+const SCROLL_ANGLE_THRESHOLD = 60;
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -89,40 +90,66 @@ const getTheme = (gameMode, aiDifficulty, puzzleDifficulty) => {
 };
 
 // Player indicator component
-const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking }) => {
-  const isVsAI = gameMode === 'ai' || gameMode === 'puzzle';
-  const p1Label = isVsAI ? 'YOU' : 'PLAYER 1';
-  const p2Label = isVsAI ? 'AI' : 'PLAYER 2';
+const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty }) => {
+  const isVsAI = gameMode === 'ai';
+  const isPuzzle = gameMode === 'puzzle';
+  const p1Label = (isVsAI || isPuzzle) ? 'YOU' : 'PLAYER 1';
+  const p2Label = (isVsAI || isPuzzle) ? 'AI' : 'PLAYER 2';
+  
+  // Get difficulty label for AI mode
+  const getDifficultyLabel = () => {
+    if (!isVsAI) return null;
+    switch (aiDifficulty) {
+      case AI_DIFFICULTY.RANDOM: return { text: 'BEGINNER', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
+      case AI_DIFFICULTY.AVERAGE: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+      case AI_DIFFICULTY.PROFESSIONAL: return { text: 'EXPERT', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
+      default: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+    }
+  };
+  
+  const difficultyInfo = getDifficultyLabel();
   
   return (
-    <div className="flex items-center justify-center gap-6 mb-3 py-2">
-      <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
+    <div className="flex items-center justify-center gap-2 mb-3 py-2">
+      {/* Player 1 - YOU */}
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
         currentPlayer === 1 
           ? `bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]` 
           : 'bg-slate-800/50 border border-slate-700/50'
       }`}>
-        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+        <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
           currentPlayer === 1 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] animate-pulse' : 'bg-slate-600'
         }`} />
-        <span className={`text-sm font-bold tracking-wide ${currentPlayer === 1 ? 'text-cyan-300' : 'text-slate-500'}`}>
+        <span className={`text-xs font-bold tracking-wide ${currentPlayer === 1 ? 'text-cyan-300' : 'text-slate-500'}`}>
           {p1Label}
         </span>
       </div>
       
-      <span className="text-slate-600 font-bold">VS</span>
+      {/* Difficulty Badge (for AI mode) or VS text */}
+      {isVsAI && difficultyInfo ? (
+        <div 
+          className={`px-3 py-1 rounded-full bg-gradient-to-r ${difficultyInfo.color} border border-white/20`}
+          style={{ boxShadow: `0 0 15px ${difficultyInfo.glow}` }}
+        >
+          <span className="text-white text-[10px] font-black tracking-wider">{difficultyInfo.text}</span>
+        </div>
+      ) : (
+        <span className="text-slate-600 font-bold text-sm">VS</span>
+      )}
       
-      <div className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all duration-300 ${
+      {/* Player 2 - AI or PLAYER 2 */}
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
         currentPlayer === 2 
           ? `bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]` 
           : 'bg-slate-800/50 border border-slate-700/50'
       }`}>
-        <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
+        <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
           currentPlayer === 2 ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse' : 'bg-slate-600'
         }`} />
-        <span className={`text-sm font-bold tracking-wide ${currentPlayer === 2 ? 'text-pink-300' : 'text-slate-500'}`}>
+        <span className={`text-xs font-bold tracking-wide ${currentPlayer === 2 ? 'text-pink-300' : 'text-slate-500'}`}>
           {p2Label}
           {isAIThinking && currentPlayer === 2 && (
-            <span className="ml-2 text-xs text-pink-400/70">thinking...</span>
+            <span className="ml-1 text-[10px] text-pink-400/70">...</span>
           )}
         </span>
       </div>
@@ -188,14 +215,8 @@ const GameScreen = ({
     return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
   })();
 
-  // Show error when placement is invalid (but not while actively dragging)
+  // Show error when placement is invalid
   useEffect(() => {
-    // Don't show error messages while actively dragging - it's distracting
-    if (isDragging) {
-      setErrorMessage(null);
-      return;
-    }
-    
     if (pendingMove) {
       const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
       const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
@@ -207,7 +228,7 @@ const GameScreen = ({
     } else {
       setErrorMessage(null);
     }
-  }, [pendingMove, rotation, flipped, board, isDragging]);
+  }, [pendingMove, rotation, flipped, board]);
 
   // Show game over modal when game ends
   useEffect(() => {
@@ -266,11 +287,6 @@ const GameScreen = ({
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
     const offsetY = clientY - (elementRect.top + elementRect.height / 2);
     
-    // OPTIMIZATION: Cache board bounds at drag start
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
-    
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
@@ -286,34 +302,31 @@ const GameScreen = ({
     document.body.style.touchAction = 'none';
   }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
 
-  // Update drag position - OPTIMIZED with requestAnimationFrame
+  // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
     if (!isDragging || !draggedPiece) return;
     
-    // Use requestAnimationFrame for smoother updates
-    requestAnimationFrame(() => {
-      setDragPosition({ x: clientX, y: clientY });
+    setDragPosition({ x: clientX, y: clientY });
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // Calculate which cell we're over
+    const cell = calculateBoardCell(clientX, clientY);
+    
+    if (cell && setPendingMove) {
+      // Update pending move for visual feedback
+      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
       
-      // Only update board bounds if not cached or stale
-      if (boardRef.current && !boardBoundsRef.current) {
-        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-      }
-      
-      // Calculate which cell we're over
-      const cell = calculateBoardCell(clientX, clientY);
-      
-      if (cell && setPendingMove) {
-        // Update pending move for visual feedback
-        setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
-        
-        // Check if valid drop position
-        const coords = getPieceCoords(draggedPiece, rotation, flipped);
-        const valid = canPlacePiece(board, cell.row, cell.col, coords);
-        setIsValidDrop(valid);
-      } else {
-        setIsValidDrop(false);
-      }
-    });
+      // Check if valid drop position
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
+    } else {
+      setIsValidDrop(false);
+    }
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // End drag
@@ -470,24 +483,17 @@ const GameScreen = ({
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
+      
+      {/* Floating pieces background animation */}
+      <FloatingPiecesBackground />
 
       {/* Main content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
         <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
           
-          {/* Title - Larger for better visibility */}
+          {/* Title - Larger for better alignment with other screens */}
           <div className="text-center mb-2">
-            <NeonTitle size="medium" />
-            {gameMode === 'ai' && (
-              <>
-                <NeonSubtitle text="VS AI" size="small" className="mt-1" />
-                {theme.label && (
-                  <div className={`inline-block mt-1 px-4 py-1 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
-                    <span className="text-white text-xs font-black tracking-[0.2em]">{theme.label}</span>
-                  </div>
-                )}
-              </>
-            )}
+            <NeonTitle size={gameMode === 'ai' ? 'medium' : 'small'} />
             {gameMode === 'puzzle' && (
               <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
             )}
@@ -499,18 +505,19 @@ const GameScreen = ({
           {/* Game Area */}
           <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
             
-            {/* Player Bar */}
+            {/* Player Bar - with difficulty shown between YOU and AI */}
             <PlayerBar 
               currentPlayer={currentPlayer} 
               gameMode={gameMode} 
               theme={theme}
               isAIThinking={isAIThinking}
+              aiDifficulty={aiDifficulty}
             />
             
             <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
 
             {/* Game Board with ref for drag positioning */}
-            <div className="flex justify-center pb-4">
+            <div className="flex justify-center pb-1">
               <GameBoard
                 ref={boardRef}
                 board={board}
@@ -531,19 +538,13 @@ const GameScreen = ({
             {/* D-Pad and Error Message Layout */}
             {pendingMove && !isGeneratingPuzzle && !isDragging && (
               <div className="flex items-start justify-center gap-3 mb-2">
-                {/* Error message box - Enhanced with animation */}
-                <div className="flex-shrink-0 w-28">
+                {/* Error message box */}
+                <div className="flex-shrink-0 w-24">
                   {errorMessage && (
-                    <div className="error-message-box animate-error-shake">
-                      <div className="bg-gradient-to-r from-red-900/90 via-red-800/90 to-red-900/90 border-2 border-red-500/80 rounded-lg p-2 text-center shadow-[0_0_20px_rgba(239,68,68,0.6),inset_0_0_15px_rgba(239,68,68,0.2)]">
-                        <div className="flex items-center justify-center gap-1 mb-0.5">
-                          <span className="text-red-400 text-lg animate-pulse">⚠</span>
-                        </div>
-                        <span className="text-red-200 text-xs font-black tracking-wide leading-tight block uppercase">
-                          {errorMessage === 'Invalid placement!' ? 'PIECES OVERLAP!' : errorMessage}
-                        </span>
-                        <span className="text-red-400/70 text-[10px] block mt-0.5">Move to empty space</span>
-                      </div>
+                    <div className="error-message-box bg-red-900/80 border border-red-500/60 rounded-lg p-2 text-center shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                      <span className="text-red-300 text-xs font-bold leading-tight block">
+                        {errorMessage}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -552,21 +553,9 @@ const GameScreen = ({
                 <DPad onMove={onMovePiece} />
                 
                 {/* Spacer for symmetry */}
-                <div className="flex-shrink-0 w-28" />
+                <div className="flex-shrink-0 w-24" />
               </div>
             )}
-            
-            {/* Error shake animation */}
-            <style>{`
-              @keyframes error-shake {
-                0%, 100% { transform: translateX(0); }
-                10%, 30%, 50%, 70%, 90% { transform: translateX(-3px); }
-                20%, 40%, 60%, 80% { transform: translateX(3px); }
-              }
-              .animate-error-shake {
-                animation: error-shake 0.5s ease-in-out;
-              }
-            `}</style>
 
             <ControlButtons
               selectedPiece={selectedPiece}
@@ -582,7 +571,6 @@ const GameScreen = ({
               onCancel={onCancel}
               onReset={onReset}
               onRetryPuzzle={onRetryPuzzle}
-              onMenu={onMenu}
             />
           </div>
 

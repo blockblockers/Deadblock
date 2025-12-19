@@ -8,7 +8,7 @@
 // ============================================
 
 import { useState } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
@@ -377,90 +377,194 @@ const EntryAuthScreen = ({
   // ============================================
   // SELECT MODE - Main entry screen
   // ============================================
-  const renderSelectMode = () => (
-    <div className="space-y-3">
-      {/* Invite Banner */}
-      <InviteBanner />
-      
-      {/* Benefits Info - only show if not in invite flow */}
-      {!isInviteFlow && <BenefitsInfo />}
-      
-      {/* Error Message */}
-      {error && (
-        <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-xl text-red-300 text-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-          {error}
-        </div>
-      )}
-      
-      {/* Email Account Options - Primary */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-1">
-          <Mail size={12} className="text-cyan-400" />
-          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Email Sign-In</span>
-        </div>
+  const renderSelectMode = () => {
+    // Auth options with themed colors matching puzzle/difficulty selector style
+    const authOptions = [
+      {
+        id: 'login',
+        name: 'SIGN IN',
+        subtitle: 'Existing Account',
+        description: 'Access your profile and continue your progress',
+        icon: LogIn,
+        colors: {
+          gradient: 'from-cyan-600 to-blue-600',
+          glow: 'rgba(34,211,238,0.6)',
+          text: 'text-cyan-300',
+          ring: 'ring-cyan-500/50',
+          bg: 'bg-cyan-900/30',
+          border: 'border-cyan-500/40',
+        }
+      },
+      {
+        id: 'signup',
+        name: 'CREATE ACCOUNT',
+        subtitle: 'New Player',
+        description: 'Join and start tracking your stats',
+        icon: UserPlus2,
+        colors: {
+          gradient: 'from-purple-500 to-pink-600',
+          glow: 'rgba(168,85,247,0.6)',
+          text: 'text-purple-300',
+          ring: 'ring-purple-500/50',
+          bg: 'bg-purple-900/30',
+          border: 'border-purple-500/40',
+        }
+      },
+      {
+        id: 'google',
+        name: 'GOOGLE',
+        subtitle: 'Quick Sign-In',
+        description: 'Use your Google account for instant access',
+        icon: Globe,
+        colors: {
+          gradient: 'from-amber-500 to-orange-600',
+          glow: 'rgba(251,191,36,0.6)',
+          text: 'text-amber-300',
+          ring: 'ring-amber-500/50',
+          bg: 'bg-amber-900/30',
+          border: 'border-amber-500/40',
+        }
+      }
+    ];
+
+    // Add offline option if not forced online and no invite
+    if (!forceOnlineOnly && !isInviteFlow) {
+      authOptions.push({
+        id: 'offline',
+        name: 'PLAY OFFLINE',
+        subtitle: 'No Account',
+        description: 'Jump right in - stats won\'t be saved',
+        icon: WifiOff,
+        colors: {
+          gradient: 'from-slate-600 to-slate-700',
+          glow: 'rgba(100,116,139,0.5)',
+          text: 'text-slate-300',
+          ring: 'ring-slate-500/50',
+          bg: 'bg-slate-800/50',
+          border: 'border-slate-500/40',
+        }
+      });
+    }
+
+    const handleOptionClick = (optionId) => {
+      soundManager.playButtonClick?.();
+      if (optionId === 'login') {
+        switchMode('login');
+      } else if (optionId === 'signup') {
+        switchMode('signup');
+      } else if (optionId === 'google') {
+        handleGoogleSignIn();
+      } else if (optionId === 'offline') {
+        handleOfflineMode();
+      }
+    };
+
+    return (
+      <div className="space-y-3">
+        {/* Invite Banner */}
+        <InviteBanner />
         
-        {/* Sign In - for existing accounts */}
-        <button
-          onClick={() => switchMode('login')}
-          className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] active:scale-[0.98] border border-cyan-400/30"
-        >
-          <LogIn size={18} />
-          Sign In with Email
-        </button>
-
-        {/* Create Account */}
-        <button
-          onClick={() => switchMode('signup')}
-          className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] active:scale-[0.98] border border-purple-400/30"
-        >
-          <UserPlus2 size={18} />
-          Create New Account
-        </button>
-      </div>
-
-      {/* Google Sign In */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-1">
-          <Globe size={12} className="text-amber-400" />
-          <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">Google Sign-In</span>
-        </div>
-        <button
-          onClick={handleGoogleSignIn}
-          disabled={loading}
-          className="w-full py-2.5 bg-white text-gray-800 font-bold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(255,255,255,0.15)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait border border-white/20"
-        >
-          {loading ? (
-            <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <svg viewBox="0 0 24 24" className="w-5 h-5">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-            </svg>
-          )}
-          <span>Continue with Google</span>
-        </button>
-      </div>
-
-      {/* No Sign-in / Offline Mode - only if not forced online and no invite */}
-      {!forceOnlineOnly && !isInviteFlow && (
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 mb-1">
-            <WifiOff size={12} className="text-orange-400" />
-            <span className="text-orange-400 text-xs font-bold uppercase tracking-wider">No Account</span>
+        {/* Benefits Info - only show if not in invite flow */}
+        {!isInviteFlow && <BenefitsInfo />}
+        
+        {/* Error Message */}
+        {error && (
+          <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-xl text-red-300 text-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+            {error}
           </div>
-          <button
-            onClick={handleOfflineMode}
-            className="w-full py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white font-semibold rounded-xl hover:from-orange-500 hover:to-amber-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(249,115,22,0.3)] active:scale-[0.98] border border-orange-400/30"
-          >
-            <WifiOff size={16} />
-            Play Offline
-          </button>
+        )}
+        
+        {/* Auth Options - Glowing Orb Style */}
+        <div className="space-y-2">
+          {authOptions.map((option) => {
+            const Icon = option.icon;
+            const isGoogle = option.id === 'google';
+            const isLoading = loading && isGoogle;
+            
+            // Get gradient colors for hover effect
+            const gradientColors = {
+              login: { from: '#0891b2', to: '#2563eb' },
+              signup: { from: '#a855f7', to: '#db2777' },
+              google: { from: '#f59e0b', to: '#ea580c' },
+              offline: { from: '#475569', to: '#334155' }
+            };
+            const gradient = gradientColors[option.id];
+            
+            return (
+              <button
+                key={option.id}
+                onClick={() => handleOptionClick(option.id)}
+                disabled={isLoading}
+                className={`w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
+                  ${option.colors.bg} ${option.colors.border} border-2
+                  hover:border-white/40 hover:ring-4 ${option.colors.ring}
+                  active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait`}
+                style={{ 
+                  boxShadow: `0 0 20px ${option.colors.glow.replace('0.6', '0.2')}`,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = `0 0 35px ${option.colors.glow}`;
+                  e.currentTarget.style.background = `linear-gradient(to right, ${gradient.from}, ${gradient.to})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = `0 0 20px ${option.colors.glow.replace('0.6', '0.2')}`;
+                  e.currentTarget.style.background = '';
+                }}
+              >
+                {/* Animated shine effect on hover */}
+                <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
+                </div>
+                
+                <div className="relative flex items-center gap-3">
+                  {/* Icon Circle with Glow */}
+                  <div 
+                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
+                      bg-gradient-to-br ${option.colors.gradient} group-hover:scale-110`}
+                    style={{ boxShadow: `0 0 15px ${option.colors.glow}` }}
+                  >
+                    {isLoading ? (
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : isGoogle ? (
+                      <svg viewBox="0 0 24 24" className="w-5 h-5">
+                        <path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                        <path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                      </svg>
+                    ) : (
+                      <Icon size={20} className="text-white" />
+                    )}
+                  </div>
+                  
+                  {/* Text Content */}
+                  <div className="flex-1 text-left">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className={`font-black tracking-wide text-sm group-hover:text-white transition-colors ${option.colors.text}`}>
+                        {option.name}
+                      </h3>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                        {option.subtitle}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 group-hover:text-white/80 transition-colors">
+                      {option.description}
+                    </p>
+                  </div>
+                  
+                  {/* Arrow indicator */}
+                  <ChevronRight 
+                    size={20} 
+                    className={`flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white ${option.colors.text}`} 
+                  />
+                </div>
+              </button>
+            );
+          })}
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   // ============================================
   // LOGIN MODE - For existing email accounts
@@ -561,16 +665,52 @@ const EntryAuthScreen = ({
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] disabled:opacity-50 border border-cyan-400/30"
+          className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
+            bg-cyan-900/30 border-2 border-cyan-500/40
+            hover:border-white/40 hover:ring-4 ring-cyan-500/50
+            active:scale-[0.98] disabled:opacity-50"
+          style={{ 
+            boxShadow: '0 0 20px rgba(34,211,238,0.2)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = '0 0 35px rgba(34,211,238,0.6)';
+            e.currentTarget.style.background = 'linear-gradient(to right, #0891b2, #2563eb)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = '0 0 20px rgba(34,211,238,0.2)';
+            e.currentTarget.style.background = '';
+          }}
         >
-          {loading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <LogIn size={18} />
-              <span>Sign In</span>
-            </>
-          )}
+          {/* Animated shine effect on hover */}
+          <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
+          </div>
+          
+          <div className="relative flex items-center justify-center gap-3">
+            {/* Icon Circle with Glow */}
+            <div 
+              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
+                bg-gradient-to-br from-cyan-600 to-blue-600 group-hover:scale-110"
+              style={{ boxShadow: '0 0 15px rgba(34,211,238,0.6)' }}
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <LogIn size={20} className="text-white" />
+              )}
+            </div>
+            
+            {/* Text Content */}
+            <span className="font-black tracking-wide text-sm text-cyan-300 group-hover:text-white transition-colors">
+              SIGN IN
+            </span>
+            
+            {/* Arrow indicator */}
+            <ChevronRight 
+              size={20} 
+              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-cyan-300" 
+            />
+          </div>
         </button>
       </form>
       
@@ -694,16 +834,52 @@ const EntryAuthScreen = ({
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] disabled:opacity-50 border border-purple-400/30"
+          className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
+            bg-purple-900/30 border-2 border-purple-500/40
+            hover:border-white/40 hover:ring-4 ring-purple-500/50
+            active:scale-[0.98] disabled:opacity-50"
+          style={{ 
+            boxShadow: '0 0 20px rgba(168,85,247,0.2)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = '0 0 35px rgba(168,85,247,0.6)';
+            e.currentTarget.style.background = 'linear-gradient(to right, #a855f7, #db2777)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = '0 0 20px rgba(168,85,247,0.2)';
+            e.currentTarget.style.background = '';
+          }}
         >
-          {loading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <UserPlus2 size={18} />
-              <span>{isInviteFlow ? 'Create Account & Join Game' : 'Create Account'}</span>
-            </>
-          )}
+          {/* Animated shine effect on hover */}
+          <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
+          </div>
+          
+          <div className="relative flex items-center justify-center gap-3">
+            {/* Icon Circle with Glow */}
+            <div 
+              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
+                bg-gradient-to-br from-purple-500 to-pink-600 group-hover:scale-110"
+              style={{ boxShadow: '0 0 15px rgba(168,85,247,0.6)' }}
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <UserPlus2 size={20} className="text-white" />
+              )}
+            </div>
+            
+            {/* Text Content */}
+            <span className="font-black tracking-wide text-sm text-purple-300 group-hover:text-white transition-colors">
+              {isInviteFlow ? 'CREATE & JOIN' : 'CREATE ACCOUNT'}
+            </span>
+            
+            {/* Arrow indicator */}
+            <ChevronRight 
+              size={20} 
+              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-purple-300" 
+            />
+          </div>
         </button>
       </form>
       
@@ -951,6 +1127,17 @@ const EntryAuthScreen = ({
           © 2025 Deadblock. All rights reserved.
         </p>
       </div>
+      
+      {/* Shine animation for glowing orb buttons */}
+      <style>{`
+        @keyframes shine {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
+        .group:hover .group-hover\\:animate-shine {
+          animation: shine 1.5s ease-in-out;
+        }
+      `}</style>
     </div>
   );
 };

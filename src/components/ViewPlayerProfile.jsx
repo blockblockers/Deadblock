@@ -162,7 +162,7 @@ const ViewPlayerProfile = ({
         console.log('[ViewPlayerProfile] Loading games for player:', playerId);
         
         // Get games where player is player1 (simple query, no joins)
-        const { data: gamesAsPlayer1, error: err1 } = await dbSelect('online_games', {
+        const { data: gamesAsPlayer1, error: err1 } = await dbSelect('games', {
           select: 'id,player1_id,player2_id,winner_id,status,created_at',
           eq: { player1_id: playerId, status: 'completed' },
           order: 'created_at.desc',
@@ -173,7 +173,7 @@ const ViewPlayerProfile = ({
         console.log('[ViewPlayerProfile] Games as player1:', gamesAsPlayer1?.length || 0);
         
         // Get games where player is player2
-        const { data: gamesAsPlayer2, error: err2 } = await dbSelect('online_games', {
+        const { data: gamesAsPlayer2, error: err2 } = await dbSelect('games', {
           select: 'id,player1_id,player2_id,winner_id,status,created_at',
           eq: { player2_id: playerId, status: 'completed' },
           order: 'created_at.desc',

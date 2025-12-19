@@ -305,7 +305,7 @@ class InviteService {
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
       let firstPlayer = firstMoveOption === 'inviter' ? 1 : firstMoveOption === 'invitee' ? 2 : Math.random() < 0.5 ? 1 : 2;
 
-      const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/online_games`, {
+      const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/games`, {
         method: 'POST',
         headers: { ...headers, 'Prefer': 'return=representation' },
         body: JSON.stringify({
@@ -601,7 +601,7 @@ class InviteService {
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
       const firstPlayer = Math.random() < 0.5 ? 1 : 2;
 
-      const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/online_games`, {
+      const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/games`, {
         method: 'POST',
         headers: { ...headers, 'Prefer': 'return=representation' },
         body: JSON.stringify({
