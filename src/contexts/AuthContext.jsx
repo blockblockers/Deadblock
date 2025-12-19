@@ -214,9 +214,9 @@ export const AuthProvider = ({ children }) => {
       if (hasAuthData) {
         console.log('=== OAuth Callback Processing Started ===');
         try {
-          // Set a timeout for OAuth processing
+          // Set a longer timeout for OAuth processing (network can be slow)
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('OAuth timeout')), 8000)
+            setTimeout(() => reject(new Error('OAuth timeout')), 15000)
           );
           
           // This extracts the session from the URL hash/params
@@ -275,6 +275,29 @@ export const AuthProvider = ({ children }) => {
           window.history.replaceState({}, document.title, '/');
         } catch (err) {
           console.error('OAuth: Callback error:', err);
+          
+          // On timeout, try one more time to get the session (it might have succeeded)
+          if (err.message === 'OAuth timeout') {
+            console.log('OAuth: Timeout occurred, attempting session recovery...');
+            try {
+              const { data: recoveryData } = await supabase.auth.getSession();
+              if (recoveryData?.session?.user) {
+                console.log('OAuth: Session recovery successful!', recoveryData.session.user.id);
+                setUser(recoveryData.session.user);
+                // Fetch profile
+                fetchProfile(recoveryData.session.user.id).catch(e => {
+                  console.error('OAuth: Recovery profile fetch failed:', e);
+                });
+                // Don't clear isOAuthCallback - let App.jsx handle redirect
+                window.history.replaceState({}, document.title, '/');
+                console.log('=== OAuth Callback Processing Finished (recovered) ===');
+                return;
+              }
+            } catch (recoveryErr) {
+              console.error('OAuth: Session recovery failed:', recoveryErr);
+            }
+          }
+          
           setIsOAuthCallback(false); // Clear flag on error
           window.history.replaceState({}, document.title, '/');
         }
@@ -297,52 +320,73 @@ export const AuthProvider = ({ children }) => {
       
       let timeoutCleared = false;
       
-      // Shorter timeout since we have cached data as fallback
+      // Longer timeout for OAuth callbacks (network can be slow)
+      // Shorter timeout if we have cached data and it's NOT an OAuth flow
+      const timeoutMs = hasAuthData ? 20000 : (cached?.profile ? 4000 : 10000);
+      console.log('Auth init: Setting timeout for', timeoutMs, 'ms (OAuth:', hasAuthData, ', hasCached:', !!cached?.profile, ')');
+      
       const timeout = setTimeout(async () => {
         if (!timeoutCleared) {
           console.log('Auth init: TIMEOUT - completing with current state');
           
-          // IMPORTANT: Only set user from cache if we don't already have a user set
-          // This prevents overwriting a real user that was set by SIGNED_IN event
-          // Check the actual current user state (not captured closure)
-          const currentSession = await supabase.auth.getSession().catch(() => null);
-          const hasRealUser = !!currentSession?.data?.session?.user;
-          
-          if (!hasRealUser && cached?.profile && cached?.userId) {
-            console.log('Auth init: Timeout with valid cache and NO real session - trusting cached auth state');
-            // Create a minimal user object from cached data to maintain isAuthenticated
-            setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
+          // Check if there's a real session we should use
+          // The SIGNED_IN event might not have fired yet, so check directly
+          try {
+            const currentSession = await supabase.auth.getSession();
+            const sessionUser = currentSession?.data?.session?.user;
             
-            // Schedule a background profile refresh to get fresh data
-            const userIdToRefresh = cached.userId;
-            setTimeout(async () => {
-              // Check if user is still supposed to be logged in before refreshing
-              const currentCache = loadCachedProfile();
-              if (!currentCache?.userId || currentCache.userId !== userIdToRefresh) {
-                console.log('Auth init: Background refresh skipped - user state changed');
-                return;
+            if (sessionUser) {
+              console.log('Auth init: Timeout but found real session - setting user:', sessionUser.id);
+              setUser(sessionUser);
+              // Fetch profile if we don't have it yet
+              if (!profile) {
+                fetchProfile(sessionUser.id).catch(err => {
+                  console.error('Auth init: Timeout profile fetch error:', err);
+                });
               }
+            } else if (cached?.profile && cached?.userId) {
+              console.log('Auth init: Timeout with valid cache and NO real session - trusting cached auth state');
+              // Create a minimal user object from cached data to maintain isAuthenticated
+              setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
               
-              console.log('Auth init: Background refresh triggered after timeout');
-              try {
-                const freshProfile = await fetchProfile(userIdToRefresh);
-                if (freshProfile) {
-                  console.log('Auth init: Background refresh successful:', freshProfile.username);
-                } else {
-                  console.log('Auth init: Background refresh returned no data');
+              // Schedule a background profile refresh to get fresh data
+              const userIdToRefresh = cached.userId;
+              setTimeout(async () => {
+                // Check if user is still supposed to be logged in before refreshing
+                const currentCache = loadCachedProfile();
+                if (!currentCache?.userId || currentCache.userId !== userIdToRefresh) {
+                  console.log('Auth init: Background refresh skipped - user state changed');
+                  return;
                 }
-              } catch (err) {
-                console.error('Auth init: Background refresh error:', err);
-              }
-            }, 500);
-          } else if (hasRealUser) {
-            console.log('Auth init: Timeout but real session exists - not overwriting user');
+                
+                console.log('Auth init: Background refresh triggered after timeout');
+                try {
+                  const freshProfile = await fetchProfile(userIdToRefresh);
+                  if (freshProfile) {
+                    console.log('Auth init: Background refresh successful:', freshProfile.username);
+                  } else {
+                    console.log('Auth init: Background refresh returned no data');
+                  }
+                } catch (err) {
+                  console.error('Auth init: Background refresh error:', err);
+                }
+              }, 500);
+            } else {
+              console.log('Auth init: Timeout with no session and no cache');
+            }
+          } catch (err) {
+            console.error('Auth init: Timeout session check failed:', err);
+            // Fall back to cache if available
+            if (cached?.profile && cached?.userId) {
+              console.log('Auth init: Using cache after session check failure');
+              setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
+            }
           }
           
           setSessionReady(true); // Mark as ready even on timeout
           setLoading(false);
         }
-      }, cached?.profile ? 4000 : 10000); // Increased: 4s if cached, 10s if not
+      }, timeoutMs);
       
       const clearTimeoutSafe = () => {
         timeoutCleared = true;
@@ -670,8 +714,6 @@ export const AuthProvider = ({ children }) => {
     if (!supabase) return;
     
     console.log('[AuthContext] signOut: Starting sign out process');
-    // Log call stack to debug unexpected signOut calls
-    console.log('[AuthContext] signOut: Call stack:', new Error().stack);
     
     // Clear state FIRST before calling Supabase (in case it times out)
     setUser(null);
