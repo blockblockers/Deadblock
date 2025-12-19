@@ -44,11 +44,14 @@ const dbSelect = async (table, options = {}) => {
   if (options.select) url += `select=${encodeURIComponent(options.select)}&`;
   if (options.eq) {
     Object.entries(options.eq).forEach(([key, value]) => {
-      url += `${key}=eq.${value}&`;
+      // Properly encode the value
+      url += `${encodeURIComponent(key)}=eq.${encodeURIComponent(value)}&`;
     });
   }
-  if (options.order) url += `order=${options.order}&`;
+  if (options.order) url += `order=${encodeURIComponent(options.order)}&`;
   if (options.limit) url += `limit=${options.limit}&`;
+  
+  console.log('[dbSelect] Query:', table, url);
   
   try {
     const response = await fetch(url, { 
@@ -56,10 +59,18 @@ const dbSelect = async (table, options = {}) => {
         ? { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
         : headers 
     });
-    if (!response.ok) return { data: null, error: response.statusText };
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[dbSelect] Error:', response.status, errorText);
+      return { data: null, error: response.statusText };
+    }
+    
     const data = await response.json();
+    console.log('[dbSelect] Result:', table, 'count:', Array.isArray(data) ? data.length : 1);
     return { data, error: null };
   } catch (e) {
+    console.error('[dbSelect] Exception:', e);
     return { data: null, error: e.message };
   }
 };
@@ -119,6 +130,9 @@ const ViewPlayerProfile = ({
 
   useEffect(() => {
     if (playerId) {
+      // Reset stats when viewing a different player
+      setCalculatedStats({ wins: 0, totalGames: 0 });
+      setRecentGames([]);
       loadPlayerData();
     }
   }, [playerId]);
@@ -150,39 +164,41 @@ const ViewPlayerProfile = ({
         console.log('[ViewPlayerProfile] Loading games for player:', playerId);
         
         // Get games where player is player1
-const { data: gamesAsPlayer1, error: err1 } = await dbSelect('online_games', {
-  select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
-  eq: { player1_id: playerId, status: 'completed' },
-  order: 'created_at.desc',
-  limit: 100
-});
-
-console.log('[ViewPlayerProfile] Games as player1:', { count: gamesAsPlayer1?.length, error: err1 });
-
-// Get games where player is player2
-const { data: gamesAsPlayer2, error: err2 } = await dbSelect('online_games', {
-  select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
-  eq: { player2_id: playerId, status: 'completed' },
-  order: 'created_at.desc',
-  limit: 100
-});
-
-console.log('[ViewPlayerProfile] Games as player2:', { count: gamesAsPlayer2?.length, error: err2 });
-
-// Merge and sort
-const allGames = [...(gamesAsPlayer1 || []), ...(gamesAsPlayer2 || [])];
-allGames.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-
-// Calculate wins
-const wins = allGames.filter(g => g.winner_id === playerId).length;
-console.log('[ViewPlayerProfile] Calculated stats:', { 
-  playerId, 
-  totalGames: allGames.length, 
-  wins,
-  gameWinnerIds: allGames.slice(0, 5).map(g => g.winner_id)
-});
-
-setCalculatedStats({ wins, totalGames: allGames.length });
+        const { data: gamesAsPlayer1, error: err1 } = await dbSelect('online_games', {
+          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
+          eq: { player1_id: playerId, status: 'completed' },
+          order: 'created_at.desc',
+          limit: 100
+        });
+        
+        if (err1) console.warn('[ViewPlayerProfile] Error fetching player1 games:', err1);
+        console.log('[ViewPlayerProfile] Games as player1:', gamesAsPlayer1?.length || 0);
+        
+        // Get games where player is player2
+        const { data: gamesAsPlayer2, error: err2 } = await dbSelect('online_games', {
+          select: 'id,player1_id,player2_id,winner_id,status,created_at,player1:profiles!online_games_player1_id_fkey(id,username,display_name,rating),player2:profiles!online_games_player2_id_fkey(id,username,display_name,rating)',
+          eq: { player2_id: playerId, status: 'completed' },
+          order: 'created_at.desc',
+          limit: 100
+        });
+        
+        if (err2) console.warn('[ViewPlayerProfile] Error fetching player2 games:', err2);
+        console.log('[ViewPlayerProfile] Games as player2:', gamesAsPlayer2?.length || 0);
+        
+        // Merge and sort by created_at
+        const allGames = [...(gamesAsPlayer1 || []), ...(gamesAsPlayer2 || [])];
+        allGames.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        // Calculate actual wins from games (this is more accurate than profile.games_won)
+        const wins = allGames.filter(g => g.winner_id === playerId).length;
+        console.log('[ViewPlayerProfile] Calculated stats:', { 
+          playerId, 
+          totalGames: allGames.length, 
+          wins,
+          sampleWinnerIds: allGames.slice(0, 3).map(g => ({ gameId: g.id, winnerId: g.winner_id }))
+        });
+        
+        setCalculatedStats({ wins, totalGames: allGames.length });
         
         setRecentGames(allGames.slice(0, 10));
       } catch (e) {

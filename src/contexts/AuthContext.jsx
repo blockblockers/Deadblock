@@ -301,6 +301,15 @@ export const AuthProvider = ({ children }) => {
       const timeout = setTimeout(() => {
         if (!timeoutCleared) {
           console.log('Auth init: TIMEOUT - completing with current state');
+          
+          // IMPORTANT FIX: If we have a valid cached profile, trust it for authentication
+          // This prevents the user from being logged out just because Supabase was slow
+          if (cached?.profile && cached?.userId) {
+            console.log('Auth init: Timeout with valid cache - trusting cached auth state');
+            // Create a minimal user object from cached data to maintain isAuthenticated
+            setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
+          }
+          
           setSessionReady(true); // Mark as ready even on timeout
           setLoading(false);
         }
@@ -491,22 +500,16 @@ export const AuthProvider = ({ children }) => {
       return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
     }
 
-    // Check if username is taken - use maybeSingle to avoid 406 error
-    const { data: existing, error: checkError } = await supabase
+    // Check if username is taken
+    const { data: existing } = await supabase
       .from('profiles')
       .select('username')
-      .eq('username', username.toLowerCase())
-      .maybeSingle();
-
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('[AuthContext] Username check error:', checkError);
-    }
+      .eq('username', username)
+      .single();
 
     if (existing) {
       return { error: { message: 'Username already taken' } };
     }
-
-    console.log('[AuthContext] Creating account for:', email, 'username:', username);
 
     // Sign up the user
     const { data, error } = await supabase.auth.signUp({
@@ -514,7 +517,7 @@ export const AuthProvider = ({ children }) => {
       password,
       options: {
         data: { 
-          username: username.toLowerCase(), 
+          username, 
           display_name: username 
         },
         // Don't require email verification redirect
@@ -522,103 +525,45 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    console.log('[AuthContext] Signup response:', { 
-      hasUser: !!data?.user, 
-      hasSession: !!data?.session,
-      userId: data?.user?.id,
-      error: error?.message 
-    });
-
-    // If signup succeeded
+    // If signup succeeded but we got a database error, try to manually create profile
     if (!error && data?.user) {
-      // Wait a moment for the database trigger to run
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Wait a moment for the trigger to run
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Check if profile was created by trigger - use maybeSingle to avoid 406
-      const { data: profileCheck, error: profileCheckError } = await supabase
+      // Check if profile was created
+      const { data: profileCheck } = await supabase
         .from('profiles')
-        .select('id, username')
+        .select('id')
         .eq('id', data.user.id)
-        .maybeSingle();
-      
-      console.log('[AuthContext] Profile check:', { 
-        hasProfile: !!profileCheck, 
-        username: profileCheck?.username,
-        error: profileCheckError?.message 
-      });
+        .single();
       
       // If no profile exists, create it manually
       if (!profileCheck) {
-        console.log('[AuthContext] Profile not created by trigger, creating manually...');
+        console.log('Profile not created by trigger, creating manually...');
         const { error: profileError } = await supabase
           .from('profiles')
-          .upsert({
+          .insert({
             id: data.user.id,
-            username: username.toLowerCase(),
+            username: username,
             display_name: username
-          }, { onConflict: 'id' });
+          });
         
         if (profileError) {
-          console.error('[AuthContext] Failed to create profile:', profileError);
-        } else {
-          console.log('[AuthContext] Profile created manually');
+          console.error('Failed to create profile manually:', profileError);
         }
       }
       
-      // Check if we got a session (means email confirmation is disabled)
-      if (data.session) {
-        console.log('[AuthContext] Session received - user is logged in');
-        setUser(data.user);
-        await fetchProfile(data.user.id);
-        setIsNewUser(true);
-        
-        return { 
-          data, 
-          error: null, 
-          needsEmailConfirmation: false,
-          isNewUser: true
-        };
-      }
+      // Check if email confirmation is required
+      // If session exists, user is auto-confirmed
+      const needsEmailConfirmation = !data.session;
       
-      // No session - email confirmation might still be enabled in Supabase
-      // Try to sign them in directly (works if email confirmation is disabled)
-      console.log('[AuthContext] No session after signup, attempting direct sign-in...');
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
-      if (signInError) {
-        console.log('[AuthContext] Auto sign-in failed:', signInError.message);
-        // Email confirmation is likely still enabled in Supabase
-        if (signInError.message.includes('Email not confirmed')) {
-          return { 
-            data, 
-            error: null, 
-            needsEmailConfirmation: true,
-            isNewUser: true
-          };
-        }
-        // Other error - account created but can't sign in
-        return { 
-          data, 
-          error: null, 
-          needsEmailConfirmation: false,
-          isNewUser: true,
-          message: 'Account created! Please sign in with your credentials.'
-        };
-      }
-      
-      // Successfully signed in after signup
-      console.log('[AuthContext] Auto sign-in successful');
-      setUser(signInData.user);
-      await fetchProfile(signInData.user.id);
+      // Mark as new user to show welcome modal
       setIsNewUser(true);
       
       return { 
-        data: signInData, 
+        data, 
         error: null, 
-        needsEmailConfirmation: false,
+        needsEmailConfirmation,
         isNewUser: true
       };
     }
@@ -693,48 +638,17 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     if (!supabase) return;
     
-    console.log('[AuthContext] signOut: Starting sign out...');
-    
-    try {
-      // Add timeout to prevent hanging
-      const signOutPromise = supabase.auth.signOut();
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Sign out timeout')), 5000)
-      );
-      
-      const { error } = await Promise.race([signOutPromise, timeoutPromise])
-        .catch(err => {
-          console.warn('[AuthContext] signOut: Timeout or error, forcing local cleanup:', err.message);
-          return { error: null }; // Continue with local cleanup even on timeout
-        });
-      
-      // Always clear local state regardless of server response
+    const { error } = await supabase.auth.signOut();
+    if (!error) {
       setUser(null);
       setProfile(null);
-      setSessionReady(false);
-      
       // Clear entry auth flag so user sees auth screen on next visit
       localStorage.removeItem('deadblock_entry_auth_passed');
-      
       // Clear cached profile
       clearCachedProfile();
-      
       console.log('[AuthContext] signOut: Cleared user, profile, and cache');
-      
-      return { error };
-    } catch (err) {
-      console.error('[AuthContext] signOut: Exception:', err);
-      
-      // Force cleanup on any error
-      setUser(null);
-      setProfile(null);
-      setSessionReady(false);
-      localStorage.removeItem('deadblock_entry_auth_passed');
-      clearCachedProfile();
-      
-      console.log('[AuthContext] signOut: Forced cleanup after error');
-      return { error: err };
     }
+    return { error };
   };
 
   // Send password reset email

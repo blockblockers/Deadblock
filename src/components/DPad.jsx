@@ -7,7 +7,8 @@ const DPad = ({ onMove }) => {
   // Track last move time for debouncing
   const lastMoveTime = useRef(0);
   
-  const buttonClass = "w-10 h-10 sm:w-12 sm:h-12 bg-cyan-600/80 hover:bg-cyan-500 active:bg-cyan-400 text-white rounded-lg shadow-[0_0_15px_rgba(34,211,238,0.5)] flex items-center justify-center border border-cyan-400/50 active:scale-90 transition-all duration-100 touch-manipulation select-none";
+  // SMALLER SIZES: Reduced from w-10 h-10 / w-12 h-12 to w-8 h-8 / w-10 h-10
+  const buttonClass = "w-8 h-8 sm:w-10 sm:h-10 bg-cyan-600/80 hover:bg-cyan-500 active:bg-cyan-400 text-white rounded-lg shadow-[0_0_12px_rgba(34,211,238,0.4)] flex items-center justify-center border border-cyan-400/50 active:scale-90 transition-all duration-100 touch-manipulation select-none";
   
   const executeMove = useCallback((direction) => {
     // Debounce - ignore if less than 80ms since last move
@@ -55,15 +56,16 @@ const DPad = ({ onMove }) => {
   });
   
   return (
-    <div className="flex justify-center mt-3 mb-2">
-      <div className="relative w-28 h-28 sm:w-32 sm:h-32">
+    // SMALLER CONTAINER: Reduced from w-28 h-28 / w-32 h-32 to w-24 h-24 / w-28 h-28
+    <div className="flex justify-center mt-2 mb-1">
+      <div className="relative w-24 h-24 sm:w-28 sm:h-28">
         {/* Up */}
         <button
           type="button"
           {...getButtonHandlers('up')}
           className={`absolute top-0 left-1/2 -translate-x-1/2 ${buttonClass}`}
         >
-          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 15l7-7 7 7" />
           </svg>
         </button>
@@ -74,7 +76,7 @@ const DPad = ({ onMove }) => {
           {...getButtonHandlers('down')}
           className={`absolute bottom-0 left-1/2 -translate-x-1/2 ${buttonClass}`}
         >
-          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
@@ -85,7 +87,7 @@ const DPad = ({ onMove }) => {
           {...getButtonHandlers('left')}
           className={`absolute left-0 top-1/2 -translate-y-1/2 ${buttonClass}`}
         >
-          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
@@ -96,13 +98,13 @@ const DPad = ({ onMove }) => {
           {...getButtonHandlers('right')}
           className={`absolute right-0 top-1/2 -translate-y-1/2 ${buttonClass}`}
         >
-          <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
           </svg>
         </button>
 
-        {/* Center dot */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 sm:w-10 sm:h-10 bg-slate-800 rounded-full border border-cyan-500/50 shadow-[0_0_10px_rgba(34,211,238,0.3)]" />
+        {/* Center dot - SMALLER: Reduced from w-8 h-8 / w-10 h-10 to w-6 h-6 / w-8 h-8 */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 sm:w-8 sm:h-8 bg-slate-800 rounded-full border border-cyan-500/50 shadow-[0_0_8px_rgba(34,211,238,0.3)]" />
       </div>
     </div>
   );

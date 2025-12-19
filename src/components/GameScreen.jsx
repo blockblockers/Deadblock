@@ -1,7 +1,6 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
 // UPDATED: Added drag-and-drop for pieces from tray to board
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -11,7 +10,6 @@ import DPad from './DPad';
 import GameStatus from './GameStatus';
 import GameOverModal from './GameOverModal';
 import DragOverlay from './DragOverlay';
-import FloatingPieces from './FloatingPieces';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
@@ -19,8 +17,8 @@ import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Drag detection constants
-const DRAG_THRESHOLD = 10;
-const SCROLL_ANGLE_THRESHOLD = 60;
+const DRAG_THRESHOLD = 5; // Reduced from 10 for more responsive dragging
+const SCROLL_ANGLE_THRESHOLD = 65; // Slightly higher to favor drag over scroll
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -34,7 +32,6 @@ const difficultyThemes = {
     labelBg: 'from-green-600 via-emerald-500 to-green-600',
     labelGlow: 'shadow-[0_0_30px_rgba(34,197,94,0.8)]',
     labelBorder: 'border-green-400/50',
-    floatTheme: 'puzzle',
   },
   intermediate: {
     gridColor: 'rgba(251,191,36,0.4)',
@@ -46,7 +43,6 @@ const difficultyThemes = {
     labelBg: 'from-amber-600 via-orange-500 to-amber-600',
     labelGlow: 'shadow-[0_0_30px_rgba(251,191,36,0.8)]',
     labelBorder: 'border-amber-400/50',
-    floatTheme: 'amber',
   },
   expert: {
     gridColor: 'rgba(168,85,247,0.4)',
@@ -58,7 +54,6 @@ const difficultyThemes = {
     labelBg: 'from-purple-600 via-pink-500 to-purple-600',
     labelGlow: 'shadow-[0_0_30px_rgba(168,85,247,0.8)]',
     labelBorder: 'border-purple-400/50',
-    floatTheme: 'ai',
   },
   default: {
     gridColor: 'rgba(34,211,238,0.3)',
@@ -70,7 +65,6 @@ const difficultyThemes = {
     labelBg: '',
     labelGlow: '',
     labelBorder: '',
-    floatTheme: 'game',
   },
 };
 
@@ -266,6 +260,11 @@ const GameScreen = ({
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
     const offsetY = clientY - (elementRect.top + elementRect.height / 2);
     
+    // OPTIMIZATION: Cache board bounds at drag start
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
@@ -281,31 +280,34 @@ const GameScreen = ({
     document.body.style.touchAction = 'none';
   }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
 
-  // Update drag position
+  // Update drag position - OPTIMIZED with requestAnimationFrame
   const updateDrag = useCallback((clientX, clientY) => {
     if (!isDragging || !draggedPiece) return;
     
-    setDragPosition({ x: clientX, y: clientY });
-    
-    // Update board bounds
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
-    
-    // Calculate which cell we're over
-    const cell = calculateBoardCell(clientX, clientY);
-    
-    if (cell && setPendingMove) {
-      // Update pending move for visual feedback
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+    // Use requestAnimationFrame for smoother updates
+    requestAnimationFrame(() => {
+      setDragPosition({ x: clientX, y: clientY });
       
-      // Check if valid drop position
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(valid);
-    } else {
-      setIsValidDrop(false);
-    }
+      // Only update board bounds if not cached or stale
+      if (boardRef.current && !boardBoundsRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Calculate which cell we're over
+      const cell = calculateBoardCell(clientX, clientY);
+      
+      if (cell && setPendingMove) {
+        // Update pending move for visual feedback
+        setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+        
+        // Check if valid drop position
+        const coords = getPieceCoords(draggedPiece, rotation, flipped);
+        const valid = canPlacePiece(board, cell.row, cell.col, coords);
+        setIsValidDrop(valid);
+      } else {
+        setIsValidDrop(false);
+      }
+    });
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // End drag
@@ -459,9 +461,6 @@ const GameScreen = ({
         backgroundSize: '30px 30px'
       }} />
       
-      {/* Floating Pentomino Pieces Background */}
-      <FloatingPieces count={12} theme={theme.floatTheme || 'game'} minOpacity={0.2} maxOpacity={0.45} />
-      
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
@@ -470,38 +469,19 @@ const GameScreen = ({
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
         <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
           
-          {/* Header with Menu Button */}
-          <div className="w-full max-w-md flex items-center justify-between mb-3">
-            {/* Menu/Back Button */}
-            <button
-              onClick={() => { soundManager.playButtonClick(); onMenu?.(); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 rounded-lg border border-cyan-500/30 hover:border-cyan-400/50 transition-all text-cyan-300 hover:text-cyan-200 shadow-lg"
-            >
-              <ArrowLeft size={16} />
-              <span className="text-xs font-medium">Menu</span>
-            </button>
-            
-            {/* Title - Centered and larger */}
-            <div className="text-center flex-1">
-              <NeonTitle size="medium" />
-            </div>
-            
-            {/* Spacer for symmetry */}
-            <div className="w-16" />
-          </div>
-          
-          {/* Mode Label */}
+          {/* Compact Title */}
           <div className="text-center mb-2">
+            <NeonTitle size="small" />
             {gameMode === 'ai' && theme.label && (
-              <div className={`inline-block px-4 py-1 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
+              <div className={`inline-block mt-1 px-4 py-1 rounded-full bg-gradient-to-r ${theme.labelBg} ${theme.labelGlow} border ${theme.labelBorder}`}>
                 <span className="text-white text-xs font-black tracking-[0.2em]">{theme.label}</span>
               </div>
             )}
             {gameMode === 'puzzle' && (
-              <NeonSubtitle text="PUZZLE MODE" size="small" />
+              <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
             )}
             {gameMode === '2player' && (
-              <NeonSubtitle text="2 PLAYER" size="small" />
+              <NeonSubtitle text="2 PLAYER" size="small" className="mt-1" />
             )}
           </div>
 
@@ -531,7 +511,6 @@ const GameScreen = ({
                 gameMode={gameMode}
                 currentPlayer={currentPlayer}
                 onCellClick={handleCellClick}
-                onStartDragFromBoard={startDrag}
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}

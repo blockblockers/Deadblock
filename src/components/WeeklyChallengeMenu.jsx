@@ -33,7 +33,9 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
         
         // Load top 3 for preview
         const leaderboardResult = await weeklyChallengeService.getLeaderboard(data.id, 3);
+        console.log('[WeeklyChallengeMenu] Leaderboard result:', leaderboardResult);
         if (leaderboardResult.data) {
+          console.log('[WeeklyChallengeMenu] Top players data:', leaderboardResult.data);
           setTopPlayers(leaderboardResult.data);
         }
       }
@@ -215,7 +217,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                     <div className="space-y-1">
                       {topPlayers.slice(0, 3).map((player, idx) => (
                         <div 
-                          key={player.id}
+                          key={player.user_id}
                           className="flex items-center justify-between bg-slate-800/50 rounded px-3 py-1.5"
                         >
                           <div className="flex items-center gap-2">
@@ -225,10 +227,10 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                               #{idx + 1}
                             </span>
                             <span className="text-white text-sm truncate max-w-[120px]">
-                              {player.profiles?.display_name || player.profiles?.username || 'Anonymous'}
+                              {player.username || player.display_name || 'Anonymous'}
                             </span>
                           </div>
-                          <span className="text-cyan-300 font-mono text-sm">{formatTime(player.best_time)}</span>
+                          <span className="text-cyan-300 font-mono text-sm">{formatTime(player.first_attempt_time_ms || player.best_time_ms)}</span>
                         </div>
                       ))}
                     </div>

@@ -1,6 +1,6 @@
 // Weekly Challenge Service - Handles weekly puzzle challenges
-// FIXED: Added missing getUserChallengeStats method
-// Uses direct fetch to bypass Supabase client timeout issues
+// FIXED: Uses direct fetch to bypass Supabase client timeout issues
+// UPDATED: Added debug logging for leaderboard profile fetch
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 // Helper to get auth data and make direct fetch calls
@@ -184,24 +184,29 @@ class WeeklyChallengeService {
   }
   
   // Get the leaderboard for a challenge (ranked by first_attempt_time_ms)
+  // UPDATED: Added comprehensive debug logging
   async getLeaderboard(challengeId, limit = 50) {
+    console.log('[WeeklyChallengeService] getLeaderboard called:', { challengeId, limit });
+    
     if (!isSupabaseConfigured()) return { data: [], error: 'Supabase not configured' };
     
     const headers = getAuthHeaders();
     if (!headers) return { data: [], error: 'Not authenticated' };
     
     try {
-      // Query results with profiles
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/weekly_challenge_results?challenge_id=eq.${challengeId}&order=first_attempt_time_ms.asc.nullslast&limit=${limit}&select=user_id,first_attempt_time_ms,best_time_ms,completion_time_ms,completed_at`,
-        { headers }
-      );
+      // Query results
+      const resultsUrl = `${SUPABASE_URL}/rest/v1/weekly_challenge_results?challenge_id=eq.${challengeId}&order=first_attempt_time_ms.asc.nullslast&limit=${limit}&select=user_id,first_attempt_time_ms,best_time_ms,completion_time_ms,completed_at`;
+      console.log('[WeeklyChallengeService] Fetching results from:', resultsUrl);
+      
+      const response = await fetch(resultsUrl, { headers });
       
       if (!response.ok) {
+        console.error('[WeeklyChallengeService] Results fetch failed:', response.status);
         return { data: [], error: 'Failed to fetch leaderboard' };
       }
       
       const results = await response.json();
+      console.log('[WeeklyChallengeService] Results fetched:', results.length, 'entries');
       
       if (results.length === 0) {
         return { data: [], error: null };
@@ -209,30 +214,54 @@ class WeeklyChallengeService {
       
       // Fetch profiles for all users
       const userIds = results.map(r => r.user_id);
-      const profilesResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/profiles?id=in.(${userIds.join(',')})&select=id,username,display_name,avatar_url`,
-        { headers }
-      );
+      console.log('[WeeklyChallengeService] Fetching profiles for user IDs:', userIds);
       
-      const profiles = profilesResponse.ok ? await profilesResponse.json() : [];
+      // FIXED: Properly encode the user IDs in the URL
+      const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${userIds.join(',')})&select=id,username,display_name,avatar_url`;
+      console.log('[WeeklyChallengeService] Profiles URL:', profilesUrl);
+      
+      const profilesResponse = await fetch(profilesUrl, { headers });
+      console.log('[WeeklyChallengeService] Profiles response status:', profilesResponse.status);
+      
+      let profiles = [];
+      if (profilesResponse.ok) {
+        profiles = await profilesResponse.json();
+        console.log('[WeeklyChallengeService] Profiles fetched:', profiles.length, 'profiles');
+        console.log('[WeeklyChallengeService] Profile data sample:', profiles[0]);
+      } else {
+        const errorText = await profilesResponse.text();
+        console.error('[WeeklyChallengeService] Profiles fetch failed:', errorText);
+      }
+      
+      // Create profile map
       const profileMap = {};
-      profiles.forEach(p => { profileMap[p.id] = p; });
+      profiles.forEach(p => { 
+        profileMap[p.id] = p; 
+      });
+      console.log('[WeeklyChallengeService] ProfileMap keys:', Object.keys(profileMap));
       
       // Combine results with profiles
-      const formattedData = results.map(entry => ({
-        user_id: entry.user_id,
-        first_attempt_time_ms: entry.first_attempt_time_ms || entry.completion_time_ms,
-        best_time_ms: entry.best_time_ms || entry.completion_time_ms,
-        completion_time_ms: entry.completion_time_ms,
-        completed_at: entry.completed_at,
-        username: profileMap[entry.user_id]?.username,
-        display_name: profileMap[entry.user_id]?.display_name,
-        avatar_url: profileMap[entry.user_id]?.avatar_url
-      }));
+      const formattedData = results.map(entry => {
+        const profile = profileMap[entry.user_id];
+        console.log('[WeeklyChallengeService] Mapping entry:', entry.user_id, '-> profile:', profile?.username || 'NOT FOUND');
+        
+        return {
+          user_id: entry.user_id,
+          first_attempt_time_ms: entry.first_attempt_time_ms || entry.completion_time_ms,
+          best_time_ms: entry.best_time_ms || entry.completion_time_ms,
+          completion_time_ms: entry.completion_time_ms,
+          completed_at: entry.completed_at,
+          username: profile?.username || null,
+          display_name: profile?.display_name || null,
+          avatar_url: profile?.avatar_url || null
+        };
+      });
+      
+      console.log('[WeeklyChallengeService] Final formatted data:', formattedData);
       
       return { data: formattedData, error: null };
     } catch (err) {
-      console.error('Error getting weekly leaderboard:', err);
+      console.error('[WeeklyChallengeService] Error getting weekly leaderboard:', err);
       return { data: [], error: err.message };
     }
   }
@@ -268,29 +297,6 @@ class WeeklyChallengeService {
     }
   }
   
-  // =====================================================
-  // getUserChallengeStats - ALIAS for getUserResult
-  // Used by WeeklyChallengeMenu to get user's challenge stats
-  // =====================================================
-  async getUserChallengeStats(challengeId) {
-    const result = await this.getUserResult(challengeId);
-    
-    // Transform the result to match expected format used by WeeklyChallengeMenu
-    if (result.data) {
-      return {
-        data: {
-          ...result.data,
-          best_time: result.data.best_time_ms || result.data.completion_time_ms,
-          first_attempt_time: result.data.first_attempt_time_ms,
-          attempts: result.data.attempts || 1
-        },
-        error: null
-      };
-    }
-    
-    return result;
-  }
-  
   // Get user's rank in a challenge (based on first_attempt_time)
   async getUserRank(challengeId) {
     if (!isSupabaseConfigured()) return { rank: null, error: 'Supabase not configured' };
@@ -308,44 +314,64 @@ class WeeklyChallengeService {
       if (userIndex === -1) return { rank: null, error: null };
       return { rank: userIndex + 1, error: null };
     } catch (err) {
+      console.error('Error getting user rank:', err);
       return { rank: null, error: err.message };
     }
   }
   
-  // Generate a deterministic puzzle seed for the week
-  generatePuzzleSeed(challenge) {
-    return challenge.puzzle_seed;
+  // Get user's stats for a specific challenge
+  async getUserChallengeStats(challengeId) {
+    if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
+    
+    const headers = getAuthHeaders();
+    if (!headers) return { data: null, error: 'Not authenticated' };
+    
+    const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+    const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
+    const userId = authData?.user?.id;
+    
+    if (!userId) return { data: null, error: 'Not authenticated' };
+    
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/weekly_challenge_results?user_id=eq.${userId}&challenge_id=eq.${challengeId}&select=*`,
+        { headers }
+      );
+      
+      if (!response.ok) {
+        return { data: null, error: 'Failed to fetch stats' };
+      }
+      
+      const results = await response.json();
+      const result = results[0];
+      
+      if (!result) {
+        return { data: null, error: null };
+      }
+      
+      return { 
+        data: {
+          best_time: result.best_time_ms || result.first_attempt_time_ms || result.completion_time_ms,
+          first_attempt_time: result.first_attempt_time_ms,
+          attempts: result.attempts || 1,
+          completed_at: result.completed_at
+        }, 
+        error: null 
+      };
+    } catch (err) {
+      console.error('Error getting user challenge stats:', err);
+      return { data: null, error: err.message };
+    }
   }
   
-  // Format time from milliseconds
+  // Format time for display (converts ms to mm:ss.cc format)
   formatTime(ms) {
     if (!ms) return '--:--';
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    const remainingMs = ms % 1000;
-    
-    if (minutes > 0) {
-      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}.${Math.floor(remainingMs / 100)}`;
-    }
-    return `${seconds}.${Math.floor(remainingMs / 100)}s`;
-  }
-  
-  // Get time remaining in the week
-  getTimeRemaining(challenge) {
-    if (!challenge?.ends_at) return null;
-    
-    const now = new Date();
-    const endDate = new Date(challenge.ends_at);
-    const diff = endDate - now;
-    
-    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, expired: true };
-    
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
-    return { days, hours, minutes, expired: false };
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const centiseconds = Math.floor((ms % 1000) / 10);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
   }
 }
 

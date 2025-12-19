@@ -13,7 +13,6 @@ import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import FloatingPieces from './FloatingPieces';
 
 const EntryAuthScreen = ({ 
   onComplete, 
@@ -114,22 +113,14 @@ const EntryAuthScreen = ({
       if (result.error) {
         setError(result.error.message);
       } else if (result.needsEmailConfirmation) {
-        // Email confirmation is still enabled in Supabase
-        setSuccess('Account created! Check your email to verify, then sign in.');
-        setTimeout(() => switchMode('login'), 2000);
-      } else if (result.message) {
-        // Edge case: account created but auto-login failed
-        setSuccess(result.message);
-        setTimeout(() => switchMode('login'), 1500);
+        setSuccess('Account created! Check your email and click the verification link, then come back and sign in.');
       } else {
-        // Success - user is now logged in
-        setSuccess('Account created! Welcome to Deadblock!');
+        setSuccess('Account created! Signing you in...');
         setTimeout(() => {
           onComplete?.();
-        }, 800);
+        }, 1000);
       }
     } catch (err) {
-      console.error('Signup error:', err);
       setError('An unexpected error occurred');
     }
     
@@ -386,7 +377,7 @@ const EntryAuthScreen = ({
   // SELECT MODE - Main entry screen
   // ============================================
   const renderSelectMode = () => (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* Invite Banner */}
       <InviteBanner />
       
@@ -400,16 +391,53 @@ const EntryAuthScreen = ({
         </div>
       )}
       
-      {/* Google Sign In - Recommended */}
-      <div className="space-y-1.5">
+      {/* Email Account Options - Primary */}
+      <div className="space-y-2">
         <div className="flex items-center gap-2 mb-1">
-          <Globe size={12} className="text-cyan-400" />
-          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Recommended</span>
+          <Mail size={12} className="text-cyan-400" />
+          <span className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Email Sign-In</span>
+        </div>
+        
+        {/* Sign In - for existing accounts */}
+        <button
+          onClick={() => switchMode('login')}
+          className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] active:scale-[0.98] border border-cyan-400/30"
+        >
+          <LogIn size={18} />
+          Sign In with Email
+        </button>
+
+        {/* Create Account */}
+        <button
+          onClick={() => switchMode('signup')}
+          className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] active:scale-[0.98] border border-purple-400/30"
+        >
+          <UserPlus2 size={18} />
+          Create New Account
+        </button>
+        
+        <p className="text-slate-500 text-xs text-center">
+          Create a local account with email & password
+        </p>
+      </div>
+
+      {/* Divider */}
+      <div className="flex items-center gap-3 py-1">
+        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
+        <span className="text-slate-500 text-xs font-medium">OR</span>
+        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
+      </div>
+
+      {/* Google Sign In */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 mb-1">
+          <Globe size={12} className="text-amber-400" />
+          <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">Google Sign-In</span>
         </div>
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
-          className="w-full py-3 bg-white text-gray-800 font-bold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(255,255,255,0.15)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait border border-white/20"
+          className="w-full py-3.5 bg-white text-gray-800 font-bold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_25px_rgba(255,255,255,0.15)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait border border-white/20"
         >
           {loading ? (
             <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
@@ -423,68 +451,38 @@ const EntryAuthScreen = ({
           )}
           <span>Continue with Google</span>
         </button>
+        <p className="text-slate-500 text-xs text-center">
+          Quick & secure - uses your existing Google account
+        </p>
       </div>
 
-      {/* Divider */}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
-        <span className="text-slate-500 text-xs font-medium">OR</span>
-        <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
-      </div>
-
-      {/* Email Account Options */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-1">
-          <Mail size={12} className="text-purple-400" />
-          <span className="text-purple-400 text-xs font-bold uppercase tracking-wider">Email Account</span>
-        </div>
-        
-        {/* Sign In - for existing accounts */}
-        <button
-          onClick={() => switchMode('login')}
-          className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-bold rounded-xl hover:from-cyan-500 hover:to-blue-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,211,238,0.25)] active:scale-[0.98] border border-cyan-400/30"
-        >
-          <LogIn size={18} />
-          Sign In with Email
-        </button>
-
-        {/* Create Account */}
-        <button
-          onClick={() => switchMode('signup')}
-          className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-pink-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(168,85,247,0.25)] active:scale-[0.98] border border-purple-400/30"
-        >
-          <UserPlus2 size={18} />
-          Create New Account
-        </button>
-      </div>
-
-      {/* Offline Mode - only if not forced online and no invite */}
+      {/* No Sign-in / Offline Mode - only if not forced online and no invite */}
       {!forceOnlineOnly && !isInviteFlow && (
-        <div className="pt-2 border-t border-slate-700/50">
-          <button
-            onClick={handleOfflineMode}
-            className="w-full py-2.5 bg-gradient-to-r from-emerald-700 to-teal-600 text-white font-bold rounded-xl hover:from-emerald-600 hover:to-teal-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-[0.98] border border-emerald-400/40"
-          >
-            <WifiOff size={16} />
-            Play Offline
-          </button>
-          <p className="text-emerald-400/70 text-xs text-center mt-1.5">
-            Skip sign in - play vs AI without an account
-          </p>
-        </div>
-      )}
-      
-      {/* Back to Menu - only when forced online (from online menu/weekly challenge) */}
-      {forceOnlineOnly && !isInviteFlow && (
-        <div className="pt-2 border-t border-slate-700/50">
-          <button
-            onClick={handleOfflineMode}
-            className="w-full py-2.5 bg-gradient-to-r from-slate-700 to-slate-600 text-slate-200 font-semibold rounded-xl hover:from-slate-600 hover:to-slate-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] active:scale-[0.98] border border-slate-500/30"
-          >
-            <ArrowLeft size={16} />
-            Back to Menu
-          </button>
-        </div>
+        <>
+          {/* Divider */}
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
+            <span className="text-slate-500 text-xs font-medium">OR</span>
+            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-600 to-transparent" />
+          </div>
+          
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 mb-1">
+              <WifiOff size={12} className="text-slate-400" />
+              <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">No Sign-In</span>
+            </div>
+            <button
+              onClick={handleOfflineMode}
+              className="w-full py-3 bg-gradient-to-r from-slate-700 to-slate-600 text-slate-200 font-semibold rounded-xl hover:from-slate-600 hover:to-slate-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)] active:scale-[0.98] border border-slate-500/30"
+            >
+              <WifiOff size={16} />
+              Play Offline
+            </button>
+            <p className="text-slate-500 text-xs text-center">
+              Skip sign in - play vs AI without an account
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
@@ -925,33 +923,23 @@ const EntryAuthScreen = ({
       <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       
-      {/* Floating pieces background */}
-      <FloatingPieces count={15} theme="cyan" minOpacity={0.15} maxOpacity={0.35} />
-      
       {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-3">
-        {/* Title - Extra Large */}
-        <div className="text-center mb-3">
-          <NeonTitle size="xlarge" />
-          {forceOnlineOnly && !isInviteFlow && (
-            <p className="text-cyan-400 text-sm font-semibold mt-2 tracking-wide">
-              {intendedDestination === 'weekly-menu' ? '🏆 WEEKLY CHALLENGE' : '⚔️ ONLINE MODE'}
-            </p>
-          )}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+        {/* Title - Large size matching PuzzleSelect */}
+        <div className="text-center mb-4">
+          <NeonTitle size="large" />
         </div>
         
         {/* Subtitle */}
-        <p className="text-slate-400 text-sm mb-4 text-center max-w-xs">
+        <p className="text-slate-400 text-sm mb-6 text-center max-w-xs">
           {isInviteFlow 
             ? '🎮 Sign in to accept your game challenge!'
-            : forceOnlineOnly
-              ? 'Sign in to access online features and compete with players worldwide!'
-              : 'Strategic pentomino puzzle battles. Challenge the AI, solve puzzles, or compete online!'
+            : 'Strategic pentomino puzzle battles. Challenge the AI, solve puzzles, or compete online!'
           }
         </p>
         
         {/* Auth Card - with dramatic PuzzleSelect-style theme */}
-        <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-4 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
+        <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
           {mode === 'select' && renderSelectMode()}
           {mode === 'login' && renderLoginMode()}
           {mode === 'signup' && renderSignupMode()}
