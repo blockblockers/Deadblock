@@ -118,6 +118,7 @@ const ViewPlayerProfile = ({
   const [sendingRequest, setSendingRequest] = useState(false);
   const [achievementStats, setAchievementStats] = useState(null);
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
+  const [headToHead, setHeadToHead] = useState(null); // { myWins, theirWins, total }
 
   // Use calculated stats from actual games (more accurate than profile.games_won)
   const displayWins = calculatedStats.totalGames > 0 ? calculatedStats.wins : (profile?.games_won || 0);
@@ -133,6 +134,7 @@ const ViewPlayerProfile = ({
       // Reset stats when viewing a different player
       setCalculatedStats({ wins: 0, totalGames: 0 });
       setRecentGames([]);
+      setHeadToHead(null);
       loadPlayerData();
     }
   }, [playerId]);
@@ -197,6 +199,21 @@ const ViewPlayerProfile = ({
         });
         
         setCalculatedStats({ wins, totalGames: allGames.length });
+        
+        // Calculate head-to-head stats if viewer is logged in
+        if (currentUserId && currentUserId !== playerId) {
+          const h2hGames = allGames.filter(g => 
+            (g.player1_id === currentUserId || g.player2_id === currentUserId)
+          );
+          if (h2hGames.length > 0) {
+            const myWins = h2hGames.filter(g => g.winner_id === currentUserId).length;
+            const theirWins = h2hGames.filter(g => g.winner_id === playerId).length;
+            setHeadToHead({ myWins, theirWins, total: h2hGames.length });
+            console.log('[ViewPlayerProfile] Head-to-head:', { myWins, theirWins, total: h2hGames.length });
+          } else {
+            setHeadToHead(null);
+          }
+        }
         
         // For recent games, we need to fetch opponent profiles separately
         const recentGamesList = allGames.slice(0, 10);
@@ -462,6 +479,48 @@ const ViewPlayerProfile = ({
               <div className="text-slate-500 text-xs">Win Rate</div>
             </div>
           </div>
+
+          {/* Head-to-Head Stats - only show if viewer is logged in and has played against this player */}
+          {headToHead && headToHead.total > 0 && (
+            <div 
+              className="rounded-xl p-3 mb-4"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: '1px solid rgba(251, 191, 36, 0.3)',
+                boxShadow: '0 0 15px rgba(251, 191, 36, 0.1)'
+              }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Swords size={16} className="text-amber-400" />
+                  <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">Head-to-Head</span>
+                </div>
+                <span className="text-slate-400 text-xs">{headToHead.total} games</span>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2">
+                {/* Your Wins */}
+                <div className="text-center">
+                  <div className="text-cyan-400 font-bold text-lg">{headToHead.myWins}</div>
+                  <div className="text-slate-500 text-[10px]">YOUR WINS</div>
+                </div>
+                
+                {/* Win Rate */}
+                <div className="text-center border-x border-slate-700/50">
+                  <div className="text-white font-bold text-lg">
+                    {headToHead.total > 0 ? Math.round((headToHead.myWins / headToHead.total) * 100) : 0}%
+                  </div>
+                  <div className="text-slate-500 text-[10px]">YOUR WIN %</div>
+                </div>
+                
+                {/* Their Wins */}
+                <div className="text-center">
+                  <div className="text-pink-400 font-bold text-lg">{headToHead.theirWins}</div>
+                  <div className="text-slate-500 text-[10px]">THEIR WINS</div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Achievement Stats */}
           {achievementStats && achievementStats.total_achievements > 0 && (

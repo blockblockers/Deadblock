@@ -37,7 +37,6 @@ const WeeklyLeaderboard = lazy(() => import('./components/WeeklyLeaderboard'));
 const PlayerStatsModal = lazy(() => import('./components/PlayerStatsModal'));
 
 // Online components (loaded when entering online features)
-const AuthScreen = lazy(() => import('./components/AuthScreen'));
 const OnlineMenu = lazy(() => import('./components/OnlineMenu'));
 const MatchmakingScreen = lazy(() => import('./components/MatchmakingScreen'));
 const OnlineGameScreen = lazy(() => import('./components/OnlineGameScreen'));
@@ -59,6 +58,8 @@ function AppContent() {
     return localStorage.getItem('deadblock_pending_invite_code') || null;
   });
   const [inviteInfo, setInviteInfo] = useState(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteError, setInviteError] = useState(null);
   
   // Entry auth and offline mode state
   const [isOfflineMode, setIsOfflineMode] = useState(false);
@@ -127,6 +128,8 @@ function AppContent() {
       
       // Fetch invite info (for display purposes only - don't clear on failure)
       const fetchInviteInfo = async () => {
+        setInviteLoading(true);
+        setInviteError(null);
         try {
           const { inviteService } = await import('./services/inviteService');
           const { data, error } = await inviteService.getInviteByCode(inviteCode);
@@ -134,13 +137,19 @@ function AppContent() {
           if (data && !error) {
             setInviteInfo(data);
             console.log('App: Invite info loaded:', data);
+          } else if (error) {
+            console.log('App: Could not fetch invite preview:', error.message);
+            setInviteError(error.message);
           } else {
             // Don't clear the invite code - let acceptInvite handle validation
             console.log('App: Could not fetch invite preview (will try to accept anyway)');
           }
         } catch (err) {
           console.error('App: Error fetching invite info:', err);
+          setInviteError(err.message || 'Failed to load invite');
           // Don't clear - let acceptInvite handle it
+        } finally {
+          setInviteLoading(false);
         }
       };
       
@@ -173,6 +182,7 @@ function AppContent() {
           // Clear the pending invite from both state and localStorage
           setPendingInviteCode(null);
           setInviteInfo(null);
+          setInviteError(null);
           localStorage.removeItem('deadblock_pending_invite_code');
           // Go directly to the game
           setOnlineGameId(data.game_id);
@@ -184,6 +194,7 @@ function AppContent() {
           }
           setPendingInviteCode(null);
           setInviteInfo(null);
+          setInviteError(null);
           localStorage.removeItem('deadblock_pending_invite_code');
           // Fall back to online menu
           if (setGameModeFn) setGameModeFn('online-menu');
@@ -192,6 +203,7 @@ function AppContent() {
           console.log('App: Unexpected response from acceptInviteByCode');
           setPendingInviteCode(null);
           setInviteInfo(null);
+          setInviteError(null);
           localStorage.removeItem('deadblock_pending_invite_code');
           if (setGameModeFn) setGameModeFn('online-menu');
         }
@@ -199,6 +211,7 @@ function AppContent() {
         console.error('App: Error accepting invite:', err);
         setPendingInviteCode(null);
         setInviteInfo(null);
+        setInviteError(null);
         localStorage.removeItem('deadblock_pending_invite_code');
       }
     }
@@ -343,6 +356,7 @@ function AppContent() {
               // Clear invite state
               setPendingInviteCode(null);
               setInviteInfo(null);
+              setInviteError(null);
               localStorage.removeItem('deadblock_pending_invite_code');
               // Mark as redirected AFTER successful invite processing
               setHasRedirectedAfterOAuth(true);
@@ -362,6 +376,7 @@ function AppContent() {
           // Clear invite state even on error
           setPendingInviteCode(null);
           setInviteInfo(null);
+          setInviteError(null);
           localStorage.removeItem('deadblock_pending_invite_code');
         }
         
@@ -812,14 +827,38 @@ function AppContent() {
 
   // Auth Screen (Login/Signup)
   if (gameMode === 'auth') {
+    console.log('Rendering: EntryAuthScreen for auth mode with inviteInfo:', !!inviteInfo);
     return (
-      <LazyWrapper message="Loading authentication...">
-        <AuthScreen
-          onBack={() => setGameMode(null)}
-          onSuccess={() => setGameMode('online-menu')}
-          inviteInfo={inviteInfo}
-        />
-      </LazyWrapper>
+      <EntryAuthScreen
+        onComplete={() => {
+          // After auth, check if we need to accept an invite
+          const inviteCode = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
+          if (inviteCode && profile?.id) {
+            // Invite will be processed by the invite acceptance effect
+            setGameMode(null); // Go to menu, invite effect will handle the rest
+          } else {
+            setGameMode('online-menu');
+          }
+        }}
+        onOfflineMode={() => {
+          setPendingInviteCode(null);
+          setInviteInfo(null);
+          setInviteError(null);
+          localStorage.removeItem('deadblock_pending_invite_code');
+          setGameMode(null);
+        }}
+        inviteInfo={inviteInfo}
+        inviteLoading={inviteLoading}
+        inviteError={inviteError}
+        onCancelInvite={() => {
+          setPendingInviteCode(null);
+          setInviteInfo(null);
+          localStorage.removeItem('deadblock_pending_invite_code');
+          setInviteError(null);
+          setGameMode(null);
+        }}
+        forceOnlineOnly={!!inviteInfo}
+      />
     );
   }
 
@@ -1043,10 +1082,12 @@ function AppContent() {
       pendingMove={pendingMove}
       currentPuzzle={currentPuzzle}
       aiDifficulty={aiDifficulty}
+      puzzleDifficulty={puzzleDifficulty}
       isMobile={isMobile}
       isGeneratingPuzzle={isGeneratingPuzzle}
       aiAnimatingMove={aiAnimatingMove}
       playerAnimatingMove={playerAnimatingMove}
+      setPendingMove={setPendingMove}
       onCellClick={handleCellClick}
       onSelectPiece={selectPiece}
       onRotate={rotatePiece}

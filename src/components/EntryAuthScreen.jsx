@@ -378,7 +378,7 @@ const EntryAuthScreen = ({
   // SELECT MODE - Main entry screen
   // ============================================
   const renderSelectMode = () => {
-    // Auth options with themed colors matching puzzle/difficulty selector style
+    // Auth options with themed colors matching puzzle difficulty order (green, orange, purple, red)
     const authOptions = [
       {
         id: 'login',
@@ -387,12 +387,12 @@ const EntryAuthScreen = ({
         description: 'Access your profile and continue your progress',
         icon: LogIn,
         colors: {
-          gradient: 'from-cyan-600 to-blue-600',
-          glow: 'rgba(34,211,238,0.6)',
-          text: 'text-cyan-300',
-          ring: 'ring-cyan-500/50',
-          bg: 'bg-cyan-900/30',
-          border: 'border-cyan-500/40',
+          gradient: 'from-green-600 to-emerald-600',
+          glow: 'rgba(34,197,94,0.6)',
+          text: 'text-green-300',
+          ring: 'ring-green-500/50',
+          bg: 'bg-green-900/30',
+          border: 'border-green-500/40',
         }
       },
       {
@@ -402,12 +402,12 @@ const EntryAuthScreen = ({
         description: 'Join and start tracking your stats',
         icon: UserPlus2,
         colors: {
-          gradient: 'from-purple-500 to-pink-600',
-          glow: 'rgba(168,85,247,0.6)',
-          text: 'text-purple-300',
-          ring: 'ring-purple-500/50',
-          bg: 'bg-purple-900/30',
-          border: 'border-purple-500/40',
+          gradient: 'from-amber-500 to-orange-600',
+          glow: 'rgba(251,191,36,0.6)',
+          text: 'text-amber-300',
+          ring: 'ring-amber-500/50',
+          bg: 'bg-amber-900/30',
+          border: 'border-amber-500/40',
         }
       },
       {
@@ -417,12 +417,12 @@ const EntryAuthScreen = ({
         description: 'Use your Google account for instant access',
         icon: Globe,
         colors: {
-          gradient: 'from-amber-500 to-orange-600',
-          glow: 'rgba(251,191,36,0.6)',
-          text: 'text-amber-300',
-          ring: 'ring-amber-500/50',
-          bg: 'bg-amber-900/30',
-          border: 'border-amber-500/40',
+          gradient: 'from-purple-500 to-pink-600',
+          glow: 'rgba(168,85,247,0.6)',
+          text: 'text-purple-300',
+          ring: 'ring-purple-500/50',
+          bg: 'bg-purple-900/30',
+          border: 'border-purple-500/40',
         }
       }
     ];
@@ -436,12 +436,12 @@ const EntryAuthScreen = ({
         description: 'Jump right in - stats won\'t be saved',
         icon: WifiOff,
         colors: {
-          gradient: 'from-slate-600 to-slate-700',
-          glow: 'rgba(100,116,139,0.5)',
-          text: 'text-slate-300',
-          ring: 'ring-slate-500/50',
-          bg: 'bg-slate-800/50',
-          border: 'border-slate-500/40',
+          gradient: 'from-red-600 to-rose-600',
+          glow: 'rgba(239,68,68,0.5)',
+          text: 'text-red-300',
+          ring: 'ring-red-500/50',
+          bg: 'bg-red-900/30',
+          border: 'border-red-500/40',
         }
       });
     }
@@ -481,12 +481,12 @@ const EntryAuthScreen = ({
             const isGoogle = option.id === 'google';
             const isLoading = loading && isGoogle;
             
-            // Get gradient colors for hover effect
+            // Get gradient colors for hover effect (matching puzzle difficulty order)
             const gradientColors = {
-              login: { from: '#0891b2', to: '#2563eb' },
-              signup: { from: '#a855f7', to: '#db2777' },
-              google: { from: '#f59e0b', to: '#ea580c' },
-              offline: { from: '#475569', to: '#334155' }
+              login: { from: '#16a34a', to: '#059669' },      // green
+              signup: { from: '#f59e0b', to: '#ea580c' },     // orange
+              google: { from: '#a855f7', to: '#db2777' },     // purple
+              offline: { from: '#dc2626', to: '#e11d48' }     // red
             };
             const gradient = gradientColors[option.id];
             
@@ -577,15 +577,15 @@ const EntryAuthScreen = ({
       <button
         type="button"
         onClick={() => switchMode('select')}
-        className="flex items-center gap-2 text-slate-400 hover:text-cyan-300 text-sm transition-colors group"
+        className="flex items-center gap-2 text-slate-400 hover:text-green-300 text-sm transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
         Back to options
       </button>
       
       <div className="text-center mb-2">
-        <div className="w-14 h-14 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-cyan-400/30">
-          <KeyRound size={28} className="text-cyan-400" />
+        <div className="w-14 h-14 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-400/30">
+          <KeyRound size={28} className="text-green-400" />
         </div>
         <h3 className="text-white font-bold text-lg">Sign In</h3>
         <p className="text-slate-400 text-sm">Welcome back! Enter your credentials</p>
@@ -631,7 +631,7 @@ const EntryAuthScreen = ({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 focus:outline-none transition-all"
               placeholder="your@email.com"
               required
               autoComplete="email"
@@ -647,7 +647,7 @@ const EntryAuthScreen = ({
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 focus:outline-none transition-all"
               placeholder="Enter password"
               required
               autoComplete="current-password"
@@ -666,18 +666,18 @@ const EntryAuthScreen = ({
           type="submit"
           disabled={loading}
           className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
-            bg-cyan-900/30 border-2 border-cyan-500/40
-            hover:border-white/40 hover:ring-4 ring-cyan-500/50
+            bg-green-900/30 border-2 border-green-500/40
+            hover:border-white/40 hover:ring-4 ring-green-500/50
             active:scale-[0.98] disabled:opacity-50"
           style={{ 
-            boxShadow: '0 0 20px rgba(34,211,238,0.2)',
+            boxShadow: '0 0 20px rgba(34,197,94,0.2)',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 35px rgba(34,211,238,0.6)';
-            e.currentTarget.style.background = 'linear-gradient(to right, #0891b2, #2563eb)';
+            e.currentTarget.style.boxShadow = '0 0 35px rgba(34,197,94,0.6)';
+            e.currentTarget.style.background = 'linear-gradient(to right, #16a34a, #059669)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 20px rgba(34,211,238,0.2)';
+            e.currentTarget.style.boxShadow = '0 0 20px rgba(34,197,94,0.2)';
             e.currentTarget.style.background = '';
           }}
         >
@@ -690,8 +690,8 @@ const EntryAuthScreen = ({
             {/* Icon Circle with Glow */}
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
-                bg-gradient-to-br from-cyan-600 to-blue-600 group-hover:scale-110"
-              style={{ boxShadow: '0 0 15px rgba(34,211,238,0.6)' }}
+                bg-gradient-to-br from-green-600 to-emerald-600 group-hover:scale-110"
+              style={{ boxShadow: '0 0 15px rgba(34,197,94,0.6)' }}
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -701,14 +701,14 @@ const EntryAuthScreen = ({
             </div>
             
             {/* Text Content */}
-            <span className="font-black tracking-wide text-sm text-cyan-300 group-hover:text-white transition-colors">
+            <span className="font-black tracking-wide text-sm text-green-300 group-hover:text-white transition-colors">
               SIGN IN
             </span>
             
             {/* Arrow indicator */}
             <ChevronRight 
               size={20} 
-              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-cyan-300" 
+              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-green-300" 
             />
           </div>
         </button>
@@ -746,15 +746,15 @@ const EntryAuthScreen = ({
       <button
         type="button"
         onClick={() => switchMode('select')}
-        className="flex items-center gap-2 text-slate-400 hover:text-purple-300 text-sm transition-colors group"
+        className="flex items-center gap-2 text-slate-400 hover:text-amber-300 text-sm transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
         Back to options
       </button>
       
       <div className="text-center mb-2">
-        <div className="w-14 h-14 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-purple-400/30">
-          <UserPlus2 size={28} className="text-purple-400" />
+        <div className="w-14 h-14 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-amber-400/30">
+          <UserPlus2 size={28} className="text-amber-400" />
         </div>
         <h3 className="text-white font-bold text-lg">Create Account</h3>
         <p className="text-slate-400 text-sm">Join Deadblock with email & password</p>
@@ -782,7 +782,7 @@ const EntryAuthScreen = ({
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
               placeholder="Choose a username"
               required
               minLength={3}
@@ -799,7 +799,7 @@ const EntryAuthScreen = ({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
               placeholder="your@email.com"
               required
               autoComplete="email"
@@ -815,7 +815,7 @@ const EntryAuthScreen = ({
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
               placeholder="At least 6 characters"
               required
               minLength={6}
@@ -835,18 +835,18 @@ const EntryAuthScreen = ({
           type="submit"
           disabled={loading}
           className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
-            bg-purple-900/30 border-2 border-purple-500/40
-            hover:border-white/40 hover:ring-4 ring-purple-500/50
+            bg-amber-900/30 border-2 border-amber-500/40
+            hover:border-white/40 hover:ring-4 ring-amber-500/50
             active:scale-[0.98] disabled:opacity-50"
           style={{ 
-            boxShadow: '0 0 20px rgba(168,85,247,0.2)',
+            boxShadow: '0 0 20px rgba(251,191,36,0.2)',
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 35px rgba(168,85,247,0.6)';
-            e.currentTarget.style.background = 'linear-gradient(to right, #a855f7, #db2777)';
+            e.currentTarget.style.boxShadow = '0 0 35px rgba(251,191,36,0.6)';
+            e.currentTarget.style.background = 'linear-gradient(to right, #f59e0b, #ea580c)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 20px rgba(168,85,247,0.2)';
+            e.currentTarget.style.boxShadow = '0 0 20px rgba(251,191,36,0.2)';
             e.currentTarget.style.background = '';
           }}
         >
@@ -859,8 +859,8 @@ const EntryAuthScreen = ({
             {/* Icon Circle with Glow */}
             <div 
               className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
-                bg-gradient-to-br from-purple-500 to-pink-600 group-hover:scale-110"
-              style={{ boxShadow: '0 0 15px rgba(168,85,247,0.6)' }}
+                bg-gradient-to-br from-amber-500 to-orange-600 group-hover:scale-110"
+              style={{ boxShadow: '0 0 15px rgba(251,191,36,0.6)' }}
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -870,14 +870,14 @@ const EntryAuthScreen = ({
             </div>
             
             {/* Text Content */}
-            <span className="font-black tracking-wide text-sm text-purple-300 group-hover:text-white transition-colors">
+            <span className="font-black tracking-wide text-sm text-amber-300 group-hover:text-white transition-colors">
               {isInviteFlow ? 'CREATE & JOIN' : 'CREATE ACCOUNT'}
             </span>
             
             {/* Arrow indicator */}
             <ChevronRight 
               size={20} 
-              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-purple-300" 
+              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-amber-300" 
             />
           </div>
         </button>
@@ -885,7 +885,7 @@ const EntryAuthScreen = ({
       
       <p className="text-slate-500 text-xs text-center">
         Already have an account?{' '}
-        <button onClick={() => switchMode('login')} className="text-cyan-400 hover:text-cyan-300">
+        <button onClick={() => switchMode('login')} className="text-green-400 hover:text-green-300">
           Sign in
         </button>
       </p>
@@ -967,7 +967,7 @@ const EntryAuthScreen = ({
       <button
         type="button"
         onClick={() => switchMode('login')}
-        className="flex items-center gap-2 text-slate-400 hover:text-purple-300 text-sm transition-colors group"
+        className="flex items-center gap-2 text-slate-400 hover:text-green-300 text-sm transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
         Back to sign in

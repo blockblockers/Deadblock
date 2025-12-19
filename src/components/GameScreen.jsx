@@ -90,21 +90,31 @@ const getTheme = (gameMode, aiDifficulty, puzzleDifficulty) => {
 };
 
 // Player indicator component
-const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty }) => {
+const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty, puzzleDifficulty }) => {
   const isVsAI = gameMode === 'ai';
   const isPuzzle = gameMode === 'puzzle';
   const p1Label = (isVsAI || isPuzzle) ? 'YOU' : 'PLAYER 1';
   const p2Label = (isVsAI || isPuzzle) ? 'AI' : 'PLAYER 2';
   
-  // Get difficulty label for AI mode
+  // Get difficulty label for AI or Puzzle mode
   const getDifficultyLabel = () => {
-    if (!isVsAI) return null;
-    switch (aiDifficulty) {
-      case AI_DIFFICULTY.RANDOM: return { text: 'BEGINNER', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
-      case AI_DIFFICULTY.AVERAGE: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
-      case AI_DIFFICULTY.PROFESSIONAL: return { text: 'EXPERT', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
-      default: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+    if (isVsAI) {
+      switch (aiDifficulty) {
+        case AI_DIFFICULTY.RANDOM: return { text: 'BEGINNER', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
+        case AI_DIFFICULTY.AVERAGE: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+        case AI_DIFFICULTY.PROFESSIONAL: return { text: 'EXPERT', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
+        default: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+      }
     }
+    if (isPuzzle) {
+      switch (puzzleDifficulty) {
+        case PUZZLE_DIFFICULTY.EASY: return { text: 'EASY', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
+        case PUZZLE_DIFFICULTY.MEDIUM: return { text: 'MEDIUM', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+        case PUZZLE_DIFFICULTY.HARD: return { text: 'HARD', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
+        default: return { text: 'PUZZLE', color: 'from-cyan-500 to-blue-600', glow: 'rgba(34,211,238,0.6)' };
+      }
+    }
+    return null;
   };
   
   const difficultyInfo = getDifficultyLabel();
@@ -125,8 +135,8 @@ const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty 
         </span>
       </div>
       
-      {/* Difficulty Badge (for AI mode) or VS text */}
-      {isVsAI && difficultyInfo ? (
+      {/* Difficulty Badge (for AI or Puzzle mode) or VS text */}
+      {(isVsAI || isPuzzle) && difficultyInfo ? (
         <div 
           className={`px-3 py-1 rounded-full bg-gradient-to-r ${difficultyInfo.color} border border-white/20`}
           style={{ boxShadow: `0 0 15px ${difficultyInfo.glow}` }}
@@ -512,6 +522,7 @@ const GameScreen = ({
               theme={theme}
               isAIThinking={isAIThinking}
               aiDifficulty={aiDifficulty}
+              puzzleDifficulty={puzzleDifficulty}
             />
             
             <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
@@ -571,6 +582,7 @@ const GameScreen = ({
               onCancel={onCancel}
               onReset={onReset}
               onRetryPuzzle={onRetryPuzzle}
+              onMenu={onMenu}
             />
           </div>
 

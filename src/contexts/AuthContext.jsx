@@ -302,15 +302,18 @@ export const AuthProvider = ({ children }) => {
         if (!timeoutCleared) {
           console.log('Auth init: TIMEOUT - completing with current state');
           
-          // IMPORTANT FIX: If we have a valid cached profile, trust it for authentication
-          // This prevents the user from being logged out just because Supabase was slow
-          if (cached?.profile && cached?.userId) {
-            console.log('Auth init: Timeout with valid cache - trusting cached auth state');
+          // IMPORTANT: Only set user from cache if we don't already have a user set
+          // This prevents overwriting a real user that was set by SIGNED_IN event
+          // Check the actual current user state (not captured closure)
+          const currentSession = await supabase.auth.getSession().catch(() => null);
+          const hasRealUser = !!currentSession?.data?.session?.user;
+          
+          if (!hasRealUser && cached?.profile && cached?.userId) {
+            console.log('Auth init: Timeout with valid cache and NO real session - trusting cached auth state');
             // Create a minimal user object from cached data to maintain isAuthenticated
             setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
             
-            // CRITICAL: Schedule a background profile refresh to get fresh data
-            // This ensures the profile gets updated even if the initial fetch timed out
+            // Schedule a background profile refresh to get fresh data
             const userIdToRefresh = cached.userId;
             setTimeout(async () => {
               // Check if user is still supposed to be logged in before refreshing
@@ -332,6 +335,8 @@ export const AuthProvider = ({ children }) => {
                 console.error('Auth init: Background refresh error:', err);
               }
             }, 500);
+          } else if (hasRealUser) {
+            console.log('Auth init: Timeout but real session exists - not overwriting user');
           }
           
           setSessionReady(true); // Mark as ready even on timeout
@@ -665,6 +670,8 @@ export const AuthProvider = ({ children }) => {
     if (!supabase) return;
     
     console.log('[AuthContext] signOut: Starting sign out process');
+    // Log call stack to debug unexpected signOut calls
+    console.log('[AuthContext] signOut: Call stack:', new Error().stack);
     
     // Clear state FIRST before calling Supabase (in case it times out)
     setUser(null);
