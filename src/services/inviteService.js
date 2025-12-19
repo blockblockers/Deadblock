@@ -660,27 +660,26 @@ class InviteService {
   // REALTIME SUBSCRIPTIONS
   // =====================================================
   subscribeToInvites(userId, onNewInvite, onInviteUpdated) {
-    this.unsubscribeHandler = realtimeManager.subscribeToTable(
-      'game_invites',
-      (payload) => {
-        const invite = payload.new || payload.old;
-        if (!invite) return;
+    // Use realtimeManager's event system (connectUser already listens for game_invites)
+    const handleInvite = (invite) => {
+      if (!invite) return;
 
-        const isRecipient = invite.to_user_id === userId;
-        const isSender = invite.from_user_id === userId;
+      const isRecipient = invite.to_user_id === userId;
+      const isSender = invite.from_user_id === userId;
 
-        if (!isRecipient && !isSender) return;
+      if (!isRecipient && !isSender) return;
 
-        if (payload.eventType === 'INSERT' && isRecipient) {
-          onNewInvite?.(invite);
-        } else if (payload.eventType === 'UPDATE') {
-          onInviteUpdated?.(invite);
-        }
-      },
-      (error) => {
-        console.error('Invite subscription error:', error);
+      // New invites come through as INSERT events
+      if (isRecipient && invite.status === 'pending') {
+        onNewInvite?.(invite);
+      } else {
+        // Updates (accepted, declined, cancelled)
+        onInviteUpdated?.(invite);
       }
-    );
+    };
+
+    // Register handler with realtimeManager
+    this.unsubscribeHandler = realtimeManager.on('gameInvite', handleInvite);
 
     return {
       unsubscribe: () => {

@@ -1,12 +1,50 @@
 // GameInviteNotification - Toast notifications for game invites and challenges
-// OPTIMIZED: Uses centralized RealtimeManager instead of creating separate channels
+// FIXED: Removed FK joins that don't exist in the database schema
+// Uses separate profile fetches instead
 import { useState, useEffect, useRef } from 'react';
 import { Gamepad2, X, Check, Clock, Users, Bell } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from '../services/realtimeManager';
 import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
+
+// Direct fetch config
+const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const getAuthHeaders = () => {
+  try {
+    const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+    if (!authData?.access_token || !ANON_KEY) return null;
+    return {
+      'Authorization': `Bearer ${authData.access_token}`,
+      'apikey': ANON_KEY,
+      'Content-Type': 'application/json'
+    };
+  } catch (e) {
+    return null;
+  }
+};
+
+// Fetch profile by ID
+const fetchProfile = async (profileId) => {
+  const headers = getAuthHeaders();
+  if (!headers) return null;
+  
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${profileId}&select=id,username,avatar_url,rating`;
+    const response = await fetch(url, { 
+      headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (e) {
+    console.error('Error fetching profile:', e);
+    return null;
+  }
+};
 
 const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
   const [notifications, setNotifications] = useState([]);
@@ -18,14 +56,11 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
     // Check for pending invites on load
     checkPendingInvites();
 
-    // Register handlers with RealtimeManager (no new channels created!)
+    // Register handlers with RealtimeManager
     const unsubInvite = realtimeManager.on('gameInvite', async (invite) => {
-      // Fetch inviter details
-      const { data: inviter } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url, rating')
-        .eq('id', invite.inviter_id)
-        .single();
+      // Fetch inviter details separately (no FK join)
+      const inviterId = invite.from_user_id || invite.inviter_id;
+      const inviter = await fetchProfile(inviterId);
 
       const notification = {
         id: invite.id,
@@ -37,7 +72,7 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
       };
 
       setNotifications(prev => [...prev, notification]);
-      soundManager.playSound('notification');
+      soundManager.playSound?.('notification');
       
       // Vibrate if supported
       if (navigator.vibrate) {
@@ -46,11 +81,7 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
     });
 
     const unsubFriend = realtimeManager.on('friendRequest', async (request) => {
-      const { data: requester } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url, rating')
-        .eq('id', request.from_user_id)
-        .single();
+      const requester = await fetchProfile(request.from_user_id);
 
       const notification = {
         id: request.id,
@@ -60,7 +91,7 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
       };
 
       setNotifications(prev => [...prev, notification]);
-      soundManager.playSound('notification');
+      soundManager.playSound?.('notification');
     });
 
     unsubscribeRef.current = [unsubInvite, unsubFriend];
@@ -70,29 +101,38 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
     };
   }, [userId]);
 
+  // FIXED: Check pending invites without FK joins
   const checkPendingInvites = async () => {
-    const { data: invites } = await supabase
-      .from('game_invites')
-      .select(`
-        id,
-        timer_seconds,
-        created_at,
-        inviter:profiles!game_invites_inviter_id_fkey(id, username, avatar_url, rating)
-      `)
-      .eq('invitee_id', userId)
-      .eq('status', 'pending')
-      .gte('created_at', new Date(Date.now() - 60000).toISOString()); // Last minute
+    const headers = getAuthHeaders();
+    if (!headers) return;
 
-    if (invites?.length > 0) {
-      const notifications = invites.map(inv => ({
-        id: inv.id,
-        type: 'invite',
-        inviter: inv.inviter,
-        timerSeconds: inv.timer_seconds,
-        createdAt: inv.created_at,
-        expiresAt: new Date(new Date(inv.created_at).getTime() + 60000)
+    try {
+      // Simple query without FK joins
+      const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+      const url = `${SUPABASE_URL}/rest/v1/game_invites?to_user_id=eq.${userId}&status=eq.pending&created_at=gte.${oneMinuteAgo}&select=id,timer_seconds,created_at,from_user_id`;
+      
+      const response = await fetch(url, { headers });
+      if (!response.ok) return;
+      
+      const invites = await response.json();
+      if (!invites?.length) return;
+
+      // Fetch inviter profiles separately
+      const notifications = await Promise.all(invites.map(async (inv) => {
+        const inviter = await fetchProfile(inv.from_user_id);
+        return {
+          id: inv.id,
+          type: 'invite',
+          inviter,
+          timerSeconds: inv.timer_seconds,
+          createdAt: inv.created_at,
+          expiresAt: new Date(new Date(inv.created_at).getTime() + 60000)
+        };
       }));
+
       setNotifications(notifications);
+    } catch (e) {
+      console.error('Error checking pending invites:', e);
     }
   };
 
@@ -105,10 +145,19 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
     removeNotification(notification.id);
     
     if (notification.type === 'invite') {
-      await supabase
-        .from('game_invites')
-        .update({ status: 'declined' })
-        .eq('id', notification.id);
+      // Update invite status
+      const headers = getAuthHeaders();
+      if (headers) {
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/game_invites?id=eq.${notification.id}`, {
+            method: 'PATCH',
+            headers: { ...headers, 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ status: 'declined' })
+          });
+        } catch (e) {
+          console.error('Error declining invite:', e);
+        }
+      }
     }
     
     onDecline?.(notification);
@@ -186,7 +235,7 @@ const NotificationCard = ({ notification, onAccept, onDecline }) => {
               {notification.inviter?.username?.[0]?.toUpperCase() || '?'}
             </div>
             <div className="flex-1">
-              <div className="font-bold text-white">{notification.inviter?.username}</div>
+              <div className="font-bold text-white">{notification.inviter?.username || 'Unknown'}</div>
               <div className="text-xs text-slate-400 flex items-center gap-1">
                 <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
                 {notification.inviter?.rating || 1200}
@@ -250,7 +299,7 @@ const NotificationCard = ({ notification, onAccept, onDecline }) => {
             {notification.from?.username?.[0]?.toUpperCase() || '?'}
           </div>
           <div className="flex-1">
-            <div className="font-medium text-white">{notification.from?.username}</div>
+            <div className="font-medium text-white">{notification.from?.username || 'Unknown'}</div>
             <div className="text-xs text-cyan-400 flex items-center gap-1">
               <Users size={12} />
               Friend request
@@ -305,22 +354,26 @@ export const NotificationBell = ({ count = 0, onClick }) => {
 export default GameInviteNotification;
 
 // Add CSS animation
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateX(100%);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  .animate-slide-in {
-    animation: slideIn 0.3s ease-out;
-  }
-`;
 if (typeof document !== 'undefined') {
-  document.head.appendChild(style);
+  const styleId = 'game-invite-notification-styles';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateX(100%);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+      .animate-slide-in {
+        animation: slideIn 0.3s ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
