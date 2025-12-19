@@ -246,6 +246,7 @@ function AppContent() {
     gameMode,
     isAIThinking,
     pendingMove,
+    setPendingMove,
     currentPuzzle,
     showHowToPlay,
     showSettings,
