@@ -627,13 +627,13 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
   const handleRotate = useCallback(() => {
     if (!selectedPiece) return;
     setRotation((r) => (r + 1) % 4);
-    soundManager.playRotateSound();
+    soundManager.playPieceRotate();
   }, [selectedPiece]);
 
   const handleFlip = useCallback(() => {
     if (!selectedPiece) return;
     setFlipped((f) => !f);
-    soundManager.playFlipSound();
+    soundManager.playPieceFlip();
   }, [selectedPiece]);
 
   const handleCancel = useCallback(() => {
@@ -683,7 +683,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       }
     }
 
-    soundManager.playPiecePlaceSound();
+    soundManager.playPiecePlace();
 
     // Send move to server
     const { data: responseData, error: moveError } = await gameSyncService.makeMove(

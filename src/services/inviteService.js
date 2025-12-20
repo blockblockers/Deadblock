@@ -147,11 +147,24 @@ class InviteService {
       if (!headers) return { data: [], error: { message: 'Not authenticated' } };
 
       const searchQuery = query.trim().toLowerCase();
-      const orFilter = `username.ilike.*${searchQuery}*,display_name.ilike.*${searchQuery}*`;
       
-      const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,display_name,rating,games_played,games_won&or=(${encodeURIComponent(orFilter)})&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
+      // Check if query looks like an email
+      const isEmail = searchQuery.includes('@');
       
-      console.log('[InviteService] Searching users with query:', searchQuery);
+      // UPDATED: Search by username, display_name, OR email
+      // If it's an email-like query, prioritize email search
+      let orFilter;
+      if (isEmail) {
+        // For email search, use exact match prefix (case insensitive)
+        orFilter = `email.ilike.${searchQuery}*,username.ilike.*${searchQuery}*`;
+      } else {
+        // For non-email, search username and display_name
+        orFilter = `username.ilike.*${searchQuery}*,display_name.ilike.*${searchQuery}*`;
+      }
+      
+      const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,display_name,email,rating,games_played,games_won&or=(${encodeURIComponent(orFilter)})&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
+      
+      console.log('[InviteService] Searching users with query:', searchQuery, 'isEmail:', isEmail);
       
       const response = await fetch(url, { headers });
       if (!response.ok) {

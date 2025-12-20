@@ -406,6 +406,52 @@ class WeeklyChallengeService {
     }
   }
   
+  // Get count of top 3 finishes for a user across all completed weekly challenges
+  async getUserPodiumCount(userId) {
+    if (!isSupabaseConfigured()) return { data: 0, error: 'Not configured' };
+    
+    const headers = getAuthHeaders();
+    if (!headers) return { data: 0, error: 'Not authenticated' };
+    
+    try {
+      // First, get all completed challenges (ended before now)
+      const now = new Date().toISOString();
+      const challengesResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/weekly_challenges?ends_at=lt.${now}&select=id`,
+        { headers }
+      );
+      
+      if (!challengesResponse.ok) {
+        return { data: 0, error: 'Failed to fetch challenges' };
+      }
+      
+      const challenges = await challengesResponse.json();
+      if (!challenges || challenges.length === 0) {
+        return { data: 0, error: null };
+      }
+      
+      let podiumCount = 0;
+      
+      // For each completed challenge, check user's rank
+      for (const challenge of challenges) {
+        const { data: leaderboard } = await this.getLeaderboard(challenge.id, 10);
+        
+        if (leaderboard && leaderboard.length > 0) {
+          // Find user's position in top 3
+          const userIndex = leaderboard.findIndex(entry => entry.user_id === userId);
+          if (userIndex !== -1 && userIndex < 3) {
+            podiumCount++;
+          }
+        }
+      }
+      
+      return { data: podiumCount, error: null };
+    } catch (err) {
+      console.error('Error getting user podium count:', err);
+      return { data: 0, error: err.message };
+    }
+  }
+  
   // Generate a deterministic puzzle seed for the week
   // This method is called by WeeklyChallengeScreen to get a consistent seed for puzzle generation
   generatePuzzleSeed(challenge) {

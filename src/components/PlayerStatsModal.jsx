@@ -5,9 +5,10 @@
 // 3. Scroll behavior on mobile
 
 import { useState, useEffect, useRef } from 'react';
-import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader } from 'lucide-react';
+import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { statsService } from '../utils/statsService';
+import { weeklyChallengeService } from '../services/weeklyChallengeService';
 import { getRankInfo } from '../utils/rankUtils';
 import { soundManager } from '../utils/soundManager';
 import TierIcon from './TierIcon';
@@ -45,6 +46,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const [savingUsername, setSavingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [expandedSection, setExpandedSection] = useState('overview');
+  const [weeklyPodiums, setWeeklyPodiums] = useState(0); // Top 3 weekly finishes
   const scrollContainerRef = useRef(null);
   
   // Get tier info for theming
@@ -77,6 +79,19 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
     if (data) {
       setStats(statsService.calculateDerivedStats(data));
     }
+    
+    // Load weekly challenge podium count (top 3 finishes)
+    if (profile?.id) {
+      try {
+        const { data: podiumCount } = await weeklyChallengeService.getUserPodiumCount(profile.id);
+        if (podiumCount !== null && podiumCount !== undefined) {
+          setWeeklyPodiums(podiumCount);
+        }
+      } catch (err) {
+        console.log('Weekly podium count not available');
+      }
+    }
+    
     setLoading(false);
   };
   
@@ -455,15 +470,21 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                   />
                   <div className="grid grid-cols-3 gap-2">
                     <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/20">
-                      <div className="text-green-400 font-bold">{stats?.ai_easy_wins || 0}</div>
+                      <div className="text-green-400 font-bold">
+                        {stats?.ai_easy_wins || 0}/{(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)}
+                      </div>
                       <div className="text-slate-500 text-xs">Easy</div>
                     </div>
                     <div className="text-center p-2 bg-amber-900/20 rounded-lg border border-amber-500/20">
-                      <div className="text-amber-400 font-bold">{stats?.ai_medium_wins || 0}</div>
+                      <div className="text-amber-400 font-bold">
+                        {stats?.ai_medium_wins || 0}/{(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)}
+                      </div>
                       <div className="text-slate-500 text-xs">Medium</div>
                     </div>
                     <div className="text-center p-2 bg-red-900/20 rounded-lg border border-red-500/20">
-                      <div className="text-red-400 font-bold">{stats?.ai_hard_wins || 0}</div>
+                      <div className="text-red-400 font-bold">
+                        {stats?.ai_hard_wins || 0}/{(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)}
+                      </div>
                       <div className="text-slate-500 text-xs">Hard</div>
                     </div>
                   </div>
@@ -475,18 +496,44 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 <div className="space-y-3">
                   <div className="grid grid-cols-3 gap-2">
                     <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/20">
-                      <div className="text-green-400 font-bold">{stats?.puzzles_easy_solved || 0}</div>
+                      <div className="text-green-400 font-bold">
+                        {stats?.puzzles_easy_solved || 0}/{stats?.puzzles_easy_attempted || 0}
+                      </div>
                       <div className="text-slate-500 text-xs">Easy</div>
                     </div>
                     <div className="text-center p-2 bg-amber-900/20 rounded-lg border border-amber-500/20">
-                      <div className="text-amber-400 font-bold">{stats?.puzzles_medium_solved || 0}</div>
+                      <div className="text-amber-400 font-bold">
+                        {stats?.puzzles_medium_solved || 0}/{stats?.puzzles_medium_attempted || 0}
+                      </div>
                       <div className="text-slate-500 text-xs">Medium</div>
                     </div>
                     <div className="text-center p-2 bg-red-900/20 rounded-lg border border-red-500/20">
-                      <div className="text-red-400 font-bold">{stats?.puzzles_hard_solved || 0}</div>
+                      <div className="text-red-400 font-bold">
+                        {stats?.puzzles_hard_solved || 0}/{stats?.puzzles_hard_attempted || 0}
+                      </div>
                       <div className="text-slate-500 text-xs">Hard</div>
                     </div>
                   </div>
+                  
+                  {/* Weekly Challenge Stats */}
+                  {weeklyPodiums > 0 && (
+                    <div 
+                      className="p-3 rounded-lg"
+                      style={{ 
+                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                        border: '1px solid rgba(234, 179, 8, 0.3)'
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Medal size={14} className="text-amber-400" />
+                        <span className="text-slate-300 text-sm font-medium">Weekly Challenge</span>
+                      </div>
+                      <div className="text-sm">
+                        <span className="text-slate-500">Top 3 Finishes: </span>
+                        <span className="text-amber-400 font-bold">{weeklyPodiums}</span>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Speed Puzzle Stats */}
                   <div 
@@ -500,23 +547,9 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                       <Zap size={14} style={{ color: glowColor }} />
                       <span className="text-slate-300 text-sm font-medium">Speed Puzzles</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>
-                        <span className="text-slate-500">Solved: </span>
-                        <span className="text-white font-bold">{stats?.speed_puzzles_solved || 0}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Best Streak: </span>
-                        <span className="text-amber-400 font-bold">{stats?.speed_best_streak || 0}</span>
-                      </div>
-                      {stats?.speed_best_time && (
-                        <div className="col-span-2">
-                          <span className="text-slate-500">Best Time: </span>
-                          <span style={{ color: glowColor }} className="font-bold">
-                            {(stats.speed_best_time / 1000).toFixed(2)}s
-                          </span>
-                        </div>
-                      )}
+                    <div className="text-sm">
+                      <span className="text-slate-500">Best Streak: </span>
+                      <span className="text-amber-400 font-bold">{stats?.speed_best_streak || 0}</span>
                     </div>
                   </div>
                 </div>

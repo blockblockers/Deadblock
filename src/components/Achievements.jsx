@@ -12,13 +12,18 @@ const RARITY_COLORS = {
   legendary: { bg: 'bg-amber-600', text: 'text-amber-300', border: 'border-amber-500' },
 };
 
-const Achievements = ({ userId, onClose }) => {
+const Achievements = ({ userId, onClose, viewOnly = false, playerName = null }) => {
   const [achievements, setAchievements] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [expandedId, setExpandedId] = useState(null);
+  
+  // Title text - show player name if viewing someone else's achievements
+  const titleText = viewOnly && playerName 
+    ? `${playerName}'s Achievements` 
+    : 'Achievements';
 
   useEffect(() => {
     loadAchievements();
@@ -85,7 +90,7 @@ const Achievements = ({ userId, onClose }) => {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Trophy className="text-amber-400" size={24} />
-              <h2 className="text-lg font-bold text-amber-300">Achievements</h2>
+              <h2 className="text-lg font-bold text-amber-300">{titleText}</h2>
             </div>
             <button onClick={onClose} className="text-slate-400 hover:text-white">
               <X size={24} />

@@ -4,13 +4,14 @@
 // FIXED: Use achievementService for achievement stats
 // FIXED: Define dbSelect locally instead of importing from non-existent file
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader } from 'lucide-react';
+import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { friendsService } from '../services/friendsService';
 import achievementService from '../services/achievementService';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
 import { soundManager } from '../utils/soundManager';
+import Achievements from './Achievements';
 
 // Supabase config for direct fetch
 const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
@@ -119,6 +120,7 @@ const ViewPlayerProfile = ({
   const [sendingRequest, setSendingRequest] = useState(false);
   const [removingFriend, setRemovingFriend] = useState(false);
   const [achievementStats, setAchievementStats] = useState(null);
+  const [showAchievements, setShowAchievements] = useState(false); // Show achievements modal
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
   const [headToHead, setHeadToHead] = useState(null); // { myWins, theirWins, total }
 
@@ -546,26 +548,33 @@ const ViewPlayerProfile = ({
             </div>
           )}
 
-          {/* Achievement Stats */}
+          {/* Achievement Stats - Clickable to view all achievements */}
           {achievementStats && achievementStats.total_achievements > 0 && (
-            <div 
-              className="rounded-xl p-3 mb-4 flex items-center justify-between"
+            <button
+              onClick={() => {
+                soundManager.playButtonClick();
+                setShowAchievements(true);
+              }}
+              className="w-full rounded-xl p-3 mb-4 flex items-center justify-between hover:opacity-80 transition-opacity group"
               style={{ 
                 backgroundColor: 'rgba(15, 23, 42, 0.6)',
                 border: `1px solid ${hexToRgba(glowColor, 0.2)}`
               }}
             >
               <div className="flex items-center gap-2">
-                <Trophy size={16} className="text-amber-400" />
+                <Award size={16} className="text-amber-400" />
                 <span className="text-slate-400 text-xs">Achievements</span>
               </div>
               <div className="text-white font-bold">
                 {achievementStats.unlocked_count || 0}/{achievementStats.total_achievements || 0}
               </div>
-              <div className="text-amber-400 text-xs">
-                {achievementStats.earned_points || 0} points
+              <div className="flex items-center gap-1">
+                <span className="text-amber-400 text-xs">
+                  {achievementStats.earned_points || 0} pts
+                </span>
+                <ChevronRight size={14} className="text-slate-500 group-hover:text-slate-300 transition-colors" />
               </div>
-            </div>
+            </button>
           )}
 
           {/* Match History with Clickable Opponents */}
@@ -716,6 +725,16 @@ const ViewPlayerProfile = ({
           </div>
         )}
       </div>
+      
+      {/* Achievements Modal - View all achievements for this player */}
+      {showAchievements && (
+        <Achievements
+          userId={playerId}
+          onClose={() => setShowAchievements(false)}
+          viewOnly={true}
+          playerName={profile?.username || profile?.display_name || 'Player'}
+        />
+      )}
     </div>
   );
 };
