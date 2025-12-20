@@ -57,7 +57,7 @@ const QuickChat = ({
         
         // Clear after 3 seconds
         if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
-        bubbleTimeoutRef.current = setTimeout(() => setShowBubble(null), 3000);
+        bubbleTimeoutRef.current = setTimeout(() => setShowBubble(null), 5000);
       }
     });
 
@@ -71,6 +71,10 @@ const QuickChat = ({
     };
   }, [gameId, userId, onNewMessage]);
 
+  // State for showing "message sent" feedback
+  const [sentMessage, setSentMessage] = useState(null);
+  const sentTimeoutRef = useRef(null);
+
   const sendMessage = async (type, key) => {
     if (cooldown || disabled) return;
 
@@ -78,6 +82,9 @@ const QuickChat = ({
     setCooldown(true);
     setTimeout(() => setCooldown(false), 2000);
 
+    // Get the message display info for feedback
+    const display = chatService.getMessageDisplay(type, key);
+    
     if (type === 'chat') {
       await chatService.sendQuickChat(gameId, userId, key);
     } else {
@@ -85,24 +92,64 @@ const QuickChat = ({
     }
 
     soundManager.playClickSound('soft');
-    setIsOpen(false);
+    
+    // Show "sent" feedback
+    setSentMessage(display);
+    if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
+    sentTimeoutRef.current = setTimeout(() => {
+      setSentMessage(null);
+      setIsOpen(false);
+    }, 1500);
   };
 
   return (
     <>
-      {/* Chat Bubble (opponent's message) */}
+      {/* Chat Bubble (opponent's message) - ENHANCED for visibility */}
       {showBubble && (
         <div 
-          className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-bounce-in"
-          style={{ animation: 'bounceIn 0.3s ease-out' }}
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-50"
+          style={{ animation: 'bounceIn 0.4s ease-out' }}
         >
-          <div className="bg-slate-800 border border-amber-500/50 rounded-2xl px-4 py-2 shadow-lg flex items-center gap-2">
-            <span className="text-xl">{showBubble.icon}</span>
-            {showBubble.text && (
-              <span className="text-amber-200 text-sm font-medium">{showBubble.text}</span>
+          {/* Outer glow effect */}
+          <div className="absolute inset-0 bg-amber-500/30 rounded-2xl blur-xl animate-pulse" />
+          
+          {/* Main bubble */}
+          <div className="relative bg-gradient-to-br from-amber-900 via-slate-800 to-slate-900 border-2 border-amber-500 rounded-2xl px-5 py-3 shadow-[0_0_30px_rgba(251,191,36,0.5)] flex flex-col items-center gap-1">
+            {/* "From opponent" label */}
+            <div className="flex items-center gap-1.5 mb-1">
+              <div className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+              <span className="text-amber-400 text-xs font-bold uppercase tracking-wide">
+                {opponentName || 'Opponent'} says:
+              </span>
+            </div>
+            
+            {/* Message content - larger */}
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">{showBubble.icon}</span>
+              {showBubble.text && (
+                <span className="text-white text-lg font-bold">{showBubble.text}</span>
+              )}
+            </div>
+          </div>
+          
+          {/* Speech bubble pointer */}
+          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[12px] border-r-[12px] border-t-[12px] border-transparent border-t-amber-500" />
+        </div>
+      )}
+
+      {/* Sent Message Confirmation (your message) */}
+      {sentMessage && (
+        <div 
+          className="fixed top-32 left-1/2 -translate-x-1/2 z-50"
+          style={{ animation: 'fadeIn 0.2s ease-out' }}
+        >
+          <div className="bg-green-800 border-2 border-green-500 rounded-2xl px-5 py-3 shadow-[0_0_20px_rgba(34,197,94,0.4)] flex items-center gap-3">
+            <span className="text-green-400 text-sm font-bold">SENT!</span>
+            <span className="text-2xl">{sentMessage.icon}</span>
+            {sentMessage.text && (
+              <span className="text-green-200 text-base font-medium">{sentMessage.text}</span>
             )}
           </div>
-          <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-slate-800" />
         </div>
       )}
 

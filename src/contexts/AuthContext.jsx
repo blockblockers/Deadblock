@@ -614,18 +614,35 @@ export const AuthProvider = ({ children }) => {
       return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
     }
 
-    // Check if username is taken
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('username', username)
-      .single();
-
-    if (existing) {
-      return { error: { message: 'Username already taken' } };
+    // Check if username is taken (use direct fetch to avoid 406 errors)
+    try {
+      const authData = JSON.parse(localStorage.getItem('sb-oyeibyrednwlolmsjlwk-auth-token') || 'null');
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const headers = {
+        'apikey': anonKey,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      };
+      if (authData?.access_token) {
+        headers['Authorization'] = `Bearer ${authData.access_token}`;
+      }
+      
+      const checkUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?select=id&username=eq.${encodeURIComponent(username)}&limit=1`;
+      const checkResponse = await fetch(checkUrl, { headers });
+      
+      if (checkResponse.ok) {
+        const existing = await checkResponse.json();
+        if (existing && existing.length > 0) {
+          return { error: { message: 'Username already taken' } };
+        }
+      }
+    } catch (checkErr) {
+      console.log('Username check failed, proceeding with signup:', checkErr);
+      // Continue anyway - the database constraint will catch duplicates
     }
 
     // Sign up the user
+    console.log('[AuthContext] Attempting signup for:', email, username);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -639,8 +656,17 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    // If signup succeeded but we got a database error, try to manually create profile
-    if (!error && data?.user) {
+    if (error) {
+      console.error('[AuthContext] Signup error:', error);
+      // Provide more helpful error messages
+      if (error.message?.includes('500') || error.status === 500) {
+        return { error: { message: 'Account creation failed. The username may already exist or there was a server error. Please try a different username.' } };
+      }
+      return { error };
+    }
+
+    // Signup succeeded - try to ensure profile is created
+    if (data?.user) {
       // Wait a moment for the trigger to run
       await new Promise(resolve => setTimeout(resolve, 500));
       
@@ -659,12 +685,19 @@ export const AuthProvider = ({ children }) => {
           .insert({
             id: data.user.id,
             username: username,
-            display_name: username
+            display_name: username,
+            email: email // Store email in profiles for searchability
           });
         
         if (profileError) {
           console.error('Failed to create profile manually:', profileError);
         }
+      } else {
+        // Profile exists but might not have email - update it
+        await supabase
+          .from('profiles')
+          .update({ email: email })
+          .eq('id', data.user.id);
       }
       
       // Check if email confirmation is required

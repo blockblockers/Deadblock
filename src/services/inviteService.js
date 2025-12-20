@@ -148,23 +148,22 @@ class InviteService {
 
       const searchQuery = query.trim().toLowerCase();
       
-      // Check if query looks like an email
-      const isEmail = searchQuery.includes('@');
+      // Check if query looks like an email (contains @)
+      const isEmailSearch = searchQuery.includes('@');
       
-      // UPDATED: Search by username, display_name, OR email
-      // If it's an email-like query, prioritize email search
+      // Search by username, display_name, AND email (if email column exists in profiles)
       let orFilter;
-      if (isEmail) {
-        // For email search, use exact match prefix (case insensitive)
-        orFilter = `email.ilike.${searchQuery}*,username.ilike.*${searchQuery}*`;
+      if (isEmailSearch) {
+        // Prioritize email search when @ is present
+        orFilter = `email.ilike.*${searchQuery}*,username.ilike.*${searchQuery}*`;
       } else {
-        // For non-email, search username and display_name
-        orFilter = `username.ilike.*${searchQuery}*,display_name.ilike.*${searchQuery}*`;
+        // Search username and display_name for non-email queries
+        orFilter = `username.ilike.*${searchQuery}*,display_name.ilike.*${searchQuery}*,email.ilike.*${searchQuery}*`;
       }
       
       const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,display_name,email,rating,games_played,games_won&or=(${encodeURIComponent(orFilter)})&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
       
-      console.log('[InviteService] Searching users with query:', searchQuery, 'isEmail:', isEmail);
+      console.log('[InviteService] Searching users with query:', searchQuery, 'isEmail:', isEmailSearch);
       
       const response = await fetch(url, { headers });
       if (!response.ok) {

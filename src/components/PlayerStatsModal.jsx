@@ -83,12 +83,14 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
     // Load weekly challenge podium count (top 3 finishes)
     if (profile?.id) {
       try {
-        const { data: podiumCount } = await weeklyChallengeService.getUserPodiumCount(profile.id);
-        if (podiumCount !== null && podiumCount !== undefined) {
-          setWeeklyPodiums(podiumCount);
+        console.log('[PlayerStatsModal] Loading weekly podium count for:', profile.id);
+        const result = await weeklyChallengeService.getUserPodiumCount(profile.id);
+        console.log('[PlayerStatsModal] Weekly podium result:', result);
+        if (result?.data !== null && result?.data !== undefined) {
+          setWeeklyPodiums(result.data);
         }
       } catch (err) {
-        console.log('Weekly podium count not available');
+        console.log('[PlayerStatsModal] Weekly podium count error:', err);
       }
     }
     

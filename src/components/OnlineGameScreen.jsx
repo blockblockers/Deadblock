@@ -665,19 +665,58 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
 
     const newUsedPieces = [...usedPieces, pendingMove.piece];
     const nextPlayer = myPlayerNumber === 1 ? 2 : 1;
+    const totalPieces = Object.keys(pieces).length; // Should be 12
     
     // FIXED: Proper game over detection
     let gameOver = false;
     let winnerId = null;
+    let gameOverReason = null;
     
-    // Check if game is over after both players have placed at least 1 piece
-    if (newUsedPieces.length >= 2) {
+    console.log('handleConfirm: Checking game over...', { 
+      usedPiecesCount: newUsedPieces.length, 
+      totalPieces,
+      myPlayerNumber,
+      nextPlayer
+    });
+    
+    // Case 1: All pieces have been placed - game ends, count cells to determine winner
+    if (newUsedPieces.length >= totalPieces) {
+      gameOver = true;
+      gameOverReason = 'all_pieces_placed';
+      
+      // Count cells for each player
+      let player1Cells = 0;
+      let player2Cells = 0;
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (newBoard[r][c] === 1) player1Cells++;
+          else if (newBoard[r][c] === 2) player2Cells++;
+        }
+      }
+      
+      console.log('handleConfirm: ALL PIECES PLACED - Counting cells', { player1Cells, player2Cells });
+      
+      // Determine winner by cell count (more cells = winner)
+      if (myPlayerNumber === 1) {
+        winnerId = player1Cells >= player2Cells ? user.id : game.player2_id;
+      } else {
+        winnerId = player2Cells >= player1Cells ? user.id : game.player1_id;
+      }
+      
+      console.log('handleConfirm: GAME OVER - All pieces placed, winner determined by cell count');
+    }
+    // Case 2: Check if opponent can place any remaining pieces
+    else if (newUsedPieces.length >= 2) {
       console.log('handleConfirm: Checking if opponent can move...');
-      const remainingPieces = Object.keys(pieces).filter(p => !newUsedPieces.includes(p));
-      const opponentCanMove = canAnyPieceBePlaced(newBoard, remainingPieces, nextPlayer);
+      // FIXED: Pass usedPieces (pieces to skip), not remainingPieces
+      // The function signature is canAnyPieceBePlaced(board, usedPieces)
+      const opponentCanMove = canAnyPieceBePlaced(newBoard, newUsedPieces);
+      
+      console.log('handleConfirm: Opponent can move?', opponentCanMove);
       
       if (!opponentCanMove) {
         gameOver = true;
+        gameOverReason = 'opponent_blocked';
         winnerId = user.id;
         console.log('handleConfirm: GAME OVER - Opponent cannot move, I win!');
       }
@@ -729,10 +768,13 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
     
     // Handle game over
     if (gameOver) {
-      setGameResult({ isWin: true, winnerId: user.id, reason: 'normal' });
+      const isWin = winnerId === user.id;
+      console.log('handleConfirm: Game over!', { isWin, winnerId, userId: user.id, reason: gameOverReason });
+      
+      setGameResult({ isWin, winnerId, reason: gameOverReason || 'normal' });
       setShowGameOver(true);
-      soundManager.playSound('win');
-      setGame(prev => prev ? { ...prev, status: 'completed', winner_id: user.id } : prev);
+      soundManager.playSound(isWin ? 'win' : 'lose');
+      setGame(prev => prev ? { ...prev, status: 'completed', winner_id: winnerId } : prev);
     }
 
     // Clear move in progress after a delay
@@ -1045,11 +1087,18 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
         </div>
       </div>
 
-      {/* Quick Chat Panel */}
+      {/* Quick Chat Panel - FIXED: Use external control to hide duplicate button */}
       {chatOpen && game && (
         <QuickChat
           gameId={gameId}
-          onClose={() => setChatOpen(false)}
+          userId={user?.id}
+          opponentName={opponent?.username || opponent?.display_name}
+          isOpen={chatOpen}
+          onToggle={(open) => {
+            setChatOpen(open);
+            if (!open) setHasUnreadChat(false);
+          }}
+          hideButton={true}
           onNewMessage={() => {
             if (!chatOpen) setHasUnreadChat(true);
           }}

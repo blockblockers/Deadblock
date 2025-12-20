@@ -152,6 +152,23 @@ class RealtimeManager {
               this.notifyHandlers('matchFound', payload.new);
             }
           }
+        )
+        // Email invite links (when someone accepts your invite link)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'email_invites',
+            filter: `from_user_id=eq.${userId}`
+          },
+          (payload) => {
+            console.log('[RealtimeManager] Email invite updated:', payload.new?.id, payload.new?.status);
+            // When status changes from pending/sent to accepted/declined, notify
+            if (payload.new?.status === 'accepted' || payload.new?.status === 'declined') {
+              this.notifyHandlers('emailInviteUpdated', payload.new);
+            }
+          }
         );
       
       // Subscribe with connection status tracking

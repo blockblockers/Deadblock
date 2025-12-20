@@ -8,6 +8,7 @@ import { notificationService } from '../services/notificationService';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
+import { realtimeManager } from '../services/realtimeManager';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import TierIcon from './TierIcon';
@@ -366,8 +367,21 @@ const OnlineMenu = ({
       }
     );
     
+    // ADDED: Subscribe to email invite updates (for invite links)
+    const emailInviteHandler = realtimeManager.on('emailInviteUpdated', async (updatedInvite) => {
+      console.log('[OnlineMenu] Email invite link updated:', updatedInvite?.id, updatedInvite?.status);
+      await loadInvites();
+      
+      // If accepted, refresh games to show the new game
+      if (updatedInvite?.status === 'accepted' && updatedInvite?.game_id) {
+        await loadGames();
+        soundManager.playSound('notification');
+      }
+    });
+    
     return () => {
       inviteService.unsubscribeFromInvites(subscription);
+      if (emailInviteHandler) emailInviteHandler();
     };
   }, [sessionReady, profile?.id]);
 
@@ -1170,7 +1184,7 @@ const OnlineMenu = ({
                         type="text"
                         value={searchQuery}
                         onChange={(e) => handleSearch(e.target.value)}
-                        placeholder="Enter username..."
+                        placeholder="Search by username..."
                         className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none placeholder:text-slate-600"
                       />
                       {searching && (
