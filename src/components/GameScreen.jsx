@@ -493,6 +493,32 @@ const GameScreen = ({
     };
   }, [isDragging, updateDrag, endDrag, onCancel]);
 
+  // Global touch handlers for drag (needed for board drag on mobile)
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches[0]) {
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      endDrag();
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isDragging, updateDrag, endDrag]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {

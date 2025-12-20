@@ -642,8 +642,12 @@ class InviteService {
       }
       
       // Create the game
+      // Player setup:
+      // - player1_id = inviter (from_user_id) 
+      // - player2_id = acceptor (acceptingUserId)
+      // The person accepting the invite link ALWAYS goes first (player 2)
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
-      const firstPlayer = Math.random() < 0.5 ? 1 : 2;
+      const firstPlayer = 2; // Acceptor (player 2) always goes first for challenge links
 
       const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/games`, {
         method: 'POST',

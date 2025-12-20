@@ -39,49 +39,67 @@ const theme = {
   accentBorder: 'border-amber-400/50',
 };
 
-// Player indicator bar for online games
+// Player indicator bar for online games - with usernames
 const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus, userId, opponentId }) => {
   const myRating = profile?.rating || 1000;
   const oppRating = opponent?.rating || 1000;
   const myTier = ratingService.getRatingTier(myRating);
   const oppTier = ratingService.getRatingTier(oppRating);
+  const myUsername = profile?.username || profile?.display_name || 'You';
+  const oppUsername = opponent?.username || opponent?.display_name || 'Opponent';
   
   return (
     <div className="mb-3">
       <div className="flex items-center justify-between">
         {/* Me */}
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+        <div className={`flex-1 px-3 py-2 rounded-lg transition-all duration-300 ${
           isMyTurn && gameStatus === 'active'
             ? 'bg-amber-500/20 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.4)]' 
             : 'bg-slate-800/50 border border-slate-700/50'
         }`}>
-          <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
-            isMyTurn && gameStatus === 'active' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] animate-pulse' : 'bg-slate-600'
-          }`} />
-          <span className={`text-sm font-bold tracking-wide ${isMyTurn ? 'text-amber-300' : 'text-slate-500'}`}>
-            You
-          </span>
-          <TierIcon shape={myTier.shape} glowColor={myTier.glowColor} size="small" />
-          <span className="text-xs text-slate-600">{myRating}</span>
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full flex-shrink-0 transition-all duration-300 ${
+              isMyTurn && gameStatus === 'active' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.8)] animate-pulse' : 'bg-slate-600'
+            }`} />
+            <span className={`text-sm font-bold tracking-wide ${isMyTurn ? 'text-amber-300' : 'text-slate-500'}`}>
+              You
+            </span>
+            <TierIcon shape={myTier.shape} glowColor={myTier.glowColor} size="small" />
+            <span className="text-xs text-slate-600">{myRating}</span>
+          </div>
+          {/* Username underneath, left-aligned */}
+          <div className="mt-1 text-left">
+            <span className={`text-xs font-medium truncate block max-w-[100px] ${isMyTurn ? 'text-amber-400/80' : 'text-slate-500'}`}>
+              {myUsername}
+            </span>
+          </div>
         </div>
         
         {/* VS */}
-        <div className="text-slate-600 text-xs font-bold px-2">VS</div>
+        <div className="text-slate-600 text-xs font-bold px-3">VS</div>
         
         {/* Opponent */}
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 ${
+        <div className={`flex-1 px-3 py-2 rounded-lg transition-all duration-300 ${
           !isMyTurn && gameStatus === 'active'
             ? 'bg-orange-500/20 border border-orange-400/50 shadow-[0_0_15px_rgba(249,115,22,0.4)]' 
             : 'bg-slate-800/50 border border-slate-700/50'
         }`}>
-          <span className={`text-sm font-bold tracking-wide ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
-            Opponent
-          </span>
-          <TierIcon shape={oppTier.shape} glowColor={oppTier.glowColor} size="small" />
-          <span className="text-xs text-slate-600">{oppRating}</span>
-          <div className={`w-3 h-3 rounded-full transition-all duration-300 ${
-            !isMyTurn && gameStatus === 'active' ? 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse' : 'bg-slate-600'
-          }`} />
+          <div className="flex items-center gap-2 justify-end">
+            <span className="text-xs text-slate-600">{oppRating}</span>
+            <TierIcon shape={oppTier.shape} glowColor={oppTier.glowColor} size="small" />
+            <span className={`text-sm font-bold tracking-wide ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
+              Opponent
+            </span>
+            <div className={`w-3 h-3 rounded-full flex-shrink-0 transition-all duration-300 ${
+              !isMyTurn && gameStatus === 'active' ? 'bg-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse' : 'bg-slate-600'
+            }`} />
+          </div>
+          {/* Username underneath, left-aligned */}
+          <div className="mt-1 text-left">
+            <span className={`text-xs font-medium truncate block max-w-[100px] ${!isMyTurn && gameStatus === 'active' ? 'text-orange-400/80' : 'text-slate-500'}`}>
+              {oppUsername}
+            </span>
+          </div>
         </div>
       </div>
       
@@ -263,6 +281,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   
   // Chat state
   const [chatOpen, setChatOpen] = useState(false);
+  const [hasUnreadChat, setHasUnreadChat] = useState(false);
   
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
@@ -487,6 +506,32 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, updateDrag, endDrag]);
+
+  // Global touch handlers for drag (needed for board drag on mobile)
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches[0]) {
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      endDrag();
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
     };
   }, [isDragging, updateDrag, endDrag]);
 
@@ -911,12 +956,32 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     soundManager.playClickSound('cancel');
   };
 
-  // Handle forfeit
-  const handleForfeit = async () => {
+  // Check if any moves have been played
+  const hasMovesPlayed = usedPieces.length > 0;
+
+  // Handle quit/forfeit based on game state
+  const handleQuitOrForfeit = async () => {
     if (!game || game.status !== 'active') return;
     
-    if (window.confirm('Are you sure you want to forfeit this game?')) {
-      await gameSyncService.forfeitGame(gameId, user.id);
+    if (hasMovesPlayed) {
+      // Moves have been played - this is a forfeit with loss
+      const confirmed = window.confirm(
+        'Forfeiting will count as a loss. Are you sure you want to forfeit?'
+      );
+      if (confirmed) {
+        await gameSyncService.forfeitGame(gameId, user.id);
+      }
+    } else {
+      // No moves played - allow leaving without penalty
+      // The game will remain in 'active' status but both players can leave
+      // Games with no moves are typically cleaned up by the system
+      const confirmed = window.confirm(
+        'Leave this game? Since no moves have been played, this won\'t count as a loss.'
+      );
+      if (confirmed) {
+        soundManager.playButtonClick();
+        onLeave();
+      }
     }
   };
 
@@ -1061,13 +1126,19 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
-          {/* Header */}
+          {/* Title Header */}
+          <div className="text-center mb-2">
+            <NeonTitle text="DEADBLOCK" size="small" color="amber" />
+            <NeonSubtitle text="ONLINE BATTLE" color="amber" className="mt-0" />
+          </div>
+          
+          {/* Navigation & Status Header */}
           <div className="flex justify-between items-center mb-2">
             <button
               onClick={handleLeave}
               className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all"
             >
-              ← Leave
+              ← Menu
             </button>
             <span className={`text-sm font-bold ${theme.accent}`}>
               {game?.status === 'active' ? (isMyTurn ? "YOUR TURN" : "OPPONENT'S TURN") : game?.status === 'completed' ? "GAME OVER" : "Loading..."}
@@ -1084,6 +1155,10 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
                   }
                 }}
               />
+            )}
+            {/* Spacer if no timer */}
+            {(!game?.turn_timer_seconds || game?.status !== 'active') && (
+              <div className="w-16" />
             )}
           </div>
 
@@ -1130,16 +1205,28 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
               {/* Chat button - always visible, positioned to the right of DPad */}
               {game?.status === 'active' && (
                 <button
-                  onClick={() => setChatOpen(!chatOpen)}
+                  onClick={() => {
+                    setChatOpen(!chatOpen);
+                    if (!chatOpen) {
+                      setHasUnreadChat(false); // Clear unread when opening
+                    }
+                  }}
                   className={`
-                    w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
+                    relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
                     ${chatOpen 
                       ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
                       : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
                     }
+                    ${hasUnreadChat && !chatOpen ? 'animate-pulse' : ''}
                   `}
                 >
                   <MessageCircle size={20} />
+                  {/* Unread notification dot */}
+                  {hasUnreadChat && !chatOpen && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center animate-bounce shadow-[0_0_10px_rgba(239,68,68,0.8)]">
+                      <span className="w-2 h-2 bg-white rounded-full" />
+                    </span>
+                  )}
                 </button>
               )}
             </div>
@@ -1178,11 +1265,19 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
                 </>
               ) : (
                 <button
-                  onClick={handleForfeit}
+                  onClick={handleQuitOrForfeit}
                   disabled={game?.status !== 'active'}
-                  className="py-2 px-4 bg-slate-800 text-slate-400 rounded-lg hover:bg-red-900/50 hover:text-red-300 transition-all text-sm disabled:opacity-30"
+                  className={`py-2 px-4 rounded-lg transition-all text-sm disabled:opacity-30 flex items-center gap-1 justify-center ${
+                    hasMovesPlayed 
+                      ? 'bg-slate-800 text-slate-400 hover:bg-red-900/50 hover:text-red-300' 
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
+                  }`}
+                  title={hasMovesPlayed ? 'Forfeit (counts as loss)' : 'Quit (no penalty)'}
                 >
                   <Flag size={16} />
+                  <span className="hidden sm:inline text-xs">
+                    {hasMovesPlayed ? 'Forfeit' : 'Quit'}
+                  </span>
                 </button>
               )}
             </div>
@@ -1220,6 +1315,12 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           isOpen={chatOpen}
           onToggle={setChatOpen}
           hideButton={true}
+          onNewMessage={(isOpponentMessage) => {
+            // Only show notification if chat is closed and it's from opponent
+            if (isOpponentMessage && !chatOpen) {
+              setHasUnreadChat(true);
+            }
+          }}
         />
       )}
 

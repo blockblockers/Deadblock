@@ -1,10 +1,12 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// UPDATED: Added full drag and drop support from piece tray and board
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import ControlButtons from './ControlButtons';
 import DPad from './DPad';
+import DragOverlay from './DragOverlay';
 import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
@@ -12,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
+import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 
 // Timer display component - RED THEME
 const TimerDisplay = ({ elapsedMs, isPaused }) => {
@@ -49,6 +52,7 @@ const TimerDisplay = ({ elapsedMs, isPaused }) => {
 // Success overlay when puzzle is completed - RED THEME
 const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAttempt, rank, onViewLeaderboard, onPlayAgain, onMenu }) => {
   const isNewBest = !bestTime || completionTime < bestTime;
+  const formatTime = weeklyChallengeService.formatTime;
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" 
@@ -62,45 +66,31 @@ const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAt
           <h2 className="text-2xl font-black text-red-300">CHALLENGE COMPLETE!</h2>
         </div>
         
-        {/* Time */}
-        <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-          <div className="text-center">
-            <div className="text-slate-400 text-sm mb-1">Your Time</div>
-            <div className="text-3xl font-mono font-black text-red-300">
-              {weeklyChallengeService.formatTime(completionTime)}
+        {/* Times */}
+        <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-red-500/20">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center">
+              <div className="text-slate-500 text-xs uppercase mb-1">This Run</div>
+              <div className={`text-xl font-black ${isNewBest ? 'text-amber-400' : 'text-white'}`}>
+                {formatTime(completionTime)}
+              </div>
+              {isNewBest && <div className="text-amber-400 text-xs mt-1">NEW BEST!</div>}
             </div>
-            
-            {wasFirstAttempt && (
-              <div className="mt-2 px-3 py-1 bg-cyan-500/20 rounded-full inline-flex items-center gap-1">
-                <Trophy size={14} className="text-cyan-400" />
-                <span className="text-cyan-300 text-sm font-bold">FIRST ATTEMPT - COUNTS FOR RANKING!</span>
+            <div className="text-center">
+              <div className="text-slate-500 text-xs uppercase mb-1">Best Time</div>
+              <div className="text-xl font-black text-slate-300">
+                {formatTime(isNewBest ? completionTime : bestTime)}
               </div>
-            )}
-            
-            {!wasFirstAttempt && isNewBest && (
-              <div className="mt-2 px-3 py-1 bg-amber-500/20 rounded-full inline-flex items-center gap-1">
-                <Trophy size={14} className="text-amber-400" />
-                <span className="text-amber-300 text-sm font-bold">NEW PERSONAL BEST!</span>
-              </div>
-            )}
+            </div>
           </div>
         </div>
         
-        {/* First Attempt vs Best Time Info */}
-        {firstAttemptTime && !wasFirstAttempt && (
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <div className="bg-slate-800/50 rounded-lg p-2 border border-cyan-500/30 text-center">
-              <div className="text-cyan-400 text-xs mb-1">First Attempt</div>
-              <div className="text-cyan-300 font-mono font-bold text-sm">
-                {weeklyChallengeService.formatTime(firstAttemptTime)}
-              </div>
-              <div className="text-cyan-500 text-xs">(Ranked)</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-lg p-2 border border-amber-500/30 text-center">
-              <div className="text-amber-400 text-xs mb-1">Best Time</div>
-              <div className="text-amber-300 font-mono font-bold text-sm">
-                {weeklyChallengeService.formatTime(isNewBest ? completionTime : bestTime)}
-              </div>
+        {/* First attempt info */}
+        {wasFirstAttempt && (
+          <div className="bg-gradient-to-r from-amber-900/30 to-red-900/30 rounded-xl p-3 mb-4 border border-amber-500/30 text-center">
+            <div className="text-amber-300 font-bold text-sm">⭐ First Attempt Recorded!</div>
+            <div className="text-amber-500/70 text-xs mt-1">
+              Your first completion time counts for the leaderboard.
             </div>
           </div>
         )}
@@ -133,7 +123,7 @@ const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAt
             className="w-full p-3 rounded-xl font-bold bg-slate-800 text-red-300 border border-red-500/30 hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
           >
             <RotateCcw size={18} />
-            {wasFirstAttempt ? 'PLAY AGAIN (PRACTICE)' : 'TRY AGAIN'}
+            {wasFirstAttempt ? 'PRACTICE RUN' : 'TRY AGAIN'}
           </button>
           
           <button
@@ -149,41 +139,39 @@ const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAt
   );
 };
 
-// Lose overlay when AI wins - RED THEME
+// Lose overlay when AI wins
 const LoseOverlay = ({ elapsedMs, attemptCount, isFirstAttempt, onRetry, onMenu }) => {
+  const formatTime = weeklyChallengeService.formatTime;
+  
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" 
          style={{ backgroundColor: 'rgba(0,0,0,0.9)' }}>
-      <div className="bg-gradient-to-br from-slate-900 via-red-950/50 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.4)]">
-        {/* Lose Icon */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)]">
+        {/* Icon */}
         <div className="text-center mb-4">
-          <div className="w-16 h-16 mx-auto rounded-full bg-red-500/20 flex items-center justify-center mb-3">
+          <div className="w-16 h-16 mx-auto rounded-full bg-red-900/30 flex items-center justify-center mb-3">
             <X size={40} className="text-red-400" />
           </div>
-          <h2 className="text-2xl font-black text-red-300">AI BLOCKED YOU!</h2>
-          <p className="text-slate-400 text-sm mt-2">The AI made a move - puzzle failed</p>
+          <h2 className="text-2xl font-black text-red-300">BLOCKED!</h2>
+          <p className="text-slate-400 text-sm mt-2">AI found a winning move</p>
         </div>
         
-        {/* Current Time */}
-        <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
+        {/* Current time */}
+        <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700">
           <div className="text-center">
-            <div className="text-slate-400 text-sm mb-1">Time So Far</div>
-            <div className="text-3xl font-mono font-black text-red-300">
-              {weeklyChallengeService.formatTime(elapsedMs)}
-            </div>
+            <div className="text-slate-500 text-xs uppercase mb-1">Time (continues on retry)</div>
+            <div className="text-2xl font-black text-white">{formatTime(elapsedMs)}</div>
             {attemptCount > 0 && (
-              <div className="text-amber-400 text-xs mt-2">
-                Attempt #{attemptCount + 1}
-              </div>
+              <div className="text-slate-500 text-xs mt-1">Attempt #{attemptCount + 1}</div>
             )}
           </div>
         </div>
         
-        {/* Info about retry */}
+        {/* First attempt notice */}
         {isFirstAttempt && (
-          <div className="bg-amber-900/30 rounded-lg p-3 mb-4 border border-amber-500/30">
-            <p className="text-amber-300 text-sm text-center">
-              ⏱️ Timer continues on retry! Your first completion time counts for the leaderboard.
+          <div className="bg-amber-900/20 rounded-xl p-3 mb-4 border border-amber-500/30 text-center">
+            <p className="text-amber-400 text-sm">
+              Your first completion time counts for the leaderboard.
             </p>
           </div>
         )}
@@ -218,23 +206,34 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
   // Game state
   const [puzzle, setPuzzle] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(null); // Track loading errors
+  const [loadError, setLoadError] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameComplete, setGameComplete] = useState(false);
-  const [gameLost, setGameLost] = useState(false); // Player lost (AI won)
+  const [gameLost, setGameLost] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [accumulatedMs, setAccumulatedMs] = useState(0); // Time accumulated across retries
+  const [accumulatedMs, setAccumulatedMs] = useState(0);
   const [completionTime, setCompletionTime] = useState(null);
   const [firstAttemptTime, setFirstAttemptTime] = useState(null);
   const [bestTime, setBestTime] = useState(null);
   const [isFirstAttempt, setIsFirstAttempt] = useState(true);
   const [wasFirstAttempt, setWasFirstAttempt] = useState(false);
   const [currentRank, setCurrentRank] = useState(null);
-  const [attemptCount, setAttemptCount] = useState(0); // Track retry count for first attempt
+  const [attemptCount, setAttemptCount] = useState(0);
+  
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedPiece, setDraggedPiece] = useState(null);
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isValidDrop, setIsValidDrop] = useState(false);
   
   // Refs
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+  const boardRef = useRef(null);
+  const boardBoundsRef = useRef(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const hasDragStartedRef = useRef(false);
   
   // Game state from hook
   const {
@@ -257,12 +256,233 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     flipPiece,
     loadPuzzle,
     resetCurrentPuzzle,
+    setPendingMove,
   } = useGameState();
+  
+  // =========================================================================
+  // DRAG AND DROP HANDLERS
+  // =========================================================================
+  
+  const DRAG_THRESHOLD = 10;
+  const SCROLL_ANGLE_THRESHOLD = 60;
+  
+  // Calculate which board cell the drag position is over
+  const calculateBoardCell = useCallback((clientX, clientY) => {
+    if (!boardBoundsRef.current) return null;
+    
+    const { left, top, width, height } = boardBoundsRef.current;
+    const cellWidth = width / BOARD_SIZE;
+    const cellHeight = height / BOARD_SIZE;
+    
+    const relX = clientX - left;
+    const relY = clientY - top;
+    
+    if (relX < 0 || relX > width || relY < 0 || relY > height) {
+      return null;
+    }
+    
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
+    
+    return { row, col };
+  }, []);
+
+  // Update drag position and check validity
+  const updateDrag = useCallback((clientX, clientY) => {
+    setDragPosition({ x: clientX, y: clientY });
+    
+    const cell = calculateBoardCell(clientX, clientY);
+    if (cell && draggedPiece) {
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
+      
+      if (valid && setPendingMove) {
+        setPendingMove({
+          piece: draggedPiece,
+          row: cell.row,
+          col: cell.col,
+          coords
+        });
+      }
+    } else {
+      setIsValidDrop(false);
+    }
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+
+  // End drag - either place piece or cancel
+  const endDrag = useCallback(() => {
+    if (isValidDrop && pendingMove) {
+      // Keep pending move for confirmation
+      selectPiece(pendingMove.piece);
+    } else {
+      // Cancel if invalid drop
+      if (setPendingMove) setPendingMove(null);
+    }
+    
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setIsValidDrop(false);
+    hasDragStartedRef.current = false;
+    
+    // Re-enable scroll
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+  }, [isValidDrop, pendingMove, selectPiece, setPendingMove]);
+
+  // Create drag handlers for piece tray
+  const createDragHandlers = useCallback((piece) => {
+    if (gameOver || usedPieces.includes(piece) || !gameStarted) return {};
+
+    const getClientPos = (e) => {
+      if (e.touches && e.touches[0]) {
+        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+      }
+      return { clientX: e.clientX, clientY: e.clientY };
+    };
+
+    const handleStart = (e) => {
+      const { clientX, clientY } = getClientPos(e);
+      dragStartRef.current = { x: clientX, y: clientY };
+      hasDragStartedRef.current = false;
+      
+      // Update board bounds
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+    };
+
+    const handleMove = (e) => {
+      const { clientX, clientY } = getClientPos(e);
+      const deltaX = clientX - dragStartRef.current.x;
+      const deltaY = clientY - dragStartRef.current.y;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // Check if this is a vertical scroll gesture
+      if (!hasDragStartedRef.current && distance > 5) {
+        const angle = Math.abs(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
+        const isVertical = angle > SCROLL_ANGLE_THRESHOLD && angle < (180 - SCROLL_ANGLE_THRESHOLD);
+        
+        if (isVertical) {
+          return; // Let it scroll
+        }
+      }
+      
+      if (distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+        hasDragStartedRef.current = true;
+        setIsDragging(true);
+        setDraggedPiece(piece);
+        selectPiece(piece);
+        if (setPendingMove) setPendingMove(null);
+        setDragOffset({ x: 0, y: 0 });
+        
+        // Prevent scroll while dragging
+        document.body.style.overflow = 'hidden';
+        document.body.style.touchAction = 'none';
+        
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        
+        soundManager.playPieceSelect();
+      }
+      
+      if (hasDragStartedRef.current) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        updateDrag(clientX, clientY);
+      }
+    };
+
+    const handleEnd = () => {
+      if (hasDragStartedRef.current) {
+        endDrag();
+      }
+      hasDragStartedRef.current = false;
+    };
+
+    return {
+      onMouseDown: handleStart,
+      onMouseMove: handleMove,
+      onMouseUp: handleEnd,
+      onMouseLeave: handleEnd,
+      onTouchStart: handleStart,
+      onTouchMove: handleMove,
+      onTouchEnd: handleEnd,
+    };
+  }, [gameOver, usedPieces, gameStarted, rotation, flipped, selectPiece, setPendingMove, updateDrag, endDrag]);
+
+  // Handle dragging from board (moving pending piece)
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    if (gameOver || !gameStarted) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    // Clear the pending move (piece is being "picked up")
+    if (setPendingMove) {
+      setPendingMove(null);
+    }
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // Calculate offset from center of element
+    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
+    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
+    setIsDragging(true);
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    hasDragStartedRef.current = true;
+    
+    // Prevent scroll while dragging
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    
+    soundManager.playPieceSelect();
+  }, [gameOver, gameStarted, pendingMove, setPendingMove]);
+
+  // Global move/end handlers for drag
+  useEffect(() => {
+    if (!isDragging) return;
+    
+    const handleGlobalMove = (e) => {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      updateDrag(clientX, clientY);
+      
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleGlobalEnd = () => {
+      endDrag();
+    };
+    
+    window.addEventListener('mousemove', handleGlobalMove);
+    window.addEventListener('mouseup', handleGlobalEnd);
+    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalEnd);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMove);
+      window.removeEventListener('mouseup', handleGlobalEnd);
+      window.removeEventListener('touchmove', handleGlobalMove);
+      window.removeEventListener('touchend', handleGlobalEnd);
+    };
+  }, [isDragging, updateDrag, endDrag]);
+  
+  // =========================================================================
+  // TIMER AND GAME LOGIC
+  // =========================================================================
   
   // Load the puzzle
   useEffect(() => {
     const loadWeeklyPuzzle = async () => {
-      // Handle missing challenge
       if (!challenge || !challenge.id) {
         console.error('[WeeklyChallengeScreen] No challenge provided');
         setLoadError('Challenge data not available. Please go back and try again.');
@@ -274,7 +494,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
       setLoadError(null);
       
       try {
-        // Generate deterministic puzzle from challenge seed
         const seed = weeklyChallengeService.generatePuzzleSeed(challenge);
         console.log('[WeeklyChallengeScreen] Loading puzzle with seed:', seed);
         
@@ -288,7 +507,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
           setLoadError('Failed to generate puzzle. Please try again.');
         }
         
-        // Get user's existing results
         const { data: existingResult } = await weeklyChallengeService.getUserResult(challenge.id);
         if (existingResult) {
           setFirstAttemptTime(existingResult.first_attempt_time_ms);
@@ -306,7 +524,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     loadWeeklyPuzzle();
   }, [challenge]);
   
-  // Start the timer (accounts for accumulated time from retries)
+  // Start the timer
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
@@ -314,7 +532,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     }, 10);
   }, [accumulatedMs]);
   
-  // Stop the timer and return total elapsed time
+  // Stop the timer
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -324,7 +542,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     return accumulatedMs + sessionTime;
   }, [accumulatedMs]);
   
-  // Pause the timer (for when player loses but may retry)
+  // Pause the timer
   const pauseTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -350,11 +568,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     soundManager.playClickSound('success');
   }, [puzzle, loadPuzzle, startTimer]);
   
-  // Check for puzzle completion (win or loss)
+  // Check for puzzle completion
   useEffect(() => {
     if (gameStarted && gameOver) {
       if (winner === 1) {
-        // Player wins!
         const finalTime = stopTimer();
         setCompletionTime(finalTime);
         setWasFirstAttempt(isFirstAttempt);
@@ -362,7 +579,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
         soundManager.playPuzzleSolvedSound();
         submitResult(finalTime);
       } else if (winner === 2) {
-        // AI wins - player loses
         pauseTimer();
         setGameLost(true);
         setAttemptCount(prev => prev + 1);
@@ -371,7 +587,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     }
   }, [gameOver, winner, gameStarted, stopTimer, pauseTimer, isFirstAttempt]);
   
-  // Submit result to database
+  // Submit result
   const submitResult = async (timeMs) => {
     try {
       const { data } = await weeklyChallengeService.submitResult(challenge.id, timeMs, isFirstAttempt);
@@ -382,12 +598,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
           setIsFirstAttempt(false);
         }
         
-        // Update best time if improved
         if (!bestTime || timeMs < bestTime) {
           setBestTime(timeMs);
         }
         
-        // Get rank (based on first attempt)
         const { rank } = await weeklyChallengeService.getUserRank(challenge.id);
         setCurrentRank(rank);
       }
@@ -396,16 +610,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     }
   };
   
-  // Retry after loss (continue accumulated time)
+  // Retry after loss
   const handleRetryAfterLoss = useCallback(() => {
     resetCurrentPuzzle();
     setGameLost(false);
-    // Don't reset accumulated time - continue from where we left off
     startTimer();
     soundManager.playClickSound('success');
   }, [resetCurrentPuzzle, startTimer]);
   
-  // Full restart the puzzle (reset everything)
+  // Full restart
   const handleRestart = useCallback(() => {
     resetCurrentPuzzle();
     setGameComplete(false);
@@ -418,13 +631,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     setGameStarted(false);
   }, [resetCurrentPuzzle]);
   
-  // Handle going to leaderboard
+  // View leaderboard
   const handleViewLeaderboard = () => {
     soundManager.playButtonClick();
     onLeaderboard(challenge);
   };
   
-  // Cleanup timer on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       if (timerRef.current) {
@@ -433,10 +646,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     };
   }, []);
   
-  // Loading state - RED THEME
+  // =========================================================================
+  // RENDER
+  // =========================================================================
+  
+  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-red-300">Loading weekly challenge...</p>
@@ -445,86 +666,74 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     );
   }
   
-  // Error state - show error and back button
-  if (loadError || !puzzle) {
+  // Error state
+  if (loadError) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="bg-slate-900/90 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 text-center">
-          <X size={48} className="mx-auto text-red-400 mb-4" />
-          <h2 className="text-xl font-bold text-red-300 mb-2">Failed to Load</h2>
-          <p className="text-slate-400 mb-6 text-sm">
-            {loadError || 'Unable to load the weekly challenge puzzle. Please try again.'}
-          </p>
-          <div className="space-y-2">
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full p-3 rounded-xl font-bold bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all"
-            >
-              Retry
-            </button>
-            <button
-              onClick={() => { soundManager.playButtonClick(); onMenu(); }}
-              className="w-full p-3 rounded-xl font-bold text-slate-400 hover:text-slate-300 transition-all flex items-center justify-center gap-2"
-            >
-              <ArrowLeft size={18} />
-              Back to Menu
-            </button>
-          </div>
+        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        <div className="bg-slate-900 rounded-xl p-6 max-w-sm w-full border border-red-500/30 text-center">
+          <X size={48} className="text-red-400 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-red-300 mb-2">Error</h2>
+          <p className="text-slate-400 mb-4">{loadError}</p>
+          <button
+            onClick={() => { soundManager.playButtonClick(); onMenu(); }}
+            className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold transition-colors"
+          >
+            Go Back
+          </button>
         </div>
       </div>
     );
   }
   
-  // Pre-game state (ready to start) - RED THEME
+  // Pre-game screen
   if (!gameStarted) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        {/* Background */}
-        <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
+        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }} />
-        <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-red-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-rose-500/20 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative bg-slate-900/90 rounded-2xl p-6 max-w-sm w-full border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)] text-center">
-          <h2 className="text-2xl font-black text-red-300 mb-2">WEEKLY CHALLENGE</h2>
-          <p className="text-slate-400 mb-6">Week {challenge.week_number}, {challenge.year}</p>
+        <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full border border-red-500/30 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
+          <div className="text-center mb-6">
+            <Trophy size={48} className="text-red-400 mx-auto mb-3" />
+            <h2 className="text-2xl font-black text-red-300">WEEK {challenge?.week_number || '?'}</h2>
+            <p className="text-slate-400 mt-2">Weekly Challenge</p>
+          </div>
           
-          {/* Show existing times if not first attempt */}
-          {firstAttemptTime && (
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <div className="bg-slate-800/50 rounded-xl p-3 border border-cyan-500/30">
-                <div className="text-cyan-400 text-xs mb-1">First Attempt</div>
-                <div className="text-lg font-mono font-bold text-cyan-300">
-                  {weeklyChallengeService.formatTime(firstAttemptTime)}
+          {/* Stats */}
+          {(firstAttemptTime || bestTime) && (
+            <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700">
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                  <div className="text-slate-500 text-xs uppercase mb-1">First Time</div>
+                  <div className="text-lg font-bold text-white">
+                    {weeklyChallengeService.formatTime(firstAttemptTime)}
+                  </div>
                 </div>
-                <div className="text-cyan-500 text-xs">(Ranked)</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-xl p-3 border border-amber-500/30">
-                <div className="text-amber-400 text-xs mb-1">Best Time</div>
-                <div className="text-lg font-mono font-bold text-amber-300">
-                  {weeklyChallengeService.formatTime(bestTime)}
+                <div>
+                  <div className="text-slate-500 text-xs uppercase mb-1">Best Time</div>
+                  <div className="text-lg font-bold text-amber-400">
+                    {weeklyChallengeService.formatTime(bestTime)}
+                  </div>
                 </div>
               </div>
             </div>
           )}
           
-          <div className="bg-slate-800/50 rounded-xl p-4 mb-6 border border-slate-700/50">
-            <Clock size={32} className="mx-auto text-red-400 mb-2" />
-            <p className="text-slate-300 text-sm">
-              Timer starts when you press START
+          {isFirstAttempt ? (
+            <p className="text-amber-400 text-sm text-center mb-4">
+              ⭐ Your first completion time counts for the leaderboard!
             </p>
-            {isFirstAttempt ? (
-              <p className="text-red-300 text-xs mt-1 font-bold">
-                ⚡ Your FIRST attempt time will be used for ranking!
-              </p>
-            ) : (
-              <p className="text-slate-500 text-xs mt-1">
-                Practice mode - try to beat your best time!
-              </p>
-            )}
-          </div>
+          ) : (
+            <p className="text-slate-500 text-xs text-center mb-4">
+              Practice mode - try to beat your best time!
+            </p>
+          )}
           
           <button
             onClick={handleStartGame}
@@ -546,7 +755,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     );
   }
   
-  // Game in progress - RED THEME with proper scrolling
+  // Game in progress
   return (
     <div 
       className="min-h-screen bg-slate-950"
@@ -554,7 +763,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain'
+        overscrollBehavior: 'contain',
+        touchAction: isDragging ? 'none' : 'pan-y'
       }}
     >
       {/* Background */}
@@ -562,6 +772,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
         backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
+      
+      {/* Drag Overlay */}
+      {isDragging && draggedPiece && (
+        <DragOverlay
+          piece={draggedPiece}
+          rotation={rotation}
+          flipped={flipped}
+          position={dragPosition}
+          offset={dragOffset}
+          isValidDrop={isValidDrop}
+        />
+      )}
       
       {/* Content */}
       <div className="relative min-h-screen flex flex-col items-center px-2 py-4">
@@ -586,24 +808,27 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             </button>
           </div>
           
-          {/* Game Board - with rotation/flipped for ghost preview */}
+          {/* Game Board */}
           <div className="flex justify-center mb-3">
-            <GameBoard
-              board={board}
-              boardPieces={boardPieces}
-              selectedPiece={selectedPiece}
-              pendingMove={pendingMove}
-              rotation={rotation}
-              flipped={flipped}
-              onCellClick={handleCellClick}
-              currentPlayer={currentPlayer}
-              gameOver={gameOver}
-              gameMode="puzzle"
-            />
+            <div ref={boardRef}>
+              <GameBoard
+                board={board}
+                boardPieces={boardPieces}
+                selectedPiece={selectedPiece}
+                pendingMove={pendingMove}
+                rotation={rotation}
+                flipped={flipped}
+                onCellClick={handleCellClick}
+                currentPlayer={currentPlayer}
+                gameOver={gameOver}
+                gameMode="puzzle"
+                onPendingPieceDragStart={handleBoardDragStart}
+              />
+            </div>
           </div>
           
           {/* D-Pad for moving pieces */}
-          {pendingMove && (
+          {pendingMove && !isDragging && (
             <div className="flex justify-center mb-3">
               <DPad onMove={movePendingPiece} />
             </div>
@@ -618,6 +843,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             gameMode="puzzle"
             currentPlayer={currentPlayer}
             onSelectPiece={selectPiece}
+            createDragHandlers={createDragHandlers}
+            isDragging={isDragging}
+            draggedPiece={draggedPiece}
           />
           
           {/* Controls */}

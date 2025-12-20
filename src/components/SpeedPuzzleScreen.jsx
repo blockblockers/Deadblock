@@ -19,6 +19,7 @@ import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
 import ControlButtons from './ControlButtons';
+import DragOverlay from './DragOverlay';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, createEmptyBoard, BOARD_SIZE } from '../utils/gameLogic';
 import { getSpeedPuzzle } from '../utils/puzzleGenerator';
@@ -643,6 +644,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const [pendingMove, setPendingMove] = useState(null);
   const [playerAnimatingMove, setPlayerAnimatingMove] = useState(null);
   const [showWrongMove, setShowWrongMove] = useState(false);
+  
+  // Drag and drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedPiece, setDraggedPiece] = useState(null);
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isValidDrop, setIsValidDrop] = useState(false);
 
   // -------------------------------------------------------------------------
   // REFS - For values that shouldn't trigger re-renders
@@ -653,6 +661,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const retryCountRef = useRef(0);
   const mountedRef = useRef(true); // Track if component is mounted
   const pendingTimeoutsRef = useRef(new Set()); // Track all pending timeouts for cleanup
+  
+  // Drag refs
+  const boardRef = useRef(null);
+  const boardBoundsRef = useRef(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const hasDragStartedRef = useRef(false);
 
   // -------------------------------------------------------------------------
   // DERIVED STATE
@@ -690,6 +704,202 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       timerRef.current = null;
     }
   }, []);
+
+  // -------------------------------------------------------------------------
+  // DRAG AND DROP HANDLERS
+  // -------------------------------------------------------------------------
+  
+  // Drag detection constants
+  const DRAG_THRESHOLD = 10;
+  const SCROLL_ANGLE_THRESHOLD = 60;
+  
+  // Calculate which board cell the drag position is over
+  const calculateBoardCell = useCallback((clientX, clientY) => {
+    if (!boardBoundsRef.current) return null;
+    
+    const { left, top, width, height } = boardBoundsRef.current;
+    const cellWidth = width / BOARD_SIZE;
+    const cellHeight = height / BOARD_SIZE;
+    
+    const relX = clientX - left;
+    const relY = clientY - top;
+    
+    if (relX < 0 || relX > width || relY < 0 || relY > height) {
+      return null;
+    }
+    
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
+    
+    return { row, col };
+  }, []);
+
+  // Update drag position and check validity
+  const updateDrag = useCallback((clientX, clientY) => {
+    setDragPosition({ x: clientX, y: clientY });
+    
+    const cell = calculateBoardCell(clientX, clientY);
+    if (cell && draggedPiece) {
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
+      
+      if (valid) {
+        setPendingMove({
+          piece: draggedPiece,
+          row: cell.row,
+          col: cell.col,
+          coords
+        });
+      }
+    } else {
+      setIsValidDrop(false);
+    }
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
+
+  // End drag - either place piece or cancel
+  const endDrag = useCallback(() => {
+    if (isValidDrop && pendingMove) {
+      // Keep pending move for confirmation
+      setSelectedPiece(pendingMove.piece);
+    } else {
+      // Cancel if invalid drop
+      setPendingMove(null);
+    }
+    
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setIsValidDrop(false);
+    hasDragStartedRef.current = false;
+  }, [isValidDrop, pendingMove]);
+
+  // Create drag handlers for piece tray
+  const createDragHandlers = useCallback((piece) => {
+    const getClientPos = (e) => {
+      if (e.touches && e.touches[0]) {
+        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+      }
+      return { clientX: e.clientX, clientY: e.clientY };
+    };
+
+    const handleStart = (e) => {
+      if (gameState !== GAME_STATES.PLAYING) return;
+      if (usedPieces.includes(piece)) return;
+      
+      const { clientX, clientY } = getClientPos(e);
+      dragStartRef.current = { x: clientX, y: clientY };
+      hasDragStartedRef.current = false;
+      
+      // Update board bounds
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+    };
+
+    const handleMove = (e) => {
+      if (gameState !== GAME_STATES.PLAYING) return;
+      
+      const { clientX, clientY } = getClientPos(e);
+      const deltaX = clientX - dragStartRef.current.x;
+      const deltaY = clientY - dragStartRef.current.y;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // Check if this is a vertical scroll gesture
+      if (!hasDragStartedRef.current && distance > 5) {
+        const angle = Math.abs(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
+        const isVertical = angle > SCROLL_ANGLE_THRESHOLD && angle < (180 - SCROLL_ANGLE_THRESHOLD);
+        
+        if (isVertical) {
+          return; // Let it scroll
+        }
+      }
+      
+      if (distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+        hasDragStartedRef.current = true;
+        setIsDragging(true);
+        setDraggedPiece(piece);
+        setSelectedPiece(piece);
+        setPendingMove(null);
+        setDragOffset({ x: 0, y: 0 });
+        
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+      
+      if (hasDragStartedRef.current) {
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+        updateDrag(clientX, clientY);
+      }
+    };
+
+    const handleEnd = () => {
+      if (hasDragStartedRef.current) {
+        endDrag();
+      }
+      hasDragStartedRef.current = false;
+    };
+
+    return {
+      onMouseDown: handleStart,
+      onMouseMove: handleMove,
+      onMouseUp: handleEnd,
+      onMouseLeave: handleEnd,
+      onTouchStart: handleStart,
+      onTouchMove: handleMove,
+      onTouchEnd: handleEnd,
+    };
+  }, [gameState, usedPieces, rotation, flipped, updateDrag, endDrag]);
+
+  // Handle dragging from board (moving pending piece)
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    if (gameState !== GAME_STATES.PLAYING) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    setIsDragging(true);
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: 0, y: 0 });
+    hasDragStartedRef.current = true;
+  }, [gameState, pendingMove]);
+
+  // Global move/end handlers for drag
+  useEffect(() => {
+    if (!isDragging) return;
+    
+    const handleGlobalMove = (e) => {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      updateDrag(clientX, clientY);
+      
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleGlobalEnd = () => {
+      endDrag();
+    };
+    
+    window.addEventListener('mousemove', handleGlobalMove);
+    window.addEventListener('mouseup', handleGlobalEnd);
+    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalEnd);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMove);
+      window.removeEventListener('mouseup', handleGlobalEnd);
+      window.removeEventListener('touchmove', handleGlobalMove);
+      window.removeEventListener('touchend', handleGlobalEnd);
+    };
+  }, [isDragging, updateDrag, endDrag]);
 
   // -------------------------------------------------------------------------
   // EFFECT: Load database stats on mount
@@ -1173,8 +1383,20 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         {/* Game board */}
         {(gameState === GAME_STATES.PLAYING || gameState === GAME_STATES.SUCCESS) && (
           <>
+            {/* Drag Overlay */}
+            {isDragging && draggedPiece && (
+              <DragOverlay
+                piece={draggedPiece}
+                rotation={rotation}
+                flipped={flipped}
+                position={dragPosition}
+                offset={dragOffset}
+                isValidDrop={isValidDrop}
+              />
+            )}
+            
             <div className="w-full max-w-md flex-shrink-0 flex justify-center relative">
-              <div className="w-[min(85vw,85vh,340px)] aspect-square">
+              <div ref={boardRef} className="w-[min(85vw,85vh,340px)] aspect-square">
                 <GameBoard
                   board={board}
                   boardPieces={boardPieces}
@@ -1185,6 +1407,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                   selectedPiece={selectedPiece}
                   rotation={rotation}
                   flipped={flipped}
+                  gameOver={gameState !== GAME_STATES.PLAYING}
+                  onPendingPieceDragStart={handleBoardDragStart}
                   customColors={{
                     1: 'bg-gradient-to-br from-cyan-400 to-blue-500',
                     2: 'bg-gradient-to-br from-rose-400 to-pink-500',
@@ -1206,7 +1430,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             </div>
             
             {/* D-Pad - matches GameScreen order */}
-            {gameState === GAME_STATES.PLAYING && pendingMove && (
+            {gameState === GAME_STATES.PLAYING && pendingMove && !isDragging && (
               <div className="flex justify-center mt-3 flex-shrink-0">
                 <DPad onMove={movePendingPiece} />
               </div>
@@ -1242,6 +1466,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                 onSelectPiece={selectPiece}
                 rotation={rotation}
                 flipped={flipped}
+                pendingMove={pendingMove}
+                gameOver={gameState !== GAME_STATES.PLAYING}
+                createDragHandlers={createDragHandlers}
+                isDragging={isDragging}
+                draggedPiece={draggedPiece}
               />
             </div>
             

@@ -1,5 +1,6 @@
 // QuickChat - In-game emotes and quick messages
 // UPDATED: Added external control props (isOpen, onToggle, hideButton)
+// UPDATED: Added onNewMessage callback for notification support
 import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import { chatService, QUICK_CHAT_MESSAGES, EMOTES } from '../services/chatService';
@@ -13,7 +14,9 @@ const QuickChat = ({
   // External control props
   isOpen: externalIsOpen,
   onToggle: externalOnToggle,
-  hideButton = false
+  hideButton = false,
+  // Notification callback
+  onNewMessage
 }) => {
   // Use internal state if not externally controlled
   const [internalIsOpen, setInternalIsOpen] = useState(false);
@@ -49,6 +52,9 @@ const QuickChat = ({
         setShowBubble(display);
         soundManager.playSound('notification');
         
+        // Notify parent component about new opponent message
+        onNewMessage?.(true);
+        
         // Clear after 3 seconds
         if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
         bubbleTimeoutRef.current = setTimeout(() => setShowBubble(null), 3000);
@@ -63,7 +69,7 @@ const QuickChat = ({
         clearTimeout(bubbleTimeoutRef.current);
       }
     };
-  }, [gameId, userId]);
+  }, [gameId, userId, onNewMessage]);
 
   const sendMessage = async (type, key) => {
     if (cooldown || disabled) return;

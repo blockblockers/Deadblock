@@ -129,6 +129,52 @@ export const AuthProvider = ({ children }) => {
 
   const isOnlineEnabled = isSupabaseConfigured();
 
+  // Direct fetch helper for profile - bypasses Supabase client timeout issues
+  const fetchProfileDirect = useCallback(async (userId) => {
+    const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlolmsjlwk.supabase.co';
+    const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+    
+    try {
+      const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+      if (!authData?.access_token || !ANON_KEY) {
+        console.log('[AuthContext] fetchProfileDirect: No auth token available');
+        return null;
+      }
+      
+      const headers = {
+        'Authorization': `Bearer ${authData.access_token}`,
+        'apikey': ANON_KEY,
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.pgrst.object+json'
+      };
+      
+      console.log('[AuthContext] fetchProfileDirect: Fetching via direct API...');
+      const startTime = Date.now();
+      
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`,
+        { headers }
+      );
+      
+      const elapsed = Date.now() - startTime;
+      console.log(`[AuthContext] fetchProfileDirect: Response in ${elapsed}ms, status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[AuthContext] fetchProfileDirect: Error response:', errorText);
+        return null;
+      }
+      
+      const data = await response.json();
+      console.log('[AuthContext] fetchProfileDirect: Success:', { username: data?.username, id: data?.id });
+      return data;
+    } catch (err) {
+      console.error('[AuthContext] fetchProfileDirect: Exception:', err.message);
+      return null;
+    }
+  }, []);
+
   const fetchProfile = useCallback(async (userId, retryCount = 0) => {
     if (!supabase) {
       console.log('[AuthContext] fetchProfile: supabase not configured');
@@ -144,23 +190,16 @@ export const AuthProvider = ({ children }) => {
     console.log(`[AuthContext] fetchProfile: fetching for ${userId}, attempt ${retryCount + 1}`);
     
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // Use direct fetch to bypass Supabase client timeout issues
+      const data = await fetchProfileDirect(userId);
       
-      if (error) {
-        console.error('[AuthContext] fetchProfile error:', error);
-        // Try to create profile if it doesn't exist
-        if (error.code === 'PGRST116') {
-          console.log('[AuthContext] Profile not found, may need to create one');
-          // Retry a few times in case of race condition
-          if (retryCount < maxRetries) {
-            console.log(`[AuthContext] Profile retry ${retryCount + 1}/${maxRetries}...`);
-            await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
-            return fetchProfile(userId, retryCount + 1);
-          }
+      if (!data || !data.id) {
+        console.log('[AuthContext] fetchProfile: No profile data returned');
+        // Profile not found, retry in case of race condition (new user)
+        if (retryCount < maxRetries) {
+          console.log(`[AuthContext] fetchProfile: Retry ${retryCount + 1}/${maxRetries}...`);
+          await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
+          return fetchProfile(userId, retryCount + 1);
         }
         return null;
       }
@@ -180,7 +219,7 @@ export const AuthProvider = ({ children }) => {
       }
       return null;
     }
-  }, []);
+  }, [fetchProfileDirect]);
 
   useEffect(() => {
     if (!supabase) {

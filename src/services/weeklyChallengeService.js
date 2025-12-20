@@ -364,6 +364,35 @@ class WeeklyChallengeService {
     }
   }
   
+  // Generate a deterministic puzzle seed for the week
+  // This method is called by WeeklyChallengeScreen to get a consistent seed for puzzle generation
+  generatePuzzleSeed(challenge) {
+    if (!challenge?.puzzle_seed) {
+      console.warn('[WeeklyChallengeService] No puzzle_seed in challenge, generating fallback');
+      // Fallback: create deterministic seed from challenge properties
+      const fallbackSeed = `week-${challenge?.week_number || 1}-${challenge?.id || 'unknown'}`;
+      return fallbackSeed;
+    }
+    return challenge.puzzle_seed;
+  }
+  
+  // Get time remaining in the current challenge
+  getTimeRemaining(challenge) {
+    if (!challenge?.ends_at) return null;
+    
+    const now = new Date();
+    const endDate = new Date(challenge.ends_at);
+    const diff = endDate - now;
+    
+    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, expired: true };
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return { days, hours, minutes, expired: false };
+  }
+  
   // Format time for display (converts ms to mm:ss.cc format)
   formatTime(ms) {
     if (!ms) return '--:--';
