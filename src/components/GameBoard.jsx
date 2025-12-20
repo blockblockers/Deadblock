@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, forwardRef } from 'react';
 import PropTypes from 'prop-types';
 import { pieceColors } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
@@ -7,7 +7,7 @@ import { GamePropTypes, CallbackPropTypes } from '../utils/propTypes';
 // Animation types for ambient effects
 const AMBIENT_EFFECTS = ['shimmer', 'edgeGlow', 'trace', 'breathe'];
 
-const GameBoard = ({ 
+const GameBoard = forwardRef(({ 
   board, 
   boardPieces = {}, 
   pendingMove, 
@@ -20,7 +20,7 @@ const GameBoard = ({
   onPendingPieceDragStart,
   aiAnimatingMove,
   playerAnimatingMove
-}) => {
+}, ref) => {
   // Track active ambient animations per cell: { "row,col": "effectType" }
   const [activeEffects, setActiveEffects] = useState({});
   
@@ -161,7 +161,10 @@ const GameBoard = ({
   return (
     <div className="relative inline-block mx-auto touch-none">
       {/* Main board with cyberpunk frame */}
-      <div className="relative inline-grid gap-0.5 sm:gap-1 bg-slate-950 p-2 rounded-xl shadow-[0_0_40px_rgba(34,211,238,0.25),0_0_80px_rgba(34,211,238,0.1),inset_0_0_40px_rgba(0,0,0,0.6)] border border-cyan-500/40">
+      <div 
+        ref={ref}
+        className="relative inline-grid gap-0.5 sm:gap-1 bg-slate-950 p-2 rounded-xl shadow-[0_0_40px_rgba(34,211,238,0.25),0_0_80px_rgba(34,211,238,0.1),inset_0_0_40px_rgba(0,0,0,0.6)] border border-cyan-500/40"
+      >
         {/* Corner accents */}
         <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-cyan-400/60 rounded-tl-xl" />
         <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-cyan-400/60 rounded-tr-xl" />
@@ -747,7 +750,10 @@ const GameBoard = ({
       `}</style>
     </div>
   );
-};
+});
+
+// Add display name for forwardRef component
+GameBoard.displayName = 'GameBoard';
 
 /**
  * @component GameBoard

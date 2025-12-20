@@ -571,32 +571,85 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
   // Load game and subscribe to updates
   useEffect(() => {
+    console.log('OnlineGameScreen useEffect triggered:', { gameId, userId: user?.id, authLoading });
+    
     if (!gameId || !user?.id || authLoading) return;
 
     let mounted = true;
     const userId = user.id;
 
+    console.log('OnlineGameScreen: Starting game load for:', gameId, 'user:', userId);
+
     const loadingTimeout = setTimeout(() => {
       if (mounted && loading) {
+        console.error('OnlineGameScreen: Loading timeout reached');
         setError('Loading timed out. Please try again.');
         setLoading(false);
       }
     }, 15000);
 
+    // First, load the initial game data
+    const loadGame = async () => {
+      try {
+        console.log('OnlineGameScreen: Calling gameSyncService.getGame...');
+        const { data, error: fetchError } = await gameSyncService.getGame(gameId);
+        
+        console.log('OnlineGameScreen: Server response:', { 
+          hasData: !!data, 
+          gameId: data?.id, 
+          error: fetchError 
+        });
+        
+        if (!mounted) {
+          console.log('OnlineGameScreen: Component unmounted, ignoring response');
+          return;
+        }
+        
+        clearTimeout(loadingTimeout);
+        
+        if (fetchError) {
+          console.error('OnlineGameScreen: Error loading game:', fetchError);
+          setError('Failed to load game: ' + (fetchError.message || 'Unknown error'));
+          setLoading(false);
+          return;
+        }
+
+        if (!data) {
+          console.error('OnlineGameScreen: No game data returned');
+          setError('Game not found');
+          setLoading(false);
+          return;
+        }
+
+        console.log('OnlineGameScreen: Game loaded successfully, calling updateGameState');
+        updateGameState(data, userId);
+        setLoading(false);
+        setConnected(true);
+        console.log('OnlineGameScreen: Loading complete, setLoading(false) called');
+      } catch (err) {
+        console.error('OnlineGameScreen: Exception loading game:', err);
+        if (mounted) {
+          clearTimeout(loadingTimeout);
+          setError('Error loading game: ' + err.message);
+          setLoading(false);
+        }
+      }
+    };
+
+    // Load initial game data
+    loadGame();
+
+    // Subscribe to real-time updates
     gameSyncService.subscribeToGame(
       gameId,
       userId,
       (gameData) => {
         if (!mounted) return;
         
-        if (!gameData) {
-          setError('Game not found');
-          setLoading(false);
-          return;
-        }
-        
-        setLoading(false);
-        setConnected(true);
+        console.log('OnlineGameScreen: Real-time update received', {
+          gameId: gameData?.id,
+          usedPieces: gameData?.used_pieces?.length
+        });
         
         // Check for stale updates during move
         if (moveInProgressRef.current || expectedPieceCountRef.current !== null) {
@@ -604,6 +657,7 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
           const expectedCount = expectedPieceCountRef.current || 0;
           
           if (incomingPieceCount < expectedCount) {
+            console.log('OnlineGameScreen: Ignoring stale update', { incomingPieceCount, expectedCount });
             return; // Ignore stale update
           }
           

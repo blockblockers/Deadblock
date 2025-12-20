@@ -23,7 +23,7 @@ const ControlButtons = ({
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
   const isPuzzleMode = gameMode === 'puzzle';
-  const isMultiplayerMode = gameMode === '2player' || gameMode === 'ai';
+  const isOnlineMultiplayer = gameMode === 'online';  // Only online games need quit/forfeit
   const hasMovesMade = moveCount > 0;
 
   const handleReset = () => {
@@ -62,8 +62,8 @@ const ControlButtons = ({
         </button>
       )}
 
-      {/* Quit/Forfeit Button - Only for multiplayer modes, not when game is over */}
-      {onQuitGame && isMultiplayerMode && !gameOver && (
+      {/* Quit/Forfeit Button - Only for online multiplayer, not when game is over */}
+      {onQuitGame && isOnlineMultiplayer && !gameOver && (
         <button
           onClick={handleQuitGame}
           className={`px-2 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 border transition-all active:scale-95 ${
