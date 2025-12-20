@@ -1396,8 +1396,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             )}
             
             <div className="w-full max-w-md flex-shrink-0 flex justify-center relative">
-              <div ref={boardRef} className="w-[min(85vw,85vh,340px)] aspect-square">
+              <div className="w-[min(85vw,85vh,340px)] aspect-square">
                 <GameBoard
+                  ref={boardRef}
                   board={board}
                   boardPieces={boardPieces}
                   currentPlayer={1}

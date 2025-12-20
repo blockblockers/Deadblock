@@ -810,21 +810,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
           
           {/* Game Board */}
           <div className="flex justify-center mb-3">
-            <div ref={boardRef}>
-              <GameBoard
-                board={board}
-                boardPieces={boardPieces}
-                selectedPiece={selectedPiece}
-                pendingMove={pendingMove}
-                rotation={rotation}
-                flipped={flipped}
-                onCellClick={handleCellClick}
-                currentPlayer={currentPlayer}
-                gameOver={gameOver}
-                gameMode="puzzle"
-                onPendingPieceDragStart={handleBoardDragStart}
-              />
-            </div>
+            <GameBoard
+              ref={boardRef}
+              board={board}
+              boardPieces={boardPieces}
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              rotation={rotation}
+              flipped={flipped}
+              onCellClick={handleCellClick}
+              currentPlayer={currentPlayer}
+              gameOver={gameOver}
+              gameMode="puzzle"
+              onPendingPieceDragStart={handleBoardDragStart}
+            />
           </div>
           
           {/* D-Pad for moving pieces */}

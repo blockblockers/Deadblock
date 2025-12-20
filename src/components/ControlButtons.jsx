@@ -1,6 +1,38 @@
 import { RotateCw, FlipHorizontal, RefreshCw, Check, X, Loader, RotateCcw, Home, Flag, XCircle } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
+// Glow Orb Button Component - consistent styling across all game screens
+const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
+  const colorClasses = {
+    cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
+    amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
+    green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
+    red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
+    purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
+    indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
+    slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`
+        bg-gradient-to-r ${colorClasses[color]}
+        text-white font-bold rounded-xl px-3 py-2 text-xs
+        transition-all duration-200
+        hover:scale-105 active:scale-95
+        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
+        flex items-center justify-center gap-1
+        ${className}
+      `}
+    >
+      {children}
+    </button>
+  );
+};
+
 const ControlButtons = ({
   selectedPiece,
   pendingMove,
@@ -9,7 +41,7 @@ const ControlButtons = ({
   gameMode,
   currentPlayer,
   isGeneratingPuzzle,
-  moveCount = 0,  // Number of moves made (for quit vs forfeit)
+  moveCount = 0,
   onRotate,
   onFlip,
   onConfirm,
@@ -17,13 +49,13 @@ const ControlButtons = ({
   onReset,
   onRetryPuzzle,
   onMenu,
-  onQuitGame,  // Handler for quit/forfeit
-  hideResetButtons = false  // Hide reset/retry for speed mode
+  onQuitGame,
+  hideResetButtons = false
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
   const isPuzzleMode = gameMode === 'puzzle';
-  const isOnlineMultiplayer = gameMode === 'online';  // Only online games need quit/forfeit
+  const isOnlineMultiplayer = gameMode === 'online';
   const hasMovesMade = moveCount > 0;
 
   const handleReset = () => {
@@ -49,77 +81,73 @@ const ControlButtons = ({
   };
 
   return (
-    <div className="flex gap-1 justify-between mt-2 flex-wrap">
-      {/* Menu Button - Cyberpunk style */}
+    <div className="flex gap-2 justify-between mt-2 flex-wrap">
+      {/* Menu Button */}
       {onMenu && (
-        <button
-          onClick={handleMenu}
-          className="px-2 py-1.5 bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 text-slate-300 rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/50 shadow-[0_0_10px_rgba(100,116,139,0.3)] transition-all active:scale-95"
-          title="Back to menu"
-        >
-          <Home size={14} className="text-cyan-400" />
-          <span className="hidden sm:inline text-cyan-400 font-bold">MENU</span>
-        </button>
+        <GlowOrbButton onClick={handleMenu} color="slate" title="Back to menu">
+          <Home size={14} />
+          <span className="hidden sm:inline">MENU</span>
+        </GlowOrbButton>
       )}
 
       {/* Quit/Forfeit Button - Only for online multiplayer, not when game is over */}
       {onQuitGame && isOnlineMultiplayer && !gameOver && (
-        <button
-          onClick={handleQuitGame}
-          className={`px-2 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 border transition-all active:scale-95 ${
-            hasMovesMade 
-              ? 'bg-gradient-to-r from-red-900 to-red-800 hover:from-red-800 hover:to-red-700 text-red-200 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
-              : 'bg-gradient-to-r from-amber-900 to-orange-900 hover:from-amber-800 hover:to-orange-800 text-amber-200 border-amber-500/50 shadow-[0_0_10px_rgba(251,191,36,0.3)]'
-          }`}
+        <GlowOrbButton 
+          onClick={handleQuitGame} 
+          color={hasMovesMade ? 'red' : 'amber'}
           title={hasMovesMade ? "Forfeit game (counts as loss)" : "Cancel game (no stats recorded)"}
         >
           {hasMovesMade ? (
             <>
               <Flag size={14} />
-              <span className="hidden sm:inline font-bold">FORFEIT</span>
+              <span className="hidden sm:inline">FORFEIT</span>
             </>
           ) : (
             <>
               <XCircle size={14} />
-              <span className="hidden sm:inline font-bold">QUIT</span>
+              <span className="hidden sm:inline">QUIT</span>
             </>
           )}
-        </button>
+        </GlowOrbButton>
       )}
 
       {/* Rotate Button */}
-      <button
+      <GlowOrbButton
         onClick={onRotate}
-        className="flex-1 px-1.5 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
         disabled={!hasSelection || gameOver || !isPlayerTurn || isGeneratingPuzzle}
+        color="cyan"
+        className="flex-1"
       >
-        <RotateCw size={12} />ROTATE
-      </button>
+        <RotateCw size={14} />ROTATE
+      </GlowOrbButton>
 
       {/* Flip Button */}
-      <button
+      <GlowOrbButton
         onClick={onFlip}
-        className="flex-1 px-1.5 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
         disabled={!hasSelection || gameOver || !isPlayerTurn || isGeneratingPuzzle}
+        color="purple"
+        className="flex-1"
       >
-        <FlipHorizontal size={12} />FLIP
-      </button>
+        <FlipHorizontal size={14} />FLIP
+      </GlowOrbButton>
 
       {/* Confirm/Cancel when pending move is valid */}
       {pendingMove && canConfirm && !isGeneratingPuzzle && (
         <>
-          <button
-            onClick={onConfirm}
-            className="flex-1 px-1.5 py-1.5 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)]"
-          >
-            <Check size={12} />CONFIRM
-          </button>
-          <button
+          <GlowOrbButton
             onClick={onCancel}
-            className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+            color="slate"
+            className="flex-1"
           >
-            <X size={12} />CANCEL
-          </button>
+            <X size={14} />CANCEL
+          </GlowOrbButton>
+          <GlowOrbButton
+            onClick={onConfirm}
+            color="green"
+            className="flex-1"
+          >
+            <Check size={14} />CONFIRM
+          </GlowOrbButton>
         </>
       )}
 
@@ -127,50 +155,49 @@ const ControlButtons = ({
       {(!pendingMove || !canConfirm) && !isGeneratingPuzzle && (
         <>
           {pendingMove && (
-            <button
+            <GlowOrbButton
               onClick={onCancel}
-              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              color="slate"
+              className="flex-1"
             >
-              <X size={12} />CANCEL
-            </button>
+              <X size={14} />CANCEL
+            </GlowOrbButton>
           )}
           {!pendingMove && !hideResetButtons && (
             <>
-              {/* Puzzle mode: Show RETRY and NEW buttons */}
               {isPuzzleMode ? (
                 <>
                   {onRetryPuzzle && (
-                    <button
+                    <GlowOrbButton
                       onClick={handleRetry}
-                      className="flex-1 px-1.5 py-1.5 bg-cyan-600/70 hover:bg-cyan-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-cyan-400/30 shadow-[0_0_10px_rgba(34,211,238,0.4)]"
+                      color="cyan"
+                      className="flex-1"
                       title="Retry this puzzle from the beginning"
                     >
-                      <RotateCcw size={12} />
-                      <span>RETRY</span>
-                    </button>
+                      <RotateCcw size={14} />RETRY
+                    </GlowOrbButton>
                   )}
                   {onReset && (
-                    <button
+                    <GlowOrbButton
                       onClick={handleReset}
-                      className="flex-1 px-1.5 py-1.5 bg-slate-700/70 hover:bg-slate-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/30 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
+                      color="slate"
+                      className="flex-1"
                       title="Generate a new puzzle"
                     >
-                      <RefreshCw size={12} />
-                      <span>NEW</span>
-                    </button>
+                      <RefreshCw size={14} />NEW
+                    </GlowOrbButton>
                   )}
                 </>
               ) : (
-                /* Non-puzzle mode: Show reset with RESET text */
                 onReset && (
-                  <button
+                  <GlowOrbButton
                     onClick={handleReset}
-                    className="flex-1 px-1.5 py-1.5 bg-slate-700/70 hover:bg-slate-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-slate-500/30 shadow-[0_0_10px_rgba(100,116,139,0.3)]"
+                    color="slate"
+                    className="flex-1"
                     title="Reset game"
                   >
-                    <RefreshCw size={12} />
-                    <span>RESET</span>
-                  </button>
+                    <RefreshCw size={14} />RESET
+                  </GlowOrbButton>
                 )
               )}
             </>
@@ -180,8 +207,8 @@ const ControlButtons = ({
 
       {/* Loading state when generating puzzle */}
       {isGeneratingPuzzle && (
-        <div className="flex-1 px-1.5 py-1.5 bg-cyan-600/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-cyan-400/30 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
-          <Loader size={12} className="animate-spin" />
+        <div className="flex-1 px-3 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(34,211,238,0.5)]">
+          <Loader size={14} className="animate-spin" />
           <span>GENERATING...</span>
         </div>
       )}
