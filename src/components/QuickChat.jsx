@@ -1,11 +1,28 @@
 // QuickChat - In-game emotes and quick messages
+// UPDATED: Added external control props (isOpen, onToggle, hideButton)
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send } from 'lucide-react';
+import { MessageCircle, X } from 'lucide-react';
 import { chatService, QUICK_CHAT_MESSAGES, EMOTES } from '../services/chatService';
 import { soundManager } from '../utils/soundManager';
 
-const QuickChat = ({ gameId, userId, opponentName, disabled = false }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const QuickChat = ({ 
+  gameId, 
+  userId, 
+  opponentName, 
+  disabled = false,
+  // External control props
+  isOpen: externalIsOpen,
+  onToggle: externalOnToggle,
+  hideButton = false
+}) => {
+  // Use internal state if not externally controlled
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  
+  // Determine if we're externally controlled
+  const isControlled = externalIsOpen !== undefined && externalOnToggle !== undefined;
+  const isOpen = isControlled ? externalIsOpen : internalIsOpen;
+  const setIsOpen = isControlled ? externalOnToggle : setInternalIsOpen;
+  
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'emote'
   const [recentMessages, setRecentMessages] = useState([]);
   const [showBubble, setShowBubble] = useState(null);
@@ -83,28 +100,45 @@ const QuickChat = ({ gameId, userId, opponentName, disabled = false }) => {
         </div>
       )}
 
-      {/* Chat Button - positioned top-right under MENU */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        disabled={disabled}
-        className={`
-          fixed top-20 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all
-          ${isOpen 
-            ? 'bg-amber-500 text-slate-900' 
-            : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
-          }
-          ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-        `}
-      >
-        {isOpen ? <X size={20} /> : <MessageCircle size={20} />}
-        {cooldown && (
-          <div className="absolute inset-0 rounded-full border-2 border-amber-400 animate-ping" />
-        )}
-      </button>
+      {/* Chat Button - only show if not hidden by parent */}
+      {!hideButton && (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          disabled={disabled}
+          className={`
+            fixed top-20 right-4 z-40 p-2.5 rounded-full shadow-lg transition-all
+            ${isOpen 
+              ? 'bg-amber-500 text-slate-900' 
+              : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
+            }
+            ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+          `}
+        >
+          {isOpen ? <X size={20} /> : <MessageCircle size={20} />}
+          {cooldown && (
+            <div className="absolute inset-0 rounded-full border-2 border-amber-400 animate-ping" />
+          )}
+        </button>
+      )}
 
-      {/* Chat Panel - positioned near the button */}
+      {/* Chat Panel - positioned near bottom when using external button */}
       {isOpen && (
-        <div className="fixed top-32 right-4 z-40 w-72 bg-slate-900 border border-amber-500/30 rounded-xl shadow-xl overflow-hidden">
+        <div className={`fixed z-40 w-72 bg-slate-900 border border-amber-500/30 rounded-xl shadow-xl overflow-hidden ${
+          hideButton ? 'bottom-32 right-4' : 'top-32 right-4'
+        }`}>
+          {/* Header with close button when externally controlled */}
+          {hideButton && (
+            <div className="flex items-center justify-between px-3 py-2 border-b border-amber-500/20 bg-slate-800/50">
+              <span className="text-sm font-medium text-amber-300">Quick Chat</span>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1 text-slate-400 hover:text-white rounded"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          
           {/* Tabs */}
           <div className="flex border-b border-amber-500/20">
             <button

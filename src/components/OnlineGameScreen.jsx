@@ -1,6 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Flag, Users, Shuffle, ArrowUp, ArrowDown } from 'lucide-react';
+import { Flag, Users, Shuffle, ArrowUp, ArrowDown, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import NeonTitle from './NeonTitle';
@@ -260,6 +260,10 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -758,22 +762,39 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
 
   // Handle confirm move
   const handleConfirm = async () => {
-    if (!pendingMove || !isMyTurn || !game) return;
+    console.log('handleConfirm: Starting...', { 
+      pendingMove, 
+      isMyTurn, 
+      hasGame: !!game,
+      myPlayerNumber,
+      rotation,
+      flipped
+    });
+    
+    if (!pendingMove || !isMyTurn || !game) {
+      console.log('handleConfirm: Cannot confirm', { pendingMove, isMyTurn, game: !!game });
+      return;
+    }
     
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    console.log('handleConfirm: Piece coords', { piece: pendingMove.piece, coords });
+    
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
+      console.log('handleConfirm: Invalid placement');
       soundManager.playInvalid();
       return;
     }
     
+    // Mark that we have a move in progress (to ignore stale real-time updates)
     moveInProgressRef.current = true;
-    const newUsedPieces = [...usedPieces, pendingMove.piece];
-    expectedPieceCountRef.current = newUsedPieces.length;
     
-    // Optimistic update
+    soundManager.playClickSound('confirm');
+    
+    // Calculate new board state
     const newBoard = board.map(row => [...row]);
     const newBoardPieces = { ...boardPieces };
     
+    // Place the piece on the board
     coords.forEach(([dx, dy]) => {
       const cellRow = pendingMove.row + dy;
       const cellCol = pendingMove.col + dx;
@@ -783,33 +804,69 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       }
     });
     
+    // Add piece to used pieces
+    const newUsedPieces = [...usedPieces, pendingMove.piece];
+    
+    // Determine next player
+    const nextPlayer = myPlayerNumber === 1 ? 2 : 1;
+    
+    // Check if game is over (opponent can't place any pieces)
+    // Be conservative - only check for game over if at least 4 pieces have been placed
+    let opponentCanMove = true;
+    let gameOver = false;
+    let winnerId = null;
+    
+    if (newUsedPieces.length >= 4) {
+      console.log('handleConfirm: Checking if opponent can move...');
+      opponentCanMove = canAnyPieceBePlaced(newBoard, newUsedPieces);
+      gameOver = !opponentCanMove;
+      winnerId = gameOver ? user.id : null;
+      console.log('handleConfirm: Game over check', { opponentCanMove, gameOver, winnerId });
+    }
+    
+    // Set expected piece count so we ignore stale real-time updates
+    expectedPieceCountRef.current = newUsedPieces.length;
+    
+    // Apply optimistic update to local state immediately
     setBoard(newBoard);
     setBoardPieces(newBoardPieces);
     setUsedPieces(newUsedPieces);
+    setIsMyTurn(false); // It's now the opponent's turn
     
-    soundManager.playClickSound('confirm');
+    console.log('handleConfirm: Sending to server...');
     
-    // Send move to server
-    const { error: moveError } = await gameSyncService.makeMove(gameId, {
-      piece: pendingMove.piece,
-      row: pendingMove.row,
-      col: pendingMove.col,
-      rotation: rotation,
-      flipped: flipped,
-      playerId: user.id
-    });
+    // Send move to server with full state
+    const { data: responseData, error: moveError } = await gameSyncService.makeMove(
+      gameId,
+      user.id,
+      {
+        pieceType: pendingMove.piece,
+        row: pendingMove.row,
+        col: pendingMove.col,
+        rotation,
+        flipped,
+        newBoard,
+        newBoardPieces,
+        newUsedPieces,
+        nextPlayer,
+        gameOver,
+        winnerId
+      }
+    );
+    
+    console.log('handleConfirm: Server response', { responseData, moveError });
     
     if (moveError) {
-      console.error('Move error:', moveError);
+      console.error('Move failed:', moveError);
+      soundManager.playSound('invalid');
       // Revert on error
-      updateGameState(game, user.id);
       moveInProgressRef.current = false;
       expectedPieceCountRef.current = null;
+      updateGameState(game, user.id);
       return;
     }
     
-    // Check for game over
-    const gameOver = !canAnyPieceBePlaced(newBoard, newUsedPieces);
+    console.log('handleConfirm: Move successful');
     
     // Clear selection
     setSelectedPiece(null);
@@ -817,10 +874,12 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
     setRotation(0);
     setFlipped(false);
     
+    // Clear move in progress flag after a short delay
     setTimeout(() => {
       moveInProgressRef.current = false;
     }, 500);
     
+    // If game is over, show game over modal
     if (gameOver) {
       setGameResult({
         isWin: true,
@@ -830,6 +889,20 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
       setShowGameOver(true);
       soundManager.playSound('win');
     }
+    
+    // Backup: manually refresh game state after a short delay
+    setTimeout(async () => {
+      console.log('handleConfirm: Fetching fresh game state as backup...');
+      const { data: freshData } = await gameSyncService.getGame(gameId);
+      if (freshData) {
+        const freshUsedCount = freshData.used_pieces?.length || 0;
+        if (freshUsedCount >= newUsedPieces.length) {
+          console.log('handleConfirm: Fresh data valid, updating state');
+          expectedPieceCountRef.current = null;
+          updateGameState(freshData, user.id);
+        }
+      }
+    }, 1500);
   };
 
   // Handle cancel
@@ -1044,8 +1117,32 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
               />
             </div>
 
-            {/* D-Pad for moving piece */}
-            {pendingMove && isMyTurn && !isDragging && <DPad onMove={handleMovePiece} />}
+            {/* D-Pad for moving piece with Chat button */}
+            <div className="flex items-center justify-center gap-3">
+              {/* DPad - only show when there's a pending move */}
+              {pendingMove && isMyTurn && !isDragging ? (
+                <DPad onMove={handleMovePiece} />
+              ) : (
+                /* Placeholder to keep chat button position consistent */
+                <div className="w-24 h-24 sm:w-28 sm:h-28" />
+              )}
+              
+              {/* Chat button - always visible, positioned to the right of DPad */}
+              {game?.status === 'active' && (
+                <button
+                  onClick={() => setChatOpen(!chatOpen)}
+                  className={`
+                    w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
+                    ${chatOpen 
+                      ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
+                      : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
+                    }
+                  `}
+                >
+                  <MessageCircle size={20} />
+                </button>
+              )}
+            </div>
 
             {/* Controls */}
             <div className="flex gap-2 mt-3">
@@ -1113,13 +1210,16 @@ const OnlineGameScreen = ({ gameId, onGameEnd, onLeave }) => {
         </div>
       </div>
 
-      {/* Quick Chat - for emotes and quick messages */}
+      {/* Quick Chat - externally controlled */}
       {game?.status === 'active' && user?.id && (
         <QuickChat
           gameId={gameId}
           userId={user.id}
           opponentName={opponent?.username || 'Opponent'}
           disabled={game?.status !== 'active'}
+          isOpen={chatOpen}
+          onToggle={setChatOpen}
+          hideButton={true}
         />
       )}
 

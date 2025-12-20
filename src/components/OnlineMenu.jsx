@@ -164,38 +164,45 @@ const OnlineMenu = ({
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [savingUsername, setSavingUsername] = useState(false);
   
-  // Refresh profile on mount to ensure fresh data
+  // Ref to track if profile has been loaded (prevents infinite loop)
+  const profileLoadedRef = useRef(false);
+  
+  // Refresh profile on mount to ensure fresh data (only once)
   useEffect(() => {
+    // Skip if already loaded or no refresh function
+    if (profileLoadedRef.current || !refreshProfile) return;
+    
     const loadProfile = async () => {
-      if (refreshProfile) {
-        console.log('OnlineMenu: Refreshing profile on mount');
-        setProfileError(false);
+      // Mark as loaded immediately to prevent re-runs
+      profileLoadedRef.current = true;
+      
+      console.log('OnlineMenu: Refreshing profile on mount');
+      setProfileError(false);
+      
+      try {
+        const result = await refreshProfile();
+        console.log('OnlineMenu: Profile refresh result', { hasProfile: !!result });
         
-        try {
-          const result = await refreshProfile();
-          console.log('OnlineMenu: Profile refresh result', { hasProfile: !!result });
+        // If profile is still null after refresh and we have a user, retry once
+        if (!result && user) {
+          console.log('OnlineMenu: Profile still null, will retry...');
+          await new Promise(r => setTimeout(r, 1000));
+          const retryResult = await refreshProfile();
+          console.log('OnlineMenu: Profile retry result', { hasProfile: !!retryResult });
           
-          // If profile is still null after refresh and we have a user, retry
-          if (!result && user) {
-            console.log('OnlineMenu: Profile still null, will retry...');
-            // Wait and retry once more
-            await new Promise(r => setTimeout(r, 1000));
-            const retryResult = await refreshProfile();
-            console.log('OnlineMenu: Profile retry result', { hasProfile: !!retryResult });
-            
-            if (!retryResult) {
-              console.error('OnlineMenu: Failed to load profile after retry');
-              setProfileError(true);
-            }
+          if (!retryResult) {
+            console.error('OnlineMenu: Failed to load profile after retry');
+            setProfileError(true);
           }
-        } catch (err) {
-          console.error('OnlineMenu: Profile load error', err);
-          setProfileError(true);
         }
+      } catch (err) {
+        console.error('OnlineMenu: Profile load error', err);
+        setProfileError(true);
       }
     };
+    
     loadProfile();
-  }, [refreshProfile, user]);
+  }, []); // Empty dependency array - run only once on mount
   
   // Friend search state
   const [searchQuery, setSearchQuery] = useState('');

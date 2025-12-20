@@ -80,66 +80,44 @@ const SettingsModal = ({ isOpen, onClose }) => {
     soundManager.playButtonClick();
   };
 
-  // UPDATED: Reset Local Data now clears everything and redirects to entry auth
-  const handleResetLocalData = async () => {
-    soundManager.playButtonClick();
+  // UPDATED: Reset Local Data now clears everything and redirects immediately
+  const handleResetLocalData = () => {
     setResetting(true);
     
+    // Stop any playing music/sounds
     try {
-      // Stop any playing music/sounds
       soundManager.stopMusic?.();
-      
-      // Clear ALL localStorage
-      localStorage.clear();
-      
-      // Clear sessionStorage too
-      sessionStorage.clear();
-      
-      // Sign out if authenticated (this clears Supabase session)
-      if (isAuthenticated && signOut) {
-        try {
-          await signOut();
-        } catch (e) {
-          console.log('Sign out during reset:', e);
-          // Continue even if sign out fails
-        }
-      }
-      
-      // Force redirect to root/entry auth
-      window.location.replace('/');
-    } catch (error) {
-      console.error('Error resetting data:', error);
-      // Still try to redirect even on error
-      window.location.replace('/');
+    } catch (e) {
+      // Ignore
     }
+    
+    // Clear ALL localStorage (synchronous - happens immediately)
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Fire signOut but DON'T wait for it - it can hang
+    if (isAuthenticated && signOut) {
+      signOut().catch(e => console.log('Sign out background error:', e));
+    }
+    
+    // Redirect IMMEDIATELY - don't wait for async signOut
+    window.location.replace('/');
   };
 
-  const handleSignOut = async () => {
+  const handleSignOut = () => {
     setSigningOut(true);
-    try {
-      // Clear local storage first
-      localStorage.removeItem('deadblock_settings');
-      
-      // Also clear Supabase auth data
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('sb-') || key.includes('supabase')) {
-          localStorage.removeItem(key);
-        }
-      });
-      
-      // Sign out using context method
-      const result = await signOut();
-      
-      if (result?.error) {
-        console.error('Sign out error:', result.error);
-      }
-      
-      // Force a full page reload after signing out
-      window.location.replace('/');
-    } catch (error) {
-      console.error('Error signing out:', error);
-      window.location.replace('/');
+    
+    // Clear ALL localStorage first (synchronous - happens immediately)
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // Fire signOut but DON'T wait for it - it can hang
+    if (signOut) {
+      signOut().catch(e => console.log('Sign out background error:', e));
     }
+    
+    // Redirect IMMEDIATELY - don't wait for async signOut
+    window.location.replace('/');
   };
 
   // Handle password update
