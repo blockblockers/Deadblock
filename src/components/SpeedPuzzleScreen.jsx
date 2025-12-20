@@ -782,7 +782,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       return { clientX: e.clientX, clientY: e.clientY };
     };
 
-    const handleStart = (e) => {
+    // Touch handlers - require drag threshold before starting
+    const handleTouchStart = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
       
@@ -796,7 +797,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       }
     };
 
-    const handleMove = (e) => {
+    const handleTouchMove = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       
       const { clientX, clientY } = getClientPos(e);
@@ -835,21 +836,43 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       }
     };
 
-    const handleEnd = () => {
+    const handleTouchEnd = () => {
       if (hasDragStartedRef.current) {
         endDrag();
       }
       hasDragStartedRef.current = false;
     };
 
+    // FIXED: Desktop mouse handler - start drag immediately on mousedown
+    const handleMouseDown = (e) => {
+      if (e.button !== 0) return;
+      if (gameState !== GAME_STATES.PLAYING) return;
+      if (usedPieces.includes(piece)) return;
+      
+      const { clientX, clientY } = e;
+      
+      // Update board bounds
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Start drag immediately for desktop
+      hasDragStartedRef.current = true;
+      setIsDragging(true);
+      setDraggedPiece(piece);
+      setSelectedPiece(piece);
+      setPendingMove(null);
+      setDragPosition({ x: clientX, y: clientY });
+      setDragOffset({ x: 0, y: 0 });
+      
+      soundManager.playPieceSelect();
+    };
+
     return {
-      onMouseDown: handleStart,
-      onMouseMove: handleMove,
-      onMouseUp: handleEnd,
-      onMouseLeave: handleEnd,
-      onTouchStart: handleStart,
-      onTouchMove: handleMove,
-      onTouchEnd: handleEnd,
+      onMouseDown: handleMouseDown,
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
     };
   }, [gameState, usedPieces, rotation, flipped, updateDrag, endDrag]);
 

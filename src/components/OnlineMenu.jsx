@@ -419,8 +419,8 @@ const OnlineMenu = ({
       });
       setActiveGames(active || []);
 
-      // Get recent completed games
-      const { data: recent, error: recentError } = await gameSyncService.getPlayerGames(profile.id, 5);
+      // Get recent completed games - UPDATED: Increased from 5 to 10
+      const { data: recent, error: recentError } = await gameSyncService.getPlayerGames(profile.id, 10);
       const completedGames = (recent || []).filter(g => g.status === 'completed');
       console.log('OnlineMenu.loadGames: Recent games', { 
         total: recent?.length, 
@@ -1808,14 +1808,14 @@ const OnlineMenu = ({
                 <div className="space-y-3">
              {recentGames.filter(g => g).map(game => {
   const result = getGameResult(game);
-  const opponent = getOpponentData(game);  // Changed from getOpponentName
+  const opponent = getOpponentData(game);
   return (
     <div
       key={game.id}
       className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/30 hover:border-slate-600/50 transition-all"
     >
-      <div className="flex items-center justify-between mb-2">
-        {/* CHANGED: Wrapped opponent info in a clickable button */}
+      <div className="flex items-center justify-between mb-3">
+        {/* Opponent info - clickable to view profile */}
         <button 
           onClick={() => {
             if (opponent.id) {
@@ -1845,7 +1845,33 @@ const OnlineMenu = ({
           {result.text}
         </span>
       </div>
-      <div className="flex justify-end">
+      {/* Action buttons */}
+      <div className="flex justify-end gap-2">
+        {/* Challenge Again button */}
+        {opponent.id && (
+          <button
+            onClick={async () => {
+              soundManager.playButtonClick();
+              setSendingInvite(opponent.id);
+              const { error } = await inviteService.sendInvite(profile.id, opponent.id);
+              setSendingInvite(null);
+              if (!error) {
+                setShowRecentGames(false);
+              }
+            }}
+            disabled={sendingInvite === opponent.id}
+            className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-lg hover:bg-amber-500/30 transition-colors text-sm disabled:opacity-50"
+            title="Challenge to rematch"
+          >
+            {sendingInvite === opponent.id ? (
+              <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Swords size={16} />
+            )}
+            Challenge
+          </button>
+        )}
+        {/* Watch Replay button */}
         <button
           onClick={() => {
             soundManager.playButtonClick();
@@ -1855,7 +1881,7 @@ const OnlineMenu = ({
           className="flex items-center gap-2 px-3 py-1.5 bg-pink-500/20 text-pink-300 rounded-lg hover:bg-pink-500/30 transition-colors text-sm"
         >
           <PlayCircle size={16} />
-          Watch Replay
+          Replay
         </button>
       </div>
     </div>

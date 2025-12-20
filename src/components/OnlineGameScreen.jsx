@@ -38,13 +38,16 @@ const theme = {
 };
 
 // Glow Orb Button Component - consistent across all game screens
-const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '' }) => {
+// Glow Orb Button Component - consistent styling across all game screens
+// UPDATED: Now matches ControlButtons.jsx exactly for consistency
+const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
   const colorClasses = {
     cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
     amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
     green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
     red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
     purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
+    indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
     slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
   };
 
@@ -52,12 +55,14 @@ const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className 
     <button
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className={`
         bg-gradient-to-r ${colorClasses[color]}
-        text-white font-bold rounded-xl px-4 py-2 text-sm
+        text-white font-bold rounded-xl px-3 py-2 text-xs
         transition-all duration-200
         hover:scale-105 active:scale-95
         disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
+        flex items-center justify-center gap-1
         ${className}
       `}
     >

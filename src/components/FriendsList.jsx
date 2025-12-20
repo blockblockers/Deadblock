@@ -327,12 +327,17 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                             >
                               <Eye size={18} />
                             </button>
-                          ) : friend.is_online && !hasInviteSent ? (
+                          ) : !hasInviteSent ? (
+                            // FIXED: Always show challenge button (works for offline friends too)
                             <button
                               onClick={() => sendGameInvite(friend)}
                               disabled={sendingInvite === friend.id}
-                              className="p-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30 transition-colors disabled:opacity-50"
-                              title="Challenge to a game"
+                              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
+                                friend.is_online 
+                                  ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' 
+                                  : 'bg-slate-600/30 text-slate-400 hover:bg-slate-600/50'
+                              }`}
+                              title={friend.is_online ? "Challenge to a game" : "Send game invite (they'll see it when online)"}
                             >
                               {sendingInvite === friend.id ? (
                                 <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />

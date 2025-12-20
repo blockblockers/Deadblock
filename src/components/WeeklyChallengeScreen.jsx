@@ -341,7 +341,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
       return { clientX: e.clientX, clientY: e.clientY };
     };
 
-    const handleStart = (e) => {
+    // Touch handlers - require drag threshold before starting
+    const handleTouchStart = (e) => {
       const { clientX, clientY } = getClientPos(e);
       dragStartRef.current = { x: clientX, y: clientY };
       hasDragStartedRef.current = false;
@@ -352,7 +353,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
       }
     };
 
-    const handleMove = (e) => {
+    const handleTouchMove = (e) => {
       const { clientX, clientY } = getClientPos(e);
       const deltaX = clientX - dragStartRef.current.x;
       const deltaY = clientY - dragStartRef.current.y;
@@ -395,21 +396,45 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
       }
     };
 
-    const handleEnd = () => {
+    const handleTouchEnd = () => {
       if (hasDragStartedRef.current) {
         endDrag();
       }
       hasDragStartedRef.current = false;
     };
 
+    // FIXED: Desktop mouse handler - start drag immediately on mousedown
+    const handleMouseDown = (e) => {
+      if (e.button !== 0) return;
+      
+      const { clientX, clientY } = e;
+      
+      // Update board bounds
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Start drag immediately for desktop
+      hasDragStartedRef.current = true;
+      setIsDragging(true);
+      setDraggedPiece(piece);
+      selectPiece(piece);
+      if (setPendingMove) setPendingMove(null);
+      setDragPosition({ x: clientX, y: clientY });
+      setDragOffset({ x: 0, y: 0 });
+      
+      // Prevent scroll while dragging
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      
+      soundManager.playPieceSelect();
+    };
+
     return {
-      onMouseDown: handleStart,
-      onMouseMove: handleMove,
-      onMouseUp: handleEnd,
-      onMouseLeave: handleEnd,
-      onTouchStart: handleStart,
-      onTouchMove: handleMove,
-      onTouchEnd: handleEnd,
+      onMouseDown: handleMouseDown,
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
     };
   }, [gameOver, usedPieces, gameStarted, rotation, flipped, selectPiece, setPendingMove, updateDrag, endDrag]);
 

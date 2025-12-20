@@ -55,6 +55,48 @@ class WeeklyChallengeService {
       if (rpcResponse.ok) {
         const data = await rpcResponse.json();
         console.log('[WeeklyChallengeService] Success! Challenge data:', data);
+        
+        // VALIDATION: Check if challenge dates are current
+        if (data) {
+          const now = new Date();
+          const startsAt = data.starts_at ? new Date(data.starts_at) : null;
+          const endsAt = data.ends_at ? new Date(data.ends_at) : null;
+          
+          console.log('[WeeklyChallengeService] Challenge dates validation:', {
+            now: now.toISOString(),
+            starts_at: startsAt?.toISOString(),
+            ends_at: endsAt?.toISOString(),
+            week_number: data.week_number,
+            challenge_id: data.id,
+            puzzle_seed: data.puzzle_seed
+          });
+          
+          // Check if challenge is stale (ended before today)
+          if (endsAt && endsAt < now) {
+            console.warn('[WeeklyChallengeService] WARNING: Challenge has ended! This may be stale data.', {
+              ended: endsAt.toISOString(),
+              now: now.toISOString()
+            });
+          }
+          
+          // Check if challenge hasn't started yet
+          if (startsAt && startsAt > now) {
+            console.warn('[WeeklyChallengeService] WARNING: Challenge has not started yet!', {
+              starts: startsAt.toISOString(),
+              now: now.toISOString()
+            });
+          }
+          
+          // Calculate current ISO week number for comparison
+          const currentWeek = this.getISOWeekNumber(now);
+          if (data.week_number && data.week_number !== currentWeek) {
+            console.warn('[WeeklyChallengeService] WARNING: Challenge week_number mismatch!', {
+              challenge_week: data.week_number,
+              current_week: currentWeek
+            });
+          }
+        }
+        
         return { data, error: null };
       }
       
@@ -401,6 +443,16 @@ class WeeklyChallengeService {
     const seconds = totalSeconds % 60;
     const centiseconds = Math.floor((ms % 1000) / 10);
     return `${minutes}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
+  }
+  
+  // Get ISO week number for a date
+  // Used for validation to ensure challenge week matches current week
+  getISOWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
 }
 

@@ -404,6 +404,10 @@ class GameSyncService {
           profiles.forEach(p => { profileMap[p.id] = p; });
 
           games.forEach(game => {
+            // FIXED: Populate player1 and player2 objects (OnlineMenu expects these)
+            game.player1 = profileMap[game.player1_id] || null;
+            game.player2 = profileMap[game.player2_id] || null;
+            // Also keep opponent for backwards compatibility
             const oppId = game.player1_id === userId ? game.player2_id : game.player1_id;
             game.opponent = profileMap[oppId] || null;
           });
@@ -414,6 +418,67 @@ class GameSyncService {
 
     } catch (e) {
       console.error('[GameSync] getActiveGames: Exception:', e.message);
+      return { data: [], error: { message: e.message } };
+    }
+  }
+
+  // Get player's recent completed games
+  async getPlayerGames(userId, limit = 10) {
+    if (!supabase || !userId) return { data: [], error: null };
+
+    console.log('[GameSync] getPlayerGames: Using direct fetch for', userId);
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return { data: [], error: { message: 'Not authenticated' } };
+    }
+
+    try {
+      // Fetch completed games where user is player1 or player2
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.completed&order=updated_at.desc&limit=${limit}&select=*`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        return { data: [], error: { message: 'Failed to fetch games' } };
+      }
+
+      const games = await response.json();
+      console.log('[GameSync] getPlayerGames: Fetched', games.length, 'games');
+
+      // Fetch all player profiles (both players for each game)
+      const allPlayerIds = new Set();
+      games.forEach(g => {
+        if (g.player1_id) allPlayerIds.add(g.player1_id);
+        if (g.player2_id) allPlayerIds.add(g.player2_id);
+      });
+
+      if (allPlayerIds.size > 0) {
+        const uniqueIds = [...allPlayerIds];
+        const profilesResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating`,
+          { headers }
+        );
+
+        if (profilesResponse.ok) {
+          const profiles = await profilesResponse.json();
+          const profileMap = {};
+          profiles.forEach(p => { profileMap[p.id] = p; });
+
+          games.forEach(game => {
+            game.player1 = profileMap[game.player1_id] || null;
+            game.player2 = profileMap[game.player2_id] || null;
+            const oppId = game.player1_id === userId ? game.player2_id : game.player1_id;
+            game.opponent = profileMap[oppId] || null;
+          });
+        }
+      }
+
+      return { data: games, error: null };
+
+    } catch (e) {
+      console.error('[GameSync] getPlayerGames: Exception:', e.message);
       return { data: [], error: { message: e.message } };
     }
   }

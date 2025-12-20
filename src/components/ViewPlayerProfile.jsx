@@ -4,7 +4,7 @@
 // FIXED: Use achievementService for achievement stats
 // FIXED: Define dbSelect locally instead of importing from non-existent file
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, Clock, Swords, Calendar, ChevronRight, Loader } from 'lucide-react';
+import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { friendsService } from '../services/friendsService';
 import achievementService from '../services/achievementService';
@@ -115,7 +115,9 @@ const ViewPlayerProfile = ({
   const [loading, setLoading] = useState(!playerData);
   const [recentGames, setRecentGames] = useState([]);
   const [friendStatus, setFriendStatus] = useState(null);
+  const [friendshipId, setFriendshipId] = useState(null); // Store friendship ID for remove friend
   const [sendingRequest, setSendingRequest] = useState(false);
+  const [removingFriend, setRemovingFriend] = useState(false);
   const [achievementStats, setAchievementStats] = useState(null);
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
   const [headToHead, setHeadToHead] = useState(null); // { myWins, theirWins, total }
@@ -283,8 +285,15 @@ const ViewPlayerProfile = ({
       // Check friend status
       if (currentUserId && currentUserId !== playerId) {
         try {
-          const status = await friendsService.getFriendshipStatus(currentUserId, playerId);
-          setFriendStatus(status);
+          const result = await friendsService.getFriendshipStatus(currentUserId, playerId);
+          // Handle both old (string) and new (object) return formats
+          if (typeof result === 'object' && result !== null) {
+            setFriendStatus(result.status);
+            setFriendshipId(result.friendshipId);
+          } else {
+            setFriendStatus(result);
+            setFriendshipId(null);
+          }
         } catch (e) {
           console.log('Friend status not available');
         }
@@ -308,6 +317,21 @@ const ViewPlayerProfile = ({
       console.error('Error sending friend request:', err);
     }
     setSendingRequest(false);
+  };
+
+  const handleRemoveFriend = async () => {
+    if (!currentUserId || !friendshipId || removingFriend) return;
+    
+    setRemovingFriend(true);
+    try {
+      await friendsService.removeFriend(friendshipId, currentUserId);
+      setFriendStatus(null);
+      setFriendshipId(null);
+      soundManager.playSound('click');
+    } catch (err) {
+      console.error('Error removing friend:', err);
+    }
+    setRemovingFriend(false);
   };
 
   const handleInvite = () => {
@@ -634,10 +658,21 @@ const ViewPlayerProfile = ({
           <div className="p-4 border-t border-slate-800 space-y-2">
             {/* Friend Button */}
             {friendStatus === 'friends' ? (
-              <div className="flex items-center justify-center gap-2 py-2 text-green-400">
-                <UserCheck size={18} />
-                <span className="text-sm font-medium">Friends</span>
-              </div>
+              <button
+                onClick={handleRemoveFriend}
+                disabled={removingFriend}
+                className="w-full py-2.5 bg-slate-800 hover:bg-red-900/50 text-slate-300 hover:text-red-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-all border border-slate-700 hover:border-red-500/50"
+              >
+                {removingFriend ? (
+                  <Loader size={16} className="animate-spin" />
+                ) : (
+                  <>
+                    <UserCheck size={16} className="text-green-400" />
+                    <span>Friends</span>
+                    <span className="text-slate-500 text-xs ml-1">(tap to remove)</span>
+                  </>
+                )}
+              </button>
             ) : friendStatus === 'pending_sent' ? (
               <div className="flex items-center justify-center gap-2 py-2 text-amber-400">
                 <Clock size={18} />

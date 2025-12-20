@@ -181,6 +181,44 @@ export const friendsService = {
     return !!data;
   },
 
+  // Get detailed friendship status between two users
+  // Returns object: { status: 'friends'|'pending_sent'|'pending_received'|'blocked'|null, friendshipId: string|null }
+  async getFriendshipStatus(currentUserId, otherUserId) {
+    if (!isSupabaseConfigured() || !currentUserId || !otherUserId) {
+      return { status: null, friendshipId: null };
+    }
+
+    try {
+      // Check for any relationship between the users
+      const { data } = await dbSelect('friends', {
+        select: 'id,user_id,friend_id,status',
+        or: `and(user_id.eq.${currentUserId},friend_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},friend_id.eq.${currentUserId})`,
+        single: true
+      });
+
+      if (!data) return { status: null, friendshipId: null };
+
+      // Determine the status based on who initiated and the current status
+      if (data.status === 'accepted') {
+        return { status: 'friends', friendshipId: data.id };
+      } else if (data.status === 'blocked') {
+        return { status: 'blocked', friendshipId: data.id };
+      } else if (data.status === 'pending') {
+        // Check who sent the request
+        if (data.user_id === currentUserId) {
+          return { status: 'pending_sent', friendshipId: data.id };
+        } else {
+          return { status: 'pending_received', friendshipId: data.id };
+        }
+      }
+
+      return { status: null, friendshipId: null };
+    } catch (err) {
+      console.error('Error getting friendship status:', err);
+      return { status: null, friendshipId: null };
+    }
+  },
+
   async blockUser(userId, blockedUserId) {
     if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 

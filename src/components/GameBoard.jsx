@@ -198,7 +198,7 @@ const GameBoard = forwardRef(({
                 extraClass = 'animate-player-place';
               } else if (isInBoundsPendingCell) {
                 if (hasOverlap) {
-                  // UPDATED: Bold orange background for overlap cells
+                  // FIXED: Bold orange background for overlap cells
                   bgClass = 'bg-orange-500';
                 } else if (hasOutOfBounds) {
                   // Part of piece is out of bounds - dim the in-bounds cells
@@ -222,7 +222,7 @@ const GameBoard = forwardRef(({
                 ringClass = 'ring-2 ring-cyan-300 shadow-[0_0_30px_rgba(34,211,238,1),0_0_60px_rgba(34,211,238,0.6),0_0_90px_rgba(74,222,128,0.3)]';
               } else if (isInBoundsPendingCell) {
                 if (hasOverlap) {
-                  // UPDATED: Bold orange ring with strong glow for overlap - NO pulse animation
+                  // FIXED: Bold orange ring with strong glow - no pulse animation
                   ringClass = 'ring-4 ring-orange-400 shadow-[0_0_20px_rgba(251,146,60,0.9),0_0_40px_rgba(251,146,60,0.5)]';
                 } else if (hasOutOfBounds) {
                   // Orange warning ring when piece extends out of bounds
@@ -244,47 +244,59 @@ const GameBoard = forwardRef(({
                 onTouchStart: (e) => {
                   // Store touch start info for drag detection
                   const touch = e.touches[0];
-                  e.currentTarget.dataset.touchStartX = touch.clientX;
-                  e.currentTarget.dataset.touchStartY = touch.clientY;
-                  e.currentTarget.dataset.touchStartTime = Date.now();
+                  const element = e.currentTarget;
+                  if (element) {
+                    element.dataset.touchStartX = touch.clientX;
+                    element.dataset.touchStartY = touch.clientY;
+                    element.dataset.touchStartTime = Date.now();
+                  }
                 },
                 onTouchMove: (e) => {
+                  const element = e.currentTarget;
+                  if (!element) return;
+                  
                   const touch = e.touches[0];
-                  const startX = parseFloat(e.currentTarget.dataset.touchStartX);
-                  const startY = parseFloat(e.currentTarget.dataset.touchStartY);
+                  const startX = parseFloat(element.dataset.touchStartX);
+                  const startY = parseFloat(element.dataset.touchStartY);
+                  if (isNaN(startX) || isNaN(startY)) return;
+                  
                   const dx = Math.abs(touch.clientX - startX);
                   const dy = Math.abs(touch.clientY - startY);
                   
                   // If moved enough, start drag
-                  if (dx + dy > 10 && !e.currentTarget.dataset.dragStarted) {
-                    e.currentTarget.dataset.dragStarted = 'true';
+                  if (dx + dy > 10 && !element.dataset.dragStarted) {
+                    element.dataset.dragStarted = 'true';
                     e.preventDefault();
-                    const rect = e.currentTarget.getBoundingClientRect();
+                    const rect = element.getBoundingClientRect();
                     onPendingPieceDragStart(pendingMove.piece, touch.clientX, touch.clientY, rect);
                   }
                 },
                 onTouchEnd: (e) => {
                   // Clean up
-                  delete e.currentTarget.dataset.touchStartX;
-                  delete e.currentTarget.dataset.touchStartY;
-                  delete e.currentTarget.dataset.touchStartTime;
-                  delete e.currentTarget.dataset.dragStarted;
+                  const element = e.currentTarget;
+                  if (element) {
+                    delete element.dataset.touchStartX;
+                    delete element.dataset.touchStartY;
+                    delete element.dataset.touchStartTime;
+                    delete element.dataset.dragStarted;
+                  }
                 },
                 onMouseDown: (e) => {
                   if (e.button !== 0) return;
-                  // Store mouse start position
-                  e.currentTarget.dataset.mouseStartX = e.clientX;
-                  e.currentTarget.dataset.mouseStartY = e.clientY;
+                  // FIXED: Store element reference to avoid null issues
+                  const element = e.currentTarget;
+                  if (!element) return;
+                  
+                  const startX = e.clientX;
+                  const startY = e.clientY;
                   
                   const handleMouseMove = (moveEvent) => {
-                    const startX = parseFloat(e.currentTarget.dataset.mouseStartX);
-                    const startY = parseFloat(e.currentTarget.dataset.mouseStartY);
                     const dx = Math.abs(moveEvent.clientX - startX);
                     const dy = Math.abs(moveEvent.clientY - startY);
                     
                     if (dx + dy > 5) {
-                      // Start drag
-                      const rect = e.currentTarget.getBoundingClientRect();
+                      // Start drag - use stored element reference
+                      const rect = element.getBoundingClientRect();
                       onPendingPieceDragStart(pendingMove.piece, moveEvent.clientX, moveEvent.clientY, rect);
                       document.removeEventListener('mousemove', handleMouseMove);
                       document.removeEventListener('mouseup', handleMouseUp);
@@ -294,8 +306,6 @@ const GameBoard = forwardRef(({
                   const handleMouseUp = () => {
                     document.removeEventListener('mousemove', handleMouseMove);
                     document.removeEventListener('mouseup', handleMouseUp);
-                    delete e.currentTarget.dataset.mouseStartX;
-                    delete e.currentTarget.dataset.mouseStartY;
                   };
                   
                   document.addEventListener('mousemove', handleMouseMove);
@@ -436,14 +446,7 @@ const GameBoard = forwardRef(({
         );
       })}
 
-      {/* Warning message when piece extends out of bounds */}
-      {outOfBoundsCells.length > 0 && (
-        <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 whitespace-nowrap z-20">
-          <span className="text-xs text-orange-400 font-semibold tracking-wide bg-slate-900/90 px-3 py-1 rounded-full border border-orange-500/30 shadow-[0_0_10px_rgba(251,146,60,0.4)]">
-            ⚠️ ROTATE or FLIP to fit
-          </span>
-        </div>
-      )}
+      {/* Warning message removed - only "Invalid placement!" error is shown */}
 
       {/* AI placing animation styles - Cyberpunk materialize effect */}
       <style>{`
