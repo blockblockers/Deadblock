@@ -1,6 +1,7 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
 // UPDATED: Added drag-and-drop for pieces from tray to board
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { Flag, XCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -185,6 +186,7 @@ const GameScreen = ({
   isGeneratingPuzzle,
   aiAnimatingMove,
   playerAnimatingMove,
+  moveCount = 0,  // Number of moves made
   onCellClick,
   onSelectPiece,
   onRotate,
@@ -196,11 +198,14 @@ const GameScreen = ({
   onMenu,
   onRetryPuzzle,
   onDifficultySelect,
+  onQuitGame,  // Handler for quit/forfeit
   // Add setter for pending move (needed for drag-and-drop)
   setPendingMove,
 }) => {
   const { needsScroll, viewportHeight } = useResponsiveLayout(850);
   const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [showQuitConfirmModal, setShowQuitConfirmModal] = useState(false);
+  const [quitIsForfeit, setQuitIsForfeit] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   
@@ -311,6 +316,34 @@ const GameScreen = ({
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
   }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
+
+  // Handle starting drag from a pending piece on the board
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    if (gameOver) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    
+    // Clear the pending move first (piece is being "picked up")
+    if (setPendingMove) {
+      setPendingMove(null);
+    }
+    
+    // Start the drag
+    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
+    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    hasDragStartedRef.current = true;
+    
+    // Piece is already selected, just play sound
+    soundManager.playPieceSelect();
+    
+    // Prevent scroll while dragging
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameOver, gameMode, currentPlayer, setPendingMove]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
@@ -540,6 +573,7 @@ const GameScreen = ({
                 gameMode={gameMode}
                 currentPlayer={currentPlayer}
                 onCellClick={handleCellClick}
+                onPendingPieceDragStart={handleBoardDragStart}
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
@@ -576,6 +610,7 @@ const GameScreen = ({
               gameMode={gameMode}
               currentPlayer={currentPlayer}
               isGeneratingPuzzle={isGeneratingPuzzle}
+              moveCount={moveCount}
               onRotate={onRotate}
               onFlip={onFlip}
               onConfirm={onConfirm}
@@ -583,6 +618,10 @@ const GameScreen = ({
               onReset={onReset}
               onRetryPuzzle={onRetryPuzzle}
               onMenu={onMenu}
+              onQuitGame={onQuitGame ? (isForfeit) => {
+                setQuitIsForfeit(isForfeit);
+                setShowQuitConfirmModal(true);
+              } : null}
             />
           </div>
 
@@ -632,6 +671,66 @@ const GameScreen = ({
           onMenu={onMenu}
           onDifficultySelect={onDifficultySelect}
         />
+      )}
+
+      {/* Quit/Forfeit Confirmation Modal */}
+      {showQuitConfirmModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-slate-600/50 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                quitIsForfeit 
+                  ? 'bg-red-500/20 border-2 border-red-500/50' 
+                  : 'bg-amber-500/20 border-2 border-amber-500/50'
+              }`}>
+                {quitIsForfeit ? (
+                  <Flag size={32} className="text-red-400" />
+                ) : (
+                  <XCircle size={32} className="text-amber-400" />
+                )}
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className={`text-xl font-bold text-center mb-2 ${
+              quitIsForfeit ? 'text-red-400' : 'text-amber-400'
+            }`}>
+              {quitIsForfeit ? 'Forfeit Game?' : 'Cancel Game?'}
+            </h2>
+
+            {/* Description */}
+            <p className="text-slate-300 text-center text-sm mb-6">
+              {quitIsForfeit 
+                ? 'This will count as a loss. Are you sure you want to forfeit?'
+                : 'No moves have been made yet. This game will not affect your stats.'
+              }
+            </p>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowQuitConfirmModal(false)}
+                className="flex-1 py-3 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all border border-slate-500/50"
+              >
+                Keep Playing
+              </button>
+              <button
+                onClick={() => {
+                  setShowQuitConfirmModal(false);
+                  if (onQuitGame) onQuitGame(quitIsForfeit);
+                }}
+                className={`flex-1 py-3 px-4 rounded-xl font-bold transition-all border ${
+                  quitIsForfeit
+                    ? 'bg-red-600 hover:bg-red-500 text-white border-red-400/50'
+                    : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-400/50'
+                }`}
+              >
+                {quitIsForfeit ? 'Forfeit' : 'Quit'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       
       {/* Error message animation styles */}

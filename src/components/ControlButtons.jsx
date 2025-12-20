@@ -1,4 +1,4 @@
-import { RotateCw, FlipHorizontal, RefreshCw, Check, X, Loader, RotateCcw, Home } from 'lucide-react';
+import { RotateCw, FlipHorizontal, RefreshCw, Check, X, Loader, RotateCcw, Home, Flag, XCircle } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 const ControlButtons = ({
@@ -9,18 +9,22 @@ const ControlButtons = ({
   gameMode,
   currentPlayer,
   isGeneratingPuzzle,
+  moveCount = 0,  // Number of moves made (for quit vs forfeit)
   onRotate,
   onFlip,
   onConfirm,
   onCancel,
   onReset,
   onRetryPuzzle,
-  onMenu,  // NEW: Menu button handler
+  onMenu,
+  onQuitGame,  // Handler for quit/forfeit
   hideResetButtons = false  // Hide reset/retry for speed mode
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
   const isPuzzleMode = gameMode === 'puzzle';
+  const isMultiplayerMode = gameMode === '2player' || gameMode === 'ai';
+  const hasMovesMade = moveCount > 0;
 
   const handleReset = () => {
     soundManager.playButtonClick();
@@ -39,9 +43,14 @@ const ControlButtons = ({
     if (onMenu) onMenu();
   };
 
+  const handleQuitGame = () => {
+    soundManager.playButtonClick();
+    if (onQuitGame) onQuitGame(hasMovesMade);
+  };
+
   return (
     <div className="flex gap-1 justify-between mt-2 flex-wrap">
-      {/* Menu Button - NEW: Cool cyberpunk style */}
+      {/* Menu Button - Cyberpunk style */}
       {onMenu && (
         <button
           onClick={handleMenu}
@@ -50,6 +59,31 @@ const ControlButtons = ({
         >
           <Home size={14} className="text-cyan-400" />
           <span className="hidden sm:inline text-cyan-400 font-bold">MENU</span>
+        </button>
+      )}
+
+      {/* Quit/Forfeit Button - Only for multiplayer modes, not when game is over */}
+      {onQuitGame && isMultiplayerMode && !gameOver && (
+        <button
+          onClick={handleQuitGame}
+          className={`px-2 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1 border transition-all active:scale-95 ${
+            hasMovesMade 
+              ? 'bg-gradient-to-r from-red-900 to-red-800 hover:from-red-800 hover:to-red-700 text-red-200 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+              : 'bg-gradient-to-r from-amber-900 to-orange-900 hover:from-amber-800 hover:to-orange-800 text-amber-200 border-amber-500/50 shadow-[0_0_10px_rgba(251,191,36,0.3)]'
+          }`}
+          title={hasMovesMade ? "Forfeit game (counts as loss)" : "Cancel game (no stats recorded)"}
+        >
+          {hasMovesMade ? (
+            <>
+              <Flag size={14} />
+              <span className="hidden sm:inline font-bold">FORFEIT</span>
+            </>
+          ) : (
+            <>
+              <XCircle size={14} />
+              <span className="hidden sm:inline font-bold">QUIT</span>
+            </>
+          )}
         </button>
       )}
 

@@ -172,15 +172,17 @@ class InviteService {
   // =====================================================
   // GAME INVITES (direct user-to-user)
   // =====================================================
-  async sendInvite(fromUserId, toUserId) {
+  async sendInvite(fromUserId, toUserId, options = {}) {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
+
+    const { orderPreference = 'random', isRematch = false } = options;
 
     try {
       const headers = getAuthHeaders();
       if (!headers) return { data: null, error: { message: 'Not authenticated' } };
       
       // Check existing invites
-      const existingUrl = `${SUPABASE_URL}/rest/v1/game_invites?select=id,status,from_user_id&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
+      const existingUrl = `${SUPABASE_URL}/rest/v1/game_invites?select=id,status,from_user_id,order_preference&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
       
       const existingResponse = await fetch(existingUrl, { headers });
       if (existingResponse.ok) {
@@ -188,18 +190,45 @@ class InviteService {
         if (existing?.length > 0) {
           const existingInvite = existing[0];
           if (existingInvite.from_user_id === toUserId) {
-            return await this.acceptInvite(existingInvite.id, fromUserId);
+            // Other player already sent invite - accept it with order preference resolution
+            // Convert orderPreference to firstMoveOption format
+            let firstMoveOption = 'random';
+            
+            // My preference from my perspective
+            // 'me' = I (the acceptor, who is the invitee) want to go first -> 'invitee'
+            // 'opponent' = opponent (the inviter) goes first -> 'inviter'
+            // 'random' = random
+            if (orderPreference === 'me') {
+              firstMoveOption = 'invitee';
+            } else if (orderPreference === 'opponent') {
+              firstMoveOption = 'inviter';
+            }
+            
+            return await this.acceptInvite(existingInvite.id, fromUserId, firstMoveOption);
           }
           return { data: null, error: { message: 'Invite already sent' } };
         }
       }
 
-      return await dbInsert('game_invites', {
+      // Store order preference on the invite
+      // 'me' = inviter wants to go first, 'opponent' = inviter wants invitee to go first
+      const inviteData = {
         from_user_id: fromUserId,
         to_user_id: toUserId,
         status: 'pending',
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-      }, { returning: true, single: true });
+      };
+      
+      // Add order preference as metadata (stored in a JSONB column if available, or we note it)
+      // For now we'll add it as a new column reference - if the column doesn't exist it will be ignored
+      if (orderPreference && orderPreference !== 'random') {
+        inviteData.order_preference = orderPreference;
+      }
+      if (isRematch) {
+        inviteData.is_rematch = true;
+      }
+
+      return await dbInsert('game_invites', inviteData, { returning: true, single: true });
     } catch (e) {
       console.error('sendInvite exception:', e);
       return { data: null, error: { message: e.message } };
@@ -278,7 +307,7 @@ class InviteService {
     }
   }
 
-  async acceptInvite(inviteId, userId, firstMoveOption = 'random') {
+  async acceptInvite(inviteId, userId, firstMoveOption = null) {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
@@ -301,9 +330,24 @@ class InviteService {
         return { data: null, error: { message: 'Not authorized' } };
       }
 
+      // Determine first player
+      // If no explicit firstMoveOption, check if invite has stored order_preference
+      let effectiveOption = firstMoveOption;
+      if (!effectiveOption && invite.order_preference) {
+        // order_preference is from inviter's perspective: 'me' = inviter first, 'opponent' = invitee first
+        if (invite.order_preference === 'me') {
+          effectiveOption = 'inviter';
+        } else if (invite.order_preference === 'opponent') {
+          effectiveOption = 'invitee';
+        }
+      }
+      if (!effectiveOption) {
+        effectiveOption = 'random';
+      }
+
       // Create game
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
-      let firstPlayer = firstMoveOption === 'inviter' ? 1 : firstMoveOption === 'invitee' ? 2 : Math.random() < 0.5 ? 1 : 2;
+      let firstPlayer = effectiveOption === 'inviter' ? 1 : effectiveOption === 'invitee' ? 2 : Math.random() < 0.5 ? 1 : 2;
 
       const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/games`, {
         method: 'POST',

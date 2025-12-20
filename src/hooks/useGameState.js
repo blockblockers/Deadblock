@@ -277,11 +277,11 @@ export const useGameState = () => {
       
       if (gameMode === 'ai') {
         const difficultyMap = {
-          [AI_DIFFICULTY.RANDOM]: 'beginner',
-          [AI_DIFFICULTY.AVERAGE]: 'intermediate',
-          [AI_DIFFICULTY.PROFESSIONAL]: 'expert',
+          [AI_DIFFICULTY.RANDOM]: 'easy',
+          [AI_DIFFICULTY.AVERAGE]: 'medium',
+          [AI_DIFFICULTY.PROFESSIONAL]: 'hard',
         };
-        const difficultyString = difficultyMap[aiDifficulty] || 'intermediate';
+        const difficultyString = difficultyMap[aiDifficulty] || 'medium';
         statsService.recordAIGameResult(difficultyString, playerWon);
       } else if (gameMode === 'puzzle' && currentPuzzle) {
         const difficultyMap = {
@@ -290,7 +290,11 @@ export const useGameState = () => {
           [PUZZLE_DIFFICULTY.HARD]: 'hard',
         };
         const difficultyString = difficultyMap[puzzleDifficulty] || 'easy';
-        statsService.recordPuzzleResult(difficultyString, playerWon);
+        // Record attempt always, and solved only if won
+        statsService.recordPuzzleAttempt(difficultyString);
+        if (playerWon) {
+          statsService.recordPuzzleSolved(difficultyString);
+        }
       }
     }
   }, [gameOver, winner, gameMode, aiDifficulty, puzzleDifficulty, currentPuzzle]);

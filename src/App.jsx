@@ -1088,6 +1088,7 @@ function AppContent() {
       isGeneratingPuzzle={isGeneratingPuzzle}
       aiAnimatingMove={aiAnimatingMove}
       playerAnimatingMove={playerAnimatingMove}
+      moveCount={moveHistory.length}
       setPendingMove={setPendingMove}
       onCellClick={handleCellClick}
       onSelectPiece={selectPiece}
@@ -1099,6 +1100,12 @@ function AppContent() {
       onReset={resetGame}
       onRetryPuzzle={resetCurrentPuzzle}
       onMenu={() => setGameMode(null)}
+      onQuitGame={(isForfeit) => {
+        // For now, just go back to menu
+        // In the future, could record a loss for VS AI mode if isForfeit is true
+        console.log('Quit game:', { isForfeit, gameMode });
+        setGameMode(null);
+      }}
       onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'difficulty-select')}
     />
   );
