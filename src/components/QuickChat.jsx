@@ -127,11 +127,16 @@ const QuickChat = ({
         </button>
       )}
 
-      {/* Chat Panel - positioned near bottom when using external button */}
+      {/* Chat Panel - UPDATED: Position relative to trigger button */}
       {isOpen && (
-        <div className={`fixed z-40 w-72 bg-slate-900 border border-amber-500/30 rounded-xl shadow-xl overflow-hidden ${
-          hideButton ? 'bottom-32 right-4' : 'top-32 right-4'
-        }`}>
+        <div 
+          className={`fixed z-40 w-72 bg-slate-900 border border-amber-500/30 rounded-xl shadow-xl overflow-hidden`}
+          style={{
+            // Position near the chat button - right side, lower on screen
+            right: '1rem',
+            bottom: hideButton ? '8rem' : '12rem',
+          }}
+        >
           {/* Header with close button when externally controlled */}
           {hideButton && (
             <div className="flex items-center justify-between px-3 py-2 border-b border-amber-500/20 bg-slate-800/50">

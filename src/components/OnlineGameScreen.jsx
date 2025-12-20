@@ -342,8 +342,8 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       startX = e.clientX;
       startY = e.clientY;
       elementRect = e.currentTarget.getBoundingClientRect();
-      dragStartRef.current = { x: startX, y: startY };
-      hasDragStartedRef.current = false;
+      // FIXED: Actually start the drag for desktop/mouse events
+      startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
     return {

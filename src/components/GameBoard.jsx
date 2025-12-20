@@ -198,7 +198,8 @@ const GameBoard = forwardRef(({
                 extraClass = 'animate-player-place';
               } else if (isInBoundsPendingCell) {
                 if (hasOverlap) {
-                  bgClass = pieceColors[pieceName];
+                  // UPDATED: Bold orange background for overlap cells
+                  bgClass = 'bg-orange-500';
                 } else if (hasOutOfBounds) {
                   // Part of piece is out of bounds - dim the in-bounds cells
                   bgClass = `${pieceColors[pendingMove.piece]} opacity-60`;
@@ -221,7 +222,8 @@ const GameBoard = forwardRef(({
                 ringClass = 'ring-2 ring-cyan-300 shadow-[0_0_30px_rgba(34,211,238,1),0_0_60px_rgba(34,211,238,0.6),0_0_90px_rgba(74,222,128,0.3)]';
               } else if (isInBoundsPendingCell) {
                 if (hasOverlap) {
-                  ringClass = 'ring-2 ring-red-500 shadow-[0_0_25px_rgba(239,68,68,0.8)] animate-pulse';
+                  // UPDATED: Bold orange ring with strong glow for overlap - NO pulse animation
+                  ringClass = 'ring-4 ring-orange-400 shadow-[0_0_20px_rgba(251,146,60,0.9),0_0_40px_rgba(251,146,60,0.5)]';
                 } else if (hasOutOfBounds) {
                   // Orange warning ring when piece extends out of bounds
                   ringClass = 'ring-2 ring-orange-400 shadow-[0_0_20px_rgba(251,146,60,0.6)]';
@@ -309,6 +311,16 @@ const GameBoard = forwardRef(({
                   disabled={isDisabled}
                   {...pendingPieceDragHandlers}
                 >
+                  {/* BOLD diagonal stripes overlay for overlap cells */}
+                  {hasOverlap && (
+                    <div 
+                      className="absolute inset-0 pointer-events-none z-10"
+                      style={{
+                        background: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.6) 4px, rgba(0,0,0,0.6) 8px)',
+                      }}
+                    />
+                  )}
+                  
                   {/* AI placing effect - energy burst overlay */}
                   {isAiAnimatingCell && (
                     <div className="absolute inset-0 pointer-events-none">

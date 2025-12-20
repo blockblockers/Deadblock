@@ -560,9 +560,12 @@ const GameScreen = ({
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
         <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
           
-          {/* Title - Larger for better alignment with other screens */}
+          {/* Title - CONSISTENT sizing across all game modes */}
           <div className="text-center mb-2">
-            <NeonTitle size={gameMode === 'ai' ? 'medium' : 'small'} />
+            <NeonTitle size="medium" />
+            {gameMode === 'ai' && (
+              <NeonSubtitle text="VS AI" size="small" className="mt-1" />
+            )}
             {gameMode === 'puzzle' && (
               <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
             )}
