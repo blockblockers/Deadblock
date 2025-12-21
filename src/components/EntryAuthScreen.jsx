@@ -1186,33 +1186,51 @@ const EntryAuthScreen = ({
       {/* Floating Pentomino Pieces Background Animation */}
       <FloatingPiecesBackground count={10} colorPreset="default" />
       
-      {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
-        {/* Title - Large size matching PuzzleSelect */}
-        <div className="text-center mb-4">
-          <NeonTitle size="large" />
+      {/* Content - Grouped title+subtitle+card together, positioned in upper-center area */}
+      <div className="relative z-10 flex-1 flex flex-col items-center p-4 pt-12 sm:pt-16"
+        style={{
+          paddingTop: 'max(48px, env(safe-area-inset-top))',
+          paddingBottom: 'max(80px, env(safe-area-inset-bottom))',
+        }}
+      >
+        {/* Spacer to push content to ~35% from top on larger screens */}
+        <div className="flex-shrink-0 h-8 sm:h-16 md:h-24" />
+        
+        {/* Main content group - title, subtitle, and card together */}
+        <div className="flex flex-col items-center">
+          {/* Title - Large size matching PuzzleSelect */}
+          <div className="text-center mb-3">
+            <NeonTitle size="large" />
+          </div>
+          
+          {/* Subtitle - Positioned close to the card below */}
+          <p className="text-slate-400 text-sm mb-4 text-center max-w-xs px-2">
+            {isInviteFlow 
+              ? '🎮 Sign in to accept your game challenge!'
+              : 'Strategic pentomino puzzle battles. Challenge the AI, solve puzzles, or compete online!'
+            }
+          </p>
+          
+          {/* Auth Card - with dramatic PuzzleSelect-style theme */}
+          <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
+            {mode === 'select' && renderSelectMode()}
+            {mode === 'login' && renderLoginMode()}
+            {mode === 'signup' && renderSignupMode()}
+            {mode === 'forgot-password' && renderForgotPasswordMode()}
+            {mode === 'magic-link' && renderMagicLinkMode()}
+          </div>
         </div>
         
-        {/* Subtitle */}
-        <p className="text-slate-400 text-sm mb-6 text-center max-w-xs">
-          {isInviteFlow 
-            ? '🎮 Sign in to accept your game challenge!'
-            : 'Strategic pentomino puzzle battles. Challenge the AI, solve puzzles, or compete online!'
-          }
-        </p>
-        
-        {/* Auth Card - with dramatic PuzzleSelect-style theme */}
-        <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
-          {mode === 'select' && renderSelectMode()}
-          {mode === 'login' && renderLoginMode()}
-          {mode === 'signup' && renderSignupMode()}
-          {mode === 'forgot-password' && renderForgotPasswordMode()}
-          {mode === 'magic-link' && renderMagicLinkMode()}
-        </div>
+        {/* Flexible spacer */}
+        <div className="flex-1" />
       </div>
 
-      {/* Footer */}
-      <div className="relative z-10 text-center pb-5 px-4">
+      {/* Footer - Fixed at bottom */}
+      <div className="relative z-10 text-center pb-5 px-4"
+        style={{
+          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+        }}
+      >
         <div className="flex items-center justify-center gap-3 text-xs mb-2">
           <button 
             onClick={() => setPolicyModal('privacy')}

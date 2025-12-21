@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, PlayCircle, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, Grid3X3, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -18,6 +18,7 @@ import ViewPlayerProfile from './ViewPlayerProfile';
 import Achievements, { AchievementPopup } from './Achievements';
 import { SpectatableGamesList } from './SpectatorView';
 import GameInviteNotification from './GameInviteNotification';
+import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import FloatingPieces from './FloatingPieces';
@@ -242,6 +243,9 @@ const OnlineMenu = ({
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
+  
+  // Final Board View state
+  const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
 
   // Initialize notifications
   useEffect(() => {
@@ -837,10 +841,12 @@ const OnlineMenu = ({
         overflowY: 'auto',
         overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch', 
-        touchAction: 'pan-y pinch-zoom',
+        touchAction: 'pan-y',
         overscrollBehavior: 'contain',
         height: '100%',
         width: '100%',
+        // Ensure momentum scrolling on iOS
+        scrollBehavior: 'smooth',
       }}
     >
       {/* Themed Grid background */}
@@ -870,17 +876,18 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* Content */}
-      <div className="relative flex flex-col items-center px-4 pt-8 pb-24"
+      {/* Content - Enhanced padding for small screens */}
+      <div className="relative flex flex-col items-center px-3 sm:px-4 pt-6 sm:pt-8 pb-32"
         style={{ 
           minHeight: '100%',
-          paddingBottom: 'max(96px, calc(env(safe-area-inset-bottom) + 96px))'
+          paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
+          paddingTop: 'max(24px, env(safe-area-inset-top))'
         }}
       >
         <div className="w-full max-w-md">
           
           {/* Title - Centered and Enlarged */}
-          <div className="text-center mb-8">
+          <div className="text-center mb-6 sm:mb-8">
             <NeonTitle size="xlarge" />
             <NeonSubtitle text="ONLINE" size="large" className="mt-2" />
           </div>
@@ -1916,17 +1923,17 @@ const OnlineMenu = ({
             Challenge
           </button>
         )}
-        {/* Watch Replay button */}
+        {/* Final Board View button */}
         <button
           onClick={() => {
             soundManager.playButtonClick();
-            setShowRecentGames(false);
-            onViewReplay?.(game.id);
+            setSelectedGameForFinalView(game);
           }}
-          className="flex items-center gap-2 px-3 py-1.5 bg-pink-500/20 text-pink-300 rounded-lg hover:bg-pink-500/30 transition-colors text-sm"
+          className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-sm"
+          title="View final board state"
         >
-          <PlayCircle size={16} />
-          Replay
+          <Grid3X3 size={16} />
+          Final
         </button>
       </div>
     </div>
@@ -2012,6 +2019,21 @@ const OnlineMenu = ({
         <AchievementPopup
           achievement={unlockedAchievement}
           onClose={() => setUnlockedAchievement(null)}
+        />
+      )}
+      
+      {/* Final Board View Modal */}
+      {selectedGameForFinalView && (
+        <FinalBoardView
+          isOpen={true}
+          onClose={() => setSelectedGameForFinalView(null)}
+          board={selectedGameForFinalView.board}
+          boardPieces={selectedGameForFinalView.board_pieces}
+          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
+                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
         />
       )}
       

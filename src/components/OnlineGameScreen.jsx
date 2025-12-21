@@ -1,9 +1,11 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
+// ADDED: Rematch request system with opponent notification
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { gameSyncService, createRematchGame } from '../services/gameSync';
+import { gameSyncService } from '../services/gameSync';
+import { rematchService } from '../services/rematchService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -11,6 +13,7 @@ import PieceTray from './PieceTray';
 import DPad from './DPad';
 import DragOverlay from './DragOverlay';
 import GameOverModal from './GameOverModal';
+import RematchModal from './RematchModal';
 import QuickChat from './QuickChat';
 import TurnTimer from './TurnTimer';
 import HeadToHead from './HeadToHead';
@@ -24,7 +27,7 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { realtimeManager } from '../services/realtimeManager';
 
 // Drag detection constants
-const DRAG_THRESHOLD = 10;
+const DRAG_THRESHOLD = 5; // Reduced from 10 for faster drag response on phones
 const SCROLL_ANGLE_THRESHOLD = 60;
 
 // Orange/Amber theme for online mode
@@ -158,7 +161,19 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
   const [error, setError] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null); // For invalid placement message
   const [showGameOver, setShowGameOver] = useState(false);
+  const [rematchMessage, setRematchMessage] = useState(null);
+  const [rematchError, setRematchError] = useState(null);
   const [gameResult, setGameResult] = useState(null);
+  
+  // Rematch request system state
+  const [showRematchModal, setShowRematchModal] = useState(false);
+  const [rematchRequest, setRematchRequest] = useState(null);
+  const [isRematchRequester, setIsRematchRequester] = useState(false);
+  const [rematchWaiting, setRematchWaiting] = useState(false);
+  const [rematchAccepted, setRematchAccepted] = useState(false);
+  const [rematchDeclined, setRematchDeclined] = useState(false);
+  const [newGameFromRematch, setNewGameFromRematch] = useState(null);
+  
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [turnStartedAt, setTurnStartedAt] = useState(null);
@@ -302,36 +317,51 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       return {};
     }
 
-    let startX = 0, startY = 0, elementRect = null, gestureDecided = false;
+    let startX = 0, startY = 0, elementRect = null, isDragGesture = false;
+    let touchStartTime = 0;
 
     const handleTouchStart = (e) => {
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
       elementRect = e.currentTarget.getBoundingClientRect();
-      gestureDecided = false;
+      isDragGesture = false;
+      touchStartTime = Date.now();
       hasDragStartedRef.current = false;
       dragStartRef.current = { x: startX, y: startY };
+      
+      // Prevent default to avoid scroll interference during potential drag
+      // e.preventDefault(); // Don't prevent yet - wait for gesture detection
     };
 
     const handleTouchMove = (e) => {
-      if (gestureDecided && !hasDragStartedRef.current) return;
-      
       const touch = e.touches[0];
       const deltaX = touch.clientX - startX;
       const deltaY = touch.clientY - startY;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const elapsed = Date.now() - touchStartTime;
       
-      if (!gestureDecided && distance > 5) {
-        gestureDecided = true;
-        if (isScrollGesture(startX, startY, touch.clientX, touch.clientY)) return;
+      // Quick gesture detection - if moved enough within 150ms, it's likely a drag
+      if (!isDragGesture && distance > DRAG_THRESHOLD) {
+        // Check if this is more horizontal than vertical (drag vs scroll)
+        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
+        
+        // If moving mostly horizontal, or if it's a quick gesture, treat as drag
+        if (isHorizontalish || elapsed < 150) {
+          isDragGesture = true;
+        } else {
+          // Vertical scroll - don't interfere
+          return;
+        }
       }
       
-      if (gestureDecided && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+      // Start dragging if we've decided it's a drag gesture
+      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
         e.preventDefault();
         startDrag(piece, touch.clientX, touch.clientY, elementRect);
       }
       
+      // Continue drag updates
       if (hasDragStartedRef.current) {
         e.preventDefault();
         updateDrag(touch.clientX, touch.clientY);
@@ -340,6 +370,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
 
     const handleTouchEnd = () => {
       if (hasDragStartedRef.current) endDrag();
+      isDragGesture = false;
     };
 
     const handleMouseDown = (e) => {
@@ -393,6 +424,66 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       window.removeEventListener('touchend', handleTouchEnd);
     };
   }, [isDragging, updateDrag, endDrag]);
+
+  // Poll for rematch requests when game is over
+  useEffect(() => {
+    if (!showGameOver || !gameId || !user?.id) return;
+    
+    let pollInterval;
+    let mounted = true;
+    
+    const checkRematch = async () => {
+      if (!mounted) return;
+      
+      try {
+        const { data: request } = await rematchService.getPendingRematchRequest(gameId, user.id);
+        
+        if (!mounted) return;
+        
+        if (request) {
+          setRematchRequest(request);
+          
+          // Check if we're the requester or receiver
+          const isSender = request.from_user_id === user.id;
+          setIsRematchRequester(isSender);
+          
+          // If we're the receiver and haven't seen this request yet, show modal
+          if (!isSender && !showRematchModal && !rematchDeclined) {
+            setShowRematchModal(true);
+            soundManager.playSound('notification');
+          }
+          
+          // If we're the requester, show waiting state
+          if (isSender && !rematchAccepted) {
+            setRematchWaiting(true);
+            if (!showRematchModal) {
+              setShowRematchModal(true);
+            }
+          }
+        } else if (rematchRequest && !rematchAccepted) {
+          // Request was cancelled or expired
+          if (isRematchRequester) {
+            // Our request was declined or expired
+            setRematchDeclined(true);
+            setRematchWaiting(false);
+          }
+        }
+      } catch (e) {
+        console.error('[OnlineGameScreen] Rematch poll error:', e);
+      }
+    };
+    
+    // Initial check
+    checkRematch();
+    
+    // Poll every 2 seconds
+    pollInterval = setInterval(checkRematch, 2000);
+    
+    return () => {
+      mounted = false;
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [showGameOver, gameId, user?.id, showRematchModal, rematchDeclined, rematchAccepted, isRematchRequester]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1157,50 +1248,61 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
           }}
           onRematch={async () => {
             try {
-              console.log('[OnlineGameScreen] Initiating rematch...');
+              console.log('[OnlineGameScreen] Initiating rematch request...');
               
-              // Randomly choose who goes first
-              const randomFirstPlayer = Math.random() < 0.5 ? 1 : 2;
-              const firstPlayerId = randomFirstPlayer === 1 ? user.id : opponent?.id;
-              const firstPlayerName = firstPlayerId === user.id
-                ? 'You go'
-                : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
-              
-              // Create new game with same players but random starting player
-              const { data: newGame, error } = await createRematchGame(
+              // Create rematch request (this will check if opponent already requested)
+              const { data, error } = await rematchService.createRematchRequest(
                 gameId,
                 user.id,
-                opponent?.id,
-                firstPlayerId
+                opponent?.id
               );
               
-              if (error || !newGame) {
-                console.error('[OnlineGameScreen] Rematch creation failed:', error);
-                alert(`Could not create rematch: ${error?.message || 'Unknown error'}`);
+              if (error) {
+                console.error('[OnlineGameScreen] Rematch request failed:', error);
+                setRematchError(error.message || 'Could not create rematch request');
                 return;
               }
               
-              console.log('[OnlineGameScreen] Rematch created:', newGame.id);
+              // Check if rematch was auto-accepted (opponent already requested)
+              if (data?.game) {
+                console.log('[OnlineGameScreen] Rematch auto-accepted, new game:', data.game.id);
+                setRematchAccepted(true);
+                setNewGameFromRematch(data.game);
+                
+                // Determine who goes first
+                const firstPlayerId = data.firstPlayerId;
+                const firstPlayerName = firstPlayerId === user.id
+                  ? 'You go'
+                  : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
+                
+                soundManager.playSound('notification');
+                setRematchMessage(`Rematch starting! ${firstPlayerName} first.`);
+                
+                // Navigate to new game after delay
+                setTimeout(() => {
+                  setShowGameOver(false);
+                  setShowRematchModal(false);
+                  if (typeof onLeave === 'function') {
+                    onLeave();
+                  } else {
+                    window.location.href = window.location.origin;
+                  }
+                }, 2000);
+                return;
+              }
               
-              // Show notification about who starts
+              // Show rematch modal in waiting state
+              console.log('[OnlineGameScreen] Rematch request sent:', data.id);
+              setRematchRequest(data);
+              setIsRematchRequester(true);
+              setRematchWaiting(true);
+              setShowRematchModal(true);
+              
               soundManager.playSound('notification');
-              alert(`Rematch created! ${firstPlayerName} first. Opening new game...`);
-              
-              // Close modal and go to menu - the new game will appear in active games
-              setShowGameOver(false);
-              
-              // Small delay then navigate to menu
-              setTimeout(() => {
-                if (typeof onLeave === 'function') {
-                  onLeave();
-                } else {
-                  window.location.href = window.location.origin;
-                }
-              }, 500);
               
             } catch (err) {
               console.error('[OnlineGameScreen] Rematch error:', err);
-              alert('Failed to create rematch. Please try again.');
+              setRematchError('Failed to request rematch. Please try again.');
             }
           }}
           onMenu={() => {
@@ -1215,6 +1317,111 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
           }}
         />
       )}
+
+      {/* Rematch Notification Toast */}
+      {(rematchMessage || rematchError) && (
+        <div className="fixed inset-x-0 top-20 z-[60] flex justify-center pointer-events-none">
+          <div 
+            className={`
+              px-6 py-4 rounded-xl shadow-2xl max-w-sm mx-4 text-center
+              ${rematchError 
+                ? 'bg-red-900/90 border border-red-500/50 text-red-100' 
+                : 'bg-gradient-to-r from-amber-500/90 to-orange-500/90 border border-amber-400/50 text-white'
+              }
+              backdrop-blur-sm animate-pulse
+            `}
+          >
+            <div className="flex items-center justify-center gap-2">
+              {rematchError ? (
+                <>
+                  <span className="text-2xl">❌</span>
+                  <span className="font-medium">{rematchError}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-2xl">⚔️</span>
+                  <span className="font-bold">{rematchMessage}</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rematch Modal - For rematch requests */}
+      <RematchModal
+        isOpen={showRematchModal}
+        onClose={() => {
+          setShowRematchModal(false);
+          // If we're the requester and closing, cancel the request
+          if (isRematchRequester && rematchRequest?.id && !rematchAccepted) {
+            rematchService.cancelRematchRequest(rematchRequest.id, user.id);
+          }
+        }}
+        onAccept={async () => {
+          if (!rematchRequest?.id) return;
+          
+          console.log('[OnlineGameScreen] Accepting rematch...');
+          const { data, error } = await rematchService.acceptRematchRequest(rematchRequest.id, user.id);
+          
+          if (error) {
+            setRematchError(error.message);
+            return;
+          }
+          
+          if (data?.game) {
+            setRematchAccepted(true);
+            setNewGameFromRematch(data.game);
+            
+            const firstPlayerId = data.firstPlayerId;
+            const firstPlayerName = firstPlayerId === user.id
+              ? 'You go'
+              : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
+            
+            soundManager.playSound('notification');
+            
+            // Navigate to new game after delay
+            setTimeout(() => {
+              setShowGameOver(false);
+              setShowRematchModal(false);
+              if (typeof onLeave === 'function') {
+                onLeave();
+              } else {
+                window.location.href = window.location.origin;
+              }
+            }, 2000);
+          }
+        }}
+        onDecline={async () => {
+          if (!rematchRequest?.id) {
+            setShowRematchModal(false);
+            return;
+          }
+          
+          if (isRematchRequester) {
+            // Cancel our own request
+            await rematchService.cancelRematchRequest(rematchRequest.id, user.id);
+            setRematchWaiting(false);
+            setShowRematchModal(false);
+          } else {
+            // Decline opponent's request
+            await rematchService.declineRematchRequest(rematchRequest.id, user.id);
+            setRematchDeclined(true);
+            setShowRematchModal(false);
+          }
+        }}
+        isRequester={isRematchRequester}
+        requesterName={isRematchRequester ? 'You' : (opponent?.display_name || opponent?.username || 'Opponent')}
+        isWaiting={rematchWaiting}
+        opponentAccepted={rematchAccepted}
+        opponentDeclined={rematchDeclined}
+        error={rematchError}
+        firstPlayerName={newGameFromRematch ? (
+          newGameFromRematch.player1_id === user.id 
+            ? 'You go' 
+            : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`
+        ) : null}
+      />
     </div>
   );
 };

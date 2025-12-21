@@ -3,14 +3,16 @@
 // 1. Uses username priority (same as PlayerProfileCard)
 // 2. Tier-colored styling throughout
 // 3. Clickable opponents in match history
+// 4. Final Board View for completed games
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap, Grid3X3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { getRankInfo } from '../utils/rankUtils';
 import NeonTitle from './NeonTitle';
 import TierIcon from './TierIcon';
 import ViewPlayerProfile from './ViewPlayerProfile';
+import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
 
 // Helper to convert hex to rgba
@@ -53,6 +55,9 @@ const UserProfile = ({ onBack }) => {
   
   // State for viewing opponent profile
   const [viewingOpponent, setViewingOpponent] = useState(null);
+  
+  // State for Final Board View
+  const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
 
   // Get tier info for theming
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
@@ -388,51 +393,72 @@ const UserProfile = ({ onBack }) => {
                   const opponentRankInfo = getRankInfo(opponent.rating);
                   
                   return (
-                    <button
+                    <div
                       key={game.id}
-                      onClick={() => handleViewOpponent(opponent)}
-                      className={`w-full p-3 rounded-lg flex items-center justify-between transition-all hover:scale-[1.02] ${
+                      className={`w-full p-3 rounded-lg transition-all ${
                         won 
-                          ? 'bg-green-900/20 border border-green-500/30 hover:border-green-500/50' 
-                          : 'bg-red-900/20 border border-red-500/30 hover:border-red-500/50'
+                          ? 'bg-green-900/20 border border-green-500/30' 
+                          : 'bg-red-900/20 border border-red-500/30'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
-                        
-                        {/* Opponent avatar with tier icon */}
-                        <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center"
-                          style={{
-                            background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
-                            border: `2px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
-                          }}
-                        >
-                          {opponentRankInfo ? (
-                            <TierIcon shape={opponentRankInfo.shape} glowColor={opponentRankInfo.glowColor} size="small" />
-                          ) : (
-                            <User size={14} className="text-slate-400" />
-                          )}
-                        </div>
-                        
-                        <div className="text-left">
-                          <div className="text-slate-300 text-sm font-medium">vs {opponent.name}</div>
-                          <div className="text-slate-600 text-xs flex items-center gap-2">
-                            <span>{formatDate(game.created_at)}</span>
-                            <span style={{ color: opponentRankInfo?.glowColor || '#64748b' }}>
-                              {opponent.rating} ELO
-                            </span>
+                      {/* Clickable opponent info row */}
+                      <button
+                        onClick={() => handleViewOpponent(opponent)}
+                        className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
+                          
+                          {/* Opponent avatar with tier icon */}
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center"
+                            style={{
+                              background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
+                              border: `2px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
+                            }}
+                          >
+                            {opponentRankInfo ? (
+                              <TierIcon shape={opponentRankInfo.shape} glowColor={opponentRankInfo.glowColor} size="small" />
+                            ) : (
+                              <User size={14} className="text-slate-400" />
+                            )}
+                          </div>
+                          
+                          <div className="text-left">
+                            <div className="text-slate-300 text-sm font-medium">vs {opponent.name}</div>
+                            <div className="text-slate-600 text-xs flex items-center gap-2">
+                              <span>{formatDate(game.created_at)}</span>
+                              <span style={{ color: opponentRankInfo?.glowColor || '#64748b' }}>
+                                {opponent.rating} ELO
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
+                            {won ? 'WIN' : 'LOSS'}
+                          </span>
+                          <div className="text-slate-600">›</div>
+                        </div>
+                      </button>
                       
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
-                          {won ? 'WIN' : 'LOSS'}
-                        </span>
-                        <div className="text-slate-600">›</div>
+                      {/* Final Board View button */}
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            soundManager.playButtonClick();
+                            setSelectedGameForFinalView(game);
+                          }}
+                          className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-xs"
+                          title="View final board state"
+                        >
+                          <Grid3X3 size={14} />
+                          Final Board
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -453,6 +479,21 @@ const UserProfile = ({ onBack }) => {
           playerData={viewingOpponent.data}
           currentUserId={profile?.id}
           onClose={() => setViewingOpponent(null)}
+        />
+      )}
+      
+      {/* Final Board View Modal */}
+      {selectedGameForFinalView && (
+        <FinalBoardView
+          isOpen={true}
+          onClose={() => setSelectedGameForFinalView(null)}
+          board={selectedGameForFinalView.board}
+          boardPieces={selectedGameForFinalView.board_pieces}
+          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
+                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
         />
       )}
     </div>

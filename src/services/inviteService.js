@@ -461,20 +461,35 @@ class InviteService {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
-      const { data: invite, error: createError } = await dbInsert('email_invites', {
+      console.log('[InviteService] Creating invite link for user:', fromUserId);
+      
+      const inviteData = {
         from_user_id: fromUserId,
         to_email: recipientName.trim() || `friend_${Date.now()}`,
         status: 'pending',
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      }, { returning: true, single: true });
+      };
+      
+      console.log('[InviteService] Invite data:', inviteData);
+      
+      const { data: invite, error: createError } = await dbInsert('email_invites', inviteData, { returning: true, single: true });
 
       if (createError) {
-        console.error('Error creating invite link:', createError);
+        console.error('[InviteService] Error creating invite link:', createError);
         return { data: null, error: createError };
+      }
+
+      console.log('[InviteService] Created invite:', invite);
+
+      if (!invite?.invite_code) {
+        console.error('[InviteService] Invite created but no invite_code returned!', invite);
+        return { data: null, error: { message: 'Invite code not generated' } };
       }
 
       const appUrl = window.location.origin;
       const inviteLink = `${appUrl}/?invite=${invite.invite_code}`;
+
+      console.log('[InviteService] Invite link created successfully:', inviteLink);
 
       return {
         data: { ...invite, inviteLink, recipientName: recipientName.trim() || 'Friend' },
@@ -493,24 +508,29 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { data: [], error: null };
 
-      // Add cache-busting timestamp to prevent stale data
-      const cacheBuster = Date.now();
-      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${new Date().toISOString()}&order=created_at.desc&_cb=${cacheBuster}`;
+      // Get current time for expiry check
+      const now = new Date().toISOString();
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${now}&order=created_at.desc`;
 
       console.log('[InviteService] Fetching invite links for user:', userId);
       
-      const response = await fetch(url, { 
-        headers,
-        cache: 'no-store'  // Prevent browser caching
-      });
+      // Add cache control headers instead of URL param
+      const fetchHeaders = {
+        ...headers,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      };
+      
+      const response = await fetch(url, { headers: fetchHeaders });
       
       if (!response.ok) {
-        console.error('[InviteService] getInviteLinks error:', response.status);
+        const errorText = await response.text();
+        console.error('[InviteService] getInviteLinks error:', response.status, errorText);
         return { data: [], error: null };
       }
 
       const data = await response.json();
-      console.log('[InviteService] Got', data?.length || 0, 'active invite links');
+      console.log('[InviteService] Got', data?.length || 0, 'active invite links:', data?.map(i => ({ id: i.id, status: i.status, code: i.invite_code?.substring(0, 8) })));
       
       const appUrl = window.location.origin;
       
