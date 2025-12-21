@@ -261,7 +261,12 @@ class RealtimeManager {
             filter: `game_id=eq.${gameId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Chat message received');
+            console.log('[RealtimeManager] 📨 Chat message received:', {
+              id: payload.new?.id,
+              user_id: payload.new?.user_id,
+              message_type: payload.new?.message_type,
+              message_key: payload.new?.message_key
+            });
             this.notifyHandlers('chatMessage', payload.new);
           }
         );

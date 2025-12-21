@@ -1,6 +1,7 @@
 // QuickChat - In-game emotes and quick messages
 // UPDATED: Added external control props (isOpen, onToggle, hideButton)
 // UPDATED: Added onNewMessage callback for notification support
+// UPDATED: Enhanced received message notification with screen flash
 import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X } from 'lucide-react';
 import { chatService, QUICK_CHAT_MESSAGES, EMOTES } from '../services/chatService';
@@ -29,47 +30,131 @@ const QuickChat = ({
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'emote'
   const [recentMessages, setRecentMessages] = useState([]);
   const [showBubble, setShowBubble] = useState(null);
+  const [showFlash, setShowFlash] = useState(false); // Screen flash effect
   const [cooldown, setCooldown] = useState(false);
   const subscriptionRef = useRef(null);
   const bubbleTimeoutRef = useRef(null);
+  const flashTimeoutRef = useRef(null);
 
   // Subscribe to chat messages
   useEffect(() => {
-    if (!gameId) return;
+    if (!gameId) {
+      console.log('[QuickChat] No gameId, skipping subscription');
+      return;
+    }
+
+    console.log('[QuickChat] Setting up subscription for game:', gameId, 'userId:', userId);
 
     // Load existing messages
     chatService.getChatHistory(gameId).then(({ data }) => {
-      if (data) setRecentMessages(data.slice(-10));
+      if (data) {
+        console.log('[QuickChat] Loaded', data.length, 'existing messages');
+        setRecentMessages(data.slice(-10));
+      }
     });
 
     // Subscribe to new messages
     subscriptionRef.current = chatService.subscribeToChat(gameId, (newMessage) => {
+      console.log('[QuickChat] 📨 New message received:', newMessage);
       setRecentMessages(prev => [...prev.slice(-9), newMessage]);
       
       // Show bubble for opponent's messages
       if (newMessage.user_id !== userId) {
+        console.log('[QuickChat] 🔔 OPPONENT MESSAGE - Showing notification!');
         const display = chatService.getMessageDisplay(newMessage.message_type, newMessage.message_key);
+        
+        // Trigger screen flash
+        setShowFlash(true);
+        if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+        flashTimeoutRef.current = setTimeout(() => setShowFlash(false), 500);
+        
+        // Show bubble
         setShowBubble(display);
+        
+        // Play notification sound (multiple times for emphasis)
         soundManager.playSound('notification');
+        setTimeout(() => soundManager.playSound('notification'), 200);
+        
+        // Vibrate on mobile if supported
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100, 50, 100]);
+        }
         
         // Notify parent component about new opponent message
         onNewMessage?.(true);
         
-        // Clear after 3 seconds
+        // Clear bubble after 6 seconds
         if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
-        bubbleTimeoutRef.current = setTimeout(() => setShowBubble(null), 5000);
+        bubbleTimeoutRef.current = setTimeout(() => setShowBubble(null), 6000);
+      } else {
+        console.log('[QuickChat] Own message, no notification');
       }
     });
 
     return () => {
+      console.log('[QuickChat] Cleaning up subscription');
       if (subscriptionRef.current) {
         chatService.unsubscribeFromChat(subscriptionRef.current);
       }
       if (bubbleTimeoutRef.current) {
         clearTimeout(bubbleTimeoutRef.current);
       }
+      if (flashTimeoutRef.current) {
+        clearTimeout(flashTimeoutRef.current);
+      }
     };
   }, [gameId, userId, onNewMessage]);
+
+  // FALLBACK: Poll for new messages every 5 seconds in case realtime isn't working
+  const lastMessageIdRef = useRef(null);
+  
+  useEffect(() => {
+    if (!gameId || !userId) return;
+    
+    const pollForNewMessages = async () => {
+      const { data } = await chatService.getChatHistory(gameId);
+      if (data && data.length > 0) {
+        const latestMessage = data[data.length - 1];
+        
+        // Check if this is a new message we haven't seen
+        if (lastMessageIdRef.current && latestMessage.id !== lastMessageIdRef.current) {
+          // Check if it's from opponent
+          if (latestMessage.user_id !== userId) {
+            console.log('[QuickChat] 🔄 POLL: Found new opponent message!', latestMessage.id);
+            
+            const display = chatService.getMessageDisplay(latestMessage.message_type, latestMessage.message_key);
+            
+            // Only show if bubble isn't already showing
+            if (!showBubble) {
+              setShowFlash(true);
+              setTimeout(() => setShowFlash(false), 500);
+              setShowBubble(display);
+              soundManager.playSound('notification');
+              if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+              onNewMessage?.(true);
+              
+              if (bubbleTimeoutRef.current) clearTimeout(bubbleTimeoutRef.current);
+              bubbleTimeoutRef.current = setTimeout(() => setShowBubble(null), 6000);
+            }
+          }
+        }
+        
+        lastMessageIdRef.current = latestMessage.id;
+      }
+    };
+    
+    // Initial load to set the last message ID
+    chatService.getChatHistory(gameId).then(({ data }) => {
+      if (data && data.length > 0) {
+        lastMessageIdRef.current = data[data.length - 1].id;
+      }
+    });
+    
+    // Poll every 5 seconds as fallback
+    const pollInterval = setInterval(pollForNewMessages, 5000);
+    
+    return () => clearInterval(pollInterval);
+  }, [gameId, userId, showBubble, onNewMessage]);
 
   // State for showing "message sent" feedback
   const [sentMessage, setSentMessage] = useState(null);
@@ -104,6 +189,14 @@ const QuickChat = ({
 
   return (
     <>
+      {/* SCREEN FLASH - Full screen amber flash when message received */}
+      {showFlash && (
+        <div 
+          className="fixed inset-0 z-[100] pointer-events-none bg-amber-500/40"
+          style={{ animation: 'flashPulse 0.5s ease-out' }}
+        />
+      )}
+      
       {/* Chat Bubble (opponent's message) - ENHANCED for visibility */}
       {showBubble && (
         <div 
@@ -293,6 +386,11 @@ const QuickChat = ({
           0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
           50% { transform: translateX(-50%) scale(1.1); }
           100% { opacity: 1; transform: translateX(-50%) scale(1); }
+        }
+        @keyframes flashPulse {
+          0% { opacity: 0.6; }
+          50% { opacity: 0.3; }
+          100% { opacity: 0; }
         }
       `}</style>
     </>

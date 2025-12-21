@@ -146,7 +146,9 @@ export const AuthProvider = ({ children }) => {
         'Authorization': `Bearer ${authData.access_token}`,
         'apikey': ANON_KEY,
         'Content-Type': 'application/json',
-        'Accept': 'application/vnd.pgrst.object+json'
+        // FIXED: Use standard JSON accept header to get array response
+        // This avoids 406 errors when profile doesn't exist yet
+        'Accept': 'application/json'
       };
       
       console.log('[AuthContext] fetchProfileDirect: Fetching via direct API...');
@@ -166,7 +168,15 @@ export const AuthProvider = ({ children }) => {
         return null;
       }
       
-      const data = await response.json();
+      const dataArray = await response.json();
+      // FIXED: Response is now an array, take first element
+      const data = Array.isArray(dataArray) ? dataArray[0] : dataArray;
+      
+      if (!data) {
+        console.log('[AuthContext] fetchProfileDirect: No profile found (empty result)');
+        return null;
+      }
+      
       console.log('[AuthContext] fetchProfileDirect: Success:', { username: data?.username, id: data?.id });
       return data;
     } catch (err) {
@@ -670,27 +680,54 @@ export const AuthProvider = ({ children }) => {
       // Wait a moment for the trigger to run
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Check if profile was created
-      const { data: profileCheck } = await supabase
+      // Check if profile was created (use maybeSingle to avoid 406 error when no rows)
+      const { data: profileCheck, error: checkError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('*')
         .eq('id', data.user.id)
-        .single();
+        .maybeSingle();
+      
+      if (checkError) {
+        console.log('[AuthContext] Profile check error (expected if new):', checkError.message);
+      }
+      
+      let createdProfile = profileCheck;
       
       // If no profile exists, create it manually
       if (!profileCheck) {
-        console.log('Profile not created by trigger, creating manually...');
-        const { error: profileError } = await supabase
+        console.log('[AuthContext] Profile not created by trigger, creating manually for:', data.user.id);
+        const { data: newProfile, error: profileError } = await supabase
           .from('profiles')
           .insert({
             id: data.user.id,
             username: username,
             display_name: username,
             email: email // Store email in profiles for searchability
-          });
+          })
+          .select()
+          .single();
         
         if (profileError) {
-          console.error('Failed to create profile manually:', profileError);
+          console.error('[AuthContext] Failed to create profile manually:', profileError);
+          // Try one more time with upsert
+          const { data: upsertProfile, error: upsertError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: data.user.id,
+              username: username,
+              display_name: username,
+              email: email
+            })
+            .select()
+            .single();
+          
+          if (upsertError) {
+            console.error('[AuthContext] Upsert also failed:', upsertError);
+          } else {
+            createdProfile = upsertProfile;
+          }
+        } else {
+          createdProfile = newProfile;
         }
       } else {
         // Profile exists but might not have email - update it
@@ -698,6 +735,28 @@ export const AuthProvider = ({ children }) => {
           .from('profiles')
           .update({ email: email })
           .eq('id', data.user.id);
+      }
+      
+      // CRITICAL: Set the profile in state so the app can proceed
+      if (createdProfile) {
+        console.log('[AuthContext] Setting profile after signup:', createdProfile.username);
+        setProfile(createdProfile);
+      } else {
+        // Last resort: fetch the profile again
+        console.log('[AuthContext] Fetching profile after creation...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+        const { data: finalProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (finalProfile) {
+          console.log('[AuthContext] Got profile on retry:', finalProfile.username);
+          setProfile(finalProfile);
+        } else {
+          console.error('[AuthContext] Could not get profile after signup!');
+        }
       }
       
       // Check if email confirmation is required

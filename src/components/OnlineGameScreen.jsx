@@ -745,6 +745,43 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
 
     if (moveError) {
       console.error('Move failed:', moveError);
+      
+      // CRITICAL: If we detected game over locally but server failed, 
+      // still show the game over screen and retry the server update
+      if (gameOver) {
+        console.log('handleConfirm: Server failed but game over detected locally - showing result anyway');
+        
+        const isWin = winnerId === user.id;
+        setGameResult({ isWin, winnerId, reason: gameOverReason || 'opponent_blocked' });
+        setShowGameOver(true);
+        soundManager.playSound(isWin ? 'win' : 'lose');
+        
+        // Apply the local board state so user sees their move
+        setBoard(newBoard);
+        setBoardPieces(newBoardPieces);
+        setUsedPieces(newUsedPieces);
+        setGame(prev => prev ? { ...prev, status: 'completed', winner_id: winnerId } : prev);
+        
+        // Retry the server update in background (the RLS policy needs to be fixed)
+        console.log('handleConfirm: Retrying server update in background...');
+        setTimeout(async () => {
+          try {
+            const retryResult = await gameSyncService.makeMove(
+              gameId, user.id,
+              { pieceType: pendingMove.piece, row: pendingMove.row, col: pendingMove.col,
+                rotation, flipped, newBoard, newBoardPieces, newUsedPieces,
+                nextPlayer, gameOver: true, winnerId }
+            );
+            console.log('handleConfirm: Background retry result:', retryResult.error ? 'failed' : 'success');
+          } catch (e) {
+            console.log('handleConfirm: Background retry exception:', e.message);
+          }
+        }, 2000);
+        
+        moveInProgressRef.current = false;
+        return;
+      }
+      
       soundManager.playSound('invalid');
       moveInProgressRef.current = false;
       expectedPieceCountRef.current = null;

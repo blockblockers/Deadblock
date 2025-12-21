@@ -96,14 +96,23 @@ export const chatService = {
 
   // Subscribe to chat messages - uses RealtimeManager (no new channel created!)
   subscribeToChat(gameId, callback) {
-    if (!isSupabaseConfigured()) return () => {};
+    if (!isSupabaseConfigured()) {
+      console.log('[ChatService] Not configured, skipping subscription');
+      return () => {};
+    }
 
+    console.log('[ChatService] Registering chat handler for game:', gameId);
+    
     // Register handler with RealtimeManager
     // The game channel is already subscribed, this just adds a handler
     return realtimeManager.on('chatMessage', (message) => {
+      console.log('[ChatService] Received chatMessage event:', message?.id, 'for game:', message?.game_id);
       // Only callback for messages in this game
       if (message.game_id === gameId) {
+        console.log('[ChatService] Message matches our game, calling callback');
         callback(message);
+      } else {
+        console.log('[ChatService] Message for different game, ignoring');
       }
     });
   },
