@@ -594,23 +594,25 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
     const player1Id = firstPlayerId;
     const player2Id = firstPlayerId === currentUserId ? opponentId : currentUserId;
 
-    // Create new game with swapped players based on random selection
+    // Create empty board - must use 0 not null (matches working format)
+    const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
+
+    // Create new game matching the format used in inviteService
     const newGame = {
       player1_id: player1Id,
       player2_id: player2Id,
       status: 'active',
       current_player: 1, // Player 1 always goes first
-      board: Array(8).fill(null).map(() => Array(8).fill(null)),
+      board: emptyBoard,
       board_pieces: {},
-      used_pieces: [],
-      timer_seconds: null, // No timer for rematch
-      turn_started_at: new Date().toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      used_pieces: []
+      // Don't include timer_seconds, turn_started_at, created_at, updated_at
+      // - database will auto-generate these
     };
 
-    const createHeaders = { ...headers };
-    createHeaders['Accept'] = 'application/vnd.pgrst.object+json';
+    console.log('[GameSync] Rematch game data:', newGame);
+
+    const createHeaders = { ...headers, 'Prefer': 'return=representation' };
 
     const response = await fetch(
       `${SUPABASE_URL}/rest/v1/games`,
@@ -623,12 +625,15 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[GameSync] Rematch creation failed:', errorText);
+      console.error('[GameSync] Rematch creation failed:', response.status, errorText);
       return { data: null, error: { message: `Failed to create rematch: ${response.status}` } };
     }
 
-    const createdGame = await response.json();
-    console.log('[GameSync] Rematch created successfully:', createdGame.id);
+    // Response is an array when using 'return=representation'
+    const games = await response.json();
+    const createdGame = Array.isArray(games) ? games[0] : games;
+    
+    console.log('[GameSync] Rematch created successfully:', createdGame?.id);
 
     return { data: createdGame, error: null };
 

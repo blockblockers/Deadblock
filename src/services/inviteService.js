@@ -493,12 +493,25 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { data: [], error: null };
 
-      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${new Date().toISOString()}&order=created_at.desc`;
+      // Add cache-busting timestamp to prevent stale data
+      const cacheBuster = Date.now();
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${new Date().toISOString()}&order=created_at.desc&_cb=${cacheBuster}`;
 
-      const response = await fetch(url, { headers });
-      if (!response.ok) return { data: [], error: null };
+      console.log('[InviteService] Fetching invite links for user:', userId);
+      
+      const response = await fetch(url, { 
+        headers,
+        cache: 'no-store'  // Prevent browser caching
+      });
+      
+      if (!response.ok) {
+        console.error('[InviteService] getInviteLinks error:', response.status);
+        return { data: [], error: null };
+      }
 
       const data = await response.json();
+      console.log('[InviteService] Got', data?.length || 0, 'active invite links');
+      
       const appUrl = window.location.origin;
       
       const invitesWithLinks = (data || []).map(invite => ({
@@ -688,9 +701,11 @@ class InviteService {
 
       // Update the invite to mark it as accepted
       const updateUrl = `${SUPABASE_URL}/rest/v1/email_invites?id=eq.${invite.id}`;
-      await fetch(updateUrl, {
+      console.log('[InviteService] Updating invite status to accepted:', invite.id);
+      
+      const updateResponse = await fetch(updateUrl, {
         method: 'PATCH',
-        headers: { ...headers, 'Prefer': 'return=minimal' },
+        headers: { ...headers, 'Prefer': 'return=representation' },
         body: JSON.stringify({ 
           status: 'accepted', 
           game_id: game.id,
@@ -698,6 +713,13 @@ class InviteService {
           accepted_at: new Date().toISOString()
         })
       });
+
+      if (!updateResponse.ok) {
+        console.error('[InviteService] Failed to update invite status:', updateResponse.status);
+      } else {
+        const updatedInvite = await updateResponse.json();
+        console.log('[InviteService] Invite status updated:', updatedInvite);
+      }
 
       console.log('[InviteService] Invite accepted successfully, game:', game.id);
 

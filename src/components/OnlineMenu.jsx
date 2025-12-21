@@ -316,13 +316,35 @@ const OnlineMenu = ({
     
     load();
     
-    // Periodic refresh every 30 seconds for active games
+    // Periodic refresh every 15 seconds for active games and invites
     const refreshInterval = setInterval(() => {
       loadGames();
       loadInvites();
-    }, 30000);
+    }, 15000);
     
-    return () => clearInterval(refreshInterval);
+    // Also refresh when tab becomes visible again
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[OnlineMenu] Tab visible, refreshing data...');
+        loadGames();
+        loadInvites();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Refresh when window gets focus
+    const handleFocus = () => {
+      console.log('[OnlineMenu] Window focused, refreshing data...');
+      loadGames();
+      loadInvites();
+    };
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      clearInterval(refreshInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [sessionReady, profile?.id]);
   
   // Subscribe to invite updates
@@ -389,11 +411,20 @@ const OnlineMenu = ({
     if (!profile?.id) return;
     
     try {
+      console.log('[OnlineMenu] loadInvites: Fetching for', profile.id);
+      
       const [received, sent, links] = await Promise.all([
         inviteService.getReceivedInvites(profile.id),
         inviteService.getSentInvites(profile.id),
         inviteService.getInviteLinks(profile.id)
       ]);
+      
+      console.log('[OnlineMenu] loadInvites results:', {
+        received: received.data?.length || 0,
+        sent: sent.data?.length || 0,
+        links: links.data?.length || 0,
+        linkStatuses: links.data?.map(l => ({ id: l.id, status: l.status }))
+      });
       
       setReceivedInvites(received.data || []);
       setSentInvites(sent.data || []);
@@ -1184,7 +1215,7 @@ const OnlineMenu = ({
                         type="text"
                         value={searchQuery}
                         onChange={(e) => handleSearch(e.target.value)}
-                        placeholder="Search by username..."
+                        placeholder="Search by username or email..."
                         className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none placeholder:text-slate-600"
                       />
                       {searching && (

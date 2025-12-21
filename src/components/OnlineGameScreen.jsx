@@ -1163,8 +1163,8 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
               const randomFirstPlayer = Math.random() < 0.5 ? 1 : 2;
               const firstPlayerId = randomFirstPlayer === 1 ? user.id : opponent?.id;
               const firstPlayerName = firstPlayerId === user.id
-                ? (profile?.display_name || profile?.username || 'You')
-                : (opponent?.display_name || opponent?.username || 'Opponent');
+                ? 'You go'
+                : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
               
               // Create new game with same players but random starting player
               const { data: newGame, error } = await createRematchGame(
@@ -1180,13 +1180,23 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                 return;
               }
               
+              console.log('[OnlineGameScreen] Rematch created:', newGame.id);
+              
               // Show notification about who starts
               soundManager.playSound('notification');
-              alert(`Rematch started! ${firstPlayerName} goes first.`);
+              alert(`Rematch created! ${firstPlayerName} first. Opening new game...`);
               
-              // Reload the page with the new game ID
-              // This is the simplest approach since onLeave goes back to menu
-              window.location.href = `${window.location.origin}${window.location.pathname}?game=${newGame.id}`;
+              // Close modal and go to menu - the new game will appear in active games
+              setShowGameOver(false);
+              
+              // Small delay then navigate to menu
+              setTimeout(() => {
+                if (typeof onLeave === 'function') {
+                  onLeave();
+                } else {
+                  window.location.href = window.location.origin;
+                }
+              }, 500);
               
             } catch (err) {
               console.error('[OnlineGameScreen] Rematch error:', err);
