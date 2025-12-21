@@ -5,7 +5,7 @@
 // 3. Clickable opponents in match history
 // 4. Final Board View for completed games
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap, Grid3X3 } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap, LayoutGrid } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { getRankInfo } from '../utils/rankUtils';
@@ -454,7 +454,7 @@ const UserProfile = ({ onBack }) => {
                           className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-xs"
                           title="View final board state"
                         >
-                          <Grid3X3 size={14} />
+                          <LayoutGrid size={14} />
                           Final Board
                         </button>
                       </div>

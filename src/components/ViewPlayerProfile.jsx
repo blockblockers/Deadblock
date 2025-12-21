@@ -5,7 +5,7 @@
 // FIXED: Define dbSelect locally instead of importing from non-existent file
 // ADDED: Final Board View button for match history
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award, Grid3X3 } from 'lucide-react';
+import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award, LayoutGrid } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { friendsService } from '../services/friendsService';
 import achievementService from '../services/achievementService';
@@ -680,7 +680,7 @@ const ViewPlayerProfile = ({
                           className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
                           title="View final board"
                         >
-                          <Grid3X3 size={12} />
+                          <LayoutGrid size={12} />
                           Final
                         </button>
                       </div>

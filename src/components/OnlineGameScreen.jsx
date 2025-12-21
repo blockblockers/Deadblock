@@ -1121,7 +1121,6 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                           </span>
                         </>
                       )}
-                      )}
                     </button>
                   )}
                 </div>
@@ -1153,7 +1152,6 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                         <span className="absolute inset-0 rounded-full bg-red-400 animate-ping" />
                       </span>
                     </>
-                  )}
                   )}
                 </button>
               </div>
