@@ -105,7 +105,8 @@ const MenuScreen = ({
   isOnlineEnabled = false,
   isAuthenticated = false,
   isOfflineMode = false,
-  onShowProfile
+  onShowProfile,
+  onSignIn
 }) => {
   const { needsScroll } = useResponsiveLayout(700);
   const showOnline = isSupabaseConfigured();
@@ -178,7 +179,8 @@ const MenuScreen = ({
             {/* Player Profile Card - Inside menu at top */}
             <div className="mb-3">
               <PlayerProfileCard 
-                onClick={onShowProfile} 
+                onClick={onShowProfile}
+                onSignIn={onSignIn}
                 isOffline={isOfflineMode}
               />
             </div>

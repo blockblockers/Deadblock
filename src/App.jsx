@@ -790,6 +790,7 @@ function AppContent() {
           isAuthenticated={isAuthenticated}
           isOfflineMode={isOfflineMode}
           onShowProfile={() => setShowProfileModal(true)}
+          onSignIn={() => setGameMode('auth')}
           // Preload components on hover for better UX
           onPuzzleHover={preloadPuzzleComponents}
           onOnlineHover={preloadOnlineComponents}

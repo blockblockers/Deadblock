@@ -1107,14 +1107,20 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                         relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
                         ${chatOpen 
                           ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
-                          : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
+                          : hasUnreadChat 
+                            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.8)] animate-chat-blink' 
+                            : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
                         }
-                        ${hasUnreadChat && !chatOpen ? 'animate-pulse' : ''}
                       `}
                     >
-                      <MessageCircle size={20} />
+                      <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-pulse' : ''} />
                       {hasUnreadChat && !chatOpen && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+                        <>
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce shadow-[0_0_10px_rgba(239,68,68,0.8)]">
+                            <span className="absolute inset-0 rounded-full bg-red-400 animate-ping" />
+                          </span>
+                        </>
+                      )}
                       )}
                     </button>
                   )}
@@ -1134,14 +1140,20 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                     relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
                     ${chatOpen 
                       ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
-                      : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
+                      : hasUnreadChat 
+                        ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.8)] animate-chat-blink' 
+                        : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
                     }
-                    ${hasUnreadChat && !chatOpen ? 'animate-pulse' : ''}
                   `}
                 >
-                  <MessageCircle size={20} />
+                  <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-pulse' : ''} />
                   {hasUnreadChat && !chatOpen && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+                    <>
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce shadow-[0_0_10px_rgba(239,68,68,0.8)]">
+                        <span className="absolute inset-0 rounded-full bg-red-400 animate-ping" />
+                      </span>
+                    </>
+                  )}
                   )}
                 </button>
               </div>

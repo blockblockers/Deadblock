@@ -3,8 +3,9 @@
 // FIXED: Fixed games query syntax for PostgREST
 // FIXED: Use achievementService for achievement stats
 // FIXED: Define dbSelect locally instead of importing from non-existent file
+// ADDED: Final Board View button for match history
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award } from 'lucide-react';
+import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award, Grid3X3 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { friendsService } from '../services/friendsService';
 import achievementService from '../services/achievementService';
@@ -12,6 +13,7 @@ import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
 import { soundManager } from '../utils/soundManager';
 import Achievements from './Achievements';
+import FinalBoardView from './FinalBoardView';
 
 // Supabase config for direct fetch
 const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
@@ -123,6 +125,7 @@ const ViewPlayerProfile = ({
   const [showAchievements, setShowAchievements] = useState(false); // Show achievements modal
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
   const [headToHead, setHeadToHead] = useState(null); // { myWins, theirWins, total }
+  const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null); // Final Board View
 
   // Use calculated stats from actual games (more accurate than profile.games_won)
   const displayWins = calculatedStats.totalGames > 0 ? calculatedStats.wins : (profile?.games_won || 0);
@@ -422,10 +425,23 @@ const ViewPlayerProfile = ({
         >
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 p-1 text-slate-400 hover:text-white transition-colors"
+            className="absolute top-3 right-3 p-1 text-slate-400 hover:text-white transition-colors z-10"
           >
             <X size={20} />
           </button>
+          
+          {/* Title - Centered at top */}
+          <div className="text-center mb-4">
+            <h2 
+              className="text-lg font-black tracking-wider"
+              style={{ 
+                color: glowColor,
+                textShadow: `0 0 20px ${hexToRgba(glowColor, 0.5)}`
+              }}
+            >
+              PLAYER PROFILE
+            </h2>
+          </div>
           
           <div className="flex items-center gap-4">
             {/* Avatar with tier glow */}
@@ -442,9 +458,9 @@ const ViewPlayerProfile = ({
             </div>
             
             <div className="flex-1">
-              <h2 className="text-xl font-bold text-white">
+              <h3 className="text-xl font-bold text-white">
                 {profile.username || profile.display_name || 'Player'}
-              </h2>
+              </h3>
               
               {/* Tier Badge */}
               {rankInfo && (
@@ -599,55 +615,76 @@ const ViewPlayerProfile = ({
                   const isClickable = opponent.id !== currentUserId && onViewPlayer;
                   
                   return (
-                    <button
+                    <div
                       key={game.id}
-                      onClick={() => isClickable && handleViewOpponent(opponent)}
-                      disabled={!isClickable}
-                      className={`w-full p-2 rounded-lg flex items-center justify-between transition-all ${
+                      className={`w-full p-2 rounded-lg transition-all ${
                         won 
                           ? 'bg-green-900/20 border border-green-500/30' 
                           : 'bg-red-900/20 border border-red-500/30'
-                      } ${isClickable ? 'hover:scale-[1.02] cursor-pointer' : 'cursor-default'}`}
+                      }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
+                      {/* Clickable row for opponent info */}
+                      <button
+                        onClick={() => isClickable && handleViewOpponent(opponent)}
+                        disabled={!isClickable}
+                        className={`w-full flex items-center justify-between ${isClickable ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
+                          
+                          {/* Opponent mini avatar */}
+                          <div 
+                            className="w-6 h-6 rounded-full flex items-center justify-center"
+                            style={{
+                              background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
+                              border: `1px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
+                            }}
+                          >
+                            {opponentRankInfo ? (
+                              <TierIcon 
+                                shape={opponentRankInfo.shape} 
+                                glowColor={opponentRankInfo.glowColor} 
+                                size="tiny" 
+                              />
+                            ) : (
+                              <span className="text-[8px] text-slate-400">
+                                {opponent.name?.[0]?.toUpperCase() || '?'}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="text-left">
+                            <div className="text-white text-sm font-medium">vs {opponent.name}</div>
+                            <div className="text-slate-500 text-xs">{formatDate(game.created_at)}</div>
+                          </div>
+                        </div>
                         
-                        {/* Opponent mini avatar */}
-                        <div 
-                          className="w-6 h-6 rounded-full flex items-center justify-center"
-                          style={{
-                            background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
-                            border: `1px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
-                          }}
-                        >
-                          {opponentRankInfo ? (
-                            <TierIcon 
-                              shape={opponentRankInfo.shape} 
-                              glowColor={opponentRankInfo.glowColor} 
-                              size="tiny" 
-                            />
-                          ) : (
-                            <span className="text-[8px] text-slate-400">
-                              {opponent.name?.[0]?.toUpperCase() || '?'}
-                            </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
+                            {won ? 'WIN' : 'LOSS'}
+                          </span>
+                          {isClickable && (
+                            <ChevronRight size={14} className="text-slate-600" />
                           )}
                         </div>
-                        
-                        <div className="text-left">
-                          <div className="text-white text-sm font-medium">vs {opponent.name}</div>
-                          <div className="text-slate-500 text-xs">{formatDate(game.created_at)}</div>
-                        </div>
-                      </div>
+                      </button>
                       
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
-                          {won ? 'WIN' : 'LOSS'}
-                        </span>
-                        {isClickable && (
-                          <ChevronRight size={14} className="text-slate-600" />
-                        )}
+                      {/* Final Board View button */}
+                      <div className="mt-1.5 flex justify-end">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            soundManager.playButtonClick();
+                            setSelectedGameForFinalView(game);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
+                          title="View final board"
+                        >
+                          <Grid3X3 size={12} />
+                          Final
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -733,6 +770,21 @@ const ViewPlayerProfile = ({
           onClose={() => setShowAchievements(false)}
           viewOnly={true}
           playerName={profile?.username || profile?.display_name || 'Player'}
+        />
+      )}
+      
+      {/* Final Board View Modal */}
+      {selectedGameForFinalView && (
+        <FinalBoardView
+          isOpen={true}
+          onClose={() => setSelectedGameForFinalView(null)}
+          board={selectedGameForFinalView.board}
+          boardPieces={selectedGameForFinalView.board_pieces}
+          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
+                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          viewerIsPlayer1={selectedGameForFinalView.player1_id === playerId}
         />
       )}
     </div>

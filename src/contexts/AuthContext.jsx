@@ -624,6 +624,29 @@ export const AuthProvider = ({ children }) => {
       return { error: { message: 'Username can only contain letters, numbers, and underscores' } };
     }
 
+    // Check if email already exists (prevent multiple accounts per email)
+    try {
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      const headers = {
+        'apikey': anonKey,
+        'Content-Type': 'application/json',
+      };
+      
+      // Check profiles table for existing email
+      const emailCheckUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?select=id&email=eq.${encodeURIComponent(email)}&limit=1`;
+      const emailCheckResponse = await fetch(emailCheckUrl, { headers });
+      
+      if (emailCheckResponse.ok) {
+        const existingEmail = await emailCheckResponse.json();
+        if (existingEmail && existingEmail.length > 0) {
+          return { error: { message: 'An account with this email already exists. Please sign in instead.' } };
+        }
+      }
+    } catch (emailCheckErr) {
+      console.log('Email check failed, proceeding:', emailCheckErr);
+      // Continue anyway - Supabase auth will catch the duplicate
+    }
+
     // Check if username is taken (use direct fetch to avoid 406 errors)
     try {
       const authData = JSON.parse(localStorage.getItem('sb-oyeibyrednwlolmsjlwk-auth-token') || 'null');

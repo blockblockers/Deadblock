@@ -173,9 +173,9 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
  * LOGIC (PRIORITY ORDER):
  * 1. If we have a profile → Show authenticated view (ALWAYS - this is the key fix)
  * 2. If authenticated but no profile → Show loading (with 5s timeout)
- * 3. Otherwise → Show sign-in button
+ * 3. Otherwise → Show sign-in button (calls onSignIn if provided, otherwise onClick)
  */
-const PlayerProfileCard = ({ onClick, isOffline = false }) => {
+const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   const { user, profile, isAuthenticated, updateProfile, refreshProfile, loading: authLoading } = useAuth();
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [showUsernameEdit, setShowUsernameEdit] = useState(false);
@@ -454,7 +454,7 @@ const PlayerProfileCard = ({ onClick, isOffline = false }) => {
   console.log('[PlayerProfileCard] Rendering: SIGN IN button');
   return (
     <button
-      onClick={onClick}
+      onClick={onSignIn || onClick}
       data-testid="profile-card-signin"
       className="w-full flex items-center gap-3 p-3 transition-all group"
       style={{

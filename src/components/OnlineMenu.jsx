@@ -1064,7 +1064,7 @@ const OnlineMenu = ({
             </div>
             
            {/* Compact Quick Actions - Under Player Box */}
-<div className="flex gap-2 mb-4">
+<div className="flex gap-2 mb-3">
   <button
     onClick={() => { soundManager.playButtonClick(); onViewProfile(); }}
     className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
@@ -1120,11 +1120,44 @@ const OnlineMenu = ({
   </button>
 </div>
 
+{/* View Leaderboard - Gold Glow Orb Style */}
+<button
+  onClick={() => {
+    soundManager.playButtonClick();
+    onViewLeaderboard();
+  }}
+  className="w-full p-3 mb-3 rounded-xl transition-all duration-300 relative overflow-hidden group
+    border-2 border-yellow-500/50
+    hover:border-yellow-400/70 hover:ring-4 ring-yellow-500/30
+    active:scale-[0.98]"
+  style={{ 
+    background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(161, 98, 7, 0.3) 100%)',
+    boxShadow: '0 0 30px rgba(234, 179, 8, 0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.boxShadow = '0 0 50px rgba(234, 179, 8, 0.6)';
+    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(234, 179, 8, 0.4) 0%, rgba(161, 98, 7, 0.5) 100%)';
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.boxShadow = '0 0 30px rgba(234, 179, 8, 0.4), inset 0 1px 0 rgba(255,255,255,0.1)';
+    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(161, 98, 7, 0.3) 100%)';
+  }}
+>
+  <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
+  </div>
+  <div className="relative flex items-center justify-center gap-2">
+    <Trophy size={20} className="text-yellow-400" />
+    <span className="font-black tracking-wide text-sm text-yellow-300 group-hover:text-white transition-colors">
+      VIEW LEADERBOARD
+    </span>
+  </div>
+</button>
 
-           {/* Find Match - Glowing Orb Style */}
+{/* Find Match - Glow Orb Style (no icon circle) */}
 <button
   onClick={handleFindMatch}
-  className="w-full p-3 mb-4 rounded-xl transition-all duration-300 relative overflow-hidden group
+  className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
     bg-amber-900/30 border-2 border-amber-500/40
     hover:border-white/40 hover:ring-4 ring-amber-500/50
     active:scale-[0.98]"
@@ -1140,22 +1173,11 @@ const OnlineMenu = ({
     e.currentTarget.style.background = '';
   }}
 >
-  {/* Animated shine effect on hover */}
   <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
   </div>
   
   <div className="relative flex items-center justify-center gap-3">
-    {/* Icon Circle with Glow */}
-    <div 
-      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
-        bg-gradient-to-br from-amber-500 to-orange-600 group-hover:scale-110"
-      style={{ boxShadow: '0 0 15px rgba(251,191,36,0.6)' }}
-    >
-      <Swords size={20} className="text-white" />
-    </div>
-    
-    {/* Text Content */}
     <span className="font-black tracking-wide text-sm text-amber-300 group-hover:text-white transition-colors">
       FIND MATCH
     </span>
@@ -1165,12 +1187,6 @@ const OnlineMenu = ({
         {lobbyCount} in queue
       </span>
     )}
-    
-    {/* Arrow indicator */}
-    <ChevronRight 
-      size={20} 
-      className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-amber-300" 
-    />
   </div>
 </button>
 
@@ -1501,19 +1517,7 @@ const OnlineMenu = ({
               </div>
             )}
 
-            {/* Leaderboard Button */}
-            <button
-              onClick={() => {
-                soundManager.playButtonClick();
-                onViewLeaderboard();
-              }}
-              className="w-full p-3 mb-4 bg-slate-800/60 rounded-xl text-slate-300 hover:bg-slate-700/60 transition-all flex items-center justify-center gap-2 border border-slate-700/50"
-            >
-              <Trophy size={18} className="text-amber-400" />
-              <span className="text-sm font-medium">View Leaderboard</span>
-            </button>
-
-            {/* Active Games Button */}
+            {/* Active Games Button - Glow Orb Style */}
             {activeGames.length > 0 && (() => {
               const myTurnCount = activeGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length;
               const waitingCount = activeGames.length - myTurnCount;
@@ -1523,51 +1527,70 @@ const OnlineMenu = ({
                     soundManager.playButtonClick();
                     setShowActiveGames(true);
                   }}
-                  className="w-full p-4 mb-4 bg-amber-900/20 rounded-xl flex items-center justify-between border border-amber-500/30 hover:border-amber-400/50 transition-all group"
+                  className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+                    bg-green-900/30 border-2 border-green-500/40
+                    hover:border-white/40 hover:ring-4 ring-green-500/50
+                    active:scale-[0.98]"
+                  style={{ 
+                    boxShadow: '0 0 25px rgba(34,197,94,0.3)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 40px rgba(34,197,94,0.6)';
+                    e.currentTarget.style.background = 'linear-gradient(to right, #22c55e, #16a34a)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.boxShadow = '0 0 25px rgba(34,197,94,0.3)';
+                    e.currentTarget.style.background = '';
+                  }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center group-hover:bg-amber-500/30 transition-colors">
-                      <Swords size={20} className="text-amber-400" />
-                    </div>
-                    <div className="text-left">
-                      <div className="text-amber-300 font-medium text-sm">Active Games ({activeGames.length})</div>
-                      <div className="text-xs flex items-center gap-2">
-                        {myTurnCount > 0 && (
-                          <span className="text-green-400 font-medium">{myTurnCount} your turn</span>
-                        )}
-                        {myTurnCount > 0 && waitingCount > 0 && (
-                          <span className="text-slate-600">•</span>
-                        )}
-                        {waitingCount > 0 && (
-                          <span className="text-slate-500">{waitingCount} waiting</span>
-                        )}
-                      </div>
-                    </div>
+                  <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
                   </div>
-                  <ChevronRight size={20} className="text-amber-500/60 group-hover:text-amber-400 transition-colors" />
+                  <div className="relative flex items-center justify-center gap-2">
+                    <span className="font-black tracking-wide text-sm text-green-300 group-hover:text-white transition-colors">
+                      ACTIVE GAMES ({activeGames.length})
+                    </span>
+                    {myTurnCount > 0 && (
+                      <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-medium text-white">
+                        {myTurnCount} your turn
+                      </span>
+                    )}
+                  </div>
                 </button>
               );
             })()}
 
-            {/* Recent Games Button */}
+            {/* Recent Games Button - Glow Orb Style */}
             {recentGames.length > 0 && (
               <button
                 onClick={() => {
                   soundManager.playButtonClick();
                   setShowRecentGames(true);
                 }}
-                className="w-full p-4 bg-slate-800/40 rounded-xl flex items-center justify-between border border-slate-700/50 hover:border-slate-600 transition-all group"
+                className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+                  bg-slate-700/30 border-2 border-slate-500/40
+                  hover:border-white/40 hover:ring-4 ring-slate-500/50
+                  active:scale-[0.98]"
+                style={{ 
+                  boxShadow: '0 0 20px rgba(100,116,139,0.2)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 0 35px rgba(100,116,139,0.4)';
+                  e.currentTarget.style.background = 'linear-gradient(to right, #475569, #334155)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(100,116,139,0.2)';
+                  e.currentTarget.style.background = '';
+                }}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center group-hover:bg-slate-600/50 transition-colors">
-                    <History size={20} className="text-slate-400" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-slate-300 font-medium text-sm">Recent Games</div>
-                    <div className="text-slate-500 text-xs">{recentGames.length} completed {recentGames.length === 1 ? 'game' : 'games'}</div>
-                  </div>
+                <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
                 </div>
-                <ChevronRight size={20} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+                <div className="relative flex items-center justify-center gap-2">
+                  <span className="font-black tracking-wide text-sm text-slate-300 group-hover:text-white transition-colors">
+                    RECENT GAMES ({recentGames.length})
+                  </span>
+                </div>
               </button>
             )}
 
