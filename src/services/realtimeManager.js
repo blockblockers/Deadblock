@@ -60,6 +60,7 @@ class RealtimeManager {
       gameInvite: new Set(),
       friendRequest: new Set(),
       matchFound: new Set(),
+      emailInviteUpdated: new Set(),  // For invite link status changes
       
       // Game-level events  
       gameUpdate: new Set(),

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { gameSyncService } from '../services/gameSync';
+import { gameSyncService, createRematchGame } from '../services/gameSync';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -1150,12 +1150,59 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
           isDraw={!gameResult.winnerId}
           reason={gameResult.reason}
           gameMode="online"
-          opponent={opponent}
-          onPlayAgain={() => {
-            // TODO: Implement rematch
-            onLeave();
+          opponentName={opponent?.display_name || opponent?.username || 'Opponent'}
+          onClose={() => {
+            // Just close the modal but stay on game screen
+            setShowGameOver(false);
           }}
-          onMenu={onLeave}
+          onRematch={async () => {
+            try {
+              console.log('[OnlineGameScreen] Initiating rematch...');
+              
+              // Randomly choose who goes first
+              const randomFirstPlayer = Math.random() < 0.5 ? 1 : 2;
+              const firstPlayerId = randomFirstPlayer === 1 ? user.id : opponent?.id;
+              const firstPlayerName = firstPlayerId === user.id
+                ? (profile?.display_name || profile?.username || 'You')
+                : (opponent?.display_name || opponent?.username || 'Opponent');
+              
+              // Create new game with same players but random starting player
+              const { data: newGame, error } = await createRematchGame(
+                gameId,
+                user.id,
+                opponent?.id,
+                firstPlayerId
+              );
+              
+              if (error || !newGame) {
+                console.error('[OnlineGameScreen] Rematch creation failed:', error);
+                alert(`Could not create rematch: ${error?.message || 'Unknown error'}`);
+                return;
+              }
+              
+              // Show notification about who starts
+              soundManager.playSound('notification');
+              alert(`Rematch started! ${firstPlayerName} goes first.`);
+              
+              // Reload the page with the new game ID
+              // This is the simplest approach since onLeave goes back to menu
+              window.location.href = `${window.location.origin}${window.location.pathname}?game=${newGame.id}`;
+              
+            } catch (err) {
+              console.error('[OnlineGameScreen] Rematch error:', err);
+              alert('Failed to create rematch. Please try again.');
+            }
+          }}
+          onMenu={() => {
+            setShowGameOver(false);
+            if (typeof onLeave === 'function') {
+              onLeave();
+            } else {
+              console.error('[OnlineGameScreen] onLeave is not a function:', onLeave);
+              // Fallback: go to online menu via URL
+              window.location.href = window.location.origin;
+            }
+          }}
         />
       )}
     </div>

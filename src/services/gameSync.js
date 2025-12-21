@@ -577,5 +577,66 @@ class GameSyncService {
   }
 }
 
+// Standalone function for creating rematch games
+export async function createRematchGame(originalGameId, currentUserId, opponentId, firstPlayerId) {
+  if (!supabase) return { data: null, error: { message: 'Not configured' } };
+
+  console.log('[GameSync] Creating rematch game:', { originalGameId, currentUserId, opponentId, firstPlayerId });
+
+  const headers = getAuthHeaders();
+  if (!headers) {
+    return { data: null, error: { message: 'Not authenticated' } };
+  }
+
+  try {
+    // Determine player positions based on who goes first
+    // firstPlayerId becomes player1 (who always goes first)
+    const player1Id = firstPlayerId;
+    const player2Id = firstPlayerId === currentUserId ? opponentId : currentUserId;
+
+    // Create new game with swapped players based on random selection
+    const newGame = {
+      player1_id: player1Id,
+      player2_id: player2Id,
+      status: 'active',
+      current_player: 1, // Player 1 always goes first
+      board: Array(8).fill(null).map(() => Array(8).fill(null)),
+      board_pieces: {},
+      used_pieces: [],
+      timer_seconds: null, // No timer for rematch
+      turn_started_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const createHeaders = { ...headers };
+    createHeaders['Accept'] = 'application/vnd.pgrst.object+json';
+
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/games`,
+      {
+        method: 'POST',
+        headers: createHeaders,
+        body: JSON.stringify(newGame)
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[GameSync] Rematch creation failed:', errorText);
+      return { data: null, error: { message: `Failed to create rematch: ${response.status}` } };
+    }
+
+    const createdGame = await response.json();
+    console.log('[GameSync] Rematch created successfully:', createdGame.id);
+
+    return { data: createdGame, error: null };
+
+  } catch (e) {
+    console.error('[GameSync] Rematch error:', e);
+    return { data: null, error: { message: e.message } };
+  }
+}
+
 export const gameSyncService = new GameSyncService();
 export default gameSyncService;
