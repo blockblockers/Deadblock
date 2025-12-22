@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, Grid3X3, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -1190,93 +1190,88 @@ const OnlineMenu = ({
   </div>
 </button>
 
-{/* Challenge a Player - Glow Orb Style - Purple */}
-<button
-  onClick={() => {
-    soundManager.playButtonClick();
-    setShowSearch(!showSearch);
-    if (!showSearch) {
-      setSearchQuery('');
-      setSearchResults([]);
-    }
-  }}
-  className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
-    bg-purple-900/30 border-2 border-purple-500/40
-    hover:border-white/40 hover:ring-4 ring-purple-500/50
-    active:scale-[0.98]"
-  style={{ 
-    boxShadow: '0 0 25px rgba(168,85,247,0.3)',
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 40px rgba(168,85,247,0.6)';
-    e.currentTarget.style.background = 'linear-gradient(to right, #a855f7, #9333ea)';
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 25px rgba(168,85,247,0.3)';
-    e.currentTarget.style.background = '';
-  }}
->
-  <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
-    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
-  </div>
-  <div className="relative flex items-center justify-center gap-2">
-    <span className="font-black tracking-wide text-sm text-purple-300 group-hover:text-white transition-colors">
-      CHALLENGE A PLAYER
-    </span>
-    <ChevronRight 
-      size={16} 
-      className={`text-purple-400 transition-transform ${showSearch ? 'rotate-90' : ''}`} 
-    />
-  </div>
-</button>
-
-{/* Challenge Options - Expanded */}
-{showSearch && (
-  <div 
-    className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30"
-    style={{ 
-      boxShadow: '0 0 15px rgba(168,85,247,0.15)'
-    }}
-  >
-    <div className="space-y-3">
-      {/* Option 1: Search by Username/Email */}
-      <div className="bg-slate-900/50 rounded-lg p-3 border border-cyan-500/20">
-        <div className="flex items-center gap-2 mb-1">
-          <Search size={14} className="text-cyan-400" />
-          <span className="text-cyan-300 text-xs font-bold tracking-wide">SEARCH EXISTING ACCOUNTS</span>
-        </div>
-        <p className="text-cyan-200/70 text-xs mb-3">
-          Find players by their username or email address
-        </p>
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Enter username or email..."
-            className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none placeholder:text-slate-600"
-          />
-          {searching && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-        </div>
-        
-        {/* Search Results */}
-        {searchResults.length > 0 && (
-          <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-            {searchResults.map(user => {
-              const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
-              return (
-                <div
-                  key={user.id}
-                  className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/30"
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                      {user.username?.[0]?.toUpperCase() || '?'}
+            {/* Challenge a Player - Purple Glow Orb Button */}
+            <button
+              onClick={() => {
+                soundManager.playButtonClick();
+                setShowSearch(!showSearch);
+                if (!showSearch) {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }
+              }}
+              className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+                bg-purple-900/30 border-2 border-purple-500/40
+                hover:border-white/40 hover:ring-4 ring-purple-500/50
+                active:scale-[0.98]"
+              style={{ 
+                boxShadow: '0 0 25px rgba(168,85,247,0.3)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 0 40px rgba(168,85,247,0.6)';
+                e.currentTarget.style.background = 'linear-gradient(to right, #a855f7, #9333ea)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 0 25px rgba(168,85,247,0.3)';
+                e.currentTarget.style.background = '';
+              }}
+            >
+              <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
+              </div>
+              <div className="relative flex items-center justify-center gap-2">
+                <span className="font-black tracking-wide text-sm text-purple-300 group-hover:text-white transition-colors">
+                  CHALLENGE A PLAYER
+                </span>
+                <ChevronRight 
+                  size={16} 
+                  className={`text-purple-400 transition-transform ${showSearch ? 'rotate-90' : ''}`} 
+                />
+              </div>
+            </button>
+              
+              {/* Expanded Content */}
+              {showSearch && (
+                <div className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30" style={{ boxShadow: '0 0 15px rgba(168,85,247,0.15)' }}>
+                <div className="space-y-4">
+                  {/* Option 1: Search by Username */}
+                  <div className="bg-slate-900/50 rounded-lg p-3 border border-cyan-500/20">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Search size={14} className="text-cyan-400" />
+                      <span className="text-cyan-300 text-xs font-bold tracking-wide">SEARCH EXISTING ACCOUNTS</span>
+                    </div>
+                    <p className="text-cyan-200/70 text-xs mb-3">
+                      Find players by their username or email address
+                    </p>
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        placeholder="Search by username or email..."
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-cyan-500/50 focus:outline-none placeholder:text-slate-600"
+                      />
+                      {searching && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Search Results */}
+                    {searchResults.length > 0 && (
+                      <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        {searchResults.map(user => {
+                          const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
+                          return (
+                            <div
+                              key={user.id}
+                              className="flex items-center justify-between p-2.5 bg-slate-800/60 rounded-lg border border-slate-700/30"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                  {user.username?.[0]?.toUpperCase() || '?'}
                                 </div>
                                 <div>
                                   <div className="text-white text-sm font-medium">{user.username}</div>
@@ -1433,7 +1428,6 @@ const OnlineMenu = ({
                   </div>
                 </div>
               )}
-            </div>
 
             {/* Received Invites */}
             {receivedInvites.length > 0 && (
@@ -1576,7 +1570,7 @@ const OnlineMenu = ({
               );
             })()}
 
-            {/* Recent Games Button - Glow Orb Style - Amber/Orange */}
+            {/* Recent Games Button - Glow Orb Style - Amber */}
             {recentGames.length > 0 && (
               <button
                 onClick={() => {
@@ -1971,7 +1965,7 @@ const OnlineMenu = ({
           className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-sm"
           title="View final board state"
         >
-          <LayoutGrid size={16} />
+          <Grid3X3 size={16} />
           Final
         </button>
       </div>
