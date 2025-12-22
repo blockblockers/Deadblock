@@ -1190,50 +1190,39 @@ const OnlineMenu = ({
   </div>
 </button>
 
-            {/* Challenge a Player - Purple Glow Orb Button */}
-            <button
-              onClick={() => {
-                soundManager.playButtonClick();
-                setShowSearch(!showSearch);
-                if (!showSearch) {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                }
-              }}
-              className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
-                bg-purple-900/30 border-2 border-purple-500/40
-                hover:border-white/40 hover:ring-4 ring-purple-500/50
-                active:scale-[0.98]"
+            {/* Challenge a Player Section */}
+            <div 
+              id="challenge-section"
+              className="bg-slate-800/40 rounded-xl p-4 mb-4 border border-slate-700/50"
               style={{ 
-                boxShadow: '0 0 25px rgba(168,85,247,0.3)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 0 40px rgba(168,85,247,0.6)';
-                e.currentTarget.style.background = 'linear-gradient(to right, #a855f7, #9333ea)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 0 25px rgba(168,85,247,0.3)';
-                e.currentTarget.style.background = '';
+                position: 'relative',
+                zIndex: 1
               }}
             >
-              <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
-              </div>
-              <div className="relative flex items-center justify-center gap-2">
-                <span className="font-black tracking-wide text-sm text-purple-300 group-hover:text-white transition-colors">
-                  CHALLENGE A PLAYER
-                </span>
+              {/* Header */}
+              <button
+                onClick={() => {
+                  setShowSearch(!showSearch);
+                  if (!showSearch) {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }
+                }}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Swords size={18} className="text-amber-400" />
+                  <span className="text-sm font-medium text-slate-300">Challenge a Player</span>
+                </div>
                 <ChevronRight 
-                  size={16} 
-                  className={`text-purple-400 transition-transform ${showSearch ? 'rotate-90' : ''}`} 
+                  size={18} 
+                  className={`text-slate-500 transition-transform ${showSearch ? 'rotate-90' : ''}`} 
                 />
-              </div>
-            </button>
+              </button>
               
               {/* Expanded Content */}
               {showSearch && (
-                <div className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30" style={{ boxShadow: '0 0 15px rgba(168,85,247,0.15)' }}>
-                <div className="space-y-4">
+                <div className="mt-3 space-y-4">
                   {/* Option 1: Search by Username */}
                   <div className="bg-slate-900/50 rounded-lg p-3 border border-cyan-500/20">
                     <div className="flex items-center gap-2 mb-2">
@@ -1428,6 +1417,7 @@ const OnlineMenu = ({
                   </div>
                 </div>
               )}
+            </div>
 
             {/* Received Invites */}
             {receivedInvites.length > 0 && (
