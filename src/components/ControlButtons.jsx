@@ -11,6 +11,7 @@ const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className 
     purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
     indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
     slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
+    rose: 'from-rose-500 to-pink-600 shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:shadow-[0_0_25px_rgba(244,63,94,0.6)]',
   };
 
   return (
@@ -82,11 +83,11 @@ const ControlButtons = ({
 
   return (
     <div className="flex gap-2 justify-between mt-2 flex-wrap">
-      {/* Menu Button */}
+      {/* Menu Button - Rose/Pink color for visibility */}
       {onMenu && (
-        <GlowOrbButton onClick={handleMenu} color="slate" title="Back to menu">
+        <GlowOrbButton onClick={handleMenu} color="rose" title="Back to menu">
           <Home size={14} />
-          <span className="hidden sm:inline">MENU</span>
+          <span className="hidden sm:inline">HOME</span>
         </GlowOrbButton>
       )}
 

@@ -7,7 +7,7 @@
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const AUTH_KEY = 'deadblock_auth';
+const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
 
 const isConfigured = () => SUPABASE_URL && ANON_KEY;
 

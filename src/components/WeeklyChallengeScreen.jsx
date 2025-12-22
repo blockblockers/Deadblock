@@ -885,6 +885,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             onFlip={flipPiece}
             onConfirm={confirmMove}
             onCancel={cancelMove}
+            onMenu={onMenu}
+            onRetryPuzzle={handleRestart}
           />
         </div>
         
