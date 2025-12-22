@@ -436,7 +436,8 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       if (!mounted) return;
       
       try {
-        const { data: request } = await rematchService.getPendingRematchRequest(gameId, user.id);
+        // Use getRematchRequestByGame to get any status (including accepted)
+        const { data: request } = await rematchService.getRematchRequestByGame(gameId, user.id);
         
         if (!mounted) return;
         
@@ -447,20 +448,41 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
           const isSender = request.from_user_id === user.id;
           setIsRematchRequester(isSender);
           
-          // If we're the receiver and haven't seen this request yet, show modal
-          if (!isSender && !showRematchModal && !rematchDeclined) {
-            setShowRematchModal(true);
+          // Handle accepted rematch - navigate to new game
+          if (request.status === 'accepted' && request.new_game_id) {
+            console.log('[OnlineGameScreen] Rematch accepted! New game:', request.new_game_id);
+            setRematchAccepted(true);
+            setShowRematchModal(false);
             soundManager.playSound('notification');
+            // Navigate to the new game
+            onResumeGame(request.new_game_id);
+            return;
           }
           
-          // If we're the requester, show waiting state
-          if (isSender && !rematchAccepted) {
-            setRematchWaiting(true);
-            if (!showRematchModal) {
+          // Handle declined rematch
+          if (request.status === 'declined') {
+            setRematchDeclined(true);
+            setRematchWaiting(false);
+            return;
+          }
+          
+          // Handle pending request
+          if (request.status === 'pending') {
+            // If we're the receiver and haven't seen this request yet, show modal
+            if (!isSender && !showRematchModal && !rematchDeclined) {
               setShowRematchModal(true);
+              soundManager.playSound('notification');
+            }
+            
+            // If we're the requester, show waiting state
+            if (isSender && !rematchAccepted) {
+              setRematchWaiting(true);
+              if (!showRematchModal) {
+                setShowRematchModal(true);
+              }
             }
           }
-        } else if (rematchRequest && !rematchAccepted) {
+        } else if (rematchRequest && !rematchAccepted && rematchRequest.status === 'pending') {
           // Request was cancelled or expired
           if (isRematchRequester) {
             // Our request was declined or expired
@@ -978,7 +1000,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
           <button onClick={handleLeave} className="px-6 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">
-            Back to Menu
+            Game Menu
           </button>
         </div>
       </div>

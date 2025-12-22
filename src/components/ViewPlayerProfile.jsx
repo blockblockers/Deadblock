@@ -430,17 +430,18 @@ const ViewPlayerProfile = ({
             <X size={20} />
           </button>
           
-          {/* Title - Centered at top */}
+          {/* Title - Centered at top - DEADBLOCK style */}
           <div className="text-center mb-4">
             <h2 
-              className="text-lg font-black tracking-wider"
+              className="text-2xl font-black tracking-widest"
               style={{ 
                 color: glowColor,
-                textShadow: `0 0 20px ${hexToRgba(glowColor, 0.5)}`
+                textShadow: `0 0 30px ${hexToRgba(glowColor, 0.6)}, 0 0 60px ${hexToRgba(glowColor, 0.3)}`
               }}
             >
-              PLAYER PROFILE
+              DEADBLOCK
             </h2>
+            <p className="text-xs text-slate-400 mt-1 tracking-wide">PLAYER PROFILE</p>
           </div>
           
           <div className="flex items-center gap-4">

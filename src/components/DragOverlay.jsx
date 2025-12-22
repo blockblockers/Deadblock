@@ -17,14 +17,18 @@ import { pieceColors } from '../utils/pieces';
  * @param {boolean} props.isValid - Whether current drop position is valid
  */
 const DragOverlay = memo(({ 
-  isDragging, 
+  isDragging = true,  // Default to true since component is only rendered when dragging
   piece, 
   position, 
   offset = { x: 0, y: 0 },
   rotation = 0, 
   flipped = false,
-  isValid = false 
+  isValid = false,
+  isValidDrop  // Accept both isValid and isValidDrop for compatibility
 }) => {
+  // Support both prop names
+  const validDrop = isValidDrop !== undefined ? isValidDrop : isValid;
+  
   if (!isDragging || !piece) return null;
 
   // Get piece coordinates with current rotation/flip
@@ -90,7 +94,7 @@ const DragOverlay = memo(({
                 className={`
                   w-full h-full rounded-md relative overflow-hidden
                   ${color}
-                  ${isValid 
+                  ${validDrop 
                     ? 'ring-2 ring-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.6)]' 
                     : 'ring-2 ring-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.4)]'
                   }
@@ -112,20 +116,20 @@ const DragOverlay = memo(({
         className={`
           absolute -bottom-6 left-1/2 -translate-x-1/2 
           text-xs font-bold px-2 py-0.5 rounded
-          ${isValid 
+          ${validDrop 
             ? 'bg-cyan-500/80 text-white' 
             : 'bg-red-500/80 text-white'
           }
         `}
       >
-        {isValid ? 'DROP' : 'INVALID'}
+        {validDrop ? 'DROP' : 'INVALID'}
       </div>
       
       {/* Glow effect */}
       <div 
         className={`
           absolute inset-0 -m-2 rounded-xl pointer-events-none
-          ${isValid 
+          ${validDrop 
             ? 'bg-cyan-400/20 shadow-[0_0_30px_rgba(34,211,238,0.4)]' 
             : 'bg-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.3)]'
           }

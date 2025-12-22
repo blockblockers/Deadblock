@@ -47,7 +47,9 @@ const FinalBoardView = ({
         // Look at all cells and find connected component from anchor
         const visited = new Set();
         const queue = [[anchorRow, anchorCol]];
-        const targetValue = player === 1 ? 1 : 2;
+        
+        // Handle both numeric (1,2) and string ('cyan','rose') target values
+        const targetValues = player === 1 ? [1, 'cyan'] : [2, 'rose'];
         
         while (queue.length > 0 && cells.length < 5) {
           const [r, c] = queue.shift();
@@ -55,7 +57,9 @@ const FinalBoardView = ({
           
           if (visited.has(key)) continue;
           if (r < 0 || r >= 8 || c < 0 || c >= 8) continue;
-          if (board?.[r]?.[c] !== targetValue) continue;
+          
+          const cellVal = board?.[r]?.[c];
+          if (!targetValues.includes(cellVal)) continue;
           
           visited.add(key);
           cells.push({ row: r, col: c });
@@ -94,17 +98,21 @@ const FinalBoardView = ({
     return lastMoveCells.some(cell => cell.row === row && cell.col === col);
   };
 
-  // Determine cell color
+  // Determine cell color - handles both numeric (1,2) and string ('cyan','rose') values
   const getCellColor = (row, col) => {
     const cellValue = board?.[row]?.[col];
     const isLast = isLastMoveCell(row, col);
     
-    if (cellValue === 1) {
+    // Handle numeric values (1, 2) or string values ('cyan', 'rose')
+    const isPlayer1 = cellValue === 1 || cellValue === 'cyan';
+    const isPlayer2 = cellValue === 2 || cellValue === 'rose';
+    
+    if (isPlayer1) {
       // Player 1 - Cyan
       return isLast 
         ? 'bg-cyan-400 ring-2 ring-white shadow-[0_0_15px_rgba(34,211,238,0.8)]' 
         : 'bg-cyan-500/80';
-    } else if (cellValue === 2) {
+    } else if (isPlayer2) {
       // Player 2 - Rose
       return isLast 
         ? 'bg-rose-400 ring-2 ring-white shadow-[0_0_15px_rgba(244,63,94,0.8)]' 

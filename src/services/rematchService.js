@@ -131,6 +131,34 @@ class RematchService {
   }
 
   /**
+   * Get the latest rematch request for a game (any status)
+   * This is used by the requester to check if their request was accepted
+   */
+  async getRematchRequestByGame(gameId, userId) {
+    if (!isConfigured()) return { data: null, error: null };
+
+    const headers = getAuthHeaders();
+    if (!headers) return { data: null, error: null };
+
+    try {
+      // Get all rematch requests for this game, ordered by most recent
+      const url = `${SUPABASE_URL}/rest/v1/rematch_requests?game_id=eq.${gameId}&select=*&order=updated_at.desc&limit=1`;
+      const response = await fetch(url, { headers });
+
+      if (!response.ok) return { data: null, error: null };
+
+      const data = await response.json();
+      const request = data && data.length > 0 ? data[0] : null;
+
+      return { data: request, error: null };
+
+    } catch (e) {
+      console.error('[RematchService] Get request by game error:', e);
+      return { data: null, error: { message: e.message } };
+    }
+  }
+
+  /**
    * Accept a rematch request - creates a new game
    * @param {string} requestId - The rematch request ID
    * @param {string} userId - The accepting user ID
@@ -320,11 +348,40 @@ class RematchService {
     const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
     if (!authData?.access_token) return () => {};
 
+    let lastStatus = null;
+    let lastNewGameId = null;
+
     // Use polling as a reliable fallback since we may not have supabase client
     const pollInterval = setInterval(async () => {
-      const { data } = await this.getPendingRematchRequest(gameId, userId);
-      callback(data);
-    }, 3000);
+      // Get the latest request for this game (any status)
+      const { data } = await this.getRematchRequestByGame(gameId, userId);
+      
+      // Check if status or new_game_id changed
+      if (data) {
+        const statusChanged = data.status !== lastStatus;
+        const newGameAvailable = data.new_game_id && data.new_game_id !== lastNewGameId;
+        
+        if (statusChanged || newGameAvailable) {
+          lastStatus = data.status;
+          lastNewGameId = data.new_game_id;
+          
+          console.log('[RematchService] Status update:', { 
+            status: data.status, 
+            new_game_id: data.new_game_id,
+            from_user_id: data.from_user_id 
+          });
+        }
+        
+        callback(data);
+      } else {
+        // No request found - could be deleted or never created
+        if (lastStatus !== null) {
+          lastStatus = null;
+          lastNewGameId = null;
+          callback(null);
+        }
+      }
+    }, 2000); // Poll every 2 seconds for faster response
 
     // Store for cleanup
     this.subscriptions.set(gameId, pollInterval);
