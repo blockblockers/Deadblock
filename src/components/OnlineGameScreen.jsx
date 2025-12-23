@@ -1,11 +1,13 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
+// UPDATED: Chat notifications, rematch navigation, placement animations
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
+import { supabase } from '../utils/supabase';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -19,6 +21,7 @@ import TurnTimer from './TurnTimer';
 import HeadToHead from './HeadToHead';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
 import TierIcon from './TierIcon';
+import PlacementAnimation, { usePlacementAnimation } from './PlacementAnimation';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
@@ -139,7 +142,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
   );
 };
 
-const OnlineGameScreen = ({ gameId, onLeave }) => {
+const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const { user, profile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
@@ -198,9 +201,19 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
   const moveInProgressRef = useRef(false);
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
+  const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
+
+  // Placement animation hook
+  const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
 
   const userId = user?.id;
   const hasMovesPlayed = usedPieces.length > 0;
+  
+  // Calculate tiers for animation intensity
+  const myRating = profile?.rating || 1000;
+  const oppRating = opponent?.rating || 1000;
+  const myTier = ratingService.getRatingTier(myRating);
+  const oppTier = ratingService.getRatingTier(oppRating);
 
   // =========================================================================
   // DRAG HANDLERS
@@ -569,9 +582,45 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       validBoard = validBoard.map(row => row.map(cell => (cell === 0 ? null : cell)));
     }
     
+    // DETECT OPPONENT'S NEW PIECE PLACEMENT FOR ANIMATION
+    const newBoardPieces = gameData.board_pieces || {};
+    const prevPieces = prevBoardPiecesRef.current;
+    const newCellKeys = Object.keys(newBoardPieces).filter(key => !prevPieces[key]);
+    
+    // If there are new cells and it's now our turn (opponent just moved), trigger opponent animation
+    if (currentUserId && newCellKeys.length > 0 && !moveInProgressRef.current) {
+      const playerNum = gameData.player1_id === currentUserId ? 1 : 2;
+      const opponentNum = playerNum === 1 ? 2 : 1;
+      const isNowMyTurn = gameData.current_player === playerNum && gameData.status === 'active';
+      
+      // Get opponent's tier for animation intensity
+      const opponentData = playerNum === 1 ? gameData.player2 : gameData.player1;
+      const opponentRating = opponentData?.rating || 1000;
+      const opponentTier = ratingService.getRatingTier(opponentRating);
+      
+      // Only animate if it's now our turn (meaning opponent just moved)
+      if (isNowMyTurn && boardRef.current) {
+        const newCells = newCellKeys.map(key => {
+          const [row, col] = key.split(',').map(Number);
+          return { row, col };
+        });
+        
+        const boardRect = boardRef.current.getBoundingClientRect();
+        const cellSize = boardRect.width / BOARD_SIZE;
+        
+        // Small delay to let the board render first
+        setTimeout(() => {
+          triggerAnimation(newCells, opponentNum, boardRef, cellSize, opponentTier?.name);
+        }, 100);
+      }
+    }
+    
+    // Update ref with current board pieces
+    prevBoardPiecesRef.current = newBoardPieces;
+    
     setGame(gameData);
     setBoard(validBoard);
-    setBoardPieces(gameData.board_pieces || {});
+    setBoardPieces(newBoardPieces);
     setUsedPieces(Array.isArray(gameData.used_pieces) ? gameData.used_pieces : []);
     
     if (gameData.turn_started_at) {
@@ -607,7 +656,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
         soundManager.playSound(iWon ? 'win' : 'lose');
       }
     }
-  }, [isMyTurn, showGameOver]);
+  }, [isMyTurn, showGameOver, triggerAnimation]);
 
   // FIXED: Load game and subscribe to REAL-TIME updates
   useEffect(() => {
@@ -703,6 +752,43 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       }
     };
   }, [currentGameId, userId, updateGameState]);
+
+  // Subscribe to chat messages for notification when chat is closed
+  // Chat notification subscription - FIXED: Use supabase directly
+  useEffect(() => {
+    if (!currentGameId || !user?.id || !supabase) return;
+    
+    console.log('[OnlineGameScreen] Setting up chat notification subscription');
+    
+    // Subscribe to chat messages
+    const chatChannel = supabase
+      .channel(`chat-notify-${currentGameId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'game_chat',
+          filter: `game_id=eq.${currentGameId}`
+        },
+        (payload) => {
+          // Only notify if message is from opponent and chat is closed
+          if (payload.new.sender_id !== user.id && !chatOpen) {
+            console.log('[OnlineGameScreen] New chat message from opponent!');
+            setHasUnreadChat(true);
+            soundManager.playSound('notification');
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[OnlineGameScreen] Chat channel status:', status);
+      });
+    
+    return () => {
+      console.log('[OnlineGameScreen] Cleaning up chat subscription');
+      chatChannel.unsubscribe();
+    };
+  }, [currentGameId, user?.id, chatOpen]);
 
   // Show error message when placement is invalid
   useEffect(() => {
@@ -925,6 +1011,24 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
     // Set expected piece count to ignore stale updates
     expectedPieceCountRef.current = newUsedPieces.length;
 
+    // TRIGGER PLACEMENT ANIMATION - Calculate placed cells for animation
+    const placedCells = coords.map(([dx, dy]) => ({
+      row: pendingMove.row + dy,
+      col: pendingMove.col + dx
+    })).filter(cell => 
+      cell.row >= 0 && cell.row < BOARD_SIZE && 
+      cell.col >= 0 && cell.col < BOARD_SIZE
+    );
+    
+    // Get cell size from board bounds
+    if (boardRef.current) {
+      const boardRect = boardRef.current.getBoundingClientRect();
+      const cellSize = boardRect.width / BOARD_SIZE;
+      // Pass tier name for animation intensity
+      triggerAnimation(placedCells, myPlayerNumber, boardRef, cellSize, myTier?.name);
+      soundManager.playSound('place');
+    }
+
     // Apply optimistic update
     setBoard(newBoard);
     setBoardPieces(newBoardPieces);
@@ -960,7 +1064,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       }
     }
   }, [pendingMove, canConfirm, rotation, flipped, board, boardPieces, usedPieces, 
-      myPlayerNumber, gameId, user, updateGameState]);
+      myPlayerNumber, gameId, user, updateGameState, triggerAnimation, currentGameId, myTier]);
 
   const handleQuitOrForfeit = useCallback(async () => {
     if (game?.status !== 'active') return;
@@ -1104,19 +1208,33 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
 
             {/* Game Board - FIXED: Pass ref directly to GameBoard */}
             <div className="flex justify-center pb-4">
-              <GameBoard
-                ref={boardRef}
-                board={board}
-                boardPieces={boardPieces}
-                pendingMove={pendingMove}
-                rotation={rotation}
-                flipped={flipped}
-                gameOver={game?.status === 'completed'}
-                gameMode="online"
-                currentPlayer={myPlayerNumber}
-                onCellClick={handleCellClick}
-                onPendingPieceDragStart={handleBoardDragStart}
-              />
+              <div className="relative">
+                <GameBoard
+                  ref={boardRef}
+                  board={board}
+                  boardPieces={boardPieces}
+                  pendingMove={pendingMove}
+                  rotation={rotation}
+                  flipped={flipped}
+                  gameOver={game?.status === 'completed'}
+                  gameMode="online"
+                  currentPlayer={myPlayerNumber}
+                  onCellClick={handleCellClick}
+                  onPendingPieceDragStart={handleBoardDragStart}
+                />
+                {/* Placement Animation Overlay */}
+                {placementAnimation && (
+                  <PlacementAnimation
+                    key={placementAnimation.key}
+                    cells={placementAnimation.cells}
+                    player={placementAnimation.player}
+                    boardRef={placementAnimation.boardRef}
+                    cellSize={placementAnimation.cellSize}
+                    tier={placementAnimation.tier}
+                    onComplete={clearAnimation}
+                  />
+                )}
+              </div>
             </div>
 
             {/* D-Pad with Error Message Layout - matches GameScreen */}
@@ -1221,7 +1339,15 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
             )}
 
             {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
-            <div className="flex gap-2 mt-3">
+            {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
+            <div className="flex gap-1 mt-3">
+              <GlowOrbButton
+                onClick={() => { soundManager.playButtonClick(); onLeave(); }}
+                color="red"
+                className="flex-1"
+              >
+                Menu
+              </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleRotate}
                 disabled={!selectedPiece || !isMyTurn}
@@ -1238,37 +1364,38 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
               >
                 Flip
               </GlowOrbButton>
-              {pendingMove ? (
-                <>
-                  <GlowOrbButton
-                    onClick={handleCancel}
-                    color="slate"
-                    className="flex-1"
-                  >
-                    Cancel
-                  </GlowOrbButton>
-                  <GlowOrbButton
-                    onClick={handleConfirm}
-                    disabled={!canConfirm}
-                    color="green"
-                    className="flex-1"
-                  >
-                    Confirm
-                  </GlowOrbButton>
-                </>
-              ) : (
-                /* FORFEIT BUTTON - RED COLOR (different from others) */
+              {game?.status === 'active' && (
                 <GlowOrbButton
                   onClick={handleQuitOrForfeit}
-                  disabled={game?.status !== 'active'}
-                  color="red"
-                  className="flex items-center gap-1 justify-center"
+                  color="slate"
+                  className="flex items-center gap-1 justify-center flex-1"
                 >
-                  <Flag size={16} />
+                  <Flag size={14} />
                   <span className="hidden sm:inline">{hasMovesPlayed ? 'Forfeit' : 'Quit'}</span>
                 </GlowOrbButton>
               )}
             </div>
+            
+            {/* Row 2: Cancel/Confirm when piece is pending */}
+            {pendingMove && (
+              <div className="flex gap-2 mt-2">
+                <GlowOrbButton
+                  onClick={handleCancel}
+                  color="slate"
+                  className="flex-1"
+                >
+                  Cancel
+                </GlowOrbButton>
+                <GlowOrbButton
+                  onClick={handleConfirm}
+                  disabled={!canConfirm}
+                  color="green"
+                  className="flex-1"
+                >
+                  Confirm
+                </GlowOrbButton>
+              </div>
+            )}
           </div>
 
           {/* Piece Tray */}
@@ -1443,26 +1570,46 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
           }
           
           if (data?.game) {
+            console.log('[OnlineGameScreen] Rematch accepted! New game:', data.game.id);
             setRematchAccepted(true);
             setNewGameFromRematch(data.game);
-            
-            const firstPlayerId = data.firstPlayerId;
-            const firstPlayerName = firstPlayerId === user.id
-              ? 'You go'
-              : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
-            
             soundManager.playSound('notification');
             
-            // Navigate to new game after delay
+            // Navigate to new game after brief delay
             setTimeout(() => {
-              setShowGameOver(false);
+              // Close modals first
               setShowRematchModal(false);
-              if (typeof onLeave === 'function') {
-                onLeave();
+              setShowGameOver(false);
+              
+              // If onNavigateToGame is provided, use it to navigate (preferred)
+              // This tells App.jsx about the new game ID
+              if (onNavigateToGame) {
+                console.log('[OnlineGameScreen] Using onNavigateToGame to navigate to:', data.game.id);
+                onNavigateToGame(data.game);
               } else {
-                window.location.href = window.location.origin;
+                // Fallback: reset internal state and load new game
+                console.log('[OnlineGameScreen] Fallback: resetting internal state');
+                setRematchWaiting(false);
+                setRematchRequest(null);
+                setIsRematchRequester(false);
+                setRematchDeclined(false);
+                setRematchAccepted(false);
+                
+                // Reset board state
+                setBoard(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
+                setBoardPieces({});
+                setUsedPieces([]);
+                setSelectedPiece(null);
+                setPendingMove(null);
+                setRotation(0);
+                setFlipped(false);
+                setGame(null);
+                setLoading(true);
+                
+                // Set the new game ID - this triggers the useEffect to load the new game
+                setCurrentGameId(data.game.id);
               }
-            }, 2000);
+            }, 1000);
           }
         }}
         onDecline={async () => {

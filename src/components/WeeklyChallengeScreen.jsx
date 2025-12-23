@@ -1,14 +1,13 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
 // UPDATED: Added full drag and drop support from piece tray and board
+// UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, Zap } from 'lucide-react';
+import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, FlipHorizontal } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
-import ControlButtons from './ControlButtons';
 import DPad from './DPad';
 import DragOverlay from './DragOverlay';
 import NeonTitle from './NeonTitle';
-import NeonSubtitle from './NeonSubtitle';
 import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
@@ -201,7 +200,7 @@ const LoseOverlay = ({ elapsedMs, attemptCount, isFirstAttempt, onRetry, onMenu 
   );
 };
 
-const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
+const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard }) => {
   const { profile } = useAuth();
   const { needsScroll, isMobile } = useResponsiveLayout(650);
   
@@ -861,84 +860,129 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
           
           {/* Header with Title and Timer - styled like other game boards */}
           <div className="flex items-center justify-between mb-2 px-2">
-            <button
-              onClick={() => { soundManager.playButtonClick(); onMenu(); }}
-              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
-            >
-              <ArrowLeft size={16} />
-              Home
-            </button>
+            {/* Spacer for symmetry (home button moved to controls) */}
+            <div className="w-16" />
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="red" />
-              <NeonSubtitle text="WEEKLY CHALLENGE" color="red" size="small" className="mt-0" />
-            </div>
-            
-            {/* Enhanced Compact Timer Display - Cyberpunk Stopwatch */}
-            <div 
-              className="relative px-4 py-2 bg-gradient-to-br from-slate-900/95 to-red-950/40 rounded-xl border border-red-500/50 overflow-hidden"
-              style={{ 
-                boxShadow: '0 0 25px rgba(239,68,68,0.35), inset 0 0 20px rgba(239,68,68,0.15), 0 4px 15px rgba(0,0,0,0.4)' 
-              }}
-            >
-              {/* Animated scan line effect */}
-              <div 
-                className="absolute inset-0 pointer-events-none opacity-30"
-                style={{
-                  background: 'linear-gradient(0deg, transparent 50%, rgba(239,68,68,0.1) 50%)',
-                  backgroundSize: '100% 4px',
-                  animation: 'scanline 8s linear infinite'
-                }}
-              />
-              
-              {/* Corner accents */}
-              <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-red-400/60" />
-              <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-red-400/60" />
-              <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-red-400/60" />
-              <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-red-400/60" />
-              
-              <div className="relative flex items-center gap-2.5">
-                {/* Animated clock icon */}
-                <div className="relative">
-                  <div className="absolute inset-0 bg-red-500/30 rounded-full blur-md animate-pulse" />
-                  <Clock size={18} className="relative text-red-400" />
-                  {elapsedMs > 0 && (
-                    <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]" />
-                  )}
-                </div>
-                
-                {/* Time display with glowing digits */}
-                <div className="flex items-baseline gap-0.5">
-                  <span 
-                    className="text-xl font-mono font-black tracking-tight tabular-nums"
-                    style={{ 
-                      color: '#fca5a5',
-                      textShadow: '0 0 12px rgba(239,68,68,0.9), 0 0 25px rgba(239,68,68,0.5), 0 0 40px rgba(239,68,68,0.3)'
-                    }}
-                  >
-                    {Math.floor(elapsedMs / 60000)}
-                  </span>
-                  <span 
-                    className="text-xl font-mono font-black animate-pulse"
-                    style={{ 
-                      color: '#f87171',
-                      textShadow: '0 0 8px rgba(239,68,68,0.8)'
-                    }}
-                  >
-                    :
-                  </span>
-                  <span 
-                    className="text-xl font-mono font-black tracking-tight tabular-nums"
-                    style={{ 
-                      color: '#fca5a5',
-                      textShadow: '0 0 12px rgba(239,68,68,0.9), 0 0 25px rgba(239,68,68,0.5), 0 0 40px rgba(239,68,68,0.3)'
-                    }}
-                  >
-                    {String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0')}
-                  </span>
-                </div>
+              <div className="text-red-400/80 text-[10px] font-bold tracking-[0.3em] uppercase mt-0">
+                WEEKLY CHALLENGE
               </div>
             </div>
+            
+            {/* Enhanced Compact Timer Display - Cyberpunk Stopwatch with Dynamic Colors */}
+            {(() => {
+              // Color ranges based on time (cool to hot)
+              const totalSeconds = Math.floor(elapsedMs / 1000);
+              let timerColor, timerGlow, borderColor, bgGradient, iconColor;
+              
+              if (totalSeconds < 30) {
+                // 0-30s: Cyan (cool - great pace)
+                timerColor = '#67e8f9';
+                timerGlow = 'rgba(34,211,238,0.9)';
+                borderColor = 'border-cyan-500/50';
+                bgGradient = 'from-slate-900/95 to-cyan-950/40';
+                iconColor = 'text-cyan-400';
+              } else if (totalSeconds < 60) {
+                // 30s-1min: Green (good pace)
+                timerColor = '#86efac';
+                timerGlow = 'rgba(74,222,128,0.9)';
+                borderColor = 'border-green-500/50';
+                bgGradient = 'from-slate-900/95 to-green-950/40';
+                iconColor = 'text-green-400';
+              } else if (totalSeconds < 120) {
+                // 1-2min: Yellow (moderate)
+                timerColor = '#fde047';
+                timerGlow = 'rgba(250,204,21,0.9)';
+                borderColor = 'border-yellow-500/50';
+                bgGradient = 'from-slate-900/95 to-yellow-950/40';
+                iconColor = 'text-yellow-400';
+              } else if (totalSeconds < 180) {
+                // 2-3min: Orange (getting slow)
+                timerColor = '#fdba74';
+                timerGlow = 'rgba(251,146,60,0.9)';
+                borderColor = 'border-orange-500/50';
+                bgGradient = 'from-slate-900/95 to-orange-950/40';
+                iconColor = 'text-orange-400';
+              } else {
+                // 3min+: Red (hot - taking long)
+                timerColor = '#fca5a5';
+                timerGlow = 'rgba(239,68,68,0.9)';
+                borderColor = 'border-red-500/50';
+                bgGradient = 'from-slate-900/95 to-red-950/40';
+                iconColor = 'text-red-400';
+              }
+              
+              return (
+                <div 
+                  className={`relative px-4 py-2 bg-gradient-to-br ${bgGradient} rounded-xl border ${borderColor} overflow-hidden transition-all duration-500`}
+                  style={{ 
+                    boxShadow: `0 0 25px ${timerGlow.replace('0.9', '0.35')}, inset 0 0 20px ${timerGlow.replace('0.9', '0.15')}, 0 4px 15px rgba(0,0,0,0.4)` 
+                  }}
+                >
+                  {/* Animated scan line effect */}
+                  <div 
+                    className="absolute inset-0 pointer-events-none opacity-30"
+                    style={{
+                      background: `linear-gradient(0deg, transparent 50%, ${timerGlow.replace('0.9', '0.1')} 50%)`,
+                      backgroundSize: '100% 4px',
+                      animation: 'scanline 8s linear infinite'
+                    }}
+                  />
+                  
+                  {/* Corner accents with dynamic color */}
+                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  
+                  <div className="relative flex items-center gap-2.5">
+                    {/* Animated clock icon with dynamic color */}
+                    <div className="relative">
+                      <div 
+                        className="absolute inset-0 rounded-full blur-md animate-pulse transition-colors duration-500" 
+                        style={{ backgroundColor: timerGlow.replace('0.9', '0.3') }}
+                      />
+                      <Clock size={18} className={`relative ${iconColor} transition-colors duration-500`} />
+                      {elapsedMs > 0 && (
+                        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]" />
+                      )}
+                    </div>
+                    
+                    {/* Time display with dynamic glowing digits */}
+                    <div className="flex items-baseline gap-0.5">
+                      <span 
+                        className="text-xl font-mono font-black tracking-tight tabular-nums transition-all duration-500"
+                        style={{ 
+                          color: timerColor,
+                          textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}, 0 0 40px ${timerGlow.replace('0.9', '0.3')}`
+                        }}
+                      >
+                        {Math.floor(elapsedMs / 60000)}
+                      </span>
+                      <span 
+                        className="text-xl font-mono font-black animate-pulse transition-colors duration-500"
+                        style={{ 
+                          color: timerColor,
+                          textShadow: `0 0 8px ${timerGlow.replace('0.9', '0.8')}`
+                        }}
+                      >
+                        :
+                      </span>
+                      <span 
+                        className="text-xl font-mono font-black tracking-tight tabular-nums transition-all duration-500"
+                        style={{ 
+                          color: timerColor,
+                          textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}, 0 0 40px ${timerGlow.replace('0.9', '0.3')}`
+                        }}
+                      >
+                        {String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           
           {/* Game Board */}
@@ -966,6 +1010,43 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             </div>
           )}
           
+          {/* Control Buttons - Above Piece Tray with Menu button */}
+          <div className="flex gap-1 justify-between mb-2 flex-wrap">
+            {/* Menu Button - Goes to main game menu */}
+            <button
+              onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
+              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+            >
+              <ArrowLeft size={12} />MENU
+            </button>
+            
+            {/* Rotate Button */}
+            <button
+              onClick={rotatePiece}
+              className="flex-1 px-1.5 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+              disabled={!selectedPiece && !pendingMove}
+            >
+              <RotateCcw size={12} />ROTATE
+            </button>
+
+            {/* Flip Button */}
+            <button
+              onClick={flipPiece}
+              className="flex-1 px-1.5 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
+              disabled={!selectedPiece && !pendingMove}
+            >
+              <FlipHorizontal size={12} />FLIP
+            </button>
+            
+            {/* Retry Button */}
+            <button
+              onClick={handleRestart}
+              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+            >
+              <RotateCcw size={12} />RETRY
+            </button>
+          </div>
+          
           {/* Piece Tray */}
           <PieceTray
             usedPieces={usedPieces}
@@ -980,22 +1061,27 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             draggedPiece={draggedPiece}
           />
           
-          {/* Controls */}
-          <ControlButtons
-            selectedPiece={selectedPiece}
-            pendingMove={pendingMove}
-            canConfirm={!!pendingMove}
-            gameOver={gameOver}
-            gameMode="puzzle"
-            currentPlayer={currentPlayer}
-            isGeneratingPuzzle={false}
-            onRotate={rotatePiece}
-            onFlip={flipPiece}
-            onConfirm={confirmMove}
-            onCancel={cancelMove}
-            onMenu={onMenu}
-            onRetryPuzzle={handleRestart}
-          />
+          {/* Confirm/Cancel Controls - Only show when there's a pending move */}
+          {pendingMove && (
+            <div className="flex gap-2 justify-center mt-2">
+              <button
+                onClick={confirmMove}
+                disabled={!pendingMove || !(() => {
+                  const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+                  return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+                })()}
+                className="flex-1 max-w-32 px-3 py-2 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)] disabled:opacity-30 disabled:shadow-none"
+              >
+                <CheckCircle size={14} />CONFIRM
+              </button>
+              <button
+                onClick={cancelMove}
+                className="flex-1 max-w-32 px-3 py-2 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              >
+                <X size={14} />CANCEL
+              </button>
+            </div>
+          )}
         </div>
         
         {/* Bottom padding for scroll */}

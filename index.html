@@ -12,8 +12,31 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="application-name" content="DEADBLOCK" />
   
-  <title>DEADBLOCK - Block Puzzle Strategy</title>
-  <meta name="description" content="DEADBLOCK - Strategic pentomino placement puzzle game. Challenge the AI or play with friends!" />
+  <!-- Primary SEO -->
+  <title>DEADBLOCK - Strategic Block Puzzle Game</title>
+  <meta name="description" content="DEADBLOCK - Strategic pentomino placement puzzle game. Challenge the AI, solve puzzles, or compete with friends online!" />
+  <meta name="keywords" content="puzzle game, pentomino, block puzzle, strategy game, multiplayer game, online puzzle, brain game, tetris-like" />
+  <meta name="author" content="Deadblock" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://deadblock.app/" />
+  
+  <!-- Open Graph (Facebook, LinkedIn, Discord) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://deadblock.app/" />
+  <meta property="og:title" content="DEADBLOCK - Strategic Block Puzzle Game" />
+  <meta property="og:description" content="Challenge friends or AI in this strategic pentomino placement puzzle game. Play online multiplayer, solve puzzles, and climb the leaderboards!" />
+  <meta property="og:image" content="https://deadblock.app/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:site_name" content="Deadblock" />
+  <meta property="og:locale" content="en_US" />
+  
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://deadblock.app/" />
+  <meta name="twitter:title" content="DEADBLOCK - Strategic Block Puzzle Game" />
+  <meta name="twitter:description" content="Challenge friends or AI in this strategic pentomino placement puzzle game. Play online multiplayer!" />
+  <meta name="twitter:image" content="https://deadblock.app/og-image.png" />
   
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json" />
@@ -158,64 +181,53 @@
         filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.8)) 
                 drop-shadow(0 0 20px rgba(168, 85, 247, 0.6)) 
                 drop-shadow(0 0 40px rgba(236, 72, 153, 0.4));
-        transform: scale(1);
       }
       to { 
         filter: drop-shadow(0 0 12px rgba(34, 211, 238, 1)) 
                 drop-shadow(0 0 30px rgba(168, 85, 247, 0.8)) 
                 drop-shadow(0 0 60px rgba(236, 72, 153, 0.6));
-        transform: scale(1.02);
       }
-    }
-
-    @keyframes glow {
-      from { filter: drop-shadow(0 0 20px rgba(34, 211, 238, 0.3)); }
-      to { filter: drop-shadow(0 0 30px rgba(168, 85, 247, 0.5)); }
     }
 
     .subtitle {
       font-family: 'Orbitron', sans-serif;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.4em;
-      background: linear-gradient(90deg, rgba(34, 211, 238, 0.8), rgba(168, 85, 247, 0.8), rgba(34, 211, 238, 0.8));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      letter-spacing: 0.5em;
+      color: rgba(148, 163, 184, 0.8);
       text-transform: uppercase;
-      filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.5));
+      margin-top: 10px;
     }
 
     .loading-bar-container {
       width: 200px;
       height: 4px;
-      background: rgba(255,255,255,0.1);
+      background: rgba(255, 255, 255, 0.1);
       border-radius: 2px;
-      margin-top: 2rem;
+      margin-top: 30px;
       overflow: hidden;
     }
 
     .loading-bar {
       height: 100%;
       width: 0%;
-      background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
-      animation: loadingProgress 2s ease-out forwards;
-      box-shadow: 0 0 10px var(--neon-cyan);
+      background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple), var(--neon-pink));
+      border-radius: 2px;
+      animation: loading-progress 2s ease-in-out forwards;
     }
 
-    @keyframes loadingProgress {
+    @keyframes loading-progress {
       0% { width: 0%; }
+      50% { width: 70%; }
       100% { width: 100%; }
     }
 
     .loading-text {
       font-family: 'Orbitron', sans-serif;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       letter-spacing: 0.3em;
       color: var(--neon-cyan);
-      margin-top: 1rem;
-      animation: blink 1s step-end infinite;
+      margin-top: 15px;
+      animation: blink 1s ease-in-out infinite;
     }
 
     @keyframes blink {
@@ -223,7 +235,7 @@
       50% { opacity: 0.5; }
     }
 
-    /* Scanline effect overlay */
+    /* Scanline effect */
     .scanlines {
       position: fixed;
       top: 0;
@@ -231,75 +243,72 @@
       right: 0;
       bottom: 0;
       pointer-events: none;
-      z-index: 1000;
+      z-index: 10000;
       background: repeating-linear-gradient(
         0deg,
-        rgba(0, 0, 0, 0.1) 0px,
-        rgba(0, 0, 0, 0.1) 1px,
-        transparent 1px,
-        transparent 2px
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.03) 2px,
+        rgba(0, 0, 0, 0.03) 4px
       );
-      opacity: 0.3;
+      opacity: 0.5;
     }
 
-    /* Install prompt - Neon styled */
+    /* PWA Install Prompt */
     #install-prompt {
       position: fixed;
-      bottom: calc(20px + var(--sab));
-      left: 50%;
-      transform: translateX(-50%) translateY(200px);
-      background: var(--dark-bg);
-      padding: 1.25rem 1.5rem;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      max-width: 360px;
+      margin: 0 auto;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.95));
+      border: 1px solid rgba(34, 211, 238, 0.3);
       border-radius: 16px;
-      border: 1px solid rgba(34, 211, 238, 0.4);
-      box-shadow: 
-        0 0 30px rgba(34, 211, 238, 0.3),
-        0 10px 40px rgba(0, 0, 0, 0.5);
-      z-index: 1001;
-      max-width: 90%;
-      width: 320px;
+      box-shadow: 0 0 30px rgba(34, 211, 238, 0.2), 0 10px 40px rgba(0, 0, 0, 0.5);
+      z-index: 9998;
+      transform: translateY(200%);
       opacity: 0;
-      visibility: hidden;
-      transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s;
+      transition: transform 0.4s ease, opacity 0.4s ease;
     }
 
     #install-prompt.show {
-      transform: translateX(-50%) translateY(0);
+      transform: translateY(0);
       opacity: 1;
-      visibility: visible;
     }
 
-    #install-prompt .prompt-title {
+    .prompt-title {
       font-family: 'Orbitron', sans-serif;
-      font-size: 1rem;
+      font-size: 0.9rem;
       font-weight: 700;
       color: var(--neon-cyan);
-      margin-bottom: 0.5rem;
       letter-spacing: 0.1em;
+      margin-bottom: 6px;
     }
 
-    #install-prompt .prompt-text {
-      font-size: 0.875rem;
-      color: rgba(226, 232, 240, 0.7);
-      margin-bottom: 1rem;
+    .prompt-text {
+      font-size: 0.85rem;
+      color: rgba(148, 163, 184, 0.9);
+      margin-bottom: 14px;
     }
 
-    #install-prompt .btn-container {
+    .btn-container {
       display: flex;
-      gap: 0.75rem;
+      gap: 10px;
     }
 
     #install-prompt button {
       flex: 1;
-      padding: 0.75rem 1rem;
-      border-radius: 10px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
       font-family: 'Orbitron', sans-serif;
       font-size: 0.75rem;
       font-weight: 600;
       letter-spacing: 0.1em;
       cursor: pointer;
       transition: all 0.3s ease;
-      border: none;
     }
 
     #install-btn {
@@ -374,273 +383,150 @@
       font-size: 11px;
       cursor: pointer;
       width: 100%;
-    ">Already installed? Don't show again</button>
+    ">Already installed? Click here</button>
   </div>
   
-  <!-- Service Worker Registration & PWA Logic -->
+  <script type="module" src="/src/main.jsx"></script>
+  
   <script>
-    // Debug logging
-    function pwaLog(msg) {
-      console.log('[PWA]', msg);
-    }
-
-    // Detect environments - comprehensive standalone detection
-    const isNativeApp = window.Capacitor !== undefined;
+    // =====================================================
+    // PWA INSTALL PROMPT LOGIC
+    // =====================================================
     
-    // Check multiple display modes for installed PWA
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                         window.matchMedia('(display-mode: fullscreen)').matches ||
-                         window.matchMedia('(display-mode: minimal-ui)').matches ||
-                         window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-                         window.navigator.standalone === true;
+    const pwaDebug = false;
+    const pwaLog = (msg) => { if (pwaDebug) console.log('[PWA]', msg); };
     
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const isChrome = /Chrome/i.test(navigator.userAgent) && !/Edge|Edg/i.test(navigator.userAgent);
-    const isFirefox = /Firefox/i.test(navigator.userAgent);
-    const isEdge = /Edge|Edg/i.test(navigator.userAgent);
-    const isSamsung = /SamsungBrowser/i.test(navigator.userAgent);
-    const isDesktop = !isAndroid && !isIOS;
-
-    // Check if app was previously installed (persisted across sessions)
-    let wasInstalled = false;
-    try {
-      wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
-    } catch (e) {}
-
-    pwaLog('Environment: native=' + isNativeApp + ', standalone=' + isStandalone + ', android=' + isAndroid + ', iOS=' + isIOS + ', desktop=' + isDesktop);
-    pwaLog('Browser: chrome=' + isChrome + ', firefox=' + isFirefox + ', edge=' + isEdge + ', samsung=' + isSamsung);
-    pwaLog('Previously installed: ' + wasInstalled);
-
-    // Track the deferred prompt
     let deferredPrompt = null;
-    let promptShownViaEvent = false;
-    let appIsInstalled = wasInstalled; // Start with persisted state
-
-    // Check if app is installed using getInstalledRelatedApps API (Chrome 80+)
+    let appIsInstalled = false;
+    const installPrompt = document.getElementById('install-prompt');
+    
+    // Check if running as native app (Capacitor)
+    const isNativeApp = window.Capacitor?.isNativePlatform?.() || false;
+    
+    // Check if already in standalone mode
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                         window.navigator.standalone === true ||
+                         document.referrer.includes('android-app://');
+    
+    // Check localStorage for previous installation
+    const wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
+    
+    if (isNativeApp || isStandalone || wasInstalled) {
+      pwaLog('Running as installed app or native - hiding prompt');
+      appIsInstalled = true;
+    }
+    
+    // Check using getInstalledRelatedApps API
     async function checkIfInstalled() {
       if ('getInstalledRelatedApps' in navigator) {
         try {
-          const relatedApps = await navigator.getInstalledRelatedApps();
-          pwaLog('Related apps check: ' + relatedApps.length + ' apps found');
-          if (relatedApps.length > 0) {
-            appIsInstalled = true;
-            try {
-              localStorage.setItem('pwa-was-installed', 'true');
-            } catch (e) {}
-            return true;
-          }
+          const apps = await navigator.getInstalledRelatedApps();
+          return apps.length > 0;
         } catch (e) {
-          pwaLog('getInstalledRelatedApps error: ' + e);
+          return false;
         }
       }
       return false;
     }
-
-    // Get DOM elements
-    const installPrompt = document.getElementById('install-prompt');
-    const installBtn = document.getElementById('install-btn');
-    const dismissBtn = document.getElementById('dismiss-btn');
-    const promptTitle = installPrompt?.querySelector('.prompt-title');
-    const promptText = installPrompt?.querySelector('.prompt-text');
-
-    // Check if should show prompt
-    function shouldShowPrompt() {
-      if (isNativeApp) {
-        pwaLog('Not showing: native app');
-        return false;
-      }
-      if (isStandalone) {
-        pwaLog('Not showing: standalone mode');
-        return false;
-      }
-      if (appIsInstalled) {
-        pwaLog('Not showing: app is installed');
-        return false;
-      }
-      
-      // Check if user previously dismissed - use the same flag as installed
-      // This means once dismissed, we treat it as "installed" and never show again
-      const wasDismissed = localStorage.getItem('pwa-install-dismissed');
-      if (wasDismissed) {
-        const dismissedTime = parseInt(wasDismissed);
-        const daysSince = (Date.now() - dismissedTime) / (1000 * 60 * 60 * 24);
-        // After 3 dismissals or 30+ days, stop showing entirely
-        const dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10);
-        if (dismissCount >= 3) {
-          pwaLog('Dismissed ' + dismissCount + ' times, not showing anymore');
-          return false;
-        }
-        if (daysSince < 14) {
-          pwaLog('Dismissed ' + Math.round(daysSince) + ' days ago, not showing');
-          return false;
-        }
-      }
-      return true;
-    }
-
-    // Show manual install instructions based on browser
+    
+    // Show manual install instructions for Safari/iOS
     function showManualInstructions() {
-      if (!installPrompt || !shouldShowPrompt()) return;
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
       
-      pwaLog('Showing manual install instructions');
-      
-      if (isIOS) {
-        // iOS Safari instructions
-        if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
-        if (promptText) promptText.innerHTML = 'Tap <strong>Share</strong> (↑) then <strong>"Add to Home Screen"</strong>';
+      if (isIOS || isSafari) {
+        const promptText = document.querySelector('.prompt-text');
+        if (promptText) {
+          promptText.innerHTML = isIOS 
+            ? 'Tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong>'
+            : 'Click the share button and select <strong>"Add to Dock"</strong>';
+        }
+        const installBtn = document.getElementById('install-btn');
         if (installBtn) {
           installBtn.textContent = 'GOT IT';
           installBtn.onclick = () => {
             installPrompt.classList.remove('show');
-            localStorage.setItem('pwa-was-installed', 'true');
             localStorage.setItem('pwa-install-dismissed', Date.now().toString());
           };
         }
-      } else if (isAndroid) {
-        if (isChrome) {
-          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
-          if (promptText) promptText.innerHTML = 'Tap <strong>⋮</strong> menu → <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong>';
-        } else if (isSamsung) {
-          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
-          if (promptText) promptText.innerHTML = 'Tap <strong>☰</strong> menu → <strong>"Add page to"</strong> → <strong>"Home screen"</strong>';
-        } else if (isFirefox) {
-          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
-          if (promptText) promptText.innerHTML = 'Tap <strong>⋮</strong> menu → <strong>"Install"</strong>';
-        } else {
-          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
-          if (promptText) promptText.innerHTML = 'Open menu → <strong>"Add to Home screen"</strong> or <strong>"Install"</strong>';
-        }
-        if (installBtn) {
-          installBtn.textContent = 'GOT IT';
-          installBtn.onclick = () => {
-            installPrompt.classList.remove('show');
-            localStorage.setItem('pwa-was-installed', 'true');
-            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
-          };
-        }
-      } else {
-        // Desktop
-        if (isChrome || isEdge) {
-          if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
-          if (promptText) promptText.innerHTML = 'Click the <strong>install icon</strong> (⊕) in the address bar, or menu → <strong>"Install Deadblock"</strong>';
-        } else if (isFirefox) {
-          if (promptTitle) promptTitle.textContent = 'ADD TO DESKTOP';
-          if (promptText) promptText.innerHTML = 'Firefox: Drag page icon from address bar to desktop';
-        } else {
-          if (promptTitle) promptTitle.textContent = 'ADD TO HOME';
-          if (promptText) promptText.textContent = 'Use your browser menu to add this app to your home screen';
-        }
-        if (installBtn) {
-          installBtn.textContent = 'GOT IT';
-          installBtn.onclick = () => {
-            installPrompt.classList.remove('show');
-            localStorage.setItem('pwa-was-installed', 'true');
-            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
-          };
-        }
+        installPrompt.classList.add('show');
       }
-      
-      installPrompt.classList.add('show');
     }
-
-    // Service Worker Registration
-    if ('serviceWorker' in navigator && !isNativeApp) {
-      pwaLog('Registering ServiceWorker...');
-      
-      navigator.serviceWorker.register('/service-worker.js')
-        .then((registration) => {
-          pwaLog('ServiceWorker registered: ' + registration.scope);
-          
-          // Check for updates
-          registration.addEventListener('updatefound', () => {
-            pwaLog('ServiceWorker update found');
-          });
-        })
-        .catch((error) => {
-          pwaLog('ServiceWorker failed: ' + error);
-        });
-    }
-
-    // Listen for beforeinstallprompt (Chrome, Edge, Samsung)
+    
+    // Capture the install prompt
     window.addEventListener('beforeinstallprompt', (e) => {
-      pwaLog('beforeinstallprompt fired!');
+      pwaLog('beforeinstallprompt fired');
       e.preventDefault();
       deferredPrompt = e;
-      promptShownViaEvent = true;
       
-      if (shouldShowPrompt()) {
-        // Reset to native prompt UI
-        if (promptTitle) promptTitle.textContent = 'INSTALL DEADBLOCK';
-        if (promptText) promptText.textContent = 'Add to your home screen for the full experience!';
-        if (installBtn) {
-          installBtn.textContent = 'INSTALL';
-          installBtn.onclick = async () => {
-            pwaLog('Install clicked');
-            if (deferredPrompt) {
-              deferredPrompt.prompt();
-              const { outcome } = await deferredPrompt.userChoice;
-              pwaLog('User choice: ' + outcome);
-              if (outcome === 'accepted') {
-                appIsInstalled = true;
-                try {
-                  localStorage.setItem('pwa-was-installed', 'true');
-                } catch (e) {}
-              }
-              deferredPrompt = null;
-            }
-            installPrompt.classList.remove('show');
-          };
+      // Don't show if already installed
+      if (appIsInstalled) {
+        pwaLog('App already installed - not showing prompt');
+        return;
+      }
+      
+      // Check dismiss cooldown (7 days)
+      const dismissed = localStorage.getItem('pwa-install-dismissed');
+      if (dismissed) {
+        const dismissedTime = parseInt(dismissed, 10);
+        const sevenDays = 7 * 24 * 60 * 60 * 1000;
+        if (Date.now() - dismissedTime < sevenDays) {
+          pwaLog('Prompt dismissed recently - waiting');
+          return;
         }
-        
-        setTimeout(() => {
-          pwaLog('Showing native install prompt');
+      }
+      
+      // Show prompt after short delay
+      setTimeout(() => {
+        if (!appIsInstalled) {
           installPrompt.classList.add('show');
-        }, 3000);
+          pwaLog('Showing install prompt');
+        }
+      }, 3000);
+    });
+    
+    // Handle install button
+    document.getElementById('install-btn')?.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        pwaLog('No deferred prompt - showing manual instructions');
+        showManualInstructions();
+        return;
+      }
+      
+      pwaLog('Triggering install prompt');
+      installPrompt.classList.remove('show');
+      
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      pwaLog('Install outcome: ' + outcome);
+      
+      if (outcome === 'accepted') {
+        appIsInstalled = true;
+        localStorage.setItem('pwa-was-installed', 'true');
+      }
+      
+      deferredPrompt = null;
+    });
+    
+    // Handle dismiss button
+    document.getElementById('dismiss-btn')?.addEventListener('click', () => {
+      pwaLog('User dismissed prompt');
+      installPrompt.classList.remove('show');
+      
+      // Track dismiss count
+      const dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10) + 1;
+      localStorage.setItem('pwa-dismiss-count', dismissCount.toString());
+      
+      // After 2 dismissals, don't show again
+      if (dismissCount >= 2) {
+        pwaLog('Dismissed twice - permanent dismiss');
+        localStorage.setItem('pwa-was-installed', 'true');
+        localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
+      } else {
+        pwaLog('Dismissed (' + dismissCount + '/2) - will show again in 7 days');
+        localStorage.setItem('pwa-install-dismissed', Date.now().toString());
       }
     });
-
-    // Fallback: If beforeinstallprompt doesn't fire after 5 seconds, show manual instructions
-    // But first check if the app is already installed
-    if (!isNativeApp && !isStandalone) {
-      setTimeout(async () => {
-        // First check if app is installed using the API
-        const installed = await checkIfInstalled();
-        
-        if (!installed && !promptShownViaEvent && shouldShowPrompt()) {
-          pwaLog('beforeinstallprompt did not fire, showing manual instructions');
-          showManualInstructions();
-        } else if (installed) {
-          pwaLog('App is installed, not showing prompt');
-        }
-      }, 5000);
-    }
-
-    // Handle dismiss
-    if (dismissBtn) {
-      dismissBtn.addEventListener('click', () => {
-        // Track dismiss count
-        let dismissCount = 0;
-        try {
-          dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10);
-          dismissCount++;
-          localStorage.setItem('pwa-dismiss-count', dismissCount.toString());
-        } catch (e) {}
-        
-        installPrompt.classList.remove('show');
-        
-        // After 2 dismisses, treat as permanently installed/dismissed
-        if (dismissCount >= 2) {
-          pwaLog('Dismissed ' + dismissCount + ' times - marking as installed');
-          appIsInstalled = true;
-          localStorage.setItem('pwa-was-installed', 'true');
-          localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
-        } else {
-          pwaLog('Dismissed (' + dismissCount + '/2) - will show again in 7 days');
-          localStorage.setItem('pwa-install-dismissed', Date.now().toString());
-        }
-      });
-    }
 
     // Handle "Already Installed" / permanent dismiss
     const alreadyInstalledBtn = document.getElementById('already-installed-btn');
@@ -706,41 +592,9 @@
       // Check service worker
       if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.getRegistration();
-        pwaLog('SW registered: ' + (reg ? 'YES at ' + reg.scope : 'NO'));
+        pwaLog('SW registered: ' + (reg ? 'YES' : 'NO'));
       }
     };
-
-    window.resetInstallPrompt = () => {
-      localStorage.removeItem('pwa-install-dismissed');
-      location.reload();
-    };
-
-    // Hide loading screen
-    window.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => {
-        const loading = document.getElementById('loading');
-        if (loading) {
-          loading.style.opacity = '0';
-          loading.style.transition = 'opacity 0.5s ease';
-          setTimeout(() => loading.style.display = 'none', 500);
-        }
-      }, 1500);
-    });
-
-    // Prevent pull-to-refresh
-    let lastTouchY = 0;
-    document.addEventListener('touchstart', (e) => {
-      lastTouchY = e.touches[0].clientY;
-    }, { passive: true });
-    document.addEventListener('touchmove', (e) => {
-      const touchY = e.touches[0].clientY;
-      if (window.scrollY === 0 && touchY > lastTouchY && e.cancelable) {
-        e.preventDefault();
-      }
-      lastTouchY = touchY;
-    }, { passive: false });
   </script>
-  
-  <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

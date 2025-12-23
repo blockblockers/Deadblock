@@ -916,10 +916,16 @@ function AppContent() {
       <LazyWrapper message="Loading game...">
         <OnlineGameScreen
           gameId={onlineGameId}
-          onGameEnd={handleOnlineGameEnd}
           onLeave={() => {
             setOnlineGameId(null);
             setGameMode('online-menu');
+          }}
+          onNavigateToGame={(game) => {
+            console.log('[App] onNavigateToGame called with:', game?.id);
+            if (game?.id) {
+              // Update the game ID - this causes OnlineGameScreen to reload with new game
+              setOnlineGameId(game.id);
+            }
           }}
         />
       </LazyWrapper>
@@ -1047,6 +1053,7 @@ function AppContent() {
         <WeeklyChallengeScreen
           challenge={currentWeeklyChallenge}
           onMenu={() => setGameMode('weekly-menu')}
+          onMainMenu={() => setGameMode(null)}
           onLeaderboard={handleWeeklyLeaderboard}
         />
       </LazyWrapper>
