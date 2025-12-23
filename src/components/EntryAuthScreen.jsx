@@ -17,9 +17,11 @@ import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Policy/Terms Modal Component - displays content in-app without navigation
+// FIXED: Now extracts both <style> and <body> content to preserve formatting
 const PolicyModal = ({ type, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState('');
+  const [styles, setStyles] = useState('');
   const [error, setError] = useState(false);
   
   const title = type === 'privacy' ? 'Privacy Policy' : 'Terms of Service';
@@ -33,10 +35,37 @@ const PolicyModal = ({ type, onClose }) => {
         if (!response.ok) throw new Error('Failed to load');
         const html = await response.text();
         
+        // Extract style content from HTML <head>
+        const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+        if (styleMatch) {
+          // Scope styles to our modal container to avoid conflicts
+          const scopedStyles = styleMatch[1]
+            .replace(/body\s*\{/g, '.policy-content {')
+            .replace(/\.container\s*\{/g, '.policy-content .container {')
+            .replace(/\.header\s*\{/g, '.policy-content .header {')
+            .replace(/\.logo\s*\{/g, '.policy-content .logo {')
+            .replace(/\.subtitle\s*\{/g, '.policy-content .subtitle {')
+            .replace(/\.effective-date\s*\{/g, '.policy-content .effective-date {')
+            .replace(/\.back-link\s*\{/g, '.policy-content .back-link {')
+            .replace(/\.footer\s*\{/g, '.policy-content .footer {')
+            .replace(/h1\s*\{/g, '.policy-content h1 {')
+            .replace(/h2\s*\{/g, '.policy-content h2 {')
+            .replace(/p\s*\{/g, '.policy-content p {')
+            .replace(/ul\s*\{/g, '.policy-content ul {')
+            .replace(/li\s*\{/g, '.policy-content li {')
+            .replace(/([^.#\w])a\s*\{/g, '$1.policy-content a {')
+            .replace(/([^.#\w])a:hover\s*\{/g, '$1.policy-content a:hover {');
+          setStyles(scopedStyles);
+        }
+        
         // Extract body content from HTML
         const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
         if (bodyMatch) {
-          setContent(bodyMatch[1]);
+          // Remove the back-link and footer since we have our own close button
+          let bodyContent = bodyMatch[1]
+            .replace(/<a[^>]*class="back-link"[^>]*>[\s\S]*?<\/a>/gi, '')
+            .replace(/<div[^>]*class="footer"[^>]*>[\s\S]*?<\/div>/gi, '');
+          setContent(bodyContent);
         } else {
           setContent(html);
         }
@@ -82,7 +111,7 @@ const PolicyModal = ({ type, onClose }) => {
         </div>
         
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader className="w-8 h-8 text-cyan-400 animate-spin" />
@@ -100,10 +129,15 @@ const PolicyModal = ({ type, onClose }) => {
               </a>
             </div>
           ) : (
-            <div 
-              className="prose prose-invert prose-sm max-w-none prose-headings:text-cyan-300 prose-p:text-slate-300 prose-a:text-cyan-400 prose-strong:text-white prose-li:text-slate-300"
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
+            <>
+              {/* Inject scoped styles */}
+              <style dangerouslySetInnerHTML={{ __html: styles }} />
+              {/* Render content with policy-content class for scoped styles */}
+              <div 
+                className="policy-content"
+                dangerouslySetInnerHTML={{ __html: content }}
+              />
+            </>
           )}
         </div>
         
