@@ -13,7 +13,7 @@ const config: CapacitorConfig = {
     // iOS scheme
     iosScheme: 'https',
     // Allow navigation to your web domain (for links)
-    allowNavigation: ['*.netlify.app', 'deadblock.com']
+    allowNavigation: ['deadblock.app', '*.deadblock.app']
   },
 
   // Android-specific configuration
