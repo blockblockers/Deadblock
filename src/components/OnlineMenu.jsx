@@ -836,17 +836,13 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-950"
+      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
       style={{ 
-        overflowY: 'auto',
-        overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch', 
         touchAction: 'pan-y',
-        overscrollBehavior: 'contain',
         height: '100%',
         width: '100%',
-        // Ensure momentum scrolling on iOS
-        scrollBehavior: 'smooth',
+        overscrollBehavior: 'contain',
       }}
     >
       {/* Themed Grid background */}
@@ -877,11 +873,17 @@ const OnlineMenu = ({
       )}
 
       {/* Content - Enhanced padding for small screens */}
-      <div className="relative flex flex-col items-center px-3 sm:px-4 pt-6 sm:pt-8 pb-32"
+      <div 
+        className="relative flex flex-col items-center px-3 sm:px-4 pt-6 sm:pt-8 pb-32"
         style={{ 
           minHeight: '100%',
           paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
-          paddingTop: 'max(24px, env(safe-area-inset-top))'
+          paddingTop: 'max(24px, env(safe-area-inset-top))',
+          touchAction: 'pan-y',
+          WebkitOverflowScrolling: 'touch',
+        }}
+        onTouchMove={(e) => {
+          // Allow vertical scrolling by not preventing default
         }}
       >
         <div className="w-full max-w-md">
@@ -1437,7 +1439,7 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-60 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                  style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                   {receivedInvites.map(invite => (
                     <div
@@ -1488,7 +1490,7 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-40 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                  style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                   {sentInvites.map(invite => {
                     // Get the best display name available

@@ -143,6 +143,9 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
   const { user, profile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
+  // Track the current game (can change on rematch)
+  const [currentGameId, setCurrentGameId] = useState(gameId);
+  
   // Game state
   const [game, setGame] = useState(null);
   const [board, setBoard] = useState(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
@@ -454,8 +457,24 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
             setRematchAccepted(true);
             setShowRematchModal(false);
             soundManager.playSound('notification');
-            // Navigate to the new game
-            onResumeGame(request.new_game_id);
+            // Store new game ID and trigger navigation via state change
+            setNewGameFromRematch(request.new_game_id);
+            // Reset game state for new game
+            setCurrentGameId(request.new_game_id);
+            setGame(null);
+            setLoading(true);
+            setShowGameOver(false);
+            setRematchWaiting(false);
+            setRematchRequest(null);
+            setIsRematchRequester(false);
+            setRematchDeclined(false);
+            setBoard(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
+            setBoardPieces({});
+            setUsedPieces([]);
+            setSelectedPiece(null);
+            setPendingMove(null);
+            setRotation(0);
+            setFlipped(false);
             return;
           }
           
@@ -592,10 +611,10 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
 
   // FIXED: Load game and subscribe to REAL-TIME updates
   useEffect(() => {
-    if (!gameId || !userId) return;
+    if (!currentGameId || !userId) return;
     
     mountedRef.current = true;
-    console.log('OnlineGameScreen: Starting game load', { gameId, userId });
+    console.log('OnlineGameScreen: Starting game load', { gameId: currentGameId, userId });
 
     const loadingTimeout = setTimeout(() => {
       if (mountedRef.current && loading) {
@@ -606,7 +625,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
 
     const loadGame = async () => {
       try {
-        const { data, error: fetchError } = await gameSyncService.getGame(gameId);
+        const { data, error: fetchError } = await gameSyncService.getGame(currentGameId);
         
         if (!mountedRef.current) return;
         clearTimeout(loadingTimeout);
@@ -640,10 +659,10 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
     console.log('[OnlineGameScreen] Subscribing to real-time updates via gameSyncService');
     
     const subscription = gameSyncService.subscribeToGame(
-      gameId,
+      currentGameId,
       (updatedGame) => {
         if (!mountedRef.current) return;
-        if (!updatedGame || updatedGame.id !== gameId) return;
+        if (!updatedGame || updatedGame.id !== currentGameId) return;
         
         console.log('Real-time update received', {
           pieces: updatedGame?.used_pieces?.length,
@@ -683,7 +702,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
         subscription.unsubscribe();
       }
     };
-  }, [gameId, userId, updateGameState]);
+  }, [currentGameId, userId, updateGameState]);
 
   // Show error message when placement is invalid
   useEffect(() => {
@@ -839,7 +858,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
 
     // Send move to server
     const { data: responseData, error: moveError } = await gameSyncService.makeMove(
-      gameId,
+      currentGameId,
       user.id,
       {
         pieceType: pendingMove.piece,
@@ -880,7 +899,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
         setTimeout(async () => {
           try {
             const retryResult = await gameSyncService.makeMove(
-              gameId, user.id,
+              currentGameId, user.id,
               { pieceType: pendingMove.piece, row: pendingMove.row, col: pendingMove.col,
                 rotation, flipped, newBoard, newBoardPieces, newUsedPieces,
                 nextPlayer, gameOver: true, winnerId }
@@ -933,7 +952,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
     }, 500);
 
     // Fetch fresh game state as backup
-    const { data: freshData } = await gameSyncService.getGame(gameId);
+    const { data: freshData } = await gameSyncService.getGame(currentGameId);
     if (freshData && mountedRef.current) {
       const freshCount = freshData.used_pieces?.length || 0;
       if (freshCount >= newUsedPieces.length) {
@@ -951,7 +970,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       if (!confirmed) return;
       
       soundManager.playButtonClick();
-      await gameSyncService.forfeitGame(gameId, user.id);
+      await gameSyncService.forfeitGame(currentGameId, user.id);
       
       setGameResult({ isWin: false, winnerId: opponent?.id, reason: 'forfeit' });
       setShowGameOver(true);
@@ -961,7 +980,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       if (!confirmed) return;
       
       soundManager.playButtonClick();
-      await gameSyncService.abandonGame(gameId);
+      await gameSyncService.abandonGame(currentGameId);
       onLeave();
     }
   }, [game?.status, hasMovesPlayed, gameId, user?.id, opponent?.id, onLeave]);
@@ -1064,7 +1083,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                 turnStartedAt={game.turn_started_at || turnStartedAt}
                 isMyTurn={isMyTurn}
                 onTimeout={() => {
-                  if (isMyTurn) gameSyncService.forfeitGame(gameId, user.id);
+                  if (isMyTurn) gameSyncService.forfeitGame(currentGameId, user.id);
                 }}
               />
             ) : (
@@ -1130,17 +1149,28 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                         ${chatOpen 
                           ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
                           : hasUnreadChat 
-                            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.8)] animate-chat-blink' 
+                            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
                             : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
                         }
                       `}
+                      style={hasUnreadChat && !chatOpen ? {
+                        animation: 'chatBlink 0.8s ease-in-out infinite',
+                        boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
+                      } : {}}
                     >
-                      <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-pulse' : ''} />
+                      <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
                       {hasUnreadChat && !chatOpen && (
                         <>
-                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce shadow-[0_0_10px_rgba(239,68,68,0.8)]">
-                            <span className="absolute inset-0 rounded-full bg-red-400 animate-ping" />
+                          <span 
+                            className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                            style={{
+                              animation: 'bounce 0.5s ease-in-out infinite',
+                              boxShadow: '0 0 15px rgba(239,68,68,1)'
+                            }}
+                          >
+                            !
                           </span>
+                          <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
                         </>
                       )}
                     </button>
@@ -1162,17 +1192,28 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
                     ${chatOpen 
                       ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
                       : hasUnreadChat 
-                        ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white shadow-[0_0_25px_rgba(239,68,68,0.8)] animate-chat-blink' 
+                        ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
                         : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
                     }
                   `}
+                  style={hasUnreadChat && !chatOpen ? {
+                    animation: 'chatBlink 0.8s ease-in-out infinite',
+                    boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
+                  } : {}}
                 >
-                  <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-pulse' : ''} />
+                  <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
                   {hasUnreadChat && !chatOpen && (
                     <>
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full animate-bounce shadow-[0_0_10px_rgba(239,68,68,0.8)]">
-                        <span className="absolute inset-0 rounded-full bg-red-400 animate-ping" />
+                      <span 
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                        style={{
+                          animation: 'bounce 0.5s ease-in-out infinite',
+                          boxShadow: '0 0 15px rgba(239,68,68,1)'
+                        }}
+                      >
+                        !
                       </span>
+                      <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
                     </>
                   )}
                 </button>
@@ -1250,7 +1291,7 @@ const OnlineGameScreen = ({ gameId, onLeave }) => {
       {/* Quick Chat Panel - FIXED: Use external control to hide duplicate button */}
       {chatOpen && game && (
         <QuickChat
-          gameId={gameId}
+          gameId={currentGameId}
           userId={user?.id}
           opponentName={opponent?.username || opponent?.display_name}
           isOpen={chatOpen}

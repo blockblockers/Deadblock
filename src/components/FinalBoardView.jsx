@@ -98,25 +98,67 @@ const FinalBoardView = ({
     return lastMoveCells.some(cell => cell.row === row && cell.col === col);
   };
 
+  // Get piece info for a cell (for distinguishing different pieces)
+  const getPieceInfo = (row, col) => {
+    const key = `${row},${col}`;
+    return boardPieces?.[key];
+  };
+
+  // Generate a subtle shade variation based on moveNumber or piece
+  const getShadeVariation = (pieceInfo) => {
+    if (!pieceInfo?.moveNumber && !pieceInfo?.piece) return 0;
+    // Use moveNumber or piece name to create variation
+    const identifier = pieceInfo.moveNumber || (pieceInfo.piece?.charCodeAt(0) || 0);
+    return (identifier % 3) * 10 - 10; // -10, 0, or 10 for subtle variation
+  };
+
+  // Get a unique pattern/texture index for each piece based on move number
+  const getPiecePattern = (pieceInfo) => {
+    if (!pieceInfo?.moveNumber) return 0;
+    return pieceInfo.moveNumber % 6; // 6 different patterns
+  };
+
   // Determine cell color - handles both numeric (1,2) and string ('cyan','rose') values
   const getCellColor = (row, col) => {
     const cellValue = board?.[row]?.[col];
     const isLast = isLastMoveCell(row, col);
+    const pieceInfo = getPieceInfo(row, col);
+    const pattern = getPiecePattern(pieceInfo);
     
     // Handle numeric values (1, 2) or string values ('cyan', 'rose')
     const isPlayer1 = cellValue === 1 || cellValue === 'cyan';
     const isPlayer2 = cellValue === 2 || cellValue === 'rose';
     
     if (isPlayer1) {
-      // Player 1 - Cyan
-      return isLast 
-        ? 'bg-cyan-400 ring-2 ring-white shadow-[0_0_15px_rgba(34,211,238,0.8)]' 
-        : 'bg-cyan-500/80';
+      // Player 1 - Cyan with distinct piece patterns
+      if (isLast) {
+        return 'bg-cyan-300 ring-2 ring-white ring-offset-1 ring-offset-slate-900 shadow-[0_0_25px_rgba(34,211,238,1),inset_0_0_15px_rgba(255,255,255,0.3)]';
+      }
+      // Different shades based on move number for piece distinction
+      const shades = [
+        'bg-cyan-500 border border-cyan-300/40',      // Pattern 0
+        'bg-cyan-600 border border-cyan-400/30',      // Pattern 1
+        'bg-teal-500 border border-teal-300/40',      // Pattern 2
+        'bg-cyan-400 border border-cyan-200/40',      // Pattern 3
+        'bg-teal-600 border border-teal-400/30',      // Pattern 4
+        'bg-sky-500 border border-sky-300/40',        // Pattern 5
+      ];
+      return shades[pattern];
     } else if (isPlayer2) {
-      // Player 2 - Rose
-      return isLast 
-        ? 'bg-rose-400 ring-2 ring-white shadow-[0_0_15px_rgba(244,63,94,0.8)]' 
-        : 'bg-rose-500/80';
+      // Player 2 - Rose with distinct piece patterns
+      if (isLast) {
+        return 'bg-rose-300 ring-2 ring-white ring-offset-1 ring-offset-slate-900 shadow-[0_0_25px_rgba(244,63,94,1),inset_0_0_15px_rgba(255,255,255,0.3)]';
+      }
+      // Different shades based on move number for piece distinction
+      const shades = [
+        'bg-rose-500 border border-rose-300/40',      // Pattern 0
+        'bg-rose-600 border border-rose-400/30',      // Pattern 1
+        'bg-pink-500 border border-pink-300/40',      // Pattern 2
+        'bg-rose-400 border border-rose-200/40',      // Pattern 3
+        'bg-pink-600 border border-pink-400/30',      // Pattern 4
+        'bg-red-500 border border-red-300/40',        // Pattern 5
+      ];
+      return shades[pattern];
     }
     
     // Empty cell - checkerboard pattern
@@ -213,15 +255,27 @@ const FinalBoardView = ({
         </div>
 
         {/* Legend */}
-        <div className="flex justify-center gap-6 p-4 pt-0 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-cyan-500/80" />
-            <span className="text-slate-300">{player1Name}</span>
+        <div className="flex flex-col gap-2 p-4 pt-0">
+          <div className="flex justify-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-cyan-500/80" />
+              <span className="text-slate-300">{player1Name}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded bg-rose-500/80" />
+              <span className="text-slate-300">{player2Name}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-rose-500/80" />
-            <span className="text-slate-300">{player2Name}</span>
-          </div>
+          
+          {/* Last move legend */}
+          {lastMoveCells.length > 0 && (
+            <div className="flex justify-center">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                <div className="w-4 h-4 rounded bg-white/80 ring-2 ring-white shadow-[0_0_10px_rgba(255,255,255,0.5)] animate-pulse" />
+                <span className="text-amber-400 text-xs font-medium">Last piece placed</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

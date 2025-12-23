@@ -1,12 +1,14 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
 // UPDATED: Added full drag and drop support from piece tray and board
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X } from 'lucide-react';
+import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, Zap } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import ControlButtons from './ControlButtons';
 import DPad from './DPad';
 import DragOverlay from './DragOverlay';
+import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
 import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
@@ -345,16 +347,53 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     }
   }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
+  // Keep current piece in ref to avoid stale closures
+  const draggedPieceRef = useRef(null);
+  
+  useEffect(() => {
+    draggedPieceRef.current = draggedPiece;
+  }, [draggedPiece]);
+
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
-    console.log('[WeeklyChallenge] endDrag called:', { isValidDrop, hasPendingMove: !!pendingMove });
+    const currentPiece = draggedPieceRef.current;
+    console.log('[WeeklyChallenge] endDrag called:', { isDragging, draggedPiece: currentPiece });
     
-    if (isValidDrop && pendingMove) {
-      selectPiece(pendingMove.piece);
-      console.log('[WeeklyChallenge] Valid drop, keeping pending move');
-    } else {
-      if (setPendingMove) setPendingMove(null);
-      console.log('[WeeklyChallenge] Invalid drop, clearing');
+    // Recompute validity based on current drag position
+    if (currentPiece && dragPosition && boardBoundsRef.current) {
+      const cell = calculateBoardCell(dragPosition.x, dragPosition.y);
+      if (cell) {
+        const coords = getPieceCoords(currentPiece, rotation, flipped);
+        const valid = canPlacePiece(board, cell.row, cell.col, coords);
+        
+        console.log('[WeeklyChallenge] endDrag computed:', { cell, valid, piece: currentPiece });
+        
+        if (valid) {
+          // Select piece first, then set pending move
+          selectPiece(currentPiece);
+          
+          // Set pending move after piece is selected
+          setTimeout(() => {
+            setPendingMove({
+              piece: currentPiece,
+              row: cell.row,
+              col: cell.col,
+              coords
+            });
+            console.log('[WeeklyChallenge] Valid drop, pending move set for:', currentPiece);
+          }, 10);
+          
+          soundManager.playPieceSelect();
+        } else {
+          // Invalid drop - clear
+          setPendingMove(null);
+          console.log('[WeeklyChallenge] Invalid drop position');
+        }
+      } else {
+        // Outside board - clear
+        setPendingMove(null);
+        console.log('[WeeklyChallenge] Drop outside board');
+      }
     }
     
     setIsDragging(false);
@@ -364,7 +403,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isValidDrop, pendingMove, selectPiece, setPendingMove]);
+  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove]);
 
   // Create drag handlers for piece tray - FIXED WITH LOGGING
   const createDragHandlers = useCallback((piece) => {
@@ -831,27 +870,73 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onLeaderboard }) => {
             </button>
             
             <div className="text-center flex-1 mx-2">
-              <h1 
-                className="text-2xl font-black tracking-wider text-red-400"
-                style={{ textShadow: '0 0 20px rgba(239,68,68,0.5), 0 0 40px rgba(239,68,68,0.3)' }}
-              >
-                DEADBLOCK
-              </h1>
-              <p className="text-xs text-red-400/70 uppercase tracking-widest mt-0.5">
-                WEEKLY CHALLENGE
-              </p>
+              <NeonTitle text="DEADBLOCK" size="medium" color="red" />
+              <NeonSubtitle text="WEEKLY CHALLENGE" color="red" size="small" className="mt-0" />
             </div>
             
-            {/* Compact Timer Display */}
+            {/* Enhanced Compact Timer Display - Cyberpunk Stopwatch */}
             <div 
-              className="px-3 py-1.5 bg-slate-900/80 rounded-lg border border-red-500/30"
-              style={{ boxShadow: '0 0 15px rgba(239,68,68,0.2)' }}
+              className="relative px-4 py-2 bg-gradient-to-br from-slate-900/95 to-red-950/40 rounded-xl border border-red-500/50 overflow-hidden"
+              style={{ 
+                boxShadow: '0 0 25px rgba(239,68,68,0.35), inset 0 0 20px rgba(239,68,68,0.15), 0 4px 15px rgba(0,0,0,0.4)' 
+              }}
             >
-              <div className="flex items-center gap-2">
-                <Clock size={14} className="text-red-400" />
-                <span className="text-lg font-mono font-bold text-red-300">
-                  {Math.floor(elapsedMs / 60000)}:{String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0')}
-                </span>
+              {/* Animated scan line effect */}
+              <div 
+                className="absolute inset-0 pointer-events-none opacity-30"
+                style={{
+                  background: 'linear-gradient(0deg, transparent 50%, rgba(239,68,68,0.1) 50%)',
+                  backgroundSize: '100% 4px',
+                  animation: 'scanline 8s linear infinite'
+                }}
+              />
+              
+              {/* Corner accents */}
+              <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-red-400/60" />
+              <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-red-400/60" />
+              <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-red-400/60" />
+              <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-red-400/60" />
+              
+              <div className="relative flex items-center gap-2.5">
+                {/* Animated clock icon */}
+                <div className="relative">
+                  <div className="absolute inset-0 bg-red-500/30 rounded-full blur-md animate-pulse" />
+                  <Clock size={18} className="relative text-red-400" />
+                  {elapsedMs > 0 && (
+                    <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]" />
+                  )}
+                </div>
+                
+                {/* Time display with glowing digits */}
+                <div className="flex items-baseline gap-0.5">
+                  <span 
+                    className="text-xl font-mono font-black tracking-tight tabular-nums"
+                    style={{ 
+                      color: '#fca5a5',
+                      textShadow: '0 0 12px rgba(239,68,68,0.9), 0 0 25px rgba(239,68,68,0.5), 0 0 40px rgba(239,68,68,0.3)'
+                    }}
+                  >
+                    {Math.floor(elapsedMs / 60000)}
+                  </span>
+                  <span 
+                    className="text-xl font-mono font-black animate-pulse"
+                    style={{ 
+                      color: '#f87171',
+                      textShadow: '0 0 8px rgba(239,68,68,0.8)'
+                    }}
+                  >
+                    :
+                  </span>
+                  <span 
+                    className="text-xl font-mono font-black tracking-tight tabular-nums"
+                    style={{ 
+                      color: '#fca5a5',
+                      textShadow: '0 0 12px rgba(239,68,68,0.9), 0 0 25px rgba(239,68,68,0.5), 0 0 40px rgba(239,68,68,0.3)'
+                    }}
+                  >
+                    {String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0')}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
