@@ -595,6 +595,33 @@
         pwaLog('SW registered: ' + (reg ? 'YES' : 'NO'));
       }
     };
+
+    // =====================================================
+    // HIDE LOADING SCREEN AFTER REACT MOUNTS
+    // =====================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        const loading = document.getElementById('loading');
+        if (loading) {
+          loading.style.opacity = '0';
+          loading.style.transition = 'opacity 0.5s ease';
+          setTimeout(() => loading.style.display = 'none', 500);
+        }
+      }, 1500);
+    });
+
+    // Prevent pull-to-refresh
+    let lastTouchY = 0;
+    document.addEventListener('touchstart', (e) => {
+      lastTouchY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+      const touchY = e.touches[0].clientY;
+      if (window.scrollY === 0 && touchY > lastTouchY && e.cancelable) {
+        e.preventDefault();
+      }
+      lastTouchY = touchY;
+    }, { passive: false });
   </script>
 </body>
 </html>
