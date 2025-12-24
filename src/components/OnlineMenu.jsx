@@ -1108,18 +1108,6 @@ const OnlineMenu = ({
       </span>
     )}
   </button>
-  <button
-    onClick={() => { soundManager.playButtonClick(); setShowSpectateList(true); }}
-    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
-    style={{
-      background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-      borderColor: 'rgba(34, 197, 94, 0.3)',
-      boxShadow: '0 0 15px rgba(34, 197, 94, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
-    }}
-  >
-    <Eye size={14} className="text-green-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-green-300 transition-colors">Watch</span>
-  </button>
 </div>
 
 {/* View Leaderboard - Gold Glow Orb Style */}

@@ -1,5 +1,7 @@
+// GameOverModal.jsx - Game over modal with animations
+// UPDATED: Added "View Final Board" button for online games
 import { useState, useEffect, useMemo } from 'react';
-import { Trophy, Skull, RotateCcw, RefreshCw, Home, X, Sliders } from 'lucide-react';
+import { Trophy, Skull, RotateCcw, RefreshCw, Home, X, Sliders, Eye } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { pieces } from '../utils/pieces';
 
@@ -38,56 +40,26 @@ const NeonGridSurge = ({ color = 'cyan' }) => {
   );
 };
 
-// 2. Piece Explosion - pentominoes burst outward
+// 2. Piece Explosion - pentomino pieces fly out
 const PieceExplosion = () => {
-  const particles = useMemo(() => {
-    const pieceNames = Object.keys(pieces);
-    const colors = ['#22d3ee', '#ec4899', '#a855f7', '#22c55e', '#f59e0b'];
-    
-    return Array.from({ length: 16 }).map((_, i) => ({
-      id: i,
-      piece: pieceNames[Math.floor(Math.random() * pieceNames.length)],
-      color: colors[Math.floor(Math.random() * colors.length)],
-      angle: (i / 16) * 360,
-      delay: Math.random() * 0.3,
-      distance: 150 + Math.random() * 100,
-    }));
-  }, []);
-
+  const pieceNames = Object.keys(pieces).slice(0, 8);
   return (
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none overflow-hidden">
-      {particles.map(p => {
-        const coords = pieces[p.piece];
-        const minX = Math.min(...coords.map(([x]) => x));
-        const minY = Math.min(...coords.map(([, y]) => y));
-        const radians = (p.angle * Math.PI) / 180;
-        
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {pieceNames.map((name, i) => {
+        const angle = (i / pieceNames.length) * 360;
+        const distance = 150 + Math.random() * 100;
         return (
           <div
-            key={p.id}
-            className="absolute animate-explode-out"
+            key={name}
+            className="absolute left-1/2 top-1/2 w-8 h-8 animate-piece-fly"
             style={{
-              '--angle': `${p.angle}deg`,
-              '--distance': `${p.distance}px`,
-              animationDelay: `${p.delay}s`,
+              '--fly-x': `${Math.cos(angle * Math.PI / 180) * distance}px`,
+              '--fly-y': `${Math.sin(angle * Math.PI / 180) * distance}px`,
+              '--rotation': `${Math.random() * 720 - 360}deg`,
+              animationDelay: `${i * 0.1}s`,
             }}
           >
-            <div className="relative" style={{ transform: `rotate(${p.angle}deg)` }}>
-              {coords.map(([x, y], idx) => (
-                <div
-                  key={idx}
-                  className="absolute rounded-sm"
-                  style={{
-                    width: 8,
-                    height: 8,
-                    left: (x - minX) * 9,
-                    top: (y - minY) * 9,
-                    backgroundColor: p.color,
-                    boxShadow: `0 0 10px ${p.color}`,
-                  }}
-                />
-              ))}
-            </div>
+            <div className="w-full h-full bg-cyan-400 rounded shadow-[0_0_15px_#22d3ee]" />
           </div>
         );
       })}
@@ -228,7 +200,21 @@ const GridShatter = () => {
 
 // ====== MAIN MODAL ======
 
-const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, onNewGame, onMenu, onRematch, onDifficultySelect, opponentName, difficulty }) => {
+const GameOverModal = ({ 
+  isWin, 
+  isPuzzle, 
+  gameMode, 
+  winner, 
+  onClose, 
+  onRetry, 
+  onNewGame, 
+  onMenu, 
+  onRematch, 
+  onDifficultySelect, 
+  onViewFinalBoard,  // NEW: Callback to view final board with move numbers
+  opponentName, 
+  difficulty 
+}) => {
   const [animationType, setAnimationType] = useState(0);
 
   useEffect(() => {
@@ -240,6 +226,7 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
   const handleMenu = () => { soundManager.playButtonClick(); onClose(); onMenu?.(); };
   const handleRematch = () => { soundManager.playButtonClick(); onRematch?.(); };
   const handleDifficulty = () => { soundManager.playButtonClick(); onClose(); onDifficultySelect?.(); };
+  const handleViewFinalBoard = () => { soundManager.playButtonClick(); onViewFinalBoard?.(); };
 
   // Simple, clear messaging
   const is2Player = gameMode === '2player';
@@ -343,6 +330,17 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
                   PLAY AGAIN
                 </button>
               )}
+              
+              {/* VIEW FINAL BOARD - NEW BUTTON */}
+              {onViewFinalBoard && (
+                <button onClick={handleViewFinalBoard}
+                  className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 text-white transition-all border border-amber-400/30"
+                >
+                  <Eye size={16} />
+                  VIEW FINAL BOARD
+                </button>
+              )}
+              
               <button onClick={handleMenu}
                 className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
               >
@@ -457,38 +455,32 @@ const GameOverModal = ({ isWin, isPuzzle, gameMode, winner, onClose, onRetry, on
         .animate-expand-ring { animation: expand-ring 2s ease-out infinite; }
 
         @keyframes scan-vertical {
-          0% { left: 0; opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { left: 100%; opacity: 0; }
+          0% { left: 0; }
+          100% { left: 100%; }
         }
-        .animate-scan-vertical { animation: scan-vertical 2s ease-in-out infinite; }
+        .animate-scan-vertical { animation: scan-vertical 2s linear infinite; }
 
-        @keyframes explode-out {
-          0% { transform: translate(0, 0) scale(1); opacity: 1; }
-          100% { transform: translate(calc(cos(var(--angle)) * var(--distance)), calc(sin(var(--angle)) * var(--distance))) scale(0.5); opacity: 0; }
+        @keyframes piece-fly {
+          0% { transform: translate(-50%, -50%) rotate(0deg); opacity: 1; }
+          100% { transform: translate(calc(-50% + var(--fly-x)), calc(-50% + var(--fly-y))) rotate(var(--rotation)); opacity: 0; }
         }
-        .animate-explode-out { animation: explode-out 1.5s ease-out forwards; }
+        .animate-piece-fly { animation: piece-fly 1.5s ease-out forwards; }
 
         @keyframes node-glow {
-          0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
-          50% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
+          0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+          50% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); }
         }
         .animate-node-glow { animation: node-glow 1s ease-in-out infinite; }
 
         @keyframes line-draw {
-          0% { transform-origin: left; transform: scaleX(0) rotate(var(--rotation, 0)); }
-          100% { transform: scaleX(1) rotate(var(--rotation, 0)); }
+          0% { width: 0; opacity: 0; }
+          100% { opacity: 1; }
         }
         .animate-line-draw { animation: line-draw 0.5s ease-out forwards; }
 
         @keyframes static-noise {
-          0%, 100% { background-position: 0 0; }
-          10% { background-position: -5% -10%; }
-          30% { background-position: 3% 5%; }
-          50% { background-position: -2% 8%; }
-          70% { background-position: 5% -5%; }
-          90% { background-position: -3% 2%; }
+          0%, 100% { opacity: 0.2; }
+          50% { opacity: 0.3; }
         }
         .animate-static-noise {
           background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");

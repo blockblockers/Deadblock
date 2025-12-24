@@ -1,282 +1,410 @@
-import React, { useMemo } from 'react';
-import { X, Trophy } from 'lucide-react';
+// FinalBoardView.jsx - Display final board state with move order numbers
+// Shows each piece with its move number overlay for game analysis
+import { useState, useEffect, useMemo } from 'react';
+import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause } from 'lucide-react';
+import { BOARD_SIZE, getPieceCoords } from '../utils/gameLogic';
+import { pieceColors } from '../utils/pieces';
+import { soundManager } from '../utils/soundManager';
 
 /**
- * FinalBoardView - Shows the final state of a completed game
+ * FinalBoardView - Shows the final game board with move order numbers
  * 
- * Features:
- * - Displays the final board state
- * - Highlights the last move with glowing border
- * - Shows winner/loser info
- * - Compact modal design
+ * @param {Object} props
+ * @param {Array} props.board - Final board state (8x8 grid)
+ * @param {Object} props.boardPieces - Map of "row,col" -> pieceType
+ * @param {Array} props.moveHistory - Array of moves with move_number, piece_type, row, col, rotation, flipped
+ * @param {string} props.player1Name - Player 1's name
+ * @param {string} props.player2Name - Player 2's name
+ * @param {Function} props.onClose - Callback to close the view
  */
-const FinalBoardView = ({
-  isOpen,
-  onClose,
-  board,              // 8x8 board array
-  boardPieces = {},   // { 'r,c': { player, piece, rotation, flipped, moveNumber } }
-  winner = null,      // 'player1' | 'player2' | null (draw)
+const FinalBoardView = ({ 
+  board, 
+  boardPieces, 
+  moveHistory = [],
   player1Name = 'Player 1',
   player2Name = 'Player 2',
-  viewerIsPlayer1 = true,
-  usedPieces = [],    // Array of { piece, row, col, player, moveNumber }
+  onClose 
 }) => {
-  if (!isOpen) return null;
+  const [currentMoveIndex, setCurrentMoveIndex] = useState(-1); // -1 = show all with numbers
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1000); // ms per move
 
-  const CELL_SIZE = 36;
-  const BOARD_SIZE = 8;
-
-  // Find the last move cells by looking at usedPieces or boardPieces
-  const lastMoveCells = useMemo(() => {
-    let cells = [];
+  // Build cell move numbers by calculating piece cells from move data
+  const cellMoveNumbers = useMemo(() => {
+    const cellMap = {};
     
-    // Method 1: Check usedPieces for the last placed piece
-    if (usedPieces && usedPieces.length > 0) {
-      const lastPiece = usedPieces[usedPieces.length - 1];
-      if (lastPiece && lastPiece.row !== undefined && lastPiece.col !== undefined) {
-        // The usedPieces contains the anchor position, but we need all cells
-        // For now, just highlight around that area
-        // Since we don't have the full shape info easily, we'll look at board state
-        const player = lastPiece.player;
-        
-        // Find all cells belonging to the last piece by checking if they were part of the last move
-        // We'll use a simple heuristic: cells adjacent to the anchor point with same player
-        const anchorRow = lastPiece.row;
-        const anchorCol = lastPiece.col;
-        
-        // Look at all cells and find connected component from anchor
-        const visited = new Set();
-        const queue = [[anchorRow, anchorCol]];
-        
-        // Handle both numeric (1,2) and string ('cyan','rose') target values
-        const targetValues = player === 1 ? [1, 'cyan'] : [2, 'rose'];
-        
-        while (queue.length > 0 && cells.length < 5) {
-          const [r, c] = queue.shift();
-          const key = `${r},${c}`;
-          
-          if (visited.has(key)) continue;
-          if (r < 0 || r >= 8 || c < 0 || c >= 8) continue;
-          
-          const cellVal = board?.[r]?.[c];
-          if (!targetValues.includes(cellVal)) continue;
-          
-          visited.add(key);
-          cells.push({ row: r, col: c });
-          
-          // Add neighbors
-          queue.push([r-1, c], [r+1, c], [r, c-1], [r, c+1]);
-        }
-      }
+    if (!moveHistory || moveHistory.length === 0) {
+      return cellMap;
     }
-    
-    // Method 2: If usedPieces didn't work, try boardPieces moveNumber
-    if (cells.length === 0 && Object.keys(boardPieces).length > 0) {
-      let maxMoveNumber = -1;
-      
-      Object.entries(boardPieces).forEach(([key, info]) => {
-        if (info.moveNumber !== undefined && info.moveNumber > maxMoveNumber) {
-          maxMoveNumber = info.moveNumber;
+
+    // Process each move and calculate which cells it occupies
+    moveHistory.forEach((move, index) => {
+      const moveNumber = move.move_number || (index + 1);
+      const pieceType = move.piece_type;
+      const anchorRow = move.row;
+      const anchorCol = move.col;
+      const rotation = move.rotation || 0;
+      const flipped = move.flipped || false;
+
+      if (pieceType === undefined || anchorRow === undefined || anchorCol === undefined) {
+        return;
+      }
+
+      try {
+        // Get piece coordinates with rotation and flip applied
+        const coords = getPieceCoords(pieceType, rotation, flipped);
+        
+        if (coords && coords.length > 0) {
+          // Mark each cell this piece occupies
+          coords.forEach(([dx, dy]) => {
+            const cellRow = anchorRow + dy;
+            const cellCol = anchorCol + dx;
+            
+            // Make sure cell is within bounds
+            if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+              const key = `${cellRow},${cellCol}`;
+              cellMap[key] = {
+                moveNumber,
+                player: board[cellRow]?.[cellCol] || ((index % 2) + 1)
+              };
+            }
+          });
         }
-      });
-      
-      if (maxMoveNumber >= 0) {
-        Object.entries(boardPieces).forEach(([key, info]) => {
-          if (info.moveNumber === maxMoveNumber) {
-            const [row, col] = key.split(',').map(Number);
-            cells.push({ row, col });
+      } catch (e) {
+        console.warn('FinalBoardView: Could not calculate coords for move', moveNumber, e);
+      }
+    });
+
+    return cellMap;
+  }, [board, moveHistory]);
+
+  // Build board states at each move for replay
+  const boardStates = useMemo(() => {
+    const states = [];
+    let currentBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+    let currentBoardPieces = {};
+
+    // State 0: empty board
+    states.push({
+      board: currentBoard.map(r => [...r]),
+      boardPieces: { ...currentBoardPieces }
+    });
+
+    moveHistory.forEach((move, index) => {
+      // If move has board_state, use it
+      if (move.board_state?.board) {
+        currentBoard = move.board_state.board.map(r => [...r]);
+        currentBoardPieces = { ...move.board_state.boardPieces };
+      } else {
+        // Otherwise calculate from piece placement
+        const pieceType = move.piece_type;
+        const anchorRow = move.row;
+        const anchorCol = move.col;
+        const rotation = move.rotation || 0;
+        const flipped = move.flipped || false;
+        const playerNum = (index % 2) + 1; // Alternate players
+
+        try {
+          const coords = getPieceCoords(pieceType, rotation, flipped);
+          if (coords) {
+            currentBoard = currentBoard.map(r => [...r]);
+            currentBoardPieces = { ...currentBoardPieces };
+            
+            coords.forEach(([dx, dy]) => {
+              const cellRow = anchorRow + dy;
+              const cellCol = anchorCol + dx;
+              if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+                currentBoard[cellRow][cellCol] = playerNum;
+                currentBoardPieces[`${cellRow},${cellCol}`] = pieceType;
+              }
+            });
           }
-        });
+        } catch (e) {
+          // Skip invalid moves
+        }
       }
+
+      states.push({
+        board: currentBoard.map(r => [...r]),
+        boardPieces: { ...currentBoardPieces }
+      });
+    });
+
+    return states;
+  }, [moveHistory]);
+
+  // Playback controls
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    const interval = setInterval(() => {
+      setCurrentMoveIndex(prev => {
+        if (prev >= moveHistory.length - 1) {
+          setIsPlaying(false);
+          return -1; // Return to final view with numbers
+        }
+        return prev + 1;
+      });
+    }, playbackSpeed);
+
+    return () => clearInterval(interval);
+  }, [isPlaying, playbackSpeed, moveHistory.length]);
+
+  const handlePlayPause = () => {
+    if (currentMoveIndex === -1) {
+      // Start from beginning
+      setCurrentMoveIndex(0);
+      setIsPlaying(true);
+    } else if (currentMoveIndex >= moveHistory.length - 1) {
+      // At end, restart
+      setCurrentMoveIndex(0);
+      setIsPlaying(true);
+    } else {
+      setIsPlaying(!isPlaying);
     }
-    
-    return cells;
-  }, [board, boardPieces, usedPieces]);
-
-  // Check if a cell is part of the last move
-  const isLastMoveCell = (row, col) => {
-    return lastMoveCells.some(cell => cell.row === row && cell.col === col);
+    soundManager.playClickSound('soft');
   };
 
-  // Get piece info for a cell (for distinguishing different pieces)
-  const getPieceInfo = (row, col) => {
-    const key = `${row},${col}`;
-    return boardPieces?.[key];
+  const handlePrevMove = () => {
+    setIsPlaying(false);
+    setCurrentMoveIndex(prev => {
+      if (prev === -1) return moveHistory.length - 1;
+      if (prev === 0) return -1;
+      return prev - 1;
+    });
+    soundManager.playClickSound('soft');
   };
 
-  // Generate a subtle shade variation based on moveNumber or piece
-  const getShadeVariation = (pieceInfo) => {
-    if (!pieceInfo?.moveNumber && !pieceInfo?.piece) return 0;
-    // Use moveNumber or piece name to create variation
-    const identifier = pieceInfo.moveNumber || (pieceInfo.piece?.charCodeAt(0) || 0);
-    return (identifier % 3) * 10 - 10; // -10, 0, or 10 for subtle variation
+  const handleNextMove = () => {
+    setIsPlaying(false);
+    setCurrentMoveIndex(prev => {
+      if (prev >= moveHistory.length - 1) return -1;
+      return prev + 1;
+    });
+    soundManager.playClickSound('soft');
   };
 
-  // Get a unique pattern/texture index for each piece based on move number
-  const getPiecePattern = (pieceInfo) => {
-    if (!pieceInfo?.moveNumber) return 0;
-    return pieceInfo.moveNumber % 6; // 6 different patterns
+  const handleFirst = () => {
+    setIsPlaying(false);
+    setCurrentMoveIndex(0);
+    soundManager.playClickSound('soft');
   };
 
-  // Determine cell color - handles both numeric (1,2) and string ('cyan','rose') values
-  const getCellColor = (row, col) => {
-    const cellValue = board?.[row]?.[col];
-    const isLast = isLastMoveCell(row, col);
-    const pieceInfo = getPieceInfo(row, col);
-    const pattern = getPiecePattern(pieceInfo);
-    
-    // Handle numeric values (1, 2) or string values ('cyan', 'rose')
-    const isPlayer1 = cellValue === 1 || cellValue === 'cyan';
-    const isPlayer2 = cellValue === 2 || cellValue === 'rose';
-    
-    if (isPlayer1) {
-      // Player 1 - Cyan with distinct piece patterns
-      if (isLast) {
-        return 'bg-cyan-300 ring-2 ring-white ring-offset-1 ring-offset-slate-900 shadow-[0_0_25px_rgba(34,211,238,1),inset_0_0_15px_rgba(255,255,255,0.3)]';
-      }
-      // Different shades based on move number for piece distinction
-      const shades = [
-        'bg-cyan-500 border border-cyan-300/40',      // Pattern 0
-        'bg-cyan-600 border border-cyan-400/30',      // Pattern 1
-        'bg-teal-500 border border-teal-300/40',      // Pattern 2
-        'bg-cyan-400 border border-cyan-200/40',      // Pattern 3
-        'bg-teal-600 border border-teal-400/30',      // Pattern 4
-        'bg-sky-500 border border-sky-300/40',        // Pattern 5
-      ];
-      return shades[pattern];
-    } else if (isPlayer2) {
-      // Player 2 - Rose with distinct piece patterns
-      if (isLast) {
-        return 'bg-rose-300 ring-2 ring-white ring-offset-1 ring-offset-slate-900 shadow-[0_0_25px_rgba(244,63,94,1),inset_0_0_15px_rgba(255,255,255,0.3)]';
-      }
-      // Different shades based on move number for piece distinction
-      const shades = [
-        'bg-rose-500 border border-rose-300/40',      // Pattern 0
-        'bg-rose-600 border border-rose-400/30',      // Pattern 1
-        'bg-pink-500 border border-pink-300/40',      // Pattern 2
-        'bg-rose-400 border border-rose-200/40',      // Pattern 3
-        'bg-pink-600 border border-pink-400/30',      // Pattern 4
-        'bg-red-500 border border-red-300/40',        // Pattern 5
-      ];
-      return shades[pattern];
+  const handleLast = () => {
+    setIsPlaying(false);
+    setCurrentMoveIndex(-1); // Show final with numbers
+    soundManager.playClickSound('soft');
+  };
+
+  // Get cell color based on player
+  const getCellColor = (player) => {
+    if (player === 1) {
+      return 'bg-gradient-to-br from-cyan-400 to-cyan-600';
+    } else if (player === 2) {
+      return 'bg-gradient-to-br from-orange-400 to-orange-600';
     }
-    
-    // Empty cell - checkerboard pattern
-    return (row + col) % 2 === 0 
-      ? 'bg-slate-700/50' 
-      : 'bg-slate-800/50';
+    return 'bg-slate-700/30';
   };
 
-  const winnerName = winner === 'player1' ? player1Name : 
-                     winner === 'player2' ? player2Name : 
-                     null;
+  // Determine display state
+  const showingFinalWithNumbers = currentMoveIndex === -1;
+  const stateIndex = showingFinalWithNumbers ? boardStates.length - 1 : currentMoveIndex + 1;
+  const displayState = boardStates[stateIndex] || { board, boardPieces };
+  const displayBoard = displayState.board || board;
 
-  const isViewerWinner = (winner === 'player1' && viewerIsPlayer1) ||
-                         (winner === 'player2' && !viewerIsPlayer1);
+  // Get the current move number being shown (for progress display)
+  const displayMoveNumber = showingFinalWithNumbers 
+    ? moveHistory.length 
+    : (currentMoveIndex + 1);
 
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.85)' }}
-      onClick={onClose}
-    >
-      {/* Modal */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
       <div 
-        className="relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-slate-600/50 shadow-2xl max-w-sm w-full overflow-hidden"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/50 text-slate-400 hover:text-white transition-colors z-10"
-        >
-          <X size={20} />
-        </button>
-
+        className="absolute inset-0 bg-black/90 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative bg-slate-900/95 rounded-xl p-4 sm:p-6 max-w-md w-full border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
         {/* Header */}
-        <div className="p-4 pb-2 text-center">
-          <h3 className="text-lg font-bold text-white mb-1">Final Board</h3>
-          
-          {/* Winner info */}
-          {winnerName ? (
-            <div className={`flex items-center justify-center gap-2 text-sm ${isViewerWinner ? 'text-green-400' : 'text-red-400'}`}>
-              <Trophy size={16} />
-              <span>{winnerName} won</span>
-            </div>
-          ) : (
-            <div className="text-sm text-slate-400">Draw</div>
-          )}
-          
-          {/* Last move indicator */}
-          {lastMoveCells.length > 0 && (
-            <div className="text-xs text-amber-400 mt-1 flex items-center justify-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              Last move highlighted
-            </div>
-          )}
-        </div>
-
-        {/* Board */}
-        <div className="flex justify-center p-4 pt-2">
-          <div 
-            className="relative rounded-lg overflow-hidden border-2 border-slate-600"
-            style={{ 
-              width: CELL_SIZE * BOARD_SIZE + 4,
-              height: CELL_SIZE * BOARD_SIZE + 4
-            }}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-amber-300">
+            {showingFinalWithNumbers ? 'Final Board' : `Move ${displayMoveNumber}`}
+          </h2>
+          <button 
+            onClick={onClose}
+            className="p-1 text-slate-400 hover:text-white transition-colors"
           >
-            {/* Grid */}
-            <div 
-              className="grid"
-              style={{ 
-                gridTemplateColumns: `repeat(${BOARD_SIZE}, ${CELL_SIZE}px)`,
-                gridTemplateRows: `repeat(${BOARD_SIZE}, ${CELL_SIZE}px)`,
-              }}
-            >
-              {Array.from({ length: BOARD_SIZE }).map((_, row) =>
-                Array.from({ length: BOARD_SIZE }).map((_, col) => {
-                  const cellColor = getCellColor(row, col);
-                  const isLast = isLastMoveCell(row, col);
-                  
-                  return (
-                    <div
-                      key={`${row}-${col}`}
-                      className={`${cellColor} transition-all ${isLast ? 'z-10 animate-pulse' : ''}`}
-                      style={{
-                        width: CELL_SIZE,
-                        height: CELL_SIZE,
-                      }}
-                    />
-                  );
-                })
-              )}
-            </div>
-          </div>
+            <X size={20} />
+          </button>
         </div>
 
         {/* Legend */}
-        <div className="flex flex-col gap-2 p-4 pt-0">
-          <div className="flex justify-center gap-6 text-sm">
+        <div className="flex justify-center gap-6 mb-4 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-cyan-400 to-cyan-600" />
+            <span className="text-cyan-300">{player1Name}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-orange-400 to-orange-600" />
+            <span className="text-orange-300">{player2Name}</span>
+          </div>
+        </div>
+
+        {/* Board */}
+        <div className="flex justify-center mb-4">
+          <div 
+            className="grid gap-0.5 p-2 bg-slate-800/50 rounded-lg border border-slate-700/50"
+            style={{ 
+              gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
+              width: 'min(100%, 320px)',
+              aspectRatio: '1'
+            }}
+          >
+            {Array(BOARD_SIZE).fill(null).map((_, row) =>
+              Array(BOARD_SIZE).fill(null).map((_, col) => {
+                const cellKey = `${row},${col}`;
+                const cellValue = displayBoard[row]?.[col];
+                const moveInfo = cellMoveNumbers[cellKey];
+                const isOccupied = cellValue !== null && cellValue !== 0;
+                
+                // Show move number only on final view
+                const showMoveNumber = showingFinalWithNumbers && moveInfo && isOccupied;
+
+                return (
+                  <div
+                    key={cellKey}
+                    className={`
+                      relative aspect-square rounded-sm flex items-center justify-center
+                      ${isOccupied ? getCellColor(cellValue) : 'bg-slate-700/30'}
+                      ${isOccupied ? 'shadow-sm' : ''}
+                      transition-all duration-200
+                    `}
+                  >
+                    {/* Move number overlay */}
+                    {showMoveNumber && (
+                      <div className={`
+                        absolute inset-0 flex items-center justify-center
+                        text-[10px] sm:text-xs font-bold
+                        ${cellValue === 1 ? 'text-cyan-900' : 'text-orange-900'}
+                        bg-white/30 rounded-sm
+                      `}>
+                        {moveInfo.moveNumber}
+                      </div>
+                    )}
+                    
+                    {/* Cell highlight for non-numbered cells during replay */}
+                    {isOccupied && !showMoveNumber && (
+                      <div className="absolute inset-0 bg-white/10 rounded-sm" />
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Playback Controls */}
+        {moveHistory.length > 0 && (
+          <div className="space-y-3">
+            {/* Progress bar */}
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-cyan-500/80" />
-              <span className="text-slate-300">{player1Name}</span>
+              <span className="text-xs text-slate-500 w-8 text-center">
+                {showingFinalWithNumbers ? '●' : displayMoveNumber}
+              </span>
+              <div className="flex-1 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-500 to-orange-500 transition-all duration-200"
+                  style={{ 
+                    width: showingFinalWithNumbers 
+                      ? '100%' 
+                      : `${((currentMoveIndex + 1) / moveHistory.length) * 100}%` 
+                  }}
+                />
+              </div>
+              <span className="text-xs text-slate-500 w-8 text-right">
+                {moveHistory.length}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-rose-500/80" />
-              <span className="text-slate-300">{player2Name}</span>
+
+            {/* Control buttons */}
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={handleFirst}
+                className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                title="First move"
+              >
+                <SkipBack size={16} />
+              </button>
+              <button
+                onClick={handlePrevMove}
+                className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                title="Previous move"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                onClick={handlePlayPause}
+                className="p-3 rounded-lg bg-amber-600 text-white hover:bg-amber-500 transition-all"
+                title={isPlaying ? 'Pause' : 'Play'}
+              >
+                {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+              </button>
+              <button
+                onClick={handleNextMove}
+                className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                title="Next move"
+              >
+                <ChevronRight size={16} />
+              </button>
+              <button
+                onClick={handleLast}
+                className="p-2 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                title="Final board with move numbers"
+              >
+                <SkipForward size={16} />
+              </button>
+            </div>
+
+            {/* Speed control */}
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <span className="text-slate-500">Speed:</span>
+              {[{ speed: 2000, label: '0.5x' }, { speed: 1000, label: '1x' }, { speed: 500, label: '2x' }].map(({ speed, label }) => (
+                <button
+                  key={speed}
+                  onClick={() => setPlaybackSpeed(speed)}
+                  className={`px-2 py-1 rounded ${
+                    playbackSpeed === speed 
+                      ? 'bg-amber-600 text-white' 
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  } transition-all`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
-          
-          {/* Last move legend */}
-          {lastMoveCells.length > 0 && (
-            <div className="flex justify-center">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                <div className="w-4 h-4 rounded bg-white/80 ring-2 ring-white shadow-[0_0_10px_rgba(255,255,255,0.5)] animate-pulse" />
-                <span className="text-amber-400 text-xs font-medium">Last piece placed</span>
-              </div>
-            </div>
+        )}
+
+        {/* Info text */}
+        <div className="mt-4 text-center text-sm text-slate-500">
+          {moveHistory.length > 0 ? (
+            showingFinalWithNumbers 
+              ? <span>Numbers show move order • {moveHistory.length} total moves</span>
+              : <span>Replaying game...</span>
+          ) : (
+            <span>Move history not available</span>
           )}
         </div>
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="w-full mt-4 py-2.5 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white transition-all font-medium"
+        >
+          Close
+        </button>
       </div>
     </div>
   );

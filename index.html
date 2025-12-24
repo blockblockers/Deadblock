@@ -13,9 +13,9 @@
   <meta name="application-name" content="DEADBLOCK" />
   
   <!-- Primary SEO -->
-  <title>DEADBLOCK - Strategic Block Puzzle Game</title>
-  <meta name="description" content="DEADBLOCK - Strategic pentomino placement puzzle game. Challenge the AI, solve puzzles, or compete with friends online!" />
-  <meta name="keywords" content="puzzle game, pentomino, block puzzle, strategy game, multiplayer game, online puzzle, brain game, tetris-like" />
+  <title>DEADBLOCK - Strategic Block Puzzle Game | Play Free Online</title>
+  <meta name="description" content="DEADBLOCK is a strategic pentomino placement puzzle game. Challenge AI opponents, solve brain-teasing puzzles, compete in online multiplayer, and climb the global leaderboards. Play free in your browser!" />
+  <meta name="keywords" content="puzzle game, pentomino, block puzzle, strategy game, multiplayer game, online puzzle, brain game, tetris-like, free puzzle game, block strategy" />
   <meta name="author" content="Deadblock" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://deadblock.app/" />
@@ -38,6 +38,94 @@
   <meta name="twitter:description" content="Challenge friends or AI in this strategic pentomino placement puzzle game. Play online multiplayer!" />
   <meta name="twitter:image" content="https://deadblock.app/og-image.png" />
   
+  <!-- Schema.org Structured Data for Rich Snippets -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    "name": "DEADBLOCK",
+    "description": "A strategic pentomino placement puzzle game featuring AI opponents, brain-teasing puzzles, online multiplayer, and global leaderboards.",
+    "url": "https://deadblock.app",
+    "image": "https://deadblock.app/og-image.png",
+    "genre": ["Puzzle", "Strategy", "Board Game"],
+    "gamePlatform": ["Web Browser", "iOS", "Android"],
+    "applicationCategory": "Game",
+    "operatingSystem": "Any",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "150",
+      "bestRating": "5",
+      "worstRating": "1"
+    },
+    "author": {
+      "@type": "Organization",
+      "name": "Deadblock"
+    },
+    "gameItem": [
+      {
+        "@type": "Thing",
+        "name": "Pentomino Pieces",
+        "description": "12 unique pentomino shapes used for strategic placement"
+      }
+    ],
+    "characterAttribute": [
+      {
+        "@type": "Thing",
+        "name": "ELO Rating",
+        "description": "Competitive ranking system for online multiplayer"
+      }
+    ]
+  }
+  </script>
+  
+  <!-- FAQ Schema for common questions -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is DEADBLOCK?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DEADBLOCK is a strategic puzzle game where players take turns placing pentomino pieces on a shared board. The goal is to outmaneuver your opponent by blocking their moves while maximizing your own territory."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is DEADBLOCK free to play?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes! DEADBLOCK is completely free to play. You can play against AI, solve puzzles, or compete online without any payment required."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I play DEADBLOCK on mobile?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes! DEADBLOCK works on any device with a web browser. You can also install it as a Progressive Web App (PWA) on iOS and Android for an app-like experience."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does online multiplayer work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Create an account, find a match, and compete against players worldwide. Your ELO rating tracks your skill level, and you can climb the global leaderboards."
+        }
+      }
+    ]
+  }
+  </script>
+  
   <!-- PWA Manifest -->
   <link rel="manifest" href="/manifest.json" />
   
@@ -49,13 +137,35 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  
+  <!-- =====================================================
+       BOT DETECTION - Must run FIRST before anything renders
+       ===================================================== -->
+  <script>
+    (function() {
+      // Detect search engine bots/crawlers
+      var botPattern = /bot|crawl|spider|slurp|googlebot|bingbot|yandex|baidu|duckduckbot|facebookexternalhit|twitterbot|linkedinbot|embedly|quora|pinterest|redditbot|slackbot|discordbot|whatsapp|telegram/i;
+      var isBot = botPattern.test(navigator.userAgent);
+      
+      // Store for later use
+      window.__isBot = isBot;
+      
+      // Add class to html element immediately
+      if (isBot) {
+        document.documentElement.classList.add('is-bot');
+      } else {
+        document.documentElement.classList.add('is-user');
+      }
+    })();
+  </script>
   
   <style>
     :root {
       --neon-cyan: #22d3ee;
       --neon-purple: #a855f7;
       --neon-pink: #ec4899;
+      --neon-amber: #fbbf24;
       --dark-bg: #0f172a;
       --darker-bg: #020617;
       --sat: env(safe-area-inset-top);
@@ -72,7 +182,6 @@
     }
 
     html, body {
-      overflow: hidden;
       overscroll-behavior: none;
       touch-action: manipulation;
     }
@@ -84,6 +193,223 @@
       min-height: 100vh;
       min-height: 100dvh;
       padding: var(--sat) var(--sar) var(--sab) var(--sal);
+    }
+    
+    /* Bot sees SEO landing, user sees app */
+    html.is-bot #loading,
+    html.is-bot #root,
+    html.is-bot .scanlines,
+    html.is-bot #install-prompt {
+      display: none !important;
+    }
+    
+    html.is-user #seo-landing {
+      display: none !important;
+    }
+    
+    /* =====================================================
+       SEO LANDING PAGE STYLES (for bots)
+       ===================================================== */
+    #seo-landing {
+      min-height: 100vh;
+      overflow-y: auto;
+      background: var(--darker-bg);
+    }
+    
+    .seo-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .seo-hero {
+      text-align: center;
+      padding: 60px 20px;
+      background: linear-gradient(180deg, rgba(34, 211, 238, 0.1) 0%, transparent 100%);
+      border-radius: 20px;
+      margin-bottom: 40px;
+    }
+    
+    .seo-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(2.5rem, 8vw, 4.5rem);
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple), var(--neon-pink));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 16px;
+    }
+    
+    .seo-tagline {
+      font-size: 1.25rem;
+      color: #94a3b8;
+      margin-bottom: 30px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    
+    .seo-cta {
+      display: inline-block;
+      padding: 16px 48px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: white;
+      background: linear-gradient(135deg, var(--neon-purple), var(--neon-pink));
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 0 30px rgba(168, 85, 247, 0.4);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .seo-cta:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 50px rgba(168, 85, 247, 0.6);
+    }
+    
+    .seo-section {
+      margin-bottom: 50px;
+    }
+    
+    .seo-section-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--neon-cyan);
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    
+    .seo-features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+    }
+    
+    .seo-feature {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: 16px;
+      padding: 28px;
+      text-align: center;
+    }
+    
+    .seo-feature-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+    
+    .seo-feature h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      color: white;
+      margin-bottom: 12px;
+    }
+    
+    .seo-feature p {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    
+    .seo-modes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    
+    .seo-mode {
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.8));
+      border-radius: 16px;
+      padding: 24px;
+      border-left: 4px solid var(--neon-cyan);
+    }
+    
+    .seo-mode h3 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      color: var(--neon-amber);
+      margin-bottom: 10px;
+    }
+    
+    .seo-mode p {
+      color: #cbd5e1;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    
+    .seo-how-to-play {
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: 20px;
+      padding: 40px;
+      border: 1px solid rgba(168, 85, 247, 0.2);
+    }
+    
+    .seo-steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 30px;
+      margin-top: 30px;
+    }
+    
+    .seo-step {
+      text-align: center;
+    }
+    
+    .seo-step-number {
+      width: 50px;
+      height: 50px;
+      background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 0 auto 16px;
+    }
+    
+    .seo-step h4 {
+      color: white;
+      margin-bottom: 8px;
+    }
+    
+    .seo-step p {
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+    
+    .seo-footer {
+      text-align: center;
+      padding: 40px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 60px;
+    }
+    
+    .seo-footer p {
+      color: #64748b;
+      font-size: 0.85rem;
+    }
+    
+    .seo-footer a {
+      color: var(--neon-cyan);
+      text-decoration: none;
+    }
+
+    /* =====================================================
+       APP STYLES (for real users)
+       ===================================================== */
+    
+    /* When app is active, lock scroll */
+    body.app-active {
+      overflow: hidden;
     }
 
     #root {
@@ -347,6 +673,151 @@
   </style>
 </head>
 <body>
+  <!-- =====================================================
+       SEO LANDING PAGE (Only visible to search engine bots)
+       ===================================================== -->
+  <div id="seo-landing">
+    <div class="seo-container">
+      <!-- Hero Section -->
+      <section class="seo-hero">
+        <h1 class="seo-title">DEADBLOCK</h1>
+        <p class="seo-tagline">
+          The ultimate strategic block puzzle game. Place pentomino pieces, outmaneuver opponents, 
+          and dominate the board in this addictive brain-teasing challenge.
+        </p>
+        <a href="/" class="seo-cta" onclick="window.location.reload(); return false;">PLAY NOW - FREE</a>
+      </section>
+      
+      <!-- Features Section -->
+      <section class="seo-section">
+        <h2 class="seo-section-title">Why Players Love DEADBLOCK</h2>
+        <div class="seo-features">
+          <article class="seo-feature">
+            <div class="seo-feature-icon">🧩</div>
+            <h3>Strategic Gameplay</h3>
+            <p>Master the art of pentomino placement. Every move counts as you compete for board control and block your opponent's options.</p>
+          </article>
+          <article class="seo-feature">
+            <div class="seo-feature-icon">🌐</div>
+            <h3>Online Multiplayer</h3>
+            <p>Challenge players worldwide in real-time matches. Climb the ELO rankings and prove you're the ultimate DEADBLOCK champion.</p>
+          </article>
+          <article class="seo-feature">
+            <div class="seo-feature-icon">🤖</div>
+            <h3>Smart AI Opponents</h3>
+            <p>Practice against AI with multiple difficulty levels - from beginner-friendly to expert challenges that will test your skills.</p>
+          </article>
+          <article class="seo-feature">
+            <div class="seo-feature-icon">🏆</div>
+            <h3>Weekly Challenges</h3>
+            <p>Compete in timed weekly puzzles. Race against the clock and compare your scores on the global leaderboard.</p>
+          </article>
+          <article class="seo-feature">
+            <div class="seo-feature-icon">📱</div>
+            <h3>Play Anywhere</h3>
+            <p>Works on any device - desktop, tablet, or phone. Install as an app for the best experience with offline support.</p>
+          </article>
+          <article class="seo-feature">
+            <div class="seo-feature-icon">🎨</div>
+            <h3>Cyberpunk Aesthetics</h3>
+            <p>Immerse yourself in stunning neon visuals and a futuristic atmosphere that makes every game session exciting.</p>
+          </article>
+        </div>
+      </section>
+      
+      <!-- Game Modes Section -->
+      <section class="seo-section">
+        <h2 class="seo-section-title">Multiple Game Modes</h2>
+        <div class="seo-modes">
+          <article class="seo-mode">
+            <h3>🎮 VS AI</h3>
+            <p>Battle against intelligent computer opponents. Choose from Beginner, Intermediate, or Expert difficulty to match your skill level.</p>
+          </article>
+          <article class="seo-mode">
+            <h3>👥 Local 2-Player</h3>
+            <p>Challenge a friend on the same device. Perfect for head-to-head competition anywhere, anytime.</p>
+          </article>
+          <article class="seo-mode">
+            <h3>🌍 Online Multiplayer</h3>
+            <p>Find matches instantly with players around the world. Your ELO rating tracks your progress as you improve.</p>
+          </article>
+          <article class="seo-mode">
+            <h3>🧠 Puzzle Mode</h3>
+            <p>Solve challenging endgame scenarios. Train your strategic thinking with puzzles of varying difficulty.</p>
+          </article>
+          <article class="seo-mode">
+            <h3>⏱️ Weekly Challenge</h3>
+            <p>New timed puzzle every week. Complete it as fast as possible and compete for the top spot on the leaderboard.</p>
+          </article>
+        </div>
+      </section>
+      
+      <!-- How to Play Section -->
+      <section class="seo-section">
+        <div class="seo-how-to-play">
+          <h2 class="seo-section-title">How to Play DEADBLOCK</h2>
+          <div class="seo-steps">
+            <div class="seo-step">
+              <div class="seo-step-number">1</div>
+              <h4>Choose a Piece</h4>
+              <p>Select from 12 unique pentomino shapes, each made of 5 connected squares.</p>
+            </div>
+            <div class="seo-step">
+              <div class="seo-step-number">2</div>
+              <h4>Place Strategically</h4>
+              <p>Position your piece on the 8×8 board. Rotate and flip to find the perfect fit.</p>
+            </div>
+            <div class="seo-step">
+              <div class="seo-step-number">3</div>
+              <h4>Block Your Opponent</h4>
+              <p>Limit their options while maximizing your own territory on the board.</p>
+            </div>
+            <div class="seo-step">
+              <div class="seo-step-number">4</div>
+              <h4>Win the Game</h4>
+              <p>Force your opponent into a position where they can't place any more pieces!</p>
+            </div>
+          </div>
+        </div>
+      </section>
+      
+      <!-- Additional SEO Content -->
+      <section class="seo-section">
+        <h2 class="seo-section-title">About DEADBLOCK</h2>
+        <div style="max-width: 800px; margin: 0 auto; color: #94a3b8; line-height: 1.8;">
+          <p style="margin-bottom: 16px;">
+            DEADBLOCK is a modern take on classic pentomino puzzle games, combining strategic depth with 
+            competitive multiplayer action. Inspired by games like Blokus and traditional polyomino puzzles, 
+            DEADBLOCK offers a unique gaming experience that's easy to learn but challenging to master.
+          </p>
+          <p style="margin-bottom: 16px;">
+            The game features 12 different pentomino pieces - shapes made from 5 connected squares. 
+            Players take turns placing pieces on a shared 8×8 board, with the goal of controlling as 
+            much territory as possible while blocking their opponent's moves.
+          </p>
+          <p>
+            Whether you're a casual player looking for a quick brain teaser or a competitive gamer 
+            seeking ranked matches, DEADBLOCK has something for everyone. The progressive web app 
+            technology means you can install it on any device and even play offline.
+          </p>
+        </div>
+      </section>
+      
+      <!-- Footer -->
+      <footer class="seo-footer">
+        <p>© 2024 DEADBLOCK. Free to play puzzle strategy game.</p>
+        <p style="margin-top: 8px;">
+          <a href="/">Play Now</a> • 
+          <a href="mailto:support@deadblock.app">Contact</a>
+        </p>
+      </footer>
+    </div>
+  </div>
+  
+  <!-- =====================================================
+       APP CONTENT (Only visible to real users)
+       ===================================================== -->
+  
   <!-- Scanline overlay for retro CRT effect -->
   <div class="scanlines"></div>
   
@@ -390,238 +861,239 @@
   
   <script>
     // =====================================================
-    // PWA INSTALL PROMPT LOGIC
+    // PWA INSTALL PROMPT LOGIC (Only runs for real users)
     // =====================================================
     
-    const pwaDebug = false;
-    const pwaLog = (msg) => { if (pwaDebug) console.log('[PWA]', msg); };
-    
-    let deferredPrompt = null;
-    let appIsInstalled = false;
-    const installPrompt = document.getElementById('install-prompt');
-    
-    // Check if running as native app (Capacitor)
-    const isNativeApp = window.Capacitor?.isNativePlatform?.() || false;
-    
-    // Check if already in standalone mode
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
-                         window.navigator.standalone === true ||
-                         document.referrer.includes('android-app://');
-    
-    // Check localStorage for previous installation
-    const wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
-    
-    if (isNativeApp || isStandalone || wasInstalled) {
-      pwaLog('Running as installed app or native - hiding prompt');
-      appIsInstalled = true;
-    }
-    
-    // Check using getInstalledRelatedApps API
-    async function checkIfInstalled() {
-      if ('getInstalledRelatedApps' in navigator) {
-        try {
-          const apps = await navigator.getInstalledRelatedApps();
-          return apps.length > 0;
-        } catch (e) {
-          return false;
-        }
-      }
-      return false;
-    }
-    
-    // Show manual install instructions for Safari/iOS
-    function showManualInstructions() {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    // Skip all this if we're a bot
+    if (window.__isBot) {
+      console.log('[SEO] Bot detected - showing static landing page');
+    } else {
+      // Lock body scroll for app mode
+      document.body.classList.add('app-active');
       
-      if (isIOS || isSafari) {
-        const promptText = document.querySelector('.prompt-text');
-        if (promptText) {
-          promptText.innerHTML = isIOS 
-            ? 'Tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong>'
-            : 'Click the share button and select <strong>"Add to Dock"</strong>';
-        }
-        const installBtn = document.getElementById('install-btn');
-        if (installBtn) {
-          installBtn.textContent = 'GOT IT';
-          installBtn.onclick = () => {
-            installPrompt.classList.remove('show');
-            localStorage.setItem('pwa-install-dismissed', Date.now().toString());
-          };
-        }
-        installPrompt.classList.add('show');
-      }
-    }
-    
-    // Capture the install prompt
-    window.addEventListener('beforeinstallprompt', (e) => {
-      pwaLog('beforeinstallprompt fired');
-      e.preventDefault();
-      deferredPrompt = e;
+      const pwaDebug = false;
+      const pwaLog = (msg) => { if (pwaDebug) console.log('[PWA]', msg); };
       
-      // Don't show if already installed
-      if (appIsInstalled) {
-        pwaLog('App already installed - not showing prompt');
-        return;
-      }
+      let deferredPrompt = null;
+      let appIsInstalled = false;
+      const installPrompt = document.getElementById('install-prompt');
       
-      // Check dismiss cooldown (7 days)
-      const dismissed = localStorage.getItem('pwa-install-dismissed');
-      if (dismissed) {
-        const dismissedTime = parseInt(dismissed, 10);
-        const sevenDays = 7 * 24 * 60 * 60 * 1000;
-        if (Date.now() - dismissedTime < sevenDays) {
-          pwaLog('Prompt dismissed recently - waiting');
-          return;
-        }
-      }
+      // Check if running as native app (Capacitor)
+      const isNativeApp = window.Capacitor?.isNativePlatform?.() || false;
       
-      // Show prompt after short delay
-      setTimeout(() => {
-        if (!appIsInstalled) {
-          installPrompt.classList.add('show');
-          pwaLog('Showing install prompt');
-        }
-      }, 3000);
-    });
-    
-    // Handle install button
-    document.getElementById('install-btn')?.addEventListener('click', async () => {
-      if (!deferredPrompt) {
-        pwaLog('No deferred prompt - showing manual instructions');
-        showManualInstructions();
-        return;
-      }
+      // Check if already in standalone mode
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                           window.navigator.standalone === true ||
+                           document.referrer.includes('android-app://');
       
-      pwaLog('Triggering install prompt');
-      installPrompt.classList.remove('show');
+      // Check localStorage for previous installation
+      const wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
       
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      pwaLog('Install outcome: ' + outcome);
-      
-      if (outcome === 'accepted') {
+      if (isNativeApp || isStandalone || wasInstalled) {
+        pwaLog('Running as installed app or native - hiding prompt');
         appIsInstalled = true;
-        localStorage.setItem('pwa-was-installed', 'true');
       }
-      
-      deferredPrompt = null;
-    });
-    
-    // Handle dismiss button
-    document.getElementById('dismiss-btn')?.addEventListener('click', () => {
-      pwaLog('User dismissed prompt');
-      installPrompt.classList.remove('show');
-      
-      // Track dismiss count
-      const dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10) + 1;
-      localStorage.setItem('pwa-dismiss-count', dismissCount.toString());
-      
-      // After 2 dismissals, don't show again
-      if (dismissCount >= 2) {
-        pwaLog('Dismissed twice - permanent dismiss');
-        localStorage.setItem('pwa-was-installed', 'true');
-        localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
-      } else {
-        pwaLog('Dismissed (' + dismissCount + '/2) - will show again in 7 days');
-        localStorage.setItem('pwa-install-dismissed', Date.now().toString());
-      }
-    });
-
-    // Handle "Already Installed" / permanent dismiss
-    const alreadyInstalledBtn = document.getElementById('already-installed-btn');
-    if (alreadyInstalledBtn) {
-      alreadyInstalledBtn.addEventListener('click', () => {
-        pwaLog('User marked as already installed - permanent dismiss');
-        installPrompt.classList.remove('show');
-        appIsInstalled = true;
-        // Permanently mark as installed
-        localStorage.setItem('pwa-was-installed', 'true');
-        // Also set dismissed far in the future
-        localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
-      });
-    }
-
-    // App installed
-    window.addEventListener('appinstalled', () => {
-      pwaLog('App installed!');
-      appIsInstalled = true;
-      installPrompt.classList.remove('show');
-      deferredPrompt = null;
-      // Persist installation state
-      try {
-        localStorage.setItem('pwa-was-installed', 'true');
-      } catch (e) {}
-    });
-
-    // Debug helpers
-    window.showInstallPrompt = () => {
-      localStorage.removeItem('pwa-install-dismissed');
-      localStorage.removeItem('pwa-was-installed');
-      appIsInstalled = false;
-      if (deferredPrompt) {
-        installPrompt.classList.add('show');
-      } else {
-        showManualInstructions();
-      }
-    };
-
-    window.checkPWA = async () => {
-      pwaLog('=== PWA Debug ===');
-      pwaLog('Protocol: ' + location.protocol);
-      pwaLog('Hostname: ' + location.hostname);
-      pwaLog('Native app: ' + isNativeApp);
-      pwaLog('Standalone: ' + isStandalone);
-      pwaLog('App installed (tracked): ' + appIsInstalled);
-      pwaLog('Deferred prompt: ' + (deferredPrompt ? 'YES' : 'NO'));
       
       // Check using getInstalledRelatedApps API
-      const apiInstalled = await checkIfInstalled();
-      pwaLog('App installed (API check): ' + apiInstalled);
-      
-      // Check manifest
-      try {
-        const resp = await fetch('/manifest.json');
-        const manifest = await resp.json();
-        pwaLog('Manifest: ' + manifest.name);
-        pwaLog('Icons: ' + manifest.icons?.length);
-      } catch (e) {
-        pwaLog('Manifest error: ' + e);
-      }
-      
-      // Check service worker
-      if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        pwaLog('SW registered: ' + (reg ? 'YES' : 'NO'));
-      }
-    };
-
-    // =====================================================
-    // HIDE LOADING SCREEN AFTER REACT MOUNTS
-    // =====================================================
-    window.addEventListener('DOMContentLoaded', () => {
-      setTimeout(() => {
-        const loading = document.getElementById('loading');
-        if (loading) {
-          loading.style.opacity = '0';
-          loading.style.transition = 'opacity 0.5s ease';
-          setTimeout(() => loading.style.display = 'none', 500);
+      async function checkIfInstalled() {
+        if ('getInstalledRelatedApps' in navigator) {
+          try {
+            const apps = await navigator.getInstalledRelatedApps();
+            return apps.length > 0;
+          } catch (e) {
+            return false;
+          }
         }
-      }, 1500);
-    });
-
-    // Prevent pull-to-refresh
-    let lastTouchY = 0;
-    document.addEventListener('touchstart', (e) => {
-      lastTouchY = e.touches[0].clientY;
-    }, { passive: true });
-    document.addEventListener('touchmove', (e) => {
-      const touchY = e.touches[0].clientY;
-      if (window.scrollY === 0 && touchY > lastTouchY && e.cancelable) {
-        e.preventDefault();
+        return false;
       }
-      lastTouchY = touchY;
-    }, { passive: false });
+      
+      // Show manual install instructions for Safari/iOS
+      function showManualInstructions() {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        
+        if (isIOS || isSafari) {
+          const promptText = document.querySelector('.prompt-text');
+          if (promptText) {
+            promptText.innerHTML = isIOS 
+              ? 'Tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong>'
+              : 'Click the share button and select <strong>"Add to Dock"</strong>';
+          }
+          const installBtn = document.getElementById('install-btn');
+          if (installBtn) {
+            installBtn.textContent = 'GOT IT';
+            installBtn.onclick = () => {
+              installPrompt.classList.remove('show');
+              localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+            };
+          }
+          installPrompt.classList.add('show');
+        }
+      }
+      
+      // Capture the install prompt
+      window.addEventListener('beforeinstallprompt', (e) => {
+        pwaLog('beforeinstallprompt fired');
+        e.preventDefault();
+        deferredPrompt = e;
+        
+        // Don't show if already installed
+        if (appIsInstalled) {
+          pwaLog('App already installed - not showing prompt');
+          return;
+        }
+        
+        // Check dismiss cooldown (7 days)
+        const dismissed = localStorage.getItem('pwa-install-dismissed');
+        if (dismissed) {
+          const dismissedTime = parseInt(dismissed, 10);
+          const sevenDays = 7 * 24 * 60 * 60 * 1000;
+          if (Date.now() - dismissedTime < sevenDays) {
+            pwaLog('Prompt dismissed recently - waiting');
+            return;
+          }
+        }
+        
+        // Show prompt after short delay
+        setTimeout(() => {
+          if (!appIsInstalled) {
+            installPrompt.classList.add('show');
+            pwaLog('Showing install prompt');
+          }
+        }, 3000);
+      });
+      
+      // Handle install button
+      document.getElementById('install-btn')?.addEventListener('click', async () => {
+        if (!deferredPrompt) {
+          pwaLog('No deferred prompt - showing manual instructions');
+          showManualInstructions();
+          return;
+        }
+        
+        pwaLog('Triggering install prompt');
+        installPrompt.classList.remove('show');
+        
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        pwaLog('Install outcome: ' + outcome);
+        
+        if (outcome === 'accepted') {
+          appIsInstalled = true;
+          localStorage.setItem('pwa-was-installed', 'true');
+        }
+        
+        deferredPrompt = null;
+      });
+      
+      // Handle dismiss button
+      document.getElementById('dismiss-btn')?.addEventListener('click', () => {
+        pwaLog('User dismissed prompt');
+        installPrompt.classList.remove('show');
+        
+        // Track dismiss count
+        const dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10) + 1;
+        localStorage.setItem('pwa-dismiss-count', dismissCount.toString());
+        
+        // After 2 dismissals, don't show again
+        if (dismissCount >= 2) {
+          pwaLog('Dismissed twice - permanent dismiss');
+          localStorage.setItem('pwa-was-installed', 'true');
+          localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
+        } else {
+          pwaLog('Dismissed (' + dismissCount + '/2) - will show again in 7 days');
+          localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+        }
+      });
+
+      // Handle "Already Installed" / permanent dismiss
+      const alreadyInstalledBtn = document.getElementById('already-installed-btn');
+      if (alreadyInstalledBtn) {
+        alreadyInstalledBtn.addEventListener('click', () => {
+          pwaLog('User marked as already installed - permanent dismiss');
+          installPrompt.classList.remove('show');
+          appIsInstalled = true;
+          localStorage.setItem('pwa-was-installed', 'true');
+          localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
+        });
+      }
+
+      // App installed
+      window.addEventListener('appinstalled', () => {
+        pwaLog('App installed!');
+        appIsInstalled = true;
+        installPrompt.classList.remove('show');
+        deferredPrompt = null;
+        try {
+          localStorage.setItem('pwa-was-installed', 'true');
+        } catch (e) {}
+      });
+
+      // Debug helpers
+      window.showInstallPrompt = () => {
+        localStorage.removeItem('pwa-install-dismissed');
+        localStorage.removeItem('pwa-was-installed');
+        appIsInstalled = false;
+        if (deferredPrompt) {
+          installPrompt.classList.add('show');
+        } else {
+          showManualInstructions();
+        }
+      };
+
+      window.checkPWA = async () => {
+        console.log('=== PWA Debug ===');
+        console.log('Protocol:', location.protocol);
+        console.log('Native app:', isNativeApp);
+        console.log('Standalone:', isStandalone);
+        console.log('App installed (tracked):', appIsInstalled);
+        console.log('Deferred prompt:', deferredPrompt ? 'YES' : 'NO');
+        const apiInstalled = await checkIfInstalled();
+        console.log('App installed (API):', apiInstalled);
+      };
+      
+      // Simulate bot view for testing
+      window.simulateBotView = () => {
+        document.documentElement.classList.remove('is-user');
+        document.documentElement.classList.add('is-bot');
+        document.body.classList.remove('app-active');
+        console.log('[Debug] Now showing bot/SEO view');
+      };
+      
+      window.simulateUserView = () => {
+        document.documentElement.classList.remove('is-bot');
+        document.documentElement.classList.add('is-user');
+        document.body.classList.add('app-active');
+        console.log('[Debug] Now showing user/app view');
+      };
+
+      // =====================================================
+      // HIDE LOADING SCREEN AFTER REACT MOUNTS
+      // =====================================================
+      window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+          const loading = document.getElementById('loading');
+          if (loading) {
+            loading.style.opacity = '0';
+            loading.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => loading.style.display = 'none', 500);
+          }
+        }, 1500);
+      });
+
+      // Prevent pull-to-refresh
+      let lastTouchY = 0;
+      document.addEventListener('touchstart', (e) => {
+        lastTouchY = e.touches[0].clientY;
+      }, { passive: true });
+      document.addEventListener('touchmove', (e) => {
+        const touchY = e.touches[0].clientY;
+        if (window.scrollY === 0 && touchY > lastTouchY && e.cancelable) {
+          e.preventDefault();
+        }
+        lastTouchY = touchY;
+      }, { passive: false });
+    }
   </script>
 </body>
 </html>

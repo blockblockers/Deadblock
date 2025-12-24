@@ -22,6 +22,7 @@ import HeadToHead from './HeadToHead';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
 import TierIcon from './TierIcon';
 import PlacementAnimation, { usePlacementAnimation } from './PlacementAnimation';
+import FinalBoardView from './FinalBoardView';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
@@ -180,6 +181,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [rematchDeclined, setRematchDeclined] = useState(false);
   const [newGameFromRematch, setNewGameFromRematch] = useState(null);
   
+  // Final board view state
+  const [showFinalBoard, setShowFinalBoard] = useState(false);
+  const [moveHistory, setMoveHistory] = useState([]);
+  
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [turnStartedAt, setTurnStartedAt] = useState(null);
@@ -208,12 +213,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   const userId = user?.id;
   const hasMovesPlayed = usedPieces.length > 0;
-  
-  // Calculate tiers for animation intensity
-  const myRating = profile?.rating || 1000;
-  const oppRating = opponent?.rating || 1000;
-  const myTier = ratingService.getRatingTier(myRating);
-  const oppTier = ratingService.getRatingTier(oppRating);
 
   // =========================================================================
   // DRAG HANDLERS
@@ -593,11 +592,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       const opponentNum = playerNum === 1 ? 2 : 1;
       const isNowMyTurn = gameData.current_player === playerNum && gameData.status === 'active';
       
-      // Get opponent's tier for animation intensity
-      const opponentData = playerNum === 1 ? gameData.player2 : gameData.player1;
-      const opponentRating = opponentData?.rating || 1000;
-      const opponentTier = ratingService.getRatingTier(opponentRating);
-      
       // Only animate if it's now our turn (meaning opponent just moved)
       if (isNowMyTurn && boardRef.current) {
         const newCells = newCellKeys.map(key => {
@@ -610,7 +604,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         
         // Small delay to let the board render first
         setTimeout(() => {
-          triggerAnimation(newCells, opponentNum, boardRef, cellSize, opponentTier?.name);
+          triggerAnimation(newCells, opponentNum, boardRef, cellSize);
         }, 100);
       }
     }
@@ -752,6 +746,36 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
     };
   }, [currentGameId, userId, updateGameState]);
+
+  // Load move history for FinalBoardView
+  const loadMoveHistory = useCallback(async () => {
+    if (!currentGameId) return;
+    
+    try {
+      console.log('[OnlineGameScreen] Loading move history for game:', currentGameId);
+      
+      const { data, error } = await gameSyncService.getGameMoves(currentGameId);
+      
+      if (error) {
+        console.error('[OnlineGameScreen] Error loading move history:', error);
+        return;
+      }
+      
+      if (data && Array.isArray(data)) {
+        console.log('[OnlineGameScreen] Loaded', data.length, 'moves');
+        setMoveHistory(data);
+      }
+    } catch (err) {
+      console.error('[OnlineGameScreen] Failed to load move history:', err);
+    }
+  }, [currentGameId]);
+
+  // Load move history when game ends
+  useEffect(() => {
+    if (game?.status === 'completed' && moveHistory.length === 0) {
+      loadMoveHistory();
+    }
+  }, [game?.status, moveHistory.length, loadMoveHistory]);
 
   // Subscribe to chat messages for notification when chat is closed
   // Chat notification subscription - FIXED: Use supabase directly
@@ -1024,8 +1048,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (boardRef.current) {
       const boardRect = boardRef.current.getBoundingClientRect();
       const cellSize = boardRect.width / BOARD_SIZE;
-      // Pass tier name for animation intensity
-      triggerAnimation(placedCells, myPlayerNumber, boardRef, cellSize, myTier?.name);
+      triggerAnimation(placedCells, myPlayerNumber, boardRef, cellSize);
       soundManager.playSound('place');
     }
 
@@ -1064,7 +1087,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
     }
   }, [pendingMove, canConfirm, rotation, flipped, board, boardPieces, usedPieces, 
-      myPlayerNumber, gameId, user, updateGameState, triggerAnimation, currentGameId, myTier]);
+      myPlayerNumber, gameId, user, updateGameState, triggerAnimation, currentGameId]);
 
   const handleQuitOrForfeit = useCallback(async () => {
     if (game?.status !== 'active') return;
@@ -1230,7 +1253,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                     player={placementAnimation.player}
                     boardRef={placementAnimation.boardRef}
                     cellSize={placementAnimation.cellSize}
-                    tier={placementAnimation.tier}
                     onComplete={clearAnimation}
                   />
                 )}
@@ -1515,6 +1537,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               window.location.href = window.location.origin;
             }
           }}
+          onViewFinalBoard={() => {
+            // Load move history if not already loaded
+            if (moveHistory.length === 0) {
+              loadMoveHistory();
+            }
+            setShowFinalBoard(true);
+          }}
         />
       )}
 
@@ -1642,6 +1671,24 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`
         ) : null}
       />
+
+      {/* Final Board View Modal */}
+      {showFinalBoard && (
+        <FinalBoardView
+          board={board}
+          boardPieces={boardPieces}
+          moveHistory={moveHistory}
+          player1Name={game?.player1_id === user?.id 
+            ? (profile?.display_name || profile?.username || 'You')
+            : (opponent?.display_name || opponent?.username || 'Opponent')
+          }
+          player2Name={game?.player1_id === user?.id 
+            ? (opponent?.display_name || opponent?.username || 'Opponent')
+            : (profile?.display_name || profile?.username || 'You')
+          }
+          onClose={() => setShowFinalBoard(false)}
+        />
+      )}
     </div>
   );
 };
