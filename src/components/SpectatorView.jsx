@@ -1,6 +1,7 @@
-// SpectatorView - Watch live games
+// SpectatorView.jsx - Watch live games
+// v7.7: Added game switching for multiple active games (when watching a friend)
 import { useState, useEffect, useRef } from 'react';
-import { Eye, X, Users, Clock, Trophy, Radio, AlertTriangle } from 'lucide-react';
+import { Eye, X, Users, Clock, Trophy, Radio, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { spectatorService } from '../services/spectatorService';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
@@ -8,7 +9,15 @@ import GameBoard from './GameBoard';
 import { BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 
-const SpectatorView = ({ gameId, userId, onClose }) => {
+const SpectatorView = ({ 
+  gameId, 
+  userId, 
+  onClose,
+  // NEW v7.7: Support for multiple games
+  friendGames = [],      // Array of active games for this friend
+  onSwitchGame,          // Callback to switch to different game
+  currentGameIndex = 0   // Current position in friendGames array
+}) => {
   const [game, setGame] = useState(null);
   const [spectators, setSpectators] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,16 +105,41 @@ const SpectatorView = ({ gameId, userId, onClose }) => {
       validBoard = validBoard.map(row => 
         row.map(cell => (cell === 0 ? null : cell))
       );
-      setBoard(validBoard);
+    } else {
+      validBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
     }
+    
+    setBoard(validBoard);
     setBoardPieces(gameData.board_pieces || {});
+  };
+
+  // Handle switching to previous game
+  const handlePrevGame = () => {
+    if (friendGames.length <= 1) return;
+    const prevIndex = currentGameIndex > 0 ? currentGameIndex - 1 : friendGames.length - 1;
+    const prevGame = friendGames[prevIndex];
+    if (prevGame?.id && onSwitchGame) {
+      soundManager.playButtonClick();
+      onSwitchGame(prevGame.id, prevIndex);
+    }
+  };
+
+  // Handle switching to next game
+  const handleNextGame = () => {
+    if (friendGames.length <= 1) return;
+    const nextIndex = currentGameIndex < friendGames.length - 1 ? currentGameIndex + 1 : 0;
+    const nextGame = friendGames[nextIndex];
+    if (nextGame?.id && onSwitchGame) {
+      soundManager.playButtonClick();
+      onSwitchGame(nextGame.id, nextIndex);
+    }
   };
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin w-12 h-12 border-3 border-amber-400 border-t-transparent rounded-full mx-auto mb-4" />
+          <div className="animate-spin w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full mx-auto mb-4" />
           <p className="text-slate-400">Joining as spectator...</p>
         </div>
       </div>
@@ -114,14 +148,14 @@ const SpectatorView = ({ gameId, userId, onClose }) => {
 
   if (error) {
     return (
-      <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
-        <div className="bg-slate-900 rounded-xl p-6 max-w-sm text-center border border-red-500/30">
-          <X className="mx-auto text-red-400 mb-4" size={48} />
-          <h2 className="text-lg font-bold text-white mb-2">Cannot Spectate</h2>
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-950 flex items-center justify-center p-4">
+        <div className="bg-slate-800 rounded-xl p-6 text-center max-w-sm">
+          <AlertTriangle className="mx-auto text-amber-400 mb-3" size={48} />
+          <h2 className="text-white text-xl font-bold mb-2">Unable to Watch</h2>
           <p className="text-slate-400 mb-4">{error}</p>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600"
+            className="px-6 py-2 bg-amber-500 text-white rounded-lg font-medium hover:bg-amber-400"
           >
             Go Back
           </button>
@@ -135,81 +169,116 @@ const SpectatorView = ({ gameId, userId, onClose }) => {
     ? game?.player1?.username 
     : game?.player2?.username;
 
-  const player1Tier = ratingService.getRatingTier(game?.player1?.elo_rating || 1200);
-  const player2Tier = ratingService.getRatingTier(game?.player2?.elo_rating || 1200);
+  // Get player tiers
+  const player1Tier = ratingService.getRatingTier(game?.player1?.rating || game?.player1?.elo_rating || 1200);
+  const player2Tier = ratingService.getRatingTier(game?.player2?.rating || game?.player2?.elo_rating || 1200);
 
   return (
-    <div className="fixed inset-0 bg-slate-950 flex flex-col z-50">
+    <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-950 flex flex-col">
       {/* Header */}
-      <div className="bg-slate-900 border-b border-amber-500/30 p-3">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-3">
-            <button onClick={onClose} className="text-slate-400 hover:text-white">
-              <X size={24} />
-            </button>
-            <div className="flex items-center gap-2">
-              <Eye className="text-amber-400" size={20} />
-              <span className="text-amber-300 font-bold">Spectating</span>
-              {!isGameOver && (
-                <span className="flex items-center gap-1 text-red-400 text-xs animate-pulse">
-                  <Radio size={12} /> LIVE
-                </span>
-              )}
-            </div>
+      <div className="bg-slate-900 border-b border-amber-500/30 p-4">
+        <div className="flex items-center justify-between max-w-md mx-auto">
+          <button
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-white transition-colors"
+          >
+            <X size={24} />
+          </button>
+          
+          <div className="flex items-center gap-2 text-amber-400">
+            <Eye size={20} />
+            <span className="font-medium">Spectating</span>
+            {!isGameOver && (
+              <span className="flex items-center gap-1 text-xs text-red-400 animate-pulse">
+                <Radio size={12} /> LIVE
+              </span>
+            )}
           </div>
           
-          {/* Spectator count */}
-          <div className="flex items-center gap-2 text-slate-400 text-sm">
+          <div className="flex items-center gap-1 text-slate-500 text-sm">
             <Users size={16} />
-            {spectators.length} watching
+            <span>{spectators.length}</span>
           </div>
         </div>
       </div>
 
+      {/* NEW v7.7: Game Switcher (when watching friend with multiple games) */}
+      {friendGames.length > 1 && (
+        <div className="bg-slate-800/50 border-b border-slate-700/50 py-2 px-4">
+          <div className="max-w-md mx-auto flex items-center justify-center gap-4">
+            <button
+              onClick={handlePrevGame}
+              className="p-2 rounded-full bg-slate-700/50 hover:bg-slate-600 text-slate-400 hover:text-white transition-all"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            
+            <div className="flex items-center gap-2">
+              {friendGames.map((g, idx) => (
+                <button
+                  key={g.id}
+                  onClick={() => {
+                    if (g.id !== gameId && onSwitchGame) {
+                      soundManager.playButtonClick();
+                      onSwitchGame(g.id, idx);
+                    }
+                  }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                    g.id === gameId 
+                      ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' 
+                      : 'bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-white'
+                  }`}
+                  title={`Game ${idx + 1}`}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+            </div>
+            
+            <button
+              onClick={handleNextGame}
+              className="p-2 rounded-full bg-slate-700/50 hover:bg-slate-600 text-slate-400 hover:text-white transition-all"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+          <p className="text-center text-slate-500 text-xs mt-1">
+            Game {currentGameIndex + 1} of {friendGames.length}
+          </p>
+        </div>
+      )}
+
       {/* Players */}
-      <div className="bg-slate-900/50 p-3">
-        <div className="flex items-center justify-between max-w-md mx-auto">
+      <div className="bg-slate-800/50 p-3">
+        <div className="max-w-md mx-auto flex items-center justify-between">
           {/* Player 1 */}
-          <div className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-            !isGameOver && game?.current_player === 1 ? 'bg-cyan-500/20 ring-2 ring-cyan-400' : ''
-          }`}>
-            <div className="w-12 h-12 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-              {game?.player1?.username?.[0] || '?'}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <TierIcon tier={player1Tier.name} size={24} />
+              {game?.current_player === 1 && !isGameOver && (
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-cyan-400 rounded-full animate-pulse" />
+              )}
             </div>
             <div>
-              <div className="text-white font-medium flex items-center gap-1">
-                {game?.player1?.username}
-                {isGameOver && game?.winner_id === game?.player1?.id && (
-                  <Trophy size={14} className="text-amber-400" />
-                )}
-              </div>
-              <div className="text-xs flex items-center gap-1">
-                <TierIcon shape={player1Tier.shape} glowColor={player1Tier.glowColor} size="small" />
-                <span className="text-slate-400">{game?.player1?.elo_rating || 1200}</span>
-              </div>
+              <div className="text-cyan-400 font-medium text-sm">{game?.player1?.username || 'Player 1'}</div>
+              <div className="text-slate-500 text-xs">{game?.player1?.rating || game?.player1?.elo_rating || 1200}</div>
             </div>
           </div>
 
-          <div className="text-slate-600 font-bold text-lg">VS</div>
+          {/* VS */}
+          <div className="text-slate-600 font-bold">VS</div>
 
           {/* Player 2 */}
-          <div className={`flex items-center gap-2 p-2 rounded-lg transition-all ${
-            !isGameOver && game?.current_player === 2 ? 'bg-pink-500/20 ring-2 ring-pink-400' : ''
-          }`}>
+          <div className="flex items-center gap-2">
             <div>
-              <div className="text-white font-medium flex items-center gap-1 justify-end">
-                {isGameOver && game?.winner_id === game?.player2?.id && (
-                  <Trophy size={14} className="text-amber-400" />
-                )}
-                {game?.player2?.username}
-              </div>
-              <div className="text-xs flex items-center gap-1 justify-end">
-                <span className="text-slate-400">{game?.player2?.elo_rating || 1200}</span>
-                <TierIcon shape={player2Tier.shape} glowColor={player2Tier.glowColor} size="small" />
-              </div>
+              <div className="text-pink-400 font-medium text-sm text-right">{game?.player2?.username || 'Player 2'}</div>
+              <div className="text-slate-500 text-xs text-right">{game?.player2?.rating || game?.player2?.elo_rating || 1200}</div>
             </div>
-            <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-              {game?.player2?.username?.[0] || '?'}
+            <div className="relative">
+              <TierIcon tier={player2Tier.name} size={24} />
+              {game?.current_player === 2 && !isGameOver && (
+                <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-pink-400 rounded-full animate-pulse" />
+              )}
             </div>
           </div>
         </div>
@@ -304,19 +373,20 @@ export const SpectatableGamesList = ({ userId, onSpectate, onClose }) => {
       setError(null);
     } catch (err) {
       console.error('Error loading spectatable games:', err);
-      setError('Unable to load live games. This feature requires database setup.');
+      setError('Unable to load live games. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30">
+    <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+      <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-amber-500/20">
-          <div className="flex items-center gap-2">
-            <Eye className="text-amber-400" size={24} />
-            <h2 className="text-lg font-bold text-amber-300">Live Games</h2>
+        <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-amber-400">
+            <Eye size={20} />
+            <span className="font-bold">Live Games</span>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white">
             <X size={24} />
@@ -324,20 +394,8 @@ export const SpectatableGamesList = ({ userId, onSpectate, onClose }) => {
         </div>
 
         {/* Games list */}
-        <div className="p-4 overflow-y-auto max-h-[60vh]">
-          {error ? (
-            <div className="text-center py-8">
-              <AlertTriangle className="mx-auto text-amber-400 mb-2" size={40} />
-              <p className="text-amber-300 font-medium mb-2">Feature Not Available</p>
-              <p className="text-slate-400 text-sm">{error}</p>
-              <button
-                onClick={onClose}
-                className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          ) : loading ? (
+        <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 80px)' }}>
+          {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2" />
               <p className="text-slate-400 text-sm">Finding games...</p>

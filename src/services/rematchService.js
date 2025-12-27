@@ -1,9 +1,11 @@
 // rematchService.js - Service for handling rematch requests
+// v7.7: Added getPendingRematchRequests for pending rematches in OnlineMenu
 // Features:
 // - Create rematch requests after game ends
 // - Accept/decline rematch requests
 // - Real-time notifications for rematch status
 // - Auto-create new game when accepted
+// - Get all pending rematch requests for a user
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -73,25 +75,25 @@ class RematchService {
         from_user_id: fromUserId,
         to_user_id: toUserId,
         first_player_id: firstPlayerId,
-        status: 'pending',
-        expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() // 5 minutes
+        status: 'pending'
       };
 
-      const response = await fetch(`${SUPABASE_URL}/rest/v1/rematch_requests`, {
+      const createUrl = `${SUPABASE_URL}/rest/v1/rematch_requests`;
+      const createResponse = await fetch(createUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestData)
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
+      if (!createResponse.ok) {
+        const errorText = await createResponse.text();
         console.error('[RematchService] Failed to create request:', errorText);
         return { data: null, error: { message: 'Failed to create rematch request' } };
       }
 
-      const data = await response.json();
+      const data = await createResponse.json();
       const request = Array.isArray(data) ? data[0] : data;
-      
+
       console.log('[RematchService] Rematch request created:', request.id);
       return { data: request, error: null };
 
@@ -102,9 +104,9 @@ class RematchService {
   }
 
   /**
-   * Get pending rematch request for a game (if any)
+   * Get pending rematch request for a specific game
    * @param {string} gameId - The game ID
-   * @param {string} userId - Current user ID
+   * @param {string} userId - Current user ID (to verify involvement)
    * @returns {Promise<{data: object|null, error: object|null}>}
    */
   async getPendingRematchRequest(gameId, userId) {
@@ -114,15 +116,16 @@ class RematchService {
     if (!headers) return { data: null, error: null };
 
     try {
-      const url = `${SUPABASE_URL}/rest/v1/rematch_requests?game_id=eq.${gameId}&status=eq.pending&select=*`;
+      const url = `${SUPABASE_URL}/rest/v1/rematch_requests?game_id=eq.${gameId}&status=eq.pending&or=(from_user_id.eq.${userId},to_user_id.eq.${userId})&select=*&order=created_at.desc&limit=1`;
+      
       const response = await fetch(url, { headers });
-
-      if (!response.ok) return { data: null, error: null };
+      
+      if (!response.ok) {
+        return { data: null, error: null };
+      }
 
       const data = await response.json();
-      const request = data && data.length > 0 ? data[0] : null;
-
-      return { data: request, error: null };
+      return { data: data[0] || null, error: null };
 
     } catch (e) {
       console.error('[RematchService] Get pending error:', e);
@@ -131,8 +134,10 @@ class RematchService {
   }
 
   /**
-   * Get the latest rematch request for a game (any status)
-   * This is used by the requester to check if their request was accepted
+   * Get rematch request by game (any status - for polling)
+   * @param {string} gameId - The game ID
+   * @param {string} userId - Current user ID
+   * @returns {Promise<{data: object|null, error: object|null}>}
    */
   async getRematchRequestByGame(gameId, userId) {
     if (!isConfigured()) return { data: null, error: null };
@@ -141,20 +146,88 @@ class RematchService {
     if (!headers) return { data: null, error: null };
 
     try {
-      // Get all rematch requests for this game, ordered by most recent
-      const url = `${SUPABASE_URL}/rest/v1/rematch_requests?game_id=eq.${gameId}&select=*&order=updated_at.desc&limit=1`;
+      // Get most recent request for this game (any status)
+      const url = `${SUPABASE_URL}/rest/v1/rematch_requests?game_id=eq.${gameId}&or=(from_user_id.eq.${userId},to_user_id.eq.${userId})&select=*&order=created_at.desc&limit=1`;
+      
       const response = await fetch(url, { headers });
-
-      if (!response.ok) return { data: null, error: null };
+      
+      if (!response.ok) {
+        return { data: null, error: null };
+      }
 
       const data = await response.json();
-      const request = data && data.length > 0 ? data[0] : null;
-
-      return { data: request, error: null };
+      return { data: data[0] || null, error: null };
 
     } catch (e) {
       console.error('[RematchService] Get request by game error:', e);
       return { data: null, error: { message: e.message } };
+    }
+  }
+
+  /**
+   * NEW v7.7: Get all pending rematch requests for a user
+   * Used in OnlineMenu to show pending rematches section
+   * @param {string} userId - The user ID
+   * @returns {Promise<{data: array, error: object|null}>}
+   */
+  async getPendingRematchRequests(userId) {
+    if (!isConfigured()) return { data: [], error: null };
+
+    const headers = getAuthHeaders();
+    if (!headers) return { data: [], error: { message: 'Not authenticated' } };
+
+    try {
+      console.log('[RematchService] Getting pending rematch requests for:', userId);
+
+      // Get rematch requests where user is sender or receiver and status is pending
+      const url = `${SUPABASE_URL}/rest/v1/rematch_requests?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})&status=eq.pending&order=created_at.desc`;
+      
+      const response = await fetch(url, { headers });
+
+      if (!response.ok) {
+        console.error('[RematchService] Failed to fetch rematch requests');
+        return { data: [], error: { message: 'Failed to fetch rematch requests' } };
+      }
+
+      const requests = await response.json();
+      console.log('[RematchService] Found', requests?.length || 0, 'pending rematch requests');
+
+      if (!requests || requests.length === 0) {
+        return { data: [], error: null };
+      }
+
+      // Fetch opponent profiles
+      const opponentIds = requests.map(r => 
+        r.from_user_id === userId ? r.to_user_id : r.from_user_id
+      ).filter(Boolean);
+
+      const uniqueOpponentIds = [...new Set(opponentIds)];
+
+      if (uniqueOpponentIds.length > 0) {
+        const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueOpponentIds.join(',')})&select=id,username,display_name`;
+        const profilesResponse = await fetch(profilesUrl, { headers });
+
+        if (profilesResponse.ok) {
+          const profiles = await profilesResponse.json();
+          const profileMap = {};
+          profiles.forEach(p => { profileMap[p.id] = p; });
+
+          // Enrich requests with opponent info
+          requests.forEach(r => {
+            const oppId = r.from_user_id === userId ? r.to_user_id : r.from_user_id;
+            const oppProfile = profileMap[oppId];
+            r.opponent_id = oppId;
+            r.opponent_name = oppProfile?.display_name || oppProfile?.username || 'Opponent';
+            r.is_sender = r.from_user_id === userId;
+          });
+        }
+      }
+
+      return { data: requests, error: null };
+
+    } catch (e) {
+      console.error('[RematchService] Get pending requests error:', e);
+      return { data: [], error: { message: e.message } };
     }
   }
 
@@ -286,7 +359,7 @@ class RematchService {
       }
 
       const data = await response.json();
-      const request = Array.isArray(data) ? data[0] : data;
+      const request = Array.isArray(data) ? data[0] : null;
 
       console.log('[RematchService] Rematch declined');
       return { data: request, error: null };
@@ -370,9 +443,9 @@ class RematchService {
             new_game_id: data.new_game_id,
             from_user_id: data.from_user_id 
           });
-        }
         
-        callback(data);
+          callback(data);
+        }
       } else {
         // No request found - could be deleted or never created
         if (lastStatus !== null) {

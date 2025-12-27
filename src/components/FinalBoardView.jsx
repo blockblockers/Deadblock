@@ -1,8 +1,9 @@
 // FinalBoardView.jsx - Display final board state with move order numbers
-// ENHANCED: Added gold shimmer on last moved piece
+// IMPROVED: Shows board even when moveHistory is missing, with player colors
 // Shows each piece with its move number overlay for game analysis
+
 import { useState, useEffect, useMemo } from 'react';
-import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause, Loader } from 'lucide-react';
 import { BOARD_SIZE, getPieceCoords } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
@@ -10,30 +11,44 @@ import { soundManager } from '../utils/soundManager';
 /**
  * FinalBoardView - Shows the final game board with move order numbers
  * 
- * ENHANCED: 
+ * IMPROVED: 
+ * - Shows board even without moveHistory (from board/boardPieces props)
  * - Different colors for Player 1 (cyan) and Player 2 (orange)
- * - Move order numbers on each piece
+ * - Move order numbers on each piece (when available)
  * - Gold shimmering highlight on the last moved piece
- * 
- * @param {Object} props
- * @param {Array} props.board - Final board state (8x8 grid)
- * @param {Object} props.boardPieces - Map of "row,col" -> pieceType
- * @param {Array} props.moveHistory - Array of moves with move_number, piece_type, row, col, rotation, flipped
- * @param {string} props.player1Name - Player 1's name
- * @param {string} props.player2Name - Player 2's name
- * @param {Function} props.onClose - Callback to close the view
+ * - Loading state support
  */
 const FinalBoardView = ({ 
   board, 
   boardPieces, 
   moveHistory = [],
+  isLoadingMoves = false,
   player1Name = 'Player 1',
   player2Name = 'Player 2',
+  winner = null,
+  viewerIsPlayer1 = true,
   onClose 
 }) => {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1); // -1 = show all with numbers
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1000); // ms per move
+
+  // Ensure board is valid
+  const safeBoard = useMemo(() => {
+    if (Array.isArray(board) && board.length === BOARD_SIZE) {
+      return board;
+    }
+    // Create empty board as fallback
+    return Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+  }, [board]);
+
+  // Ensure boardPieces is valid
+  const safeBoardPieces = useMemo(() => {
+    if (boardPieces && typeof boardPieces === 'object') {
+      return boardPieces;
+    }
+    return {};
+  }, [boardPieces]);
 
   // Build cell move numbers and track which cells belong to last move
   const { cellMoveNumbers, lastMoveCells } = useMemo(() => {
@@ -74,7 +89,7 @@ const FinalBoardView = ({
               const key = `${cellRow},${cellCol}`;
               cellMap[key] = {
                 moveNumber,
-                player: board[cellRow]?.[cellCol] || ((index % 2) + 1)
+                player: safeBoard[cellRow]?.[cellCol] || ((index % 2) + 1)
               };
               
               // Track last move cells
@@ -90,10 +105,14 @@ const FinalBoardView = ({
     });
 
     return { cellMoveNumbers: cellMap, lastMoveCells: lastCells };
-  }, [board, moveHistory]);
+  }, [safeBoard, moveHistory]);
 
   // Build board states at each move for replay
   const boardStates = useMemo(() => {
+    if (!moveHistory || moveHistory.length === 0) {
+      return [{ board: safeBoard, boardPieces: safeBoardPieces }];
+    }
+
     const states = [];
     let currentBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
     let currentBoardPieces = {};
@@ -145,11 +164,11 @@ const FinalBoardView = ({
     });
 
     return states;
-  }, [moveHistory]);
+  }, [moveHistory, safeBoard, safeBoardPieces]);
 
   // Playback controls
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || moveHistory.length === 0) return;
 
     const interval = setInterval(() => {
       setCurrentMoveIndex(prev => {
@@ -165,6 +184,8 @@ const FinalBoardView = ({
   }, [isPlaying, playbackSpeed, moveHistory.length]);
 
   const handlePlayPause = () => {
+    if (moveHistory.length === 0) return;
+    
     if (currentMoveIndex === -1) {
       // Start from beginning
       setCurrentMoveIndex(0);
@@ -176,46 +197,50 @@ const FinalBoardView = ({
     } else {
       setIsPlaying(!isPlaying);
     }
-    soundManager.playClickSound('soft');
+    soundManager.playClickSound?.('soft') || soundManager.playButtonClick?.();
   };
 
   const handlePrevMove = () => {
+    if (moveHistory.length === 0) return;
     setIsPlaying(false);
     setCurrentMoveIndex(prev => {
       if (prev === -1) return moveHistory.length - 1;
       if (prev === 0) return -1;
       return prev - 1;
     });
-    soundManager.playClickSound('soft');
+    soundManager.playClickSound?.('soft') || soundManager.playButtonClick?.();
   };
 
   const handleNextMove = () => {
+    if (moveHistory.length === 0) return;
     setIsPlaying(false);
     setCurrentMoveIndex(prev => {
       if (prev >= moveHistory.length - 1) return -1;
       return prev + 1;
     });
-    soundManager.playClickSound('soft');
+    soundManager.playClickSound?.('soft') || soundManager.playButtonClick?.();
   };
 
   const handleFirst = () => {
+    if (moveHistory.length === 0) return;
     setIsPlaying(false);
     setCurrentMoveIndex(0);
-    soundManager.playClickSound('soft');
+    soundManager.playClickSound?.('soft') || soundManager.playButtonClick?.();
   };
 
   const handleLast = () => {
+    if (moveHistory.length === 0) return;
     setIsPlaying(false);
     setCurrentMoveIndex(-1); // Show final with numbers
-    soundManager.playClickSound('soft');
+    soundManager.playClickSound?.('soft') || soundManager.playButtonClick?.();
   };
 
-  // Get cell color based on player - ENHANCED colors
+  // Get cell color based on player - DISTINCT COLORS
   const getCellColor = (player) => {
     if (player === 1) {
-      return 'bg-gradient-to-br from-cyan-400 to-cyan-600';
+      return 'bg-gradient-to-br from-cyan-400 to-cyan-600'; // Player 1: Cyan
     } else if (player === 2) {
-      return 'bg-gradient-to-br from-orange-400 to-orange-600';
+      return 'bg-gradient-to-br from-orange-400 to-orange-600'; // Player 2: Orange
     }
     return 'bg-slate-700/30';
   };
@@ -223,13 +248,16 @@ const FinalBoardView = ({
   // Determine display state
   const showingFinalWithNumbers = currentMoveIndex === -1;
   const stateIndex = showingFinalWithNumbers ? boardStates.length - 1 : currentMoveIndex + 1;
-  const displayState = boardStates[stateIndex] || { board, boardPieces };
-  const displayBoard = displayState.board || board;
+  const displayState = boardStates[stateIndex] || { board: safeBoard, boardPieces: safeBoardPieces };
+  const displayBoard = displayState.board || safeBoard;
 
   // Get the current move number being shown (for progress display)
   const displayMoveNumber = showingFinalWithNumbers 
     ? moveHistory.length 
     : (currentMoveIndex + 1);
+
+  // Check if we have any pieces on the board
+  const hasPieces = displayBoard.some(row => row.some(cell => cell !== null && cell !== 0));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -246,106 +274,102 @@ const FinalBoardView = ({
           <h2 className="text-lg font-bold text-amber-300">
             {showingFinalWithNumbers ? 'Final Board' : `Move ${displayMoveNumber}`}
           </h2>
-          <button 
+          <button
             onClick={onClose}
-            className="p-1 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Legend - ENHANCED with clearer player colors */}
+        {/* Player Legend */}
         <div className="flex justify-center gap-6 mb-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
-            <span className="text-cyan-300 font-medium">{player1Name}</span>
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+            <span className={`${winner === 'player1' ? 'text-cyan-300 font-bold' : 'text-slate-400'}`}>
+              {player1Name} {winner === 'player1' && '👑'}
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
-            <span className="text-orange-300 font-medium">{player2Name}</span>
-          </div>
-        </div>
-
-        {/* Board */}
-        <div className="flex justify-center mb-4">
-          <div 
-            className="grid gap-0.5 p-2 bg-slate-800/50 rounded-lg border border-slate-700/50"
-            style={{ 
-              gridTemplateColumns: `repeat(${BOARD_SIZE}, minmax(0, 1fr))`,
-              width: 'min(100%, 320px)',
-              aspectRatio: '1'
-            }}
-          >
-            {Array(BOARD_SIZE).fill(null).map((_, row) =>
-              Array(BOARD_SIZE).fill(null).map((_, col) => {
-                const cellKey = `${row},${col}`;
-                const cellValue = displayBoard[row]?.[col];
-                const moveInfo = cellMoveNumbers[cellKey];
-                const isOccupied = cellValue !== null && cellValue !== 0;
-                const isLastMove = lastMoveCells.has(cellKey);
-                
-                // Show move number only on final view
-                const showMoveNumber = showingFinalWithNumbers && moveInfo && isOccupied;
-
-                return (
-                  <div
-                    key={cellKey}
-                    className={`
-                      relative aspect-square rounded-sm flex items-center justify-center
-                      ${isOccupied ? getCellColor(cellValue) : 'bg-slate-700/30'}
-                      ${isOccupied ? 'shadow-sm' : ''}
-                      ${showingFinalWithNumbers && isLastMove ? 'gold-shimmer-cell' : ''}
-                      transition-all duration-200
-                    `}
-                  >
-                    {/* ENHANCED: Gold shimmer overlay for last moved piece */}
-                    {showingFinalWithNumbers && isLastMove && (
-                      <div className="absolute inset-0 rounded-sm overflow-hidden pointer-events-none">
-                        <div className="absolute inset-0 gold-shimmer-effect" />
-                        <div className="absolute inset-0 border-2 border-amber-300/70 rounded-sm" />
-                      </div>
-                    )}
-                    
-                    {/* Move number overlay */}
-                    {showMoveNumber && (
-                      <div className={`
-                        absolute inset-0 flex items-center justify-center
-                        text-[10px] sm:text-xs font-bold
-                        ${isLastMove 
-                          ? 'text-amber-900 bg-amber-300/50' 
-                          : cellValue === 1 
-                            ? 'text-cyan-900 bg-white/30' 
-                            : 'text-orange-900 bg-white/30'
-                        }
-                        rounded-sm z-10
-                      `}>
-                        {moveInfo.moveNumber}
-                      </div>
-                    )}
-                    
-                    {/* Cell highlight for non-numbered cells during replay */}
-                    {isOccupied && !showMoveNumber && (
-                      <div className="absolute inset-0 bg-white/10 rounded-sm" />
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Last Move Indicator */}
-        {showingFinalWithNumbers && moveHistory.length > 0 && (
-          <div className="text-center mb-3">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 border border-amber-500/30 rounded-full text-xs text-amber-300">
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              Last move highlighted in gold
+            <div className="w-4 h-4 rounded bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
+            <span className={`${winner === 'player2' ? 'text-orange-300 font-bold' : 'text-slate-400'}`}>
+              {player2Name} {winner === 'player2' && '👑'}
             </span>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        {isLoadingMoves && (
+          <div className="flex items-center justify-center py-8">
+            <Loader size={32} className="text-amber-400 animate-spin" />
+            <span className="ml-2 text-slate-400">Loading moves...</span>
           </div>
         )}
 
-        {/* Playback Controls */}
-        {moveHistory.length > 0 && (
+        {/* Board Grid */}
+        {!isLoadingMoves && (
+          <div className="flex justify-center mb-4">
+            <div 
+              className="grid grid-cols-8 gap-1 p-2 rounded-lg bg-slate-800/50 border border-slate-700/50"
+              style={{ boxShadow: '0 0 20px rgba(0,0,0,0.3)' }}
+            >
+              {displayBoard.map((row, rowIdx) =>
+                row.map((cellValue, colIdx) => {
+                  const key = `${rowIdx},${colIdx}`;
+                  const moveInfo = cellMoveNumbers[key];
+                  const isOccupied = cellValue !== null && cellValue !== 0;
+                  const isLastMove = lastMoveCells.has(key) && showingFinalWithNumbers;
+                  const showMoveNumber = showingFinalWithNumbers && moveInfo && moveHistory.length > 0;
+                  
+                  return (
+                    <div
+                      key={key}
+                      className={`
+                        w-8 h-8 sm:w-10 sm:h-10 rounded-md relative overflow-hidden
+                        ${isOccupied ? getCellColor(cellValue) : 'bg-slate-700/30'}
+                        ${isOccupied ? 'shadow-sm' : ''}
+                        ${isLastMove ? 'last-move-shimmer ring-2 ring-amber-400' : ''}
+                        transition-all duration-200
+                      `}
+                    >
+                      {/* Cell shine for occupied cells */}
+                      {isOccupied && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/20" />
+                      )}
+                      
+                      {/* Move number overlay */}
+                      {showMoveNumber && (
+                        <div className={`
+                          absolute inset-0 flex items-center justify-center
+                          text-[10px] sm:text-xs font-bold
+                          ${cellValue === 1 ? 'text-cyan-900' : 'text-orange-900'}
+                          bg-white/30 rounded-sm
+                        `}>
+                          {moveInfo.moveNumber}
+                        </div>
+                      )}
+                      
+                      {/* Cell highlight for non-numbered cells during replay */}
+                      {isOccupied && !showMoveNumber && (
+                        <div className="absolute inset-0 bg-white/10 rounded-sm" />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* No pieces message */}
+        {!isLoadingMoves && !hasPieces && (
+          <div className="text-center text-slate-500 py-4">
+            No pieces on board
+          </div>
+        )}
+
+        {/* Playback Controls - only show if we have move history */}
+        {!isLoadingMoves && moveHistory.length > 0 && (
           <div className="space-y-3">
             {/* Progress bar */}
             <div className="flex items-center gap-2">
@@ -428,12 +452,16 @@ const FinalBoardView = ({
 
         {/* Info text */}
         <div className="mt-4 text-center text-sm text-slate-500">
-          {moveHistory.length > 0 ? (
+          {isLoadingMoves ? (
+            <span>Loading game data...</span>
+          ) : moveHistory.length > 0 ? (
             showingFinalWithNumbers 
               ? <span>Numbers show move order • {moveHistory.length} total moves</span>
               : <span>Replaying game...</span>
+          ) : hasPieces ? (
+            <span>Final board state • Move history not available</span>
           ) : (
-            <span>Move history not available</span>
+            <span>No game data available</span>
           )}
         </div>
 
@@ -446,36 +474,18 @@ const FinalBoardView = ({
         </button>
       </div>
 
-      {/* ENHANCED: Gold shimmer animation styles */}
+      {/* Shimmer animation for last move */}
       <style>{`
-        .gold-shimmer-cell {
-          box-shadow: 0 0 15px rgba(251,191,36,0.6), 0 0 30px rgba(251,191,36,0.3);
+        .last-move-shimmer {
+          animation: last-move-glow 1.5s ease-in-out infinite;
         }
         
-        .gold-shimmer-effect {
-          background: linear-gradient(
-            135deg,
-            transparent 0%,
-            transparent 40%,
-            rgba(251,191,36,0.4) 45%,
-            rgba(255,255,255,0.6) 50%,
-            rgba(251,191,36,0.4) 55%,
-            transparent 60%,
-            transparent 100%
-          );
-          background-size: 300% 300%;
-          animation: gold-shimmer 2s ease-in-out infinite;
-        }
-        
-        @keyframes gold-shimmer {
-          0% {
-            background-position: 200% 200%;
+        @keyframes last-move-glow {
+          0%, 100% {
+            box-shadow: 0 0 5px rgba(251, 191, 36, 0.5), inset 0 0 5px rgba(251, 191, 36, 0.2);
           }
           50% {
-            background-position: 0% 0%;
-          }
-          100% {
-            background-position: -200% -200%;
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.8), inset 0 0 10px rgba(251, 191, 36, 0.4);
           }
         }
       `}</style>

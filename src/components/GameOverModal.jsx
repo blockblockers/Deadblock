@@ -1,8 +1,8 @@
 // GameOverModal.jsx - Game over modal with animations
-// UPDATED: Added AI level for AI games and opponent username for online games
-// UPDATED: Added "View Final Board" button for online games
+// v7.7: REMOVED View Final Board button from all game modes
+// Shows AI difficulty level for AI games
 import { useState, useEffect, useMemo } from 'react';
-import { Trophy, Skull, RotateCcw, RefreshCw, Home, X, Sliders, Eye } from 'lucide-react';
+import { Trophy, Skull, RotateCcw, RefreshCw, Home, X, Sliders } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { pieces } from '../utils/pieces';
 
@@ -223,7 +223,6 @@ const GameOverModal = ({
   onMenu, 
   onRematch, 
   onDifficultySelect, 
-  onViewFinalBoard,  // Callback to view final board with move numbers
   opponentName,      // Opponent username for online games
   difficulty         // AI difficulty level for AI games
 }) => {
@@ -238,14 +237,13 @@ const GameOverModal = ({
   const handleMenu = () => { soundManager.playButtonClick(); onClose(); onMenu?.(); };
   const handleRematch = () => { soundManager.playButtonClick(); onRematch?.(); };
   const handleDifficulty = () => { soundManager.playButtonClick(); onClose(); onDifficultySelect?.(); };
-  const handleViewFinalBoard = () => { soundManager.playButtonClick(); onViewFinalBoard?.(); };
 
   // Simple, clear messaging
   const is2Player = gameMode === '2player';
   const isOnline = gameMode === 'online';
   const isAI = gameMode === 'ai';
   
-  // UPDATED: Enhanced title with AI level and opponent name
+  // Title with AI level and opponent name
   const getTitle = () => {
     if (isPuzzle) return isWin ? 'COMPLETE!' : 'FAILED';
     if (is2Player) return winner === 1 ? 'PLAYER 1 WINS!' : 'PLAYER 2 WINS!';
@@ -253,7 +251,7 @@ const GameOverModal = ({
     return isWin ? 'YOU WIN!' : 'YOU LOSE';
   };
 
-  // UPDATED: Enhanced subtitle with AI level and opponent name
+  // Subtitle with AI level and opponent name
   const getSubtitle = () => {
     if (isPuzzle) return isWin ? 'Puzzle solved successfully' : 'No moves remaining';
     if (is2Player) return winner === 1 ? 'Player 1 dominated the board' : 'Player 2 dominated the board';
@@ -263,7 +261,7 @@ const GameOverModal = ({
         ? `You defeated ${oppDisplay}` 
         : `${oppDisplay} wins this round`;
     }
-    // AI mode - include difficulty level
+    // AI mode - include difficulty level in subtitle
     if (isAI && difficulty) {
       const diffLabel = getDifficultyLabel(difficulty);
       return isWin 
@@ -345,7 +343,7 @@ const GameOverModal = ({
         {/* Subtitle */}
         <p className="text-center text-slate-400 text-sm mb-6">{getSubtitle()}</p>
 
-        {/* UPDATED: AI Difficulty Badge for AI games */}
+        {/* AI Difficulty Badge for AI games */}
         {isAI && difficulty && (
           <div className="flex justify-center mb-4">
             <div className={`px-3 py-1 rounded-full text-xs font-bold ${
@@ -360,7 +358,7 @@ const GameOverModal = ({
           </div>
         )}
 
-        {/* UPDATED: Opponent name badge for online games */}
+        {/* Opponent name badge for online games */}
         {isOnline && opponentName && (
           <div className="flex justify-center mb-4">
             <div className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/30 text-amber-300 border border-amber-500/50">
@@ -382,15 +380,7 @@ const GameOverModal = ({
                 </button>
               )}
               
-              {/* VIEW FINAL BOARD button */}
-              {onViewFinalBoard && (
-                <button onClick={handleViewFinalBoard}
-                  className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 text-white transition-all border border-amber-400/30"
-                >
-                  <Eye size={16} />
-                  VIEW FINAL BOARD
-                </button>
-              )}
+              {/* REMOVED: View Final Board button */}
               
               <button onClick={handleMenu}
                 className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"

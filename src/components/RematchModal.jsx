@@ -1,5 +1,7 @@
+// RematchModal.jsx - Themed modal for rematch requests
+// v7.7: Added "Back to Menu" button for requester waiting state
 import React, { useState, useEffect } from 'react';
-import { X, Swords, Check, Loader2 } from 'lucide-react';
+import { X, Swords, Check, Loader2, Home } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 /**
@@ -10,12 +12,15 @@ import { soundManager } from '../utils/soundManager';
  * 2. This modal shows the request status
  * 3. Opponent sees the request in their game over modal
  * 4. Either player can accept to start the rematch
+ * 
+ * v7.7: Added onBackToMenu for navigating away while keeping request active
  */
 const RematchModal = ({
   isOpen,
   onClose,
   onAccept,
   onDecline,
+  onBackToMenu,          // NEW: Navigate to menu without canceling request
   isRequester,           // true if this player sent the request
   requesterName,         // Name of player who requested rematch
   isWaiting = false,     // Waiting for opponent response
@@ -170,6 +175,25 @@ const RematchModal = ({
               >
                 Cancel Request
               </button>
+            )}
+
+            {/* NEW v7.7: Back to Menu button (for requester waiting) */}
+            {isRequester && isWaiting && !opponentAccepted && !opponentDeclined && onBackToMenu && (
+              <>
+                <button
+                  onClick={() => {
+                    soundManager.playButtonClick();
+                    onBackToMenu();
+                  }}
+                  className="w-full py-3 px-6 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+                >
+                  <Home size={18} />
+                  Back to Menu
+                </button>
+                <p className="text-slate-500 text-xs text-center">
+                  Your rematch request will stay active
+                </p>
+              </>
             )}
 
             {/* Close button (when done) */}

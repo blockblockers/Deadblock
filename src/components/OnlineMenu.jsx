@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.7: Added pending rematches section
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,6 +10,7 @@ import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
 import { realtimeManager } from '../services/realtimeManager';
+import { rematchService } from '../services/rematchService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import TierIcon from './TierIcon';
@@ -244,6 +246,9 @@ const OnlineMenu = ({
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
   
+  // v7.7: Pending rematch requests state
+  const [pendingRematches, setPendingRematches] = useState([]);
+  
   // Final Board View state
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
 
@@ -295,6 +300,17 @@ const OnlineMenu = ({
     setPendingFriendRequests(data?.length || 0);
   };
 
+  // v7.7: Load pending rematch requests
+  const loadRematches = async () => {
+    if (!profile?.id) return;
+    try {
+      const { data } = await rematchService.getPendingRematchRequests(profile.id);
+      setPendingRematches(data || []);
+    } catch (err) {
+      console.error('Error loading rematches:', err);
+    }
+  };
+
   // Load friend request count on mount
   useEffect(() => {
     loadFriendRequests();
@@ -316,6 +332,7 @@ const OnlineMenu = ({
     const load = async () => {
       await loadGames();
       await loadInvites();
+      await loadRematches();  // v7.7: Load pending rematches
     };
     
     load();
@@ -324,6 +341,7 @@ const OnlineMenu = ({
     const refreshInterval = setInterval(() => {
       loadGames();
       loadInvites();
+      loadRematches();  // v7.7: Refresh rematches
     }, 15000);
     
     // Also refresh when tab becomes visible again
@@ -332,6 +350,7 @@ const OnlineMenu = ({
         console.log('[OnlineMenu] Tab visible, refreshing data...');
         loadGames();
         loadInvites();
+        loadRematches();  // v7.7: Refresh rematches
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -341,6 +360,7 @@ const OnlineMenu = ({
       console.log('[OnlineMenu] Window focused, refreshing data...');
       loadGames();
       loadInvites();
+      loadRematches();  // v7.7: Refresh rematches
     };
     window.addEventListener('focus', handleFocus);
     
@@ -695,6 +715,62 @@ const OnlineMenu = ({
     
     await inviteService.cancelInvite(invite.id, profile.id);
     await loadInvites();
+    
+    setProcessingInvite(null);
+  };
+
+  // v7.7: Accept a pending rematch request
+  const handleAcceptRematch = async (rematch) => {
+    if (!profile?.id) return;
+    
+    setProcessingInvite(rematch.id);
+    soundManager.playButtonClick();
+    
+    try {
+      const { data, error } = await rematchService.acceptRematchRequest(rematch.id, profile.id);
+      
+      if (error) {
+        alert(error.message || 'Failed to accept rematch');
+        setProcessingInvite(null);
+        return;
+      }
+      
+      if (data?.game) {
+        soundManager.playSound('notification');
+        // Navigate to the new game
+        onResumeGame?.(data.game);
+      }
+    } catch (err) {
+      console.error('handleAcceptRematch error:', err);
+      alert('Failed to accept rematch');
+    }
+    
+    setProcessingInvite(null);
+    await loadRematches();
+  };
+
+  // v7.7: Decline a pending rematch request
+  const handleDeclineRematch = async (rematch) => {
+    if (!profile?.id) return;
+    
+    setProcessingInvite(rematch.id);
+    soundManager.playButtonClick();
+    
+    await rematchService.declineRematchRequest(rematch.id, profile.id);
+    await loadRematches();
+    
+    setProcessingInvite(null);
+  };
+
+  // v7.7: Cancel a rematch request we sent
+  const handleCancelRematch = async (rematch) => {
+    if (!profile?.id) return;
+    
+    setProcessingInvite(rematch.id);
+    soundManager.playButtonClick();
+    
+    await rematchService.cancelRematchRequest(rematch.id, profile.id);
+    await loadRematches();
     
     setProcessingInvite(null);
   };
@@ -1513,6 +1589,95 @@ const OnlineMenu = ({
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {/* v7.7: Pending Rematches Section */}
+            {pendingRematches.length > 0 && (
+              <div className="bg-slate-800/30 rounded-xl p-4 mb-4 border border-amber-500/30">
+                <h3 className="text-amber-400 font-bold text-sm mb-3 flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  PENDING REMATCHES ({pendingRematches.length})
+                </h3>
+                <div 
+                  className="space-y-2 max-h-48 overflow-y-auto pr-1"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                  {pendingRematches.map(rematch => (
+                    <div
+                      key={rematch.id}
+                      className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-amber-500/20"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500/30 to-orange-500/30 flex items-center justify-center border border-amber-500/40">
+                          <span className="text-amber-400 font-bold text-sm">
+                            {rematch.opponent_name?.[0]?.toUpperCase() || '?'}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="text-white text-sm font-medium">
+                            {rematch.opponent_name || 'Opponent'}
+                          </div>
+                          <div className="text-xs">
+                            {rematch.is_sender ? (
+                              <span className="text-amber-400/70 flex items-center gap-1">
+                                <Clock size={10} />
+                                Waiting for response...
+                              </span>
+                            ) : (
+                              <span className="text-green-400/70">
+                                Wants a rematch!
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        {!rematch.is_sender ? (
+                          <>
+                            <button
+                              onClick={() => handleAcceptRematch(rematch)}
+                              disabled={processingInvite === rematch.id}
+                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-500 transition-all disabled:opacity-50 flex items-center gap-1"
+                            >
+                              {processingInvite === rematch.id ? (
+                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <>
+                                  <Check size={12} />
+                                  Accept
+                                </>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeclineRematch(rematch)}
+                              disabled={processingInvite === rematch.id}
+                              className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-600 transition-all disabled:opacity-50"
+                            >
+                              Decline
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => handleCancelRematch(rematch)}
+                            disabled={processingInvite === rematch.id}
+                            className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {processingInvite === rematch.id ? (
+                              <div className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <>
+                                <X size={12} />
+                                Cancel
+                              </>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

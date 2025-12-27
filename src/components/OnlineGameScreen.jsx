@@ -3,6 +3,7 @@
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // PATCHED: Clockwise rotation, always scroll, removed header menu, orange forfeit
+// v7.7: Added onBackToMenu to RematchModal for navigation while keeping request active
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -1617,6 +1618,17 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             await rematchService.declineRematchRequest(rematchRequest.id, user.id);
             setRematchDeclined(true);
             setShowRematchModal(false);
+          }
+        }}
+        // NEW v7.7: Navigate to menu while keeping rematch request active
+        onBackToMenu={() => {
+          setShowRematchModal(false);
+          setShowGameOver(false);
+          // Navigate to menu - rematch request stays active in database
+          if (typeof onLeave === 'function') {
+            onLeave();
+          } else {
+            window.location.href = window.location.origin;
           }
         }}
         isRequester={isRematchRequester}

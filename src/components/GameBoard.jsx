@@ -1,9 +1,9 @@
 // GameBoard.jsx - Main game board component
-// ENHANCED: Much more visible piece placement with strong glow and pulsing
-// ENHANCED: Overlapping pieces now have very obvious warning indicators
-// ENHANCED: Placed pieces have ambient glow and animation effects
-// ENHANCED: Ghost cells (out of bounds) are more visible
-import { forwardRef, useMemo, useState, useEffect } from 'react';
+// v7.7: Slower, more elegant animations - vibrant shiny pieces with slow rolling movement
+// CHANGED: Allow dropping pieces even with conflicts (for rotation adjustment)
+// This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
+
+import { forwardRef, useState, useEffect } from 'react';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
 
@@ -11,7 +11,7 @@ import { pieceColors } from '../utils/pieces';
  * GameBoard Component
  * 
  * Renders the 8x8 game grid with placed pieces and pending move preview.
- * Handles cell clicks and displays game state including valid/invalid move indicators.
+ * v7.7: Slower animations, more vibrant pieces, allows conflict placement for rotation
  */
 const GameBoard = forwardRef(({
   board,
@@ -36,19 +36,23 @@ const GameBoard = forwardRef(({
   
   const safeBoardPieces = boardPieces || {};
   
-  // Random ambient effects for placed pieces
+  // Random ambient effects for placed pieces - slower, more subtle
   const [ambientEffects, setAmbientEffects] = useState({});
   
   useEffect(() => {
     // Generate random ambient effects for placed pieces
     const effects = {};
-    const effectTypes = ['shimmer', 'pulse', 'glow', 'none', 'none']; // 40% chance of effect
+    const effectTypes = ['shine', 'glow', 'shimmer', 'none', 'none']; // 60% chance of effect
     
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         if (safeBoard[row]?.[col]) {
           const rand = Math.random();
-          effects[`${row},${col}`] = effectTypes[Math.floor(rand * effectTypes.length)];
+          effects[`${row},${col}`] = {
+            type: effectTypes[Math.floor(rand * effectTypes.length)],
+            delay: Math.random() * 3, // Stagger animations
+            duration: 4 + Math.random() * 3 // 4-7 second cycles
+          };
         }
       }
     }
@@ -73,9 +77,11 @@ const GameBoard = forwardRef(({
   let outOfBoundsCells = [];
   let overlappingCells = [];
   let isPendingValid = false;
+  let pendingPieceColor = null;
   
   if (pendingMove) {
     const pieceCoords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    pendingPieceColor = pieceColors[pendingMove.piece] || 'bg-gradient-to-br from-cyan-400 to-blue-500';
     
     pieceCoords.forEach(([dx, dy]) => {
       const cellRow = pendingMove.row + dy;
@@ -97,11 +103,11 @@ const GameBoard = forwardRef(({
       canPlacePiece(safeBoard, pendingMove.row, pendingMove.col, pieceCoords);
   }
 
-  // Calculate AI animating piece cells
+  // Calculate AI animating cells (for drag animation)
   let aiAnimatingCells = [];
   if (aiAnimatingMove) {
-    const pieceCoords = getPieceCoords(aiAnimatingMove.piece, aiAnimatingMove.rotation || aiAnimatingMove.rot, aiAnimatingMove.flipped || aiAnimatingMove.flip);
-    pieceCoords.forEach(([dx, dy]) => {
+    const aiCoords = getPieceCoords(aiAnimatingMove.piece, aiAnimatingMove.rotation || 0, aiAnimatingMove.flipped || false);
+    aiCoords.forEach(([dx, dy]) => {
       const cellRow = aiAnimatingMove.row + dy;
       const cellCol = aiAnimatingMove.col + dx;
       if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
@@ -110,11 +116,11 @@ const GameBoard = forwardRef(({
     });
   }
 
-  // Calculate player animating piece cells
+  // Calculate player animating cells (after confirm)
   let playerAnimatingCells = [];
   if (playerAnimatingMove) {
-    const pieceCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rotation || playerAnimatingMove.rot, playerAnimatingMove.flipped || playerAnimatingMove.flip);
-    pieceCoords.forEach(([dx, dy]) => {
+    const playerCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rotation || 0, playerAnimatingMove.flipped || false);
+    playerCoords.forEach(([dx, dy]) => {
       const cellRow = playerAnimatingMove.row + dy;
       const cellCol = playerAnimatingMove.col + dx;
       if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
@@ -123,154 +129,186 @@ const GameBoard = forwardRef(({
     });
   }
 
-  // Cell dimensions for positioning ghost cells
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-  const cellSize = isMobile ? 36 : 48;
-  const gapSize = isMobile ? 2 : 4;
-  const padding = isMobile ? 4 : 6;
-
-  // Get cell colors based on player and custom colors
-  const getPlayerColor = (player) => {
-    if (customColors && customColors[player]) {
-      return customColors[player];
+  // Get color classes based on game mode and player
+  const getPlayerColorClass = (cellValue) => {
+    if (customColors) {
+      if (cellValue === 1) return customColors.player1 || 'bg-gradient-to-br from-cyan-400 to-blue-500';
+      if (cellValue === 2) return customColors.player2 || 'bg-gradient-to-br from-orange-400 to-red-500';
     }
-    return player === 1 
-      ? 'bg-gradient-to-br from-cyan-400 to-blue-500' 
-      : 'bg-gradient-to-br from-pink-400 to-rose-500';
+    
+    if (cellValue === 1) {
+      return 'bg-gradient-to-br from-cyan-400 via-cyan-500 to-blue-600';
+    }
+    if (cellValue === 2) {
+      if (gameMode === '2player') {
+        return 'bg-gradient-to-br from-pink-400 via-pink-500 to-rose-600';
+      }
+      return 'bg-gradient-to-br from-orange-400 via-orange-500 to-red-600';
+    }
+    return '';
+  };
+
+  // Handle cell click
+  const handleCellClick = (rowIdx, colIdx) => {
+    if (isDisabled) return;
+    if (onCellClick) {
+      onCellClick(rowIdx, colIdx);
+    }
   };
 
   return (
-    <div 
-      ref={ref}
-      className="relative"
-      style={{ 
-        overflow: 'visible',
-        zIndex: 1,
-      }}
-    >
-      {/* Main grid */}
+    <div className="relative" ref={ref}>
+      {/* Main board grid */}
       <div 
-        className="grid grid-cols-8 gap-0.5 sm:gap-1 bg-slate-800/50 p-1 sm:p-1.5 rounded-lg border border-cyan-500/20"
-        style={{ overflow: 'visible' }}
+        className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
+        style={{
+          boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)'
+        }}
       >
         {safeBoard.map((row, rowIdx) =>
-          row.map((cell, colIdx) => {
+          row.map((cellValue, colIdx) => {
             const isPending = pendingCells.some(p => p.row === rowIdx && p.col === colIdx);
             const isOverlapping = overlappingCells.some(p => p.row === rowIdx && p.col === colIdx);
-            const isAiAnimating = aiAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
-            const isPlayerAnimating = playerAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
+            const isAiAnimating = aiAnimatingCells.some(p => p.row === rowIdx && p.col === colIdx);
+            const isPlayerAnimating = playerAnimatingCells.some(p => p.row === rowIdx && p.col === colIdx);
+            const isOccupied = cellValue !== null && cellValue !== 0 && cellValue !== undefined;
             const pieceName = getPieceName(rowIdx, colIdx);
+            
+            // Get piece-specific color or player color
             const pieceColor = pieceName ? pieceColors[pieceName] : null;
-            const ambientEffect = ambientEffects[`${rowIdx},${colIdx}`];
-            const isPlacedPiece = cell !== null && cell !== 0 && cell !== undefined;
+            const colorClass = isOccupied 
+              ? (pieceColor || getPlayerColorClass(cellValue))
+              : '';
+            
+            // Ambient effect for this cell
+            const ambient = ambientEffects[`${rowIdx},${colIdx}`];
+            
+            // Calculate pending index for stagger effect
+            const pendingIndex = isPending ? pendingCells.findIndex(p => p.row === rowIdx && p.col === colIdx) : -1;
             
             return (
-              <button
+              <div
                 key={`${rowIdx}-${colIdx}`}
+                onClick={() => handleCellClick(rowIdx, colIdx)}
                 className={`
-                  w-9 h-9 sm:w-12 sm:h-12 rounded-md sm:rounded-lg relative
-                  transition-all duration-150 overflow-hidden
-                  ${cell 
-                    ? `${pieceColor || getPlayerColor(cell)} shadow-lg` 
-                    : 'bg-slate-700/50 hover:bg-slate-600/50'
-                  }
-                  ${isPending && isPendingValid ? 'pending-valid-cell' : ''}
-                  ${isPending && !isPendingValid ? 'pending-invalid-cell' : ''}
+                  w-9 h-9 sm:w-12 sm:h-12 rounded-md relative overflow-hidden
+                  transition-all duration-300 cursor-pointer
+                  ${isOccupied ? colorClass : 'bg-slate-700/40 hover:bg-slate-600/50'}
+                  ${isOccupied ? 'shadow-lg' : ''}
                   ${isOverlapping ? 'overlap-cell' : ''}
                   ${isAiAnimating ? 'ai-placing-cell' : ''}
                   ${isPlayerAnimating ? 'player-placing-cell' : ''}
-                  ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
                 `}
-                onClick={() => !isDisabled && onCellClick(rowIdx, colIdx)}
-                disabled={isDisabled}
+                style={isPending ? {
+                  animationDelay: `${pendingIndex * 0.15}s`
+                } : undefined}
               >
-                {/* ENHANCED: Placed piece glow effect */}
-                {isPlacedPiece && (
+                {/* Base shine layer for occupied cells - always visible */}
+                {isOccupied && (
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/20 pointer-events-none" />
+                )}
+                
+                {/* Vibrant ambient effects for placed pieces */}
+                {isOccupied && ambient?.type === 'shine' && (
+                  <div 
+                    className="absolute inset-0 ambient-shine pointer-events-none"
+                    style={{ 
+                      animationDelay: `${ambient.delay}s`,
+                      animationDuration: `${ambient.duration}s`
+                    }}
+                  />
+                )}
+                {isOccupied && ambient?.type === 'glow' && (
+                  <div 
+                    className="absolute inset-0 ambient-glow pointer-events-none"
+                    style={{ 
+                      animationDelay: `${ambient.delay}s`,
+                      animationDuration: `${ambient.duration}s`
+                    }}
+                  />
+                )}
+                {isOccupied && ambient?.type === 'shimmer' && (
+                  <div 
+                    className="absolute inset-0 ambient-shimmer pointer-events-none"
+                    style={{ 
+                      animationDelay: `${ambient.delay}s`,
+                      animationDuration: `${ambient.duration}s`
+                    }}
+                  />
+                )}
+
+                {/* Pending piece display - original color with subtle glow */}
+                {isPending && (
                   <>
-                    {/* Base glow */}
-                    <div className="absolute inset-0 opacity-60 bg-gradient-to-br from-white/20 via-transparent to-black/20" />
-                    {/* Scan line effect */}
-                    <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.1)_2px,rgba(255,255,255,0.1)_4px)]" />
-                    {/* Ambient shimmer effect */}
-                    {ambientEffect === 'shimmer' && (
-                      <div className="absolute inset-0 ambient-shimmer" />
-                    )}
-                    {/* Ambient pulse effect */}
-                    {ambientEffect === 'pulse' && (
-                      <div className="absolute inset-0 ambient-pulse" />
-                    )}
-                    {/* Ambient glow effect */}
-                    {ambientEffect === 'glow' && (
-                      <div className="absolute inset-0 ambient-glow" />
-                    )}
+                    {/* Base color */}
+                    <div className={`absolute inset-0 ${pendingPieceColor} rounded-md`} />
+                    
+                    {/* Shine overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/20 rounded-md" />
+                    
+                    {/* Subtle pulse glow */}
+                    <div className={`absolute inset-0 pending-glow ${isPendingValid ? 'valid' : 'invalid'} rounded-md`} />
+                    
+                    {/* Rolling shine effect - slow and elegant */}
+                    <div className="absolute inset-0 pending-shine rounded-md overflow-hidden" />
                   </>
                 )}
                 
-                {/* AI placing animation - ENHANCED */}
-                {isAiAnimating && (
-                  <div className="absolute inset-0 bg-purple-400/60 animate-pulse">
-                    <div className="absolute inset-0 ai-drop-effect" />
-                  </div>
+                {/* Validity border indicator */}
+                {isPending && (
+                  <div 
+                    className="absolute inset-0 rounded-md pointer-events-none"
+                    style={{
+                      border: isPendingValid ? '2px solid rgba(34, 211, 238, 0.7)' : '2px solid rgba(239, 68, 68, 0.7)',
+                      boxShadow: isPendingValid 
+                        ? '0 0 10px rgba(34, 211, 238, 0.4), inset 0 0 8px rgba(34, 211, 238, 0.2)'
+                        : '0 0 10px rgba(239, 68, 68, 0.4), inset 0 0 8px rgba(239, 68, 68, 0.2)'
+                    }}
+                  />
                 )}
-                
-                {/* Player placing animation - ENHANCED */}
-                {isPlayerAnimating && (
-                  <div className="absolute inset-0 bg-cyan-400/60 animate-pulse">
-                    <div className="absolute inset-0 player-drop-effect" />
-                  </div>
-                )}
-                
-                {/* ENHANCED: Pending valid indicator with STRONG glow */}
-                {isPending && isPendingValid && (
-                  <div className="absolute inset-0 pending-valid-glow" />
-                )}
-                
-                {/* ENHANCED: Pending invalid indicator */}
-                {isPending && !isPendingValid && (
-                  <div className="absolute inset-0 pending-invalid-glow" />
-                )}
-                
-                {/* ENHANCED: Overlap indicator - very obvious */}
+
+                {/* Overlapping cell warning - more visible */}
                 {isOverlapping && (
-                  <div className="absolute inset-0 overlap-warning">
-                    {/* X pattern */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-white font-black text-lg drop-shadow-lg">✕</div>
-                    </div>
-                  </div>
+                  <div className="absolute inset-0 overlap-warning rounded-md" />
                 )}
-              </button>
+
+                {/* AI drop effect */}
+                {isAiAnimating && (
+                  <div className="absolute inset-0 ai-drop-effect rounded-md" />
+                )}
+
+                {/* Player drop effect */}
+                {isPlayerAnimating && (
+                  <div className="absolute inset-0 player-drop-effect rounded-md" />
+                )}
+              </div>
             );
           })
         )}
       </div>
 
-      {/* ENHANCED: Ghost cells for out-of-bounds positions */}
-      {outOfBoundsCells.length > 0 && pendingMove && (
-        <div className="absolute inset-0 pointer-events-none" style={{ overflow: 'visible', zIndex: 100 }}>
+      {/* Ghost cells for out-of-bounds preview */}
+      {outOfBoundsCells.length > 0 && (
+        <div className="absolute pointer-events-none" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
           {outOfBoundsCells.map((cell, idx) => {
-            const refCell = pendingCells[0] || { row: pendingMove.row, col: pendingMove.col };
-            const offsetRow = cell.row - refCell.row;
-            const offsetCol = cell.col - refCell.col;
+            const cellSize = window.innerWidth < 640 ? 36 : 48;
+            const gap = window.innerWidth < 640 ? 2 : 4;
+            const padding = window.innerWidth < 640 ? 6 : 8;
             
-            const top = (refCell.row + offsetRow) * (cellSize + gapSize) + padding;
-            const left = (refCell.col + offsetCol) * (cellSize + gapSize) + padding;
+            const left = padding + cell.col * (cellSize + gap);
+            const top = padding + cell.row * (cellSize + gap);
             
             return (
               <div
-                key={`ghost-${idx}`}
-                className="absolute rounded-md sm:rounded-lg ghost-cell-warning"
+                key={idx}
+                className="absolute ghost-cell-warning rounded-md"
                 style={{
                   width: cellSize,
                   height: cellSize,
-                  top: `${top}px`,
-                  left: `${left}px`,
+                  left,
+                  top,
                 }}
-              >
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-red-400 font-black text-xs">OUT</div>
-                </div>
-              </div>
+              />
             );
           })}
         </div>
@@ -279,90 +317,80 @@ const GameBoard = forwardRef(({
       {/* Full board outline when piece is active */}
       {pendingMove && (
         <div 
-          className={`absolute inset-0 pointer-events-none rounded-lg transition-all ${
+          className={`absolute inset-0 pointer-events-none rounded-lg transition-all duration-500 ${
             isPendingValid 
-              ? 'ring-2 ring-cyan-400/60 shadow-[0_0_30px_rgba(34,211,238,0.4)]'
-              : 'ring-2 ring-red-500/60 shadow-[0_0_30px_rgba(239,68,68,0.5)]'
+              ? 'ring-2 ring-cyan-400/40 shadow-[0_0_20px_rgba(34,211,238,0.2)]'
+              : 'ring-2 ring-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
           }`}
           style={{ margin: '-2px' }}
         />
       )}
 
-      {/* ENHANCED Animation styles */}
+      {/* Animation styles - SLOWER and more elegant */}
       <style>{`
         /* ============================================
-           PENDING PIECE - VALID PLACEMENT
-           Very obvious green/cyan glow
+           PENDING PIECE - SUBTLE GLOW & SHINE
+           Slower, more elegant animations
            ============================================ */
-        .pending-valid-cell {
-          box-shadow: 
-            0 0 20px rgba(34, 211, 238, 0.8),
-            0 0 40px rgba(34, 211, 238, 0.4),
-            inset 0 0 15px rgba(34, 211, 238, 0.5) !important;
-          border: 3px solid rgba(34, 211, 238, 0.9) !important;
+        
+        .pending-glow {
+          animation: pending-glow-pulse 3s ease-in-out infinite;
         }
         
-        .pending-valid-glow {
-          background: linear-gradient(135deg, rgba(34, 211, 238, 0.6) 0%, rgba(74, 222, 128, 0.4) 100%);
-          animation: valid-pulse 0.8s ease-in-out infinite;
+        .pending-glow.valid {
+          background: radial-gradient(circle at center, rgba(34, 211, 238, 0.15) 0%, transparent 70%);
         }
         
-        @keyframes valid-pulse {
-          0%, 100% { 
-            opacity: 0.5;
-            box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.6);
-          }
-          50% { 
-            opacity: 0.8;
-            box-shadow: inset 0 0 30px rgba(34, 211, 238, 0.9);
-          }
+        .pending-glow.invalid {
+          background: radial-gradient(circle at center, rgba(239, 68, 68, 0.15) 0%, transparent 70%);
+        }
+        
+        @keyframes pending-glow-pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+        
+        .pending-shine {
+          background: linear-gradient(
+            120deg,
+            transparent 0%,
+            transparent 40%,
+            rgba(255, 255, 255, 0.3) 50%,
+            transparent 60%,
+            transparent 100%
+          );
+          background-size: 200% 100%;
+          animation: pending-shine-roll 4s ease-in-out infinite;
+        }
+        
+        @keyframes pending-shine-roll {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
         }
         
         /* ============================================
-           PENDING PIECE - INVALID PLACEMENT
-           Obvious red warning
-           ============================================ */
-        .pending-invalid-cell {
-          box-shadow: 
-            0 0 15px rgba(239, 68, 68, 0.7),
-            0 0 30px rgba(239, 68, 68, 0.3),
-            inset 0 0 10px rgba(239, 68, 68, 0.4) !important;
-          border: 3px solid rgba(239, 68, 68, 0.8) !important;
-        }
-        
-        .pending-invalid-glow {
-          background: rgba(239, 68, 68, 0.4);
-          animation: invalid-pulse 0.4s ease-in-out infinite;
-        }
-        
-        @keyframes invalid-pulse {
-          0%, 100% { opacity: 0.4; }
-          50% { opacity: 0.7; }
-        }
-        
-        /* ============================================
-           OVERLAPPING CELLS - VERY OBVIOUS WARNING
+           OVERLAPPING CELLS - CLEAR WARNING
            ============================================ */
         .overlap-cell {
           box-shadow: 
-            0 0 20px rgba(239, 68, 68, 1),
-            0 0 40px rgba(239, 68, 68, 0.6),
-            inset 0 0 20px rgba(239, 68, 68, 0.8) !important;
-          border: 4px solid rgba(255, 100, 100, 1) !important;
+            0 0 15px rgba(239, 68, 68, 0.8),
+            0 0 30px rgba(239, 68, 68, 0.4),
+            inset 0 0 15px rgba(239, 68, 68, 0.6) !important;
+          border: 3px solid rgba(255, 100, 100, 1) !important;
         }
         
         .overlap-warning {
           background: repeating-linear-gradient(
             45deg,
-            rgba(239, 68, 68, 0.7),
-            rgba(239, 68, 68, 0.7) 4px,
-            rgba(255, 150, 150, 0.7) 4px,
-            rgba(255, 150, 150, 0.7) 8px
+            rgba(239, 68, 68, 0.6),
+            rgba(239, 68, 68, 0.6) 4px,
+            rgba(255, 150, 150, 0.6) 4px,
+            rgba(255, 150, 150, 0.6) 8px
           );
-          animation: overlap-flash 0.3s ease-in-out infinite;
+          animation: overlap-pulse 1.5s ease-in-out infinite;
         }
         
-        @keyframes overlap-flash {
+        @keyframes overlap-pulse {
           0%, 100% { opacity: 0.7; }
           50% { opacity: 1; }
         }
@@ -371,19 +399,19 @@ const GameBoard = forwardRef(({
            GHOST CELLS (OUT OF BOUNDS)
            ============================================ */
         .ghost-cell-warning {
-          background: rgba(239, 68, 68, 0.3);
-          border: 3px dashed rgba(239, 68, 68, 0.9);
-          animation: ghost-pulse 0.6s ease-in-out infinite;
+          background: rgba(239, 68, 68, 0.25);
+          border: 2px dashed rgba(239, 68, 68, 0.8);
+          animation: ghost-pulse 2s ease-in-out infinite;
         }
         
         @keyframes ghost-pulse {
           0%, 100% { 
-            border-color: rgba(239, 68, 68, 0.9);
-            background: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.8);
+            background: rgba(239, 68, 68, 0.25);
           }
           50% { 
             border-color: rgba(255, 100, 100, 1);
-            background: rgba(239, 68, 68, 0.5);
+            background: rgba(239, 68, 68, 0.4);
           }
         }
         
@@ -392,18 +420,18 @@ const GameBoard = forwardRef(({
            ============================================ */
         .ai-placing-cell {
           box-shadow: 
-            0 0 25px rgba(168, 85, 247, 0.9),
-            0 0 50px rgba(168, 85, 247, 0.5) !important;
-          border: 3px solid rgba(168, 85, 247, 0.9) !important;
+            0 0 20px rgba(168, 85, 247, 0.8),
+            0 0 40px rgba(168, 85, 247, 0.4) !important;
+          border: 2px solid rgba(168, 85, 247, 0.8) !important;
         }
         
         .ai-drop-effect {
-          background: radial-gradient(circle, rgba(168, 85, 247, 0.8) 0%, transparent 70%);
-          animation: ai-drop 0.4s ease-out;
+          background: radial-gradient(circle, rgba(168, 85, 247, 0.6) 0%, transparent 70%);
+          animation: ai-drop 0.5s ease-out;
         }
         
         @keyframes ai-drop {
-          0% { transform: scale(2); opacity: 0; }
+          0% { transform: scale(1.5); opacity: 0; }
           100% { transform: scale(1); opacity: 1; }
         }
         
@@ -412,59 +440,81 @@ const GameBoard = forwardRef(({
            ============================================ */
         .player-placing-cell {
           box-shadow: 
-            0 0 25px rgba(34, 211, 238, 0.9),
-            0 0 50px rgba(34, 211, 238, 0.5) !important;
-          border: 3px solid rgba(34, 211, 238, 0.9) !important;
+            0 0 20px rgba(34, 211, 238, 0.8),
+            0 0 40px rgba(34, 211, 238, 0.4) !important;
+          border: 2px solid rgba(34, 211, 238, 0.8) !important;
         }
         
         .player-drop-effect {
-          background: radial-gradient(circle, rgba(34, 211, 238, 0.8) 0%, transparent 70%);
-          animation: player-drop 0.4s ease-out;
+          background: radial-gradient(circle, rgba(34, 211, 238, 0.6) 0%, transparent 70%);
+          animation: player-drop 0.5s ease-out;
         }
         
         @keyframes player-drop {
-          0% { transform: scale(2); opacity: 0; }
+          0% { transform: scale(1.5); opacity: 0; }
           100% { transform: scale(1); opacity: 1; }
         }
         
         /* ============================================
-           PLACED PIECE AMBIENT EFFECTS
+           PLACED PIECE AMBIENT EFFECTS - VIBRANT & SLOW
            ============================================ */
+        
+        /* Rolling shine - slow diagonal sweep */
+        .ambient-shine {
+          background: linear-gradient(
+            135deg,
+            transparent 0%,
+            transparent 35%,
+            rgba(255, 255, 255, 0.4) 45%,
+            rgba(255, 255, 255, 0.5) 50%,
+            rgba(255, 255, 255, 0.4) 55%,
+            transparent 65%,
+            transparent 100%
+          );
+          background-size: 300% 300%;
+          animation: ambient-shine-roll 6s ease-in-out infinite;
+        }
+        
+        @keyframes ambient-shine-roll {
+          0% { background-position: 100% 100%; }
+          50% { background-position: 0% 0%; }
+          100% { background-position: 100% 100%; }
+        }
+        
+        /* Soft pulsing glow */
+        .ambient-glow {
+          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.3);
+          animation: ambient-glow-pulse 5s ease-in-out infinite;
+        }
+        
+        @keyframes ambient-glow-pulse {
+          0%, 100% { 
+            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2);
+            filter: brightness(1);
+          }
+          50% { 
+            box-shadow: inset 0 0 25px rgba(255, 255, 255, 0.4);
+            filter: brightness(1.15);
+          }
+        }
+        
+        /* Horizontal shimmer - very slow */
         .ambient-shimmer {
           background: linear-gradient(
-            115deg,
-            transparent 20%,
-            rgba(255, 255, 255, 0.3) 40%,
-            rgba(255, 255, 255, 0.3) 60%,
-            transparent 80%
+            90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.2) 25%,
+            rgba(255, 255, 255, 0.35) 50%,
+            rgba(255, 255, 255, 0.2) 75%,
+            transparent 100%
           );
           background-size: 200% 100%;
-          animation: shimmer 3s ease-in-out infinite;
+          animation: ambient-shimmer-sweep 8s ease-in-out infinite;
         }
         
-        @keyframes shimmer {
+        @keyframes ambient-shimmer-sweep {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
-        }
-        
-        .ambient-pulse {
-          background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
-          animation: ambient-pulse-anim 2s ease-in-out infinite;
-        }
-        
-        @keyframes ambient-pulse-anim {
-          0%, 100% { opacity: 0.3; transform: scale(0.9); }
-          50% { opacity: 0.6; transform: scale(1); }
-        }
-        
-        .ambient-glow {
-          box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.3);
-          animation: ambient-glow-anim 2.5s ease-in-out infinite;
-        }
-        
-        @keyframes ambient-glow-anim {
-          0%, 100% { box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2); }
-          50% { box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.4); }
         }
       `}</style>
     </div>

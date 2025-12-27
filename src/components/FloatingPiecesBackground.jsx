@@ -1,8 +1,8 @@
 // FloatingPiecesBackground - Reusable animated background with floating pentomino pieces
-// UPDATED: Increased default count by 20% (15 -> 18)
+// v7.7: Removed delay - animations start immediately when screen opens
 // Use this component on any game/menu screen to add the animated block background
 
-import { useMemo, memo, useState, useEffect } from 'react';
+import { useMemo, memo } from 'react';
 import { pieces } from '../utils/pieces';
 
 // Individual floating piece component
@@ -117,7 +117,7 @@ export const COLOR_PRESETS = {
 /**
  * FloatingPiecesBackground - Animated pentomino pieces floating in the background
  * 
- * @param {number} count - Number of floating pieces (default: 18, increased from 15 by 20%)
+ * @param {number} count - Number of floating pieces (default: 20)
  * @param {Array} colors - Array of {color, glow} objects (default: DEFAULT_COLORS)
  * @param {string} colorPreset - Use a preset: 'default', 'online', 'speed', 'green', 'purple'
  * @param {number} minSize - Minimum piece scale (default: 0.6)
@@ -126,7 +126,7 @@ export const COLOR_PRESETS = {
  * @param {number} maxDuration - Maximum animation duration in seconds (default: 25)
  */
 const FloatingPiecesBackground = memo(({ 
-  count = 20, // UPDATED: Increased from 15 to 20 (33% increase)
+  count = 20,
   colors = null,
   colorPreset = 'default',
   minSize = 0.6,
@@ -134,13 +134,8 @@ const FloatingPiecesBackground = memo(({
   minDuration = 15,
   maxDuration = 25,
 }) => {
-  // Delay rendering slightly to prevent hydration issues
-  const [isReady, setIsReady] = useState(false);
-  
-  useEffect(() => {
-    const timer = setTimeout(() => setIsReady(true), 50);
-    return () => clearTimeout(timer);
-  }, []);
+  // REMOVED: Delay rendering - now renders immediately
+  // This fixes the animation pause when navigating between screens
 
   const colorSet = colors || COLOR_PRESETS[colorPreset] || DEFAULT_COLORS;
   
@@ -169,8 +164,6 @@ const FloatingPiecesBackground = memo(({
       };
     });
   }, [count, colorSet, minSize, maxSize, minDuration, maxDuration]);
-
-  if (!isReady) return null;
 
   return (
     <>

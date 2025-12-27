@@ -4,6 +4,7 @@
 // 2. Added acceptInviteByCode function for invite link flow
 // 3. Fixed cancelInviteLink to properly update status
 // 4. Enhanced search to include username AND display_name
+// 5. v7.7: Added filtering to exclude used invite links (game_id check)
 import { isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
@@ -151,19 +152,17 @@ class InviteService {
       // Check if query looks like an email (contains @)
       const isEmailSearch = searchQuery.includes('@');
       
-      // Search by username, display_name, AND email (if email column exists in profiles)
+      // Search by username, display_name, AND email
       let orFilter;
       if (isEmailSearch) {
-        // Prioritize email search when @ is present
         orFilter = `email.ilike.*${searchQuery}*,username.ilike.*${searchQuery}*`;
       } else {
-        // Search username and display_name for non-email queries
         orFilter = `username.ilike.*${searchQuery}*,display_name.ilike.*${searchQuery}*,email.ilike.*${searchQuery}*`;
       }
       
-      const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,display_name,email,rating,games_played,games_won&or=(${encodeURIComponent(orFilter)})&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
+      const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,display_name,rating,games_played,games_won&or=(${encodeURIComponent(orFilter)})&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
       
-      console.log('[InviteService] Searching users with query:', searchQuery, 'isEmail:', isEmailSearch);
+      console.log('[InviteService] Searching users with query:', searchQuery);
       
       const response = await fetch(url, { headers });
       if (!response.ok) {
@@ -182,18 +181,16 @@ class InviteService {
   }
 
   // =====================================================
-  // GAME INVITES (direct user-to-user)
+  // DIRECT INVITES (between users)
   // =====================================================
-  async sendInvite(fromUserId, toUserId, options = {}) {
+  async sendInvite(fromUserId, toUserId, orderPreference = 'random', isRematch = false) {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
-
-    const { orderPreference = 'random', isRematch = false } = options;
 
     try {
       const headers = getAuthHeaders();
       if (!headers) return { data: null, error: { message: 'Not authenticated' } };
       
-      // Check existing invites
+      // Check existing invites between these users
       const existingUrl = `${SUPABASE_URL}/rest/v1/game_invites?select=id,status,from_user_id,order_preference&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
       
       const existingResponse = await fetch(existingUrl, { headers });
@@ -202,28 +199,20 @@ class InviteService {
         if (existing?.length > 0) {
           const existingInvite = existing[0];
           if (existingInvite.from_user_id === toUserId) {
-            // Other player already sent invite - accept it with order preference resolution
-            // Convert orderPreference to firstMoveOption format
+            // Other player already sent invite - accept it
             let firstMoveOption = 'random';
-            
-            // My preference from my perspective
-            // 'me' = I (the acceptor, who is the invitee) want to go first -> 'invitee'
-            // 'opponent' = opponent (the inviter) goes first -> 'inviter'
-            // 'random' = random
             if (orderPreference === 'me') {
               firstMoveOption = 'invitee';
             } else if (orderPreference === 'opponent') {
               firstMoveOption = 'inviter';
             }
-            
             return await this.acceptInvite(existingInvite.id, fromUserId, firstMoveOption);
           }
           return { data: null, error: { message: 'Invite already sent' } };
         }
       }
 
-      // Store order preference on the invite
-      // 'me' = inviter wants to go first, 'opponent' = inviter wants invitee to go first
+      // Create new invite
       const inviteData = {
         from_user_id: fromUserId,
         to_user_id: toUserId,
@@ -231,8 +220,6 @@ class InviteService {
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
       };
       
-      // Add order preference as metadata (stored in a JSONB column if available, or we note it)
-      // For now we'll add it as a new column reference - if the column doesn't exist it will be ignored
       if (orderPreference && orderPreference !== 'random') {
         inviteData.order_preference = orderPreference;
       }
@@ -319,7 +306,8 @@ class InviteService {
     }
   }
 
-  async acceptInvite(inviteId, userId, firstMoveOption = null) {
+  // Accept invite with first move selection
+  async acceptInvite(inviteId, userId, firstMoveOption = 'random') {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
@@ -342,24 +330,28 @@ class InviteService {
         return { data: null, error: { message: 'Not authorized' } };
       }
 
-      // Determine first player
-      // If no explicit firstMoveOption, check if invite has stored order_preference
-      let effectiveOption = firstMoveOption;
-      if (!effectiveOption && invite.order_preference) {
-        // order_preference is from inviter's perspective: 'me' = inviter first, 'opponent' = invitee first
-        if (invite.order_preference === 'me') {
-          effectiveOption = 'inviter';
-        } else if (invite.order_preference === 'opponent') {
-          effectiveOption = 'invitee';
-        }
-      }
-      if (!effectiveOption) {
-        effectiveOption = 'random';
-      }
-
-      // Create game
+      // Create empty board
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
-      let firstPlayer = effectiveOption === 'inviter' ? 1 : effectiveOption === 'invitee' ? 2 : Math.random() < 0.5 ? 1 : 2;
+      
+      // Determine first player
+      let firstPlayer;
+      
+      // Resolve order preference conflicts
+      const inviterPref = invite.order_preference || 'random';
+      let effectiveOption = firstMoveOption;
+      
+      // If both want to go first or both want opponent first, use random
+      if (inviterPref === 'me' && firstMoveOption === 'invitee') {
+        effectiveOption = 'random';
+      } else if (inviterPref === 'opponent' && firstMoveOption === 'inviter') {
+        effectiveOption = 'random';
+      } else if (inviterPref === 'me') {
+        effectiveOption = 'inviter';
+      } else if (inviterPref === 'opponent') {
+        effectiveOption = 'invitee';
+      }
+      
+      firstPlayer = effectiveOption === 'inviter' ? 1 : effectiveOption === 'invitee' ? 2 : Math.random() < 0.5 ? 1 : 2;
 
       const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/games`, {
         method: 'POST',
@@ -389,7 +381,14 @@ class InviteService {
         { eq: { id: inviteId } }
       );
 
-      return { data: { invite: { ...invite, status: 'accepted', game_id: game.id }, game }, error: null };
+      // Fetch full game with player profiles
+      const gameUrl = `${SUPABASE_URL}/rest/v1/games?id=eq.${game.id}&select=*`;
+      const gameResponse = await fetch(gameUrl, { 
+        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
+      });
+      const fullGame = gameResponse.ok ? await gameResponse.json() : game;
+
+      return { data: { invite: { ...invite, status: 'accepted', game_id: game.id }, game: fullGame }, error: null };
     } catch (e) {
       console.error('acceptInvite exception:', e);
       return { data: null, error: { message: e.message } };
@@ -470,16 +469,12 @@ class InviteService {
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
       };
       
-      console.log('[InviteService] Invite data:', inviteData);
-      
       const { data: invite, error: createError } = await dbInsert('email_invites', inviteData, { returning: true, single: true });
 
       if (createError) {
         console.error('[InviteService] Error creating invite link:', createError);
         return { data: null, error: createError };
       }
-
-      console.log('[InviteService] Created invite:', invite);
 
       if (!invite?.invite_code) {
         console.error('[InviteService] Invite created but no invite_code returned!', invite);
@@ -501,6 +496,7 @@ class InviteService {
     }
   }
 
+  // v7.7 FIX: Filter out used invite links
   async getInviteLinks(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
@@ -508,13 +504,14 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { data: [], error: null };
 
-      // Get current time for expiry check
       const now = new Date().toISOString();
+      
+      // Query for pending and sent invites that haven't expired
       const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${now}&order=created_at.desc`;
 
       console.log('[InviteService] Fetching invite links for user:', userId);
       
-      // Add cache control headers instead of URL param
+      // Add cache-busting headers to prevent stale data
       const fetchHeaders = {
         ...headers,
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -530,11 +527,29 @@ class InviteService {
       }
 
       const data = await response.json();
-      console.log('[InviteService] Got', data?.length || 0, 'active invite links:', data?.map(i => ({ id: i.id, status: i.status, code: i.invite_code?.substring(0, 8) })));
+      
+      // v7.7 FIX: Additional filter as safety net for edge cases
+      // Filter out invites that have a game_id (means they were used)
+      // or have a status other than pending/sent
+      const activeInvites = (data || []).filter(invite => {
+        // Only include invites that are truly pending or sent
+        if (invite.status !== 'pending' && invite.status !== 'sent') {
+          console.log('[InviteService] Filtering out invite with status:', invite.status);
+          return false;
+        }
+        // Also exclude if a game_id exists (means it was accepted/used)
+        if (invite.game_id) {
+          console.log('[InviteService] Filtering out invite with game_id:', invite.game_id);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('[InviteService] Got', activeInvites.length, 'active invite links (filtered from', data?.length || 0, ')');
       
       const appUrl = window.location.origin;
       
-      const invitesWithLinks = (data || []).map(invite => ({
+      const invitesWithLinks = activeInvites.map(invite => ({
         ...invite,
         inviteLink: `${appUrl}/?invite=${invite.invite_code}`,
         recipientName: invite.to_email?.startsWith('friend_') ? 'Friend' : invite.to_email
@@ -547,7 +562,6 @@ class InviteService {
     }
   }
 
-  // FIXED: Cancel invite link now uses proper PATCH with Prefer header
   async cancelInviteLink(inviteId, userId) {
     if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
@@ -593,7 +607,6 @@ class InviteService {
     }
   }
 
-  // FIXED: Get invite by code using direct query (not RPC)
   async getInviteByCode(code) {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
@@ -656,7 +669,7 @@ class InviteService {
     }
   }
 
-  // NEW: Accept invite by code (for shareable links)
+  // Accept invite by code (for shareable links)
   async acceptInviteByCode(code, acceptingUserId) {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
@@ -687,12 +700,11 @@ class InviteService {
       }
       
       // Create the game
-      // Player setup:
-      // - player1_id = inviter (from_user_id) 
-      // - player2_id = acceptor (acceptingUserId)
-      // The person accepting the invite link ALWAYS goes first (player 2)
+      // Player 1 = inviter (from_user_id) 
+      // Player 2 = acceptor (acceptingUserId)
+      // The person accepting ALWAYS goes first (player 2)
       const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
-      const firstPlayer = 2; // Acceptor (player 2) always goes first for challenge links
+      const firstPlayer = 2;
 
       const createResponse = await fetch(`${SUPABASE_URL}/rest/v1/games`, {
         method: 'POST',
@@ -762,7 +774,7 @@ class InviteService {
   // REALTIME SUBSCRIPTIONS
   // =====================================================
   subscribeToInvites(userId, onNewInvite, onInviteUpdated) {
-    // Use realtimeManager's event system (connectUser already listens for game_invites)
+    // Use realtimeManager's event system
     const handleInvite = (invite) => {
       if (!invite) return;
 

@@ -1,28 +1,19 @@
 // DragOverlay.jsx - Floating piece preview during drag operations
-// REDESIGNED: Single piece follows cursor (no mirrored preview on board)
-// ENHANCED: Strong glow effects, smooth animations, validity indicator
+// IMPROVED: Piece matches grid cell size, original colors with radiate/sparkle effect
+// This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
+
 import { memo } from 'react';
 import { getPieceCoords } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
 
 /**
- * DragOverlay - Renders a single floating piece that follows the drag position
+ * DragOverlay - Renders a floating piece that follows the drag position
  * 
- * REDESIGNED: Shows only ONE piece following the cursor/finger
- * - No more confusing mirrored preview
- * - Large, obvious piece with strong glow
- * - Clear valid/invalid state indication
- * - Smooth follow animation
- * 
- * @param {Object} props
- * @param {string} props.piece - Name of the piece being dragged
- * @param {Object} props.position - Current {x, y} screen position
- * @param {Object} props.offset - Offset from touch/click point {x, y}
- * @param {number} props.rotation - Current rotation (0, 1, 2, 3)
- * @param {boolean} props.flipped - Whether piece is flipped
- * @param {boolean} props.isValid - Whether current drop position is valid
- * @param {boolean} props.isValidDrop - Alias for isValid (compatibility)
- * @param {boolean} props.isOverBoard - Whether cursor is over the game board
+ * IMPROVED:
+ * - Piece cells match the game board grid size (36px mobile, 48px desktop)
+ * - Keeps original piece color with radiate/sparkle effect
+ * - Single piece follows cursor (no mirrored preview)
+ * - Clear valid/invalid state with glow color change
  */
 const DragOverlay = memo(({ 
   piece, 
@@ -32,12 +23,19 @@ const DragOverlay = memo(({
   flipped = false,
   isValid = false,
   isValidDrop,
-  isOverBoard = false,
+  isDragging = true,
 }) => {
   // Support both prop names for compatibility
   const validDrop = isValidDrop !== undefined ? isValidDrop : isValid;
   
-  if (!piece || !position) return null;
+  // Detect mobile for matching grid size
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  
+  // Match the game board cell sizes exactly
+  const cellSize = isMobile ? 36 : 48; // Same as GameBoard: w-9 (36px) / w-12 (48px)
+  const gap = isMobile ? 2 : 4; // Same as GameBoard gap
+  
+  if (!piece || !position || !isDragging) return null;
 
   // Get piece coordinates with current rotation/flip
   const coords = getPieceCoords(piece, rotation, flipped);
@@ -49,24 +47,29 @@ const DragOverlay = memo(({
   const minY = Math.min(...coords.map(([, y]) => y));
   const maxY = Math.max(...coords.map(([, y]) => y));
   
-  // Cell size for the floating preview (larger for visibility)
-  const cellSize = 32;
-  const gap = 3;
-  
   // Calculate total dimensions
-  const width = (maxX - minX + 1) * (cellSize + gap) - gap;
-  const height = (maxY - minY + 1) * (cellSize + gap) - gap;
+  const pieceWidth = (maxX - minX + 1) * (cellSize + gap) - gap;
+  const pieceHeight = (maxY - minY + 1) * (cellSize + gap) - gap;
 
-  // Get piece color
+  // Get original piece color
   const colorClass = pieceColors[piece] || 'bg-gradient-to-br from-cyan-400 to-blue-500';
+  
+  // Glow colors based on validity
+  const glowColor = validDrop 
+    ? 'rgba(34, 211, 238, 0.8)' // Cyan for valid
+    : 'rgba(239, 68, 68, 0.8)'; // Red for invalid
+  
+  const outerGlow = validDrop
+    ? '0 0 30px rgba(34,211,238,0.6), 0 0 60px rgba(34,211,238,0.4), 0 0 90px rgba(34,211,238,0.2)'
+    : '0 0 20px rgba(239,68,68,0.5), 0 0 40px rgba(239,68,68,0.3)';
 
   return (
     <>
-      {/* Backdrop blur when dragging */}
+      {/* Subtle backdrop dim */}
       <div 
         className="fixed inset-0 pointer-events-none z-[9998]"
         style={{
-          background: 'radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.2) 100%)',
+          background: 'radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.15) 100%)',
         }}
       />
       
@@ -74,105 +77,110 @@ const DragOverlay = memo(({
       <div
         className="fixed pointer-events-none z-[9999]"
         style={{
-          left: position.x - offset.x - width / 2,
-          top: position.y - offset.y - height / 2 - 20, // Offset up so finger doesn't cover piece
-          width: width + 20, // Padding for glow
-          height: height + 40, // Extra for label
+          left: position.x - pieceWidth / 2,
+          top: position.y - pieceHeight / 2 - 30, // Offset up so finger doesn't cover piece
           transform: 'translate3d(0, 0, 0)', // GPU acceleration
           willChange: 'left, top',
         }}
       >
-        {/* Outer glow effect */}
+        {/* Outer radiate glow */}
         <div 
-          className={`
-            absolute rounded-2xl transition-all duration-150
-            ${validDrop 
-              ? 'bg-cyan-400/30 shadow-[0_0_60px_rgba(34,211,238,0.6),0_0_100px_rgba(34,211,238,0.3)]' 
-              : 'bg-red-500/20 shadow-[0_0_40px_rgba(239,68,68,0.4),0_0_80px_rgba(239,68,68,0.2)]'
-            }
-          `}
+          className="absolute rounded-xl"
           style={{
-            left: -10,
-            top: -10,
-            right: -10,
-            bottom: 20,
-            filter: 'blur(8px)',
+            left: -15,
+            top: -15,
+            right: -15,
+            bottom: -15,
+            boxShadow: outerGlow,
+            animation: 'drag-radiate-glow 1.5s ease-in-out infinite',
           }}
         />
         
-        {/* Piece container */}
+        {/* Piece grid - matches board cell size */}
         <div 
-          className={`
-            relative rounded-xl p-2 transition-all duration-150
-            ${validDrop 
-              ? 'bg-slate-900/95 border-2 border-cyan-400 shadow-[0_0_30px_rgba(34,211,238,0.5)]' 
-              : 'bg-slate-900/95 border-2 border-red-500/70 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
-            }
-          `}
+          className="relative"
           style={{
-            marginLeft: 10,
-            marginTop: 10,
+            display: 'grid',
+            gridTemplateColumns: `repeat(${maxX - minX + 1}, ${cellSize}px)`,
+            gap: `${gap}px`,
           }}
         >
-          {/* Piece grid */}
-          <div 
-            className="relative"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${maxX - minX + 1}, ${cellSize}px)`,
-              gap: `${gap}px`,
-            }}
-          >
-            {coords.map(([x, y], idx) => {
-              const gridX = x - minX;
-              const gridY = y - minY;
-              
-              return (
-                <div
-                  key={idx}
-                  className={`
-                    rounded-md relative overflow-hidden
-                    ${colorClass}
-                    ${validDrop 
-                      ? 'shadow-[0_0_15px_rgba(34,211,238,0.5)]' 
-                      : 'shadow-[0_0_10px_rgba(239,68,68,0.3)]'
-                    }
-                  `}
+          {coords.map(([x, y], idx) => {
+            const gridX = x - minX;
+            const gridY = y - minY;
+            
+            return (
+              <div
+                key={idx}
+                className={`
+                  rounded-md sm:rounded-lg relative overflow-hidden
+                  ${colorClass}
+                `}
+                style={{
+                  width: cellSize,
+                  height: cellSize,
+                  gridColumn: gridX + 1,
+                  gridRow: gridY + 1,
+                  boxShadow: `0 0 15px ${glowColor}, inset 0 0 10px rgba(255,255,255,0.2)`,
+                  animation: 'drag-cell-sparkle 0.8s ease-in-out infinite',
+                  animationDelay: `${idx * 0.1}s`,
+                }}
+              >
+                {/* Inner gradient shine */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-black/20" />
+                
+                {/* Sparkle overlay */}
+                <div 
+                  className="absolute inset-0"
                   style={{
-                    width: cellSize,
-                    height: cellSize,
-                    gridColumn: gridX + 1,
-                    gridRow: gridY + 1,
+                    background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.5) 0%, transparent 50%)`,
+                    animation: 'drag-sparkle-move 1.2s ease-in-out infinite',
+                    animationDelay: `${idx * 0.15}s`,
                   }}
+                />
+                
+                {/* Shimmer sweep */}
+                <div 
+                  className="absolute inset-0 overflow-hidden"
                 >
-                  {/* Inner shine effect */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/20" />
-                  
-                  {/* Scan line effect */}
-                  <div className="absolute inset-0 opacity-40 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.15)_2px,rgba(255,255,255,0.15)_4px)]" />
-                  
-                  {/* Pulsing glow for valid */}
-                  {validDrop && (
-                    <div className="absolute inset-0 animate-pulse bg-cyan-400/20" />
-                  )}
+                  <div 
+                    className="absolute w-full h-full"
+                    style={{
+                      background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+                      animation: 'drag-shimmer-sweep 1.5s ease-in-out infinite',
+                      animationDelay: `${idx * 0.1}s`,
+                    }}
+                  />
                 </div>
-              );
-            })}
-          </div>
-          
-          {/* Corner accents */}
-          <div className={`absolute top-0 left-0 w-3 h-3 border-l-2 border-t-2 rounded-tl-lg ${validDrop ? 'border-cyan-400' : 'border-red-500'}`} />
-          <div className={`absolute top-0 right-0 w-3 h-3 border-r-2 border-t-2 rounded-tr-lg ${validDrop ? 'border-cyan-400' : 'border-red-500'}`} />
-          <div className={`absolute bottom-0 left-0 w-3 h-3 border-l-2 border-b-2 rounded-bl-lg ${validDrop ? 'border-cyan-400' : 'border-red-500'}`} />
-          <div className={`absolute bottom-0 right-0 w-3 h-3 border-r-2 border-b-2 rounded-br-lg ${validDrop ? 'border-cyan-400' : 'border-red-500'}`} />
+                
+                {/* Scan lines for cyberpunk effect */}
+                <div 
+                  className="absolute inset-0 opacity-30"
+                  style={{
+                    background: 'repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(255,255,255,0.1) 2px, rgba(255,255,255,0.1) 4px)',
+                  }}
+                />
+                
+                {/* Pulsing border glow */}
+                <div 
+                  className="absolute inset-0 rounded-md sm:rounded-lg"
+                  style={{
+                    border: `2px solid ${glowColor}`,
+                    animation: 'drag-border-pulse 0.8s ease-in-out infinite',
+                    animationDelay: `${idx * 0.1}s`,
+                  }}
+                />
+              </div>
+            );
+          })}
         </div>
         
-        {/* Status indicator label */}
+        {/* Status label */}
         <div 
           className={`
-            absolute left-1/2 -translate-x-1/2 bottom-0
+            absolute left-1/2 -translate-x-1/2 -bottom-8
             px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider
-            transition-all duration-150
+            whitespace-nowrap
             ${validDrop 
               ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white shadow-[0_0_20px_rgba(34,211,238,0.6)]' 
               : 'bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.5)]'
@@ -183,36 +191,60 @@ const DragOverlay = memo(({
         </div>
       </div>
       
-      {/* Ripple effect at cursor position */}
-      <div 
-        className="fixed pointer-events-none z-[9997]"
-        style={{
-          left: position.x,
-          top: position.y,
-          transform: 'translate(-50%, -50%)',
-        }}
-      >
-        <div 
-          className={`
-            w-12 h-12 rounded-full opacity-50
-            ${validDrop ? 'bg-cyan-400' : 'bg-red-500'}
-          `}
-          style={{
-            animation: 'ripple 1s ease-out infinite',
-          }}
-        />
-      </div>
-      
       {/* Animation keyframes */}
       <style>{`
-        @keyframes ripple {
+        @keyframes drag-radiate-glow {
+          0%, 100% {
+            opacity: 0.8;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 1;
+            transform: scale(1.05);
+          }
+        }
+        
+        @keyframes drag-cell-sparkle {
+          0%, 100% {
+            filter: brightness(1);
+          }
+          50% {
+            filter: brightness(1.3);
+          }
+        }
+        
+        @keyframes drag-sparkle-move {
           0% {
-            transform: scale(0.5);
-            opacity: 0.5;
+            transform: translate(-20%, -20%) rotate(0deg);
+            opacity: 0.3;
+          }
+          50% {
+            transform: translate(20%, 20%) rotate(180deg);
+            opacity: 0.6;
           }
           100% {
-            transform: scale(2);
-            opacity: 0;
+            transform: translate(-20%, -20%) rotate(360deg);
+            opacity: 0.3;
+          }
+        }
+        
+        @keyframes drag-shimmer-sweep {
+          0% {
+            transform: translateX(-100%);
+          }
+          50%, 100% {
+            transform: translateX(100%);
+          }
+        }
+        
+        @keyframes drag-border-pulse {
+          0%, 100% {
+            opacity: 0.6;
+            box-shadow: inset 0 0 5px currentColor;
+          }
+          50% {
+            opacity: 1;
+            box-shadow: inset 0 0 15px currentColor;
           }
         }
       `}</style>

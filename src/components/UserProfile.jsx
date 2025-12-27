@@ -1,21 +1,50 @@
-// User Profile Screen - Enhanced with tier theming and clickable opponents
+// User Profile Screen - Enhanced with ELO changes in match history and proper Final Board View
 // FIXES:
-// 1. Uses username priority (same as PlayerProfileCard)
-// 2. Tier-colored styling throughout
-// 3. Clickable opponents in match history
-// 4. Final Board View for completed games
-// PATCHED: Centered title matching other menus (size="medium" with subtitle)
-// PATCHED: Added scrolling support for mobile devices
+// 1. Shows +/- ELO changes in match history boxes
+// 2. Fetches game moves for Final Board View
+// 3. Uses username priority (same as PlayerProfileCard)
+// 4. Tier-colored styling throughout
+// 5. Clickable opponents in match history
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, TrendingDown, Swords, Award, Gamepad2, Zap, LayoutGrid, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
+import { ratingService } from '../services/ratingService';
 import { getRankInfo } from '../utils/rankUtils';
 import NeonTitle from './NeonTitle';
 import TierIcon from './TierIcon';
 import ViewPlayerProfile from './ViewPlayerProfile';
 import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
+
+// Direct fetch helper for game moves
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
+const fetchGameMoves = async (gameId) => {
+  const token = localStorage.getItem('supabase_access_token');
+  if (!token || !SUPABASE_URL) return [];
+  
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&order=move_number.asc`,
+      {
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    return [];
+  } catch (err) {
+    console.error('Error fetching game moves:', err);
+    return [];
+  }
+};
 
 // Helper to convert hex to rgba
 const hexToRgba = (hex, alpha) => {
@@ -46,6 +75,7 @@ const UserProfile = ({ onBack }) => {
   const [displayName, setDisplayName] = useState(profile?.username || profile?.display_name || '');
   const [saving, setSaving] = useState(false);
   const [recentGames, setRecentGames] = useState([]);
+  const [ratingHistory, setRatingHistory] = useState([]); // ELO changes per game
   const [stats, setStats] = useState({
     totalGames: 0,
     wins: 0,
@@ -60,6 +90,8 @@ const UserProfile = ({ onBack }) => {
   
   // State for Final Board View
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
+  const [loadingMoves, setLoadingMoves] = useState(false);
+  const [gameMoves, setGameMoves] = useState([]);
 
   // Get tier info for theming
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
@@ -70,6 +102,7 @@ const UserProfile = ({ onBack }) => {
       // FIX: Use username priority
       setDisplayName(profile.username || profile.display_name || 'Player');
       loadStats();
+      loadRatingHistory();
     }
   }, [profile]);
 
@@ -116,6 +149,26 @@ const UserProfile = ({ onBack }) => {
     } catch (err) {
       console.error('Error loading stats:', err);
     }
+  };
+
+  // Load rating history for ELO changes
+  const loadRatingHistory = async () => {
+    if (!profile?.id) return;
+    
+    try {
+      const { data } = await ratingService.getRatingHistory(profile.id, 50);
+      if (data) {
+        setRatingHistory(data);
+      }
+    } catch (err) {
+      console.error('Error loading rating history:', err);
+    }
+  };
+
+  // Get ELO change for a specific game
+  const getEloChangeForGame = (gameId) => {
+    const historyEntry = ratingHistory.find(h => h.game_id === gameId);
+    return historyEntry ? historyEntry.change : null;
   };
 
   const handleSave = async () => {
@@ -168,6 +221,23 @@ const UserProfile = ({ onBack }) => {
     setViewingOpponent(opponent);
   };
 
+  // Handle opening Final Board View - fetch moves first
+  const handleOpenFinalBoardView = async (game) => {
+    soundManager.playButtonClick();
+    setLoadingMoves(true);
+    setSelectedGameForFinalView(game);
+    
+    try {
+      const moves = await fetchGameMoves(game.id);
+      setGameMoves(moves);
+    } catch (err) {
+      console.error('Error fetching moves:', err);
+      setGameMoves([]);
+    }
+    
+    setLoadingMoves(false);
+  };
+
   // FIX: Display name uses username priority
   const playerDisplayName = profile?.username || profile?.display_name || 'Player';
 
@@ -179,327 +249,281 @@ const UserProfile = ({ onBack }) => {
         overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch',
         overscrollBehavior: 'contain',
-        touchAction: 'pan-y pinch-zoom', // Allow zoom
-        minHeight: '100dvh', // Dynamic viewport height
-        maxHeight: '100vh',
+        touchAction: 'pan-y pinch-zoom',
+        minHeight: '100dvh',
       }}
     >
-      {/* Grid background with tier color */}
-      <div 
-        className="fixed inset-0 opacity-30 pointer-events-none" 
-        style={{
-          backgroundImage: `linear-gradient(${hexToRgba(glowColor, 0.4)} 1px, transparent 1px), linear-gradient(90deg, ${hexToRgba(glowColor, 0.4)} 1px, transparent 1px)`,
-          backgroundSize: '40px 40px'
-        }} 
-      />
-      
-      {/* Glowing orbs with tier color */}
-      <div 
-        className="fixed top-10 right-20 w-64 h-64 rounded-full blur-3xl pointer-events-none"
-        style={{ backgroundColor: hexToRgba(glowColor, 0.25) }}
-      />
-      <div 
-        className="fixed bottom-20 left-10 w-48 h-48 rounded-full blur-3xl pointer-events-none"
-        style={{ backgroundColor: hexToRgba(glowColor, 0.2) }}
-      />
-
-      {/* Content - scrollable */}
-      <div 
-        className="relative min-h-screen px-4 py-8"
-        style={{
-          paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom) + 80px))',
-        }}
-      >
-        <div className="max-w-md mx-auto">
-          {/* Header - Centered title matching other menus */}
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={handleBack}
-              className="p-2 transition-colors"
-              style={{ color: glowColor }}
-            >
-              <ArrowLeft size={24} />
-            </button>
-            
-            <div className="text-center flex-1">
-              <NeonTitle text="DEADBLOCK" size="medium" />
-              <div 
-                className="text-[10px] font-bold tracking-[0.3em] uppercase mt-0"
-                style={{ color: hexToRgba(glowColor, 0.8) }}
-              >
-                PLAYER PROFILE
-              </div>
-            </div>
-            
-            {/* Spacer for balance */}
-            <div className="w-10" />
-          </div>
-
-          {/* Profile Card - Tier themed */}
-          <div 
-            className="backdrop-blur-md rounded-2xl p-6 mb-4"
-            style={{
-              background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, ${hexToRgba(glowColor, 0.1)} 50%, rgba(15, 23, 42, 0.95) 100%)`,
-              border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
-              boxShadow: `0 0 40px ${hexToRgba(glowColor, 0.25)}, inset 0 0 30px ${hexToRgba(glowColor, 0.05)}`
-            }}
+      <div className="p-4 pb-8 max-w-md mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
           >
-            {/* Avatar and name */}
-            <div className="flex items-center gap-4 mb-6">
-              {/* Avatar with tier icon */}
-              <div 
-                className="w-20 h-20 rounded-full flex items-center justify-center shadow-lg"
-                style={{
-                  background: `radial-gradient(circle at 30% 30%, ${getTierBackground(glowColor)}, rgba(10, 15, 25, 0.98))`,
-                  border: `3px solid ${hexToRgba(glowColor, 0.6)}`,
-                  boxShadow: `0 0 25px ${hexToRgba(glowColor, 0.4)}`
-                }}
-              >
-                {rankInfo && (
-                  <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="large" />
-                )}
-              </div>
-              
-              <div className="flex-1">
-                {editing ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      className="flex-1 px-3 py-2 bg-slate-800 border rounded-lg text-white focus:outline-none transition-colors"
-                      style={{ borderColor: hexToRgba(glowColor, 0.5) }}
-                      placeholder="Username"
-                    />
-                    <button
-                      onClick={handleSave}
-                      disabled={saving}
-                      className="p-2 text-white rounded-lg disabled:opacity-50"
-                      style={{ backgroundColor: hexToRgba(glowColor, 0.3) }}
-                    >
-                      <Save size={18} />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditing(false);
-                        setDisplayName(profile?.username || profile?.display_name);
-                      }}
-                      className="p-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <h2 
-                      className="text-2xl font-bold"
-                      style={{ color: '#f1f5f9', textShadow: `0 0 15px ${hexToRgba(glowColor, 0.5)}` }}
-                    >
-                      {playerDisplayName}
-                    </h2>
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="p-1.5 transition-colors"
-                      style={{ color: hexToRgba(glowColor, 0.7) }}
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                  </div>
-                )}
-                {/* Tier name */}
-                {rankInfo && (
-                  <p 
-                    className="text-sm font-bold uppercase tracking-wider"
-                    style={{ color: glowColor, textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
-                  >
-                    {rankInfo.name}
-                  </p>
-                )}
-              </div>
-            </div>
+            <ArrowLeft size={20} />
+            <span className="text-sm">Back</span>
+          </button>
+        </div>
+        
+        {/* Title - Centered like other menus */}
+        <NeonTitle text="PROFILE" size="medium" />
 
-            {/* Rating - Tier themed */}
+        {/* Profile Card - Tier themed */}
+        <div 
+          className="backdrop-blur-md rounded-2xl p-6 mb-6"
+          style={{
+            background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, rgba(15, 23, 42, 0.95) 100%)`,
+            border: `1px solid ${hexToRgba(glowColor, 0.4)}`,
+            boxShadow: `0 0 30px ${hexToRgba(glowColor, 0.15)}`
+          }}
+        >
+          {/* Avatar & Tier */}
+          <div className="flex items-center gap-4 mb-4">
             <div 
-              className="text-center py-4 rounded-xl mb-6"
+              className="w-16 h-16 rounded-xl flex items-center justify-center"
               style={{
-                background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.15)} 0%, ${hexToRgba(glowColor, 0.05)} 100%)`,
-                border: `1px solid ${hexToRgba(glowColor, 0.3)}`
+                background: getTierBackground(glowColor),
+                border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
+                boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.3)}`
               }}
             >
-              <div 
-                className="text-4xl font-black mb-1"
-                style={{ color: glowColor, textShadow: `0 0 20px ${hexToRgba(glowColor, 0.6)}` }}
-              >
-                {profile?.rating || 1000}
-              </div>
-              <div className="text-sm font-medium" style={{ color: hexToRgba(glowColor, 0.7) }}>
-                ELO RATING
-              </div>
-            </div>
-
-            {/* Stats grid - Tier accented */}
-            <div className="grid grid-cols-3 gap-3">
-              <div 
-                className="rounded-lg p-4 text-center"
-                style={{ 
-                  backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                  border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                }}
-              >
-                <Target size={20} className="mx-auto mb-2" style={{ color: glowColor }} />
-                <div className="text-2xl font-bold text-white">{stats.totalGames}</div>
-                <div className="text-slate-500 text-xs">Games</div>
-              </div>
-              <div 
-                className="rounded-lg p-4 text-center"
-                style={{ 
-                  backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                  border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                }}
-              >
-                <Percent size={20} className="text-green-400 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-white">{stats.winRate}%</div>
-                <div className="text-slate-500 text-xs">Win Rate</div>
-              </div>
-              <div 
-                className="rounded-lg p-4 text-center"
-                style={{ 
-                  backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                  border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                }}
-              >
-                <Trophy size={20} className="text-amber-400 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-white">{stats.wins}</div>
-                <div className="text-slate-500 text-xs">Victories</div>
-              </div>
+              {rankInfo ? (
+                <TierIcon shape={rankInfo.shape} glowColor={glowColor} size="large" />
+              ) : (
+                <User size={32} className="text-slate-400" />
+              )}
             </div>
             
-            {/* Streak info */}
-            {(stats.currentStreak > 0 || stats.bestStreak > 0) && (
-              <div className="flex justify-center gap-6 mt-4 pt-4" style={{ borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}` }}>
-                {stats.currentStreak > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">🔥</span>
-                    <div>
-                      <div className="text-white font-bold">{stats.currentStreak}</div>
-                      <div className="text-slate-500 text-xs">Current Streak</div>
-                    </div>
-                  </div>
-                )}
-                {stats.bestStreak > 0 && (
-                  <div className="flex items-center gap-2">
-                    <Award size={20} className="text-amber-400" />
-                    <div>
-                      <div className="text-white font-bold">{stats.bestStreak}</div>
-                      <div className="text-slate-500 text-xs">Best Streak</div>
-                    </div>
-                  </div>
-                )}
+            <div className="flex-1">
+              {editing ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="bg-slate-800/80 border border-slate-600 rounded-lg px-3 py-1.5 text-white text-lg w-full"
+                    autoFocus
+                    maxLength={20}
+                  />
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="p-2 bg-green-600 hover:bg-green-500 rounded-lg transition-colors"
+                  >
+                    <Save size={16} className="text-white" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditing(false);
+                      setDisplayName(profile?.username || profile?.display_name || '');
+                    }}
+                    className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
+                  >
+                    <X size={16} className="text-white" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-white">{playerDisplayName}</h2>
+                  <button
+                    onClick={() => setEditing(true)}
+                    className="p-1.5 text-slate-400 hover:text-white transition-colors"
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                </div>
+              )}
+              
+              {/* Tier name and rating */}
+              <div className="flex items-center gap-2 mt-1">
+                <span 
+                  className="text-sm font-medium"
+                  style={{ color: glowColor }}
+                >
+                  {rankInfo?.name || 'Unranked'}
+                </span>
+                <span className="text-slate-500">•</span>
+                <span className="text-slate-400 text-sm">{profile?.rating || 1000} ELO</span>
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Match History - Tier themed with clickable opponents */}
-          <div 
-            className="backdrop-blur-md rounded-2xl p-4"
-            style={{
-              background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${hexToRgba(glowColor, 0.05)} 100%)`,
-              border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
-              boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.1)}`
-            }}
-          >
-            <h3 className="font-bold text-sm mb-4 flex items-center gap-2" style={{ color: glowColor }}>
-              <Calendar size={16} />
-              MATCH HISTORY
-            </h3>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 gap-3 mt-4">
+            <div 
+              className="rounded-lg p-4 text-center"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <Gamepad2 size={20} style={{ color: glowColor }} className="mx-auto mb-2" />
+              <div className="text-2xl font-bold text-white">{stats.totalGames}</div>
+              <div className="text-slate-500 text-xs">Games</div>
+            </div>
+            <div 
+              className="rounded-lg p-4 text-center"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <Percent size={20} className="text-green-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-white">{stats.winRate}%</div>
+              <div className="text-slate-500 text-xs">Win Rate</div>
+            </div>
+            <div 
+              className="rounded-lg p-4 text-center"
+              style={{ 
+                backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+              }}
+            >
+              <Trophy size={20} className="text-amber-400 mx-auto mb-2" />
+              <div className="text-2xl font-bold text-white">{stats.wins}</div>
+              <div className="text-slate-500 text-xs">Victories</div>
+            </div>
+          </div>
+          
+          {/* Streak info */}
+          {(stats.currentStreak > 0 || stats.bestStreak > 0) && (
+            <div className="flex justify-center gap-6 mt-4 pt-4" style={{ borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}` }}>
+              {stats.currentStreak > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🔥</span>
+                  <div>
+                    <div className="text-white font-bold">{stats.currentStreak}</div>
+                    <div className="text-slate-500 text-xs">Current Streak</div>
+                  </div>
+                </div>
+              )}
+              {stats.bestStreak > 0 && (
+                <div className="flex items-center gap-2">
+                  <Award size={20} className="text-amber-400" />
+                  <div>
+                    <div className="text-white font-bold">{stats.bestStreak}</div>
+                    <div className="text-slate-500 text-xs">Best Streak</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-            {recentGames.length === 0 ? (
-              <p className="text-slate-600 text-center py-8">No games played yet</p>
-            ) : (
-              <div className="space-y-2">
-                {recentGames.map(game => {
-                  const won = game.winner_id === profile?.id;
-                  const opponent = getOpponentInfo(game);
-                  const opponentRankInfo = getRankInfo(opponent.rating);
-                  
-                  return (
-                    <div
-                      key={game.id}
-                      className={`w-full p-3 rounded-lg transition-all ${
-                        won 
-                          ? 'bg-green-900/20 border border-green-500/30' 
-                          : 'bg-red-900/20 border border-red-500/30'
-                      }`}
+        {/* Match History - Tier themed with clickable opponents and ELO changes */}
+        <div 
+          className="backdrop-blur-md rounded-2xl p-4"
+          style={{
+            background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${hexToRgba(glowColor, 0.05)} 100%)`,
+            border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
+            boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.1)}`
+          }}
+        >
+          <h3 className="font-bold text-sm mb-4 flex items-center gap-2" style={{ color: glowColor }}>
+            <Calendar size={16} />
+            MATCH HISTORY
+          </h3>
+
+          {recentGames.length === 0 ? (
+            <p className="text-slate-600 text-center py-8">No games played yet</p>
+          ) : (
+            <div className="space-y-2">
+              {recentGames.map(game => {
+                const won = game.winner_id === profile?.id;
+                const opponent = getOpponentInfo(game);
+                const opponentRankInfo = getRankInfo(opponent.rating);
+                const eloChange = getEloChangeForGame(game.id);
+                
+                return (
+                  <div
+                    key={game.id}
+                    className={`w-full p-3 rounded-lg transition-all ${
+                      won 
+                        ? 'bg-green-900/20 border border-green-500/30' 
+                        : 'bg-red-900/20 border border-red-500/30'
+                    }`}
+                  >
+                    {/* Clickable opponent info row */}
+                    <button
+                      onClick={() => handleViewOpponent(opponent)}
+                      className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
                     >
-                      {/* Clickable opponent info row */}
-                      <button
-                        onClick={() => handleViewOpponent(opponent)}
-                        className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
-                          
-                          {/* Opponent avatar with tier icon */}
-                          <div 
-                            className="w-8 h-8 rounded-full flex items-center justify-center"
-                            style={{
-                              background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
-                              border: `2px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
-                            }}
-                          >
-                            {opponentRankInfo ? (
-                              <TierIcon shape={opponentRankInfo.shape} glowColor={opponentRankInfo.glowColor} size="small" />
-                            ) : (
-                              <User size={14} className="text-slate-400" />
-                            )}
-                          </div>
-                          
-                          <div className="text-left">
-                            <div className="text-slate-300 text-sm font-medium">vs {opponent.name}</div>
-                            <div className="text-slate-600 text-xs flex items-center gap-2">
-                              <span>{formatDate(game.created_at)}</span>
-                              <span style={{ color: opponentRankInfo?.glowColor || '#64748b' }}>
-                                {opponent.rating} ELO
-                              </span>
-                            </div>
-                          </div>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
+                        
+                        {/* Opponent avatar with tier icon */}
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center"
+                          style={{
+                            background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
+                            border: `2px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
+                          }}
+                        >
+                          {opponentRankInfo ? (
+                            <TierIcon shape={opponentRankInfo.shape} glowColor={opponentRankInfo.glowColor} size="small" />
+                          ) : (
+                            <User size={14} className="text-slate-400" />
+                          )}
                         </div>
                         
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
-                            {won ? 'WIN' : 'LOSS'}
-                          </span>
-                          <div className="text-slate-600">›</div>
+                        <div className="text-left">
+                          <div className="text-slate-300 text-sm font-medium">vs {opponent.name}</div>
+                          <div className="text-slate-600 text-xs flex items-center gap-2">
+                            <span>{formatDate(game.created_at)}</span>
+                            <span style={{ color: opponentRankInfo?.glowColor || '#64748b' }}>
+                              {opponent.rating} ELO
+                            </span>
+                          </div>
                         </div>
-                      </button>
-                      
-                      {/* Final Board View button */}
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            soundManager.playButtonClick();
-                            setSelectedGameForFinalView(game);
-                          }}
-                          className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-xs"
-                          title="View final board state"
-                        >
-                          <LayoutGrid size={14} />
-                          Final Board
-                        </button>
                       </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {/* ELO Change Display */}
+                        {eloChange !== null && (
+                          <div className={`flex items-center gap-1 text-sm font-bold ${
+                            eloChange > 0 ? 'text-green-400' : eloChange < 0 ? 'text-red-400' : 'text-slate-400'
+                          }`}>
+                            {eloChange > 0 ? (
+                              <TrendingUp size={14} />
+                            ) : eloChange < 0 ? (
+                              <TrendingDown size={14} />
+                            ) : null}
+                            <span>{eloChange > 0 ? '+' : ''}{eloChange}</span>
+                          </div>
+                        )}
+                        
+                        <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
+                          {won ? 'WIN' : 'LOSS'}
+                        </span>
+                        <div className="text-slate-600">›</div>
+                      </div>
+                    </button>
+                    
+                    {/* Final Board View button */}
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenFinalBoardView(game);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-xs"
+                        title="View final board state"
+                      >
+                        <LayoutGrid size={14} />
+                        Final Board
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Member since */}
-          <p className="text-center text-slate-600 text-xs mt-6">
-            Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
-          </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
+
+        {/* Member since */}
+        <p className="text-center text-slate-600 text-xs mt-6">
+          Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
+        </p>
       </div>
       
       {/* View Opponent Profile Modal */}
@@ -515,10 +539,14 @@ const UserProfile = ({ onBack }) => {
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
         <FinalBoardView
-          isOpen={true}
-          onClose={() => setSelectedGameForFinalView(null)}
+          onClose={() => {
+            setSelectedGameForFinalView(null);
+            setGameMoves([]);
+          }}
           board={selectedGameForFinalView.board}
           boardPieces={selectedGameForFinalView.board_pieces}
+          moveHistory={gameMoves}
+          isLoadingMoves={loadingMoves}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
