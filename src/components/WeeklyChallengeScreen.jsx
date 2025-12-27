@@ -1,7 +1,7 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
-// PATCHED: Submit button always visible (disabled when no pending move), rotation handled by useGameState
+// PATCHED: Submit button above piece tray (like other game boards), more prominent, retry button removed
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, FlipHorizontal } from 'lucide-react';
 import GameBoard from './GameBoard';
@@ -834,7 +834,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
         overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y'
+        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom', // Allow zoom
+        minHeight: '100dvh', // Dynamic viewport height for mobile
       }}
     >
       {/* Background */}
@@ -1011,12 +1012,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             </div>
           )}
           
-          {/* Control Buttons - Above Piece Tray with Menu button */}
-          <div className="flex gap-1 justify-between mb-2 flex-wrap">
+          {/* Control Buttons - Above Piece Tray (no retry button) */}
+          <div className="flex gap-1 justify-center mb-2">
             {/* Menu Button - Goes to main game menu */}
             <button
               onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
-              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              className="px-3 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
             >
               <ArrowLeft size={12} />MENU
             </button>
@@ -1024,7 +1025,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             {/* Rotate Button */}
             <button
               onClick={rotatePiece}
-              className="flex-1 px-1.5 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+              className="px-3 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
               disabled={!selectedPiece && !pendingMove}
             >
               <RotateCcw size={12} />ROTATE
@@ -1033,19 +1034,34 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             {/* Flip Button */}
             <button
               onClick={flipPiece}
-              className="flex-1 px-1.5 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
+              className="px-3 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
               disabled={!selectedPiece && !pendingMove}
             >
               <FlipHorizontal size={12} />FLIP
             </button>
-            
-            {/* Retry Button */}
+          </div>
+          
+          {/* CONFIRM BUTTON - Prominent, always visible, above piece tray */}
+          <div className="flex gap-2 justify-center mb-2">
             <button
-              onClick={handleRestart}
-              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              onClick={confirmMove}
+              disabled={!pendingMove || !(() => {
+                if (!pendingMove) return false;
+                const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+                return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+              })()}
+              className="flex-1 max-w-xs px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-base flex items-center justify-center gap-2 font-black border-2 border-green-400/50 shadow-[0_0_25px_rgba(74,222,128,0.6),inset_0_1px_0_rgba(255,255,255,0.2)] disabled:opacity-30 disabled:shadow-none disabled:from-slate-600 disabled:to-slate-700 disabled:border-slate-500/30 transition-all duration-200 active:scale-95"
             >
-              <RotateCcw size={12} />RETRY
+              <CheckCircle size={20} />CONFIRM
             </button>
+            {pendingMove && (
+              <button
+                onClick={cancelMove}
+                className="px-4 py-3 bg-slate-700/80 hover:bg-slate-600/80 text-slate-300 rounded-xl text-sm flex items-center justify-center gap-2 border border-slate-500/30"
+              >
+                <X size={16} />CANCEL
+              </button>
+            )}
           </div>
           
           {/* Piece Tray */}
@@ -1061,29 +1077,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             isDragging={isDragging}
             draggedPiece={draggedPiece}
           />
-          
-          {/* Submit/Confirm and Cancel Controls - PATCHED: Submit always visible */}
-          <div className="flex gap-2 justify-center mt-2">
-            <button
-              onClick={confirmMove}
-              disabled={!pendingMove || !(() => {
-                if (!pendingMove) return false;
-                const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-                return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
-              })()}
-              className="flex-1 max-w-32 px-3 py-2 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)] disabled:opacity-30 disabled:shadow-none"
-            >
-              <CheckCircle size={14} />SUBMIT
-            </button>
-            {pendingMove && (
-              <button
-                onClick={cancelMove}
-                className="flex-1 max-w-32 px-3 py-2 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
-              >
-                <X size={14} />CANCEL
-              </button>
-            )}
-          </div>
         </div>
         
         {/* Bottom padding for scroll */}

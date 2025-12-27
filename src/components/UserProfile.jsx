@@ -5,6 +5,7 @@
 // 3. Clickable opponents in match history
 // 4. Final Board View for completed games
 // PATCHED: Centered title matching other menus (size="medium" with subtitle)
+// PATCHED: Added scrolling support for mobile devices
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap, LayoutGrid } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -171,7 +172,18 @@ const UserProfile = ({ onBack }) => {
   const playerDisplayName = profile?.username || profile?.display_name || 'Player';
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div 
+      className="min-h-screen bg-slate-950"
+      style={{
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain',
+        touchAction: 'pan-y pinch-zoom', // Allow zoom
+        minHeight: '100dvh', // Dynamic viewport height
+        maxHeight: '100vh',
+      }}
+    >
       {/* Grid background with tier color */}
       <div 
         className="fixed inset-0 opacity-30 pointer-events-none" 
@@ -191,8 +203,13 @@ const UserProfile = ({ onBack }) => {
         style={{ backgroundColor: hexToRgba(glowColor, 0.2) }}
       />
 
-      {/* Content */}
-      <div className="relative min-h-screen px-4 py-8">
+      {/* Content - scrollable */}
+      <div 
+        className="relative min-h-screen px-4 py-8"
+        style={{
+          paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom) + 80px))',
+        }}
+      >
         <div className="max-w-md mx-auto">
           {/* Header - Centered title matching other menus */}
           <div className="flex items-center justify-between mb-4">

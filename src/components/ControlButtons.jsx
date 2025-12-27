@@ -87,7 +87,7 @@ const ControlButtons = ({
       {onMenu && (
         <GlowOrbButton onClick={handleMenu} color="rose" title="Back to menu">
           <Home size={14} />
-          <span className="hidden sm:inline">HOME</span>
+          <span className="hidden sm:inline">MENU</span>
         </GlowOrbButton>
       )}
 

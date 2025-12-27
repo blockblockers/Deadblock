@@ -1,7 +1,8 @@
 // GameBoard.jsx - Main game board component
-// UPDATED: Enhanced selected piece visibility with stronger glow
-// UPDATED: Allow pieces to overflow on ALL sides (top, left, bottom, right)
-// UPDATED: Ghost cells can now appear outside the grid in any direction
+// ENHANCED: Much more visible piece placement with strong glow and pulsing
+// ENHANCED: Overlapping pieces now have very obvious warning indicators
+// ENHANCED: Placed pieces have ambient glow and animation effects
+// ENHANCED: Ghost cells (out of bounds) are more visible
 import { forwardRef, useMemo, useState, useEffect } from 'react';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
@@ -11,12 +12,6 @@ import { pieceColors } from '../utils/pieces';
  * 
  * Renders the 8x8 game grid with placed pieces and pending move preview.
  * Handles cell clicks and displays game state including valid/invalid move indicators.
- * 
- * UPDATED: 
- * - Enhanced selected piece glow effect on the board
- * - Ghost cells can now overflow on ALL sides (top, left, bottom, right)
- * - Board container uses overflow-visible to show out-of-bounds pieces
- * - Ghost cells have high z-index to overlay any text
  */
 const GameBoard = forwardRef(({
   board,
@@ -32,7 +27,7 @@ const GameBoard = forwardRef(({
   playerAnimatingMove,
   selectedPiece,
   customColors,
-  onPendingPieceDragStart, // Optional: for drag from board
+  onPendingPieceDragStart,
 }, ref) => {
   // Ensure board is properly formatted
   const safeBoard = Array.isArray(board) 
@@ -40,6 +35,25 @@ const GameBoard = forwardRef(({
     : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
   
   const safeBoardPieces = boardPieces || {};
+  
+  // Random ambient effects for placed pieces
+  const [ambientEffects, setAmbientEffects] = useState({});
+  
+  useEffect(() => {
+    // Generate random ambient effects for placed pieces
+    const effects = {};
+    const effectTypes = ['shimmer', 'pulse', 'glow', 'none', 'none']; // 40% chance of effect
+    
+    for (let row = 0; row < BOARD_SIZE; row++) {
+      for (let col = 0; col < BOARD_SIZE; col++) {
+        if (safeBoard[row]?.[col]) {
+          const rand = Math.random();
+          effects[`${row},${col}`] = effectTypes[Math.floor(rand * effectTypes.length)];
+        }
+      }
+    }
+    setAmbientEffects(effects);
+  }, [safeBoard]);
   
   // Helper to get piece name - handles both 2D array and object formats
   const getPieceName = (rowIdx, colIdx) => {
@@ -75,7 +89,6 @@ const GameBoard = forwardRef(({
           pendingCells.push({ row: cellRow, col: cellCol });
         }
       } else {
-        // Track all out-of-bounds cells, including negative positions (top/left)
         outOfBoundsCells.push({ row: cellRow, col: cellCol });
       }
     });
@@ -87,7 +100,7 @@ const GameBoard = forwardRef(({
   // Calculate AI animating piece cells
   let aiAnimatingCells = [];
   if (aiAnimatingMove) {
-    const pieceCoords = getPieceCoords(aiAnimatingMove.piece, aiAnimatingMove.rot, aiAnimatingMove.flip);
+    const pieceCoords = getPieceCoords(aiAnimatingMove.piece, aiAnimatingMove.rotation || aiAnimatingMove.rot, aiAnimatingMove.flipped || aiAnimatingMove.flip);
     pieceCoords.forEach(([dx, dy]) => {
       const cellRow = aiAnimatingMove.row + dy;
       const cellCol = aiAnimatingMove.col + dx;
@@ -100,7 +113,7 @@ const GameBoard = forwardRef(({
   // Calculate player animating piece cells
   let playerAnimatingCells = [];
   if (playerAnimatingMove) {
-    const pieceCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rot, playerAnimatingMove.flip);
+    const pieceCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rotation || playerAnimatingMove.rot, playerAnimatingMove.flipped || playerAnimatingMove.flip);
     pieceCoords.forEach(([dx, dy]) => {
       const cellRow = playerAnimatingMove.row + dy;
       const cellCol = playerAnimatingMove.col + dx;
@@ -127,19 +140,18 @@ const GameBoard = forwardRef(({
   };
 
   return (
-    // UPDATED: Added overflow-visible and higher z-index for ghost cells
     <div 
       ref={ref}
       className="relative"
       style={{ 
-        overflow: 'visible', // Allow ghost cells to render outside container
-        zIndex: 1, // Base z-index for board
+        overflow: 'visible',
+        zIndex: 1,
       }}
     >
       {/* Main grid */}
       <div 
         className="grid grid-cols-8 gap-0.5 sm:gap-1 bg-slate-800/50 p-1 sm:p-1.5 rounded-lg border border-cyan-500/20"
-        style={{ overflow: 'visible' }} // Grid also allows overflow
+        style={{ overflow: 'visible' }}
       >
         {safeBoard.map((row, rowIdx) =>
           row.map((cell, colIdx) => {
@@ -149,6 +161,8 @@ const GameBoard = forwardRef(({
             const isPlayerAnimating = playerAnimatingCells.some(c => c.row === rowIdx && c.col === colIdx);
             const pieceName = getPieceName(rowIdx, colIdx);
             const pieceColor = pieceName ? pieceColors[pieceName] : null;
+            const ambientEffect = ambientEffects[`${rowIdx},${colIdx}`];
+            const isPlacedPiece = cell !== null && cell !== 0 && cell !== undefined;
             
             return (
               <button
@@ -160,44 +174,70 @@ const GameBoard = forwardRef(({
                     ? `${pieceColor || getPlayerColor(cell)} shadow-lg` 
                     : 'bg-slate-700/50 hover:bg-slate-600/50'
                   }
-                  ${isPending && isPendingValid ? 'pending-valid-cell ring-2 ring-cyan-400 bg-cyan-500/30' : ''}
-                  ${isPending && !isPendingValid ? 'pending-invalid-cell ring-2 ring-red-500 bg-red-500/30' : ''}
-                  ${isOverlapping ? 'overlap-cell ring-2 ring-red-500 bg-red-500/40' : ''}
-                  ${isAiAnimating ? 'ai-placing-cell ring-2 ring-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.7)]' : ''}
-                  ${isPlayerAnimating ? 'player-placing-cell ring-2 ring-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.7)]' : ''}
+                  ${isPending && isPendingValid ? 'pending-valid-cell' : ''}
+                  ${isPending && !isPendingValid ? 'pending-invalid-cell' : ''}
+                  ${isOverlapping ? 'overlap-cell' : ''}
+                  ${isAiAnimating ? 'ai-placing-cell' : ''}
+                  ${isPlayerAnimating ? 'player-placing-cell' : ''}
                   ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}
                 `}
                 onClick={() => !isDisabled && onCellClick(rowIdx, colIdx)}
                 disabled={isDisabled}
               >
-                {/* Scan line effect for placed pieces */}
-                {cell && (
-                  <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.1)_2px,rgba(255,255,255,0.1)_4px)]" />
+                {/* ENHANCED: Placed piece glow effect */}
+                {isPlacedPiece && (
+                  <>
+                    {/* Base glow */}
+                    <div className="absolute inset-0 opacity-60 bg-gradient-to-br from-white/20 via-transparent to-black/20" />
+                    {/* Scan line effect */}
+                    <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.1)_2px,rgba(255,255,255,0.1)_4px)]" />
+                    {/* Ambient shimmer effect */}
+                    {ambientEffect === 'shimmer' && (
+                      <div className="absolute inset-0 ambient-shimmer" />
+                    )}
+                    {/* Ambient pulse effect */}
+                    {ambientEffect === 'pulse' && (
+                      <div className="absolute inset-0 ambient-pulse" />
+                    )}
+                    {/* Ambient glow effect */}
+                    {ambientEffect === 'glow' && (
+                      <div className="absolute inset-0 ambient-glow" />
+                    )}
+                  </>
                 )}
                 
-                {/* AI placing animation */}
+                {/* AI placing animation - ENHANCED */}
                 {isAiAnimating && (
-                  <div className="absolute inset-0 bg-purple-400/50 animate-pulse" />
+                  <div className="absolute inset-0 bg-purple-400/60 animate-pulse">
+                    <div className="absolute inset-0 ai-drop-effect" />
+                  </div>
                 )}
                 
-                {/* Player placing animation */}
+                {/* Player placing animation - ENHANCED */}
                 {isPlayerAnimating && (
-                  <div className="absolute inset-0 bg-cyan-400/50 animate-pulse" />
+                  <div className="absolute inset-0 bg-cyan-400/60 animate-pulse">
+                    <div className="absolute inset-0 player-drop-effect" />
+                  </div>
                 )}
                 
-                {/* ENHANCED: Pending valid indicator with stronger glow */}
+                {/* ENHANCED: Pending valid indicator with STRONG glow */}
                 {isPending && isPendingValid && (
-                  <div className="absolute inset-0 bg-cyan-400/50 valid-piece-glow shadow-[inset_0_0_15px_rgba(34,211,238,0.6)]" />
+                  <div className="absolute inset-0 pending-valid-glow" />
                 )}
                 
-                {/* Pending invalid indicator */}
+                {/* ENHANCED: Pending invalid indicator */}
                 {isPending && !isPendingValid && (
-                  <div className="absolute inset-0 bg-red-500/40 invalid-piece-pulse" />
+                  <div className="absolute inset-0 pending-invalid-glow" />
                 )}
                 
-                {/* Overlap indicator */}
+                {/* ENHANCED: Overlap indicator - very obvious */}
                 {isOverlapping && (
-                  <div className="absolute inset-0 bg-red-500/50 invalid-piece-pulse border-2 border-red-400/80 border-dashed" />
+                  <div className="absolute inset-0 overlap-warning">
+                    {/* X pattern */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-white font-black text-lg drop-shadow-lg">✕</div>
+                    </div>
+                  </div>
                 )}
               </button>
             );
@@ -205,136 +245,226 @@ const GameBoard = forwardRef(({
         )}
       </div>
 
-      {/* UPDATED: Out-of-bounds ghost cells - now positioned for ALL sides including top/left */}
+      {/* ENHANCED: Ghost cells for out-of-bounds positions */}
       {outOfBoundsCells.length > 0 && pendingMove && (
-        <>
-          {outOfBoundsCells.map(({ row, col }, idx) => {
-            // Calculate position relative to board origin (0,0)
-            // Negative rows/cols will have negative positions, showing above/left of grid
-            const left = padding + col * (cellSize + gapSize);
-            const top = padding + row * (cellSize + gapSize);
+        <div className="absolute inset-0 pointer-events-none" style={{ overflow: 'visible', zIndex: 100 }}>
+          {outOfBoundsCells.map((cell, idx) => {
+            const refCell = pendingCells[0] || { row: pendingMove.row, col: pendingMove.col };
+            const offsetRow = cell.row - refCell.row;
+            const offsetCol = cell.col - refCell.col;
+            
+            const top = (refCell.row + offsetRow) * (cellSize + gapSize) + padding;
+            const left = (refCell.col + offsetCol) * (cellSize + gapSize) + padding;
             
             return (
               <div
                 key={`ghost-${idx}`}
-                className="absolute pointer-events-none"
+                className="absolute rounded-md sm:rounded-lg ghost-cell-warning"
                 style={{
-                  left: `${left}px`,
+                  width: cellSize,
+                  height: cellSize,
                   top: `${top}px`,
-                  width: `${cellSize}px`,
-                  height: `${cellSize}px`,
-                  zIndex: 100, // High z-index to overlay text above/left of board
+                  left: `${left}px`,
                 }}
               >
-                <div className="w-full h-full rounded-lg bg-red-500/40 border-2 border-dashed border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.7)] ghost-cell-pulse flex items-center justify-center backdrop-blur-sm">
-                  <svg 
-                    className="w-4 h-4 sm:w-5 sm:h-5 text-red-300 drop-shadow-[0_0_4px_rgba(239,68,68,0.8)]" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-red-400 font-black text-xs">OUT</div>
                 </div>
               </div>
             );
           })}
-        </>
+        </div>
       )}
 
-      {/* ENHANCED: Full piece outline when piece is active - stronger glow */}
+      {/* Full board outline when piece is active */}
       {pendingMove && (
         <div 
-          className={`absolute inset-0 pointer-events-none rounded-lg ${
+          className={`absolute inset-0 pointer-events-none rounded-lg transition-all ${
             isPendingValid 
-              ? 'ring-2 ring-cyan-400/70 shadow-[0_0_30px_rgba(34,211,238,0.5),0_0_60px_rgba(34,211,238,0.2)]'
-              : 'ring-2 ring-red-500/70 shadow-[0_0_30px_rgba(239,68,68,0.5),0_0_60px_rgba(239,68,68,0.2)]'
+              ? 'ring-2 ring-cyan-400/60 shadow-[0_0_30px_rgba(34,211,238,0.4)]'
+              : 'ring-2 ring-red-500/60 shadow-[0_0_30px_rgba(239,68,68,0.5)]'
           }`}
           style={{ margin: '-2px' }}
         />
       )}
 
-      {/* Animation styles */}
+      {/* ENHANCED Animation styles */}
       <style>{`
-        /* ENHANCED: Valid piece glow animation - stronger effect */
-        .valid-piece-glow {
-          animation: valid-glow 1s ease-in-out infinite;
+        /* ============================================
+           PENDING PIECE - VALID PLACEMENT
+           Very obvious green/cyan glow
+           ============================================ */
+        .pending-valid-cell {
+          box-shadow: 
+            0 0 20px rgba(34, 211, 238, 0.8),
+            0 0 40px rgba(34, 211, 238, 0.4),
+            inset 0 0 15px rgba(34, 211, 238, 0.5) !important;
+          border: 3px solid rgba(34, 211, 238, 0.9) !important;
         }
-        @keyframes valid-glow {
+        
+        .pending-valid-glow {
+          background: linear-gradient(135deg, rgba(34, 211, 238, 0.6) 0%, rgba(74, 222, 128, 0.4) 100%);
+          animation: valid-pulse 0.8s ease-in-out infinite;
+        }
+        
+        @keyframes valid-pulse {
           0%, 100% { 
-            opacity: 0.5; 
-            box-shadow: inset 0 0 15px rgba(34,211,238,0.6), 0 0 10px rgba(34,211,238,0.4);
+            opacity: 0.5;
+            box-shadow: inset 0 0 20px rgba(34, 211, 238, 0.6);
           }
           50% { 
-            opacity: 0.8; 
-            box-shadow: inset 0 0 25px rgba(34,211,238,0.8), 0 0 20px rgba(34,211,238,0.6);
+            opacity: 0.8;
+            box-shadow: inset 0 0 30px rgba(34, 211, 238, 0.9);
           }
         }
         
-        /* Invalid piece pulse animation */
-        .invalid-piece-pulse {
-          animation: invalid-pulse 0.5s ease-in-out infinite;
+        /* ============================================
+           PENDING PIECE - INVALID PLACEMENT
+           Obvious red warning
+           ============================================ */
+        .pending-invalid-cell {
+          box-shadow: 
+            0 0 15px rgba(239, 68, 68, 0.7),
+            0 0 30px rgba(239, 68, 68, 0.3),
+            inset 0 0 10px rgba(239, 68, 68, 0.4) !important;
+          border: 3px solid rgba(239, 68, 68, 0.8) !important;
         }
+        
+        .pending-invalid-glow {
+          background: rgba(239, 68, 68, 0.4);
+          animation: invalid-pulse 0.4s ease-in-out infinite;
+        }
+        
         @keyframes invalid-pulse {
           0%, 100% { opacity: 0.4; }
           50% { opacity: 0.7; }
         }
         
-        /* Ghost cell out-of-bounds pulse */
-        .ghost-cell-pulse {
-          animation: ghost-pulse 0.8s ease-in-out infinite;
+        /* ============================================
+           OVERLAPPING CELLS - VERY OBVIOUS WARNING
+           ============================================ */
+        .overlap-cell {
+          box-shadow: 
+            0 0 20px rgba(239, 68, 68, 1),
+            0 0 40px rgba(239, 68, 68, 0.6),
+            inset 0 0 20px rgba(239, 68, 68, 0.8) !important;
+          border: 4px solid rgba(255, 100, 100, 1) !important;
         }
+        
+        .overlap-warning {
+          background: repeating-linear-gradient(
+            45deg,
+            rgba(239, 68, 68, 0.7),
+            rgba(239, 68, 68, 0.7) 4px,
+            rgba(255, 150, 150, 0.7) 4px,
+            rgba(255, 150, 150, 0.7) 8px
+          );
+          animation: overlap-flash 0.3s ease-in-out infinite;
+        }
+        
+        @keyframes overlap-flash {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
+        }
+        
+        /* ============================================
+           GHOST CELLS (OUT OF BOUNDS)
+           ============================================ */
+        .ghost-cell-warning {
+          background: rgba(239, 68, 68, 0.3);
+          border: 3px dashed rgba(239, 68, 68, 0.9);
+          animation: ghost-pulse 0.6s ease-in-out infinite;
+        }
+        
         @keyframes ghost-pulse {
           0%, 100% { 
-            border-color: rgba(239, 68, 68, 0.8);
-            background-color: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.9);
+            background: rgba(239, 68, 68, 0.3);
           }
           50% { 
-            border-color: rgba(239, 68, 68, 1);
-            background-color: rgba(239, 68, 68, 0.5);
+            border-color: rgba(255, 100, 100, 1);
+            background: rgba(239, 68, 68, 0.5);
           }
         }
         
-        /* AI placing animation */
-        @keyframes ai-place {
-          0% {
-            transform: scale(0.8);
-            opacity: 0;
-            filter: brightness(1.5) saturate(1.5);
-          }
-          50% {
-            transform: scale(1.1);
-            filter: brightness(1.3) saturate(1.3);
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-            filter: brightness(1) saturate(1);
-          }
-        }
-        .animate-ai-place {
-          animation: ai-place 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        /* ============================================
+           AI PLACING ANIMATION
+           ============================================ */
+        .ai-placing-cell {
+          box-shadow: 
+            0 0 25px rgba(168, 85, 247, 0.9),
+            0 0 50px rgba(168, 85, 247, 0.5) !important;
+          border: 3px solid rgba(168, 85, 247, 0.9) !important;
         }
         
-        /* Player placing animation */
-        @keyframes player-place {
-          0% {
-            transform: scale(0.8);
-            opacity: 0;
-            filter: brightness(1.5) saturate(1.5);
-          }
-          50% {
-            transform: scale(1.1);
-            filter: brightness(1.3) saturate(1.3);
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-            filter: brightness(1) saturate(1);
-          }
+        .ai-drop-effect {
+          background: radial-gradient(circle, rgba(168, 85, 247, 0.8) 0%, transparent 70%);
+          animation: ai-drop 0.4s ease-out;
         }
-        .animate-player-place {
-          animation: player-place 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        
+        @keyframes ai-drop {
+          0% { transform: scale(2); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        
+        /* ============================================
+           PLAYER PLACING ANIMATION
+           ============================================ */
+        .player-placing-cell {
+          box-shadow: 
+            0 0 25px rgba(34, 211, 238, 0.9),
+            0 0 50px rgba(34, 211, 238, 0.5) !important;
+          border: 3px solid rgba(34, 211, 238, 0.9) !important;
+        }
+        
+        .player-drop-effect {
+          background: radial-gradient(circle, rgba(34, 211, 238, 0.8) 0%, transparent 70%);
+          animation: player-drop 0.4s ease-out;
+        }
+        
+        @keyframes player-drop {
+          0% { transform: scale(2); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        
+        /* ============================================
+           PLACED PIECE AMBIENT EFFECTS
+           ============================================ */
+        .ambient-shimmer {
+          background: linear-gradient(
+            115deg,
+            transparent 20%,
+            rgba(255, 255, 255, 0.3) 40%,
+            rgba(255, 255, 255, 0.3) 60%,
+            transparent 80%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 3s ease-in-out infinite;
+        }
+        
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        
+        .ambient-pulse {
+          background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+          animation: ambient-pulse-anim 2s ease-in-out infinite;
+        }
+        
+        @keyframes ambient-pulse-anim {
+          0%, 100% { opacity: 0.3; transform: scale(0.9); }
+          50% { opacity: 0.6; transform: scale(1); }
+        }
+        
+        .ambient-glow {
+          box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.3);
+          animation: ambient-glow-anim 2.5s ease-in-out infinite;
+        }
+        
+        @keyframes ambient-glow-anim {
+          0%, 100% { box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2); }
+          50% { box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.4); }
         }
       `}</style>
     </div>

@@ -396,7 +396,7 @@ const GameOverModal = ({
                 className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-600 text-slate-200 transition-all border border-slate-600"
               >
                 <Home size={16} />
-                ONLINE MENU
+                MENU
               </button>
             </>
           ) : isPuzzle ? (
@@ -426,7 +426,7 @@ const GameOverModal = ({
                 className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-all border border-slate-700"
               >
                 <Home size={16} />
-                MAIN MENU
+                MENU
               </button>
             </>
           ) : is2Player ? (
@@ -443,7 +443,7 @@ const GameOverModal = ({
                 className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-all border border-slate-700"
               >
                 <Home size={16} />
-                MAIN MENU
+                MENU
               </button>
             </>
           ) : (
@@ -467,7 +467,7 @@ const GameOverModal = ({
                 className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-400 transition-all border border-slate-700"
               >
                 <Home size={16} />
-                MAIN MENU
+                MENU
               </button>
             </>
           )}

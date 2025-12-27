@@ -11,6 +11,7 @@ import DPad from './DPad';
 import GameStatus from './GameStatus';
 import GameOverModal from './GameOverModal';
 import DragOverlay from './DragOverlay';
+import AIDragAnimation from './AIDragAnimation';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
@@ -216,6 +217,7 @@ const GameScreen = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   const boardRef = useRef(null);
+  const trayRef = useRef(null); // Ref for PieceTray (used by AI drag animation)
   const boardBoundsRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const hasDragStartedRef = useRef(false);
@@ -655,7 +657,7 @@ const GameScreen = ({
           </div>
 
           {/* Piece Tray with drag handlers */}
-          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
+          <div ref={trayRef} className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
@@ -686,6 +688,20 @@ const GameScreen = ({
         flipped={flipped}
         isValid={isValidDrop}
       />
+
+      {/* AI Drag Animation - shows piece flying from tray to board during AI moves */}
+      {aiAnimatingMove?.phase === 'dragging' && (
+        <AIDragAnimation
+          piece={aiAnimatingMove.piece}
+          targetRow={aiAnimatingMove.row}
+          targetCol={aiAnimatingMove.col}
+          rotation={aiAnimatingMove.rotation}
+          flipped={aiAnimatingMove.flipped}
+          boardRef={boardRef}
+          trayRef={trayRef}
+          duration={800}
+        />
+      )}
 
       {/* Game Over Modal */}
       {showGameOverModal && (

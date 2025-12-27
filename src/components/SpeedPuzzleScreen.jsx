@@ -545,7 +545,7 @@ const GameOverOverlay = memo(({ streak, bestStreak, onPlayAgain, onMenu }) => {
               }}
             >
               <Home size={18} />
-              Back to Menu
+              MENU
             </button>
           </div>
         </div>
@@ -592,7 +592,7 @@ const ErrorOverlay = memo(({ message, onRetry, onMenu }) => (
           >
             <div className="flex items-center justify-center gap-2">
               <Home size={18} />
-              Back to Menu
+              MENU
             </div>
           </button>
         </div>

@@ -1,6 +1,7 @@
 // useGameState.js - Custom hook for managing local game state
 // CRITICAL: This hook must export startNewGame, setGameMode, and all other functions App.jsx needs
 // PATCHED: Clockwise rotation (r + 3) % 4 instead of (r + 1) % 4
+// ENHANCED: AI move animation with longer duration, sound effects, and phase indicator
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   createEmptyBoard, 
@@ -194,14 +195,15 @@ export const useGameState = () => {
     soundManager.playCancel();
   }, []);
 
-  // AI Move logic
+  // AI Move logic - ENHANCED with visual drag animation from tray to board
+  // The animation has two phases: 'dragging' (visual flight) and 'placing' (board glow)
   const makeAIMove = useCallback(async () => {
     if (gameOver || currentPlayer !== 2) return;
     if (gameMode !== 'ai' && gameMode !== 'puzzle') return;
     
     setIsAIThinking(true);
     
-    // Add delay for realistic gameplay
+    // Add delay for realistic gameplay (thinking time)
     await new Promise(resolve => setTimeout(resolve, AI_MOVE_DELAY));
     
     try {
@@ -216,16 +218,38 @@ export const useGameState = () => {
         return;
       }
       
-      // Animate AI move
+      // ENHANCED: Play piece select sound when AI "picks up" piece
+      soundManager.playPieceSelect();
+      
+      // Phase 1: DRAGGING - Show piece flying from tray to board
+      // The AIDragAnimation component will render when phase is 'dragging'
       setAiAnimatingMove({
         piece: move.pieceType,
         row: move.row,
         col: move.col,
         rotation: move.rot,
         flipped: move.flip,
+        phase: 'dragging', // AIDragAnimation renders during this phase
       });
       
+      // Wait for drag animation (component will take ~800ms)
+      await new Promise(resolve => setTimeout(resolve, 850));
+      
+      // Phase 2: PLACING - Show piece glowing on board
+      setAiAnimatingMove({
+        piece: move.pieceType,
+        row: move.row,
+        col: move.col,
+        rotation: move.rot,
+        flipped: move.flip,
+        phase: 'placing', // GameBoard shows glow effect during this phase
+      });
+      
+      // Brief delay for placement glow effect
       await new Promise(resolve => setTimeout(resolve, 400));
+      
+      // Play placement sound
+      soundManager.playConfirm();
       
       // Place the piece
       const coords = getPieceCoords(move.pieceType, move.rot, move.flip);

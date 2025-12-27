@@ -1113,7 +1113,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
           <button onClick={handleLeave} className="px-6 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">
-            Game Menu
+            MENU
           </button>
         </div>
       </div>
@@ -1124,9 +1124,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     <div 
       className="min-h-screen bg-slate-950 overflow-x-hidden"
       style={{ 
-        // PATCHED: Always enable scrolling on all devices
+        // PATCHED: Always enable scrolling on all devices with zoom support
         overflowY: 'auto',
-        touchAction: isDragging ? 'none' : 'pan-y'
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain',
+        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom', // Allow zoom
+        minHeight: '100dvh', // Dynamic viewport height for mobile
       }}
     >
       {/* Background effects */}
@@ -1331,7 +1334,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="red"
                 className="flex-1"
               >
-                Menu
+                MENU
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleRotate}
@@ -1339,7 +1342,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="cyan"
                 className="flex-1"
               >
-                Rotate
+                ROTATE
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleFlip}
@@ -1347,7 +1350,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="purple"
                 className="flex-1"
               >
-                Flip
+                FLIP
               </GlowOrbButton>
               {game?.status === 'active' && (
                 // PATCHED: Changed from slate to amber for orange forfeit button
@@ -1370,7 +1373,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   color="slate"
                   className="flex-1"
                 >
-                  Cancel
+                  CANCEL
                 </GlowOrbButton>
                 <GlowOrbButton
                   onClick={handleConfirm}
@@ -1378,7 +1381,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   color="green"
                   className="flex-1"
                 >
-                  Confirm
+                  CONFIRM
                 </GlowOrbButton>
               </div>
             )}

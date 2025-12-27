@@ -839,10 +839,11 @@ const OnlineMenu = ({
       className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
       style={{ 
         WebkitOverflowScrolling: 'touch', 
-        touchAction: 'pan-y',
+        touchAction: 'pan-y pinch-zoom', // Allow zoom
         height: '100%',
         width: '100%',
         overscrollBehavior: 'contain',
+        minHeight: '100dvh', // Dynamic viewport height
       }}
     >
       {/* Themed Grid background */}
@@ -1599,7 +1600,7 @@ const OnlineMenu = ({
               className="w-full mt-3 py-2 px-4 rounded-xl font-bold text-sm text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
             >
               <ArrowLeft size={16} />
-              GAME MENU
+              MENU
             </button>
           </div>
           )}
@@ -1611,7 +1612,7 @@ const OnlineMenu = ({
               className="w-full mt-4 py-3 px-4 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
             >
               <ArrowLeft size={18} />
-              BACK TO MENU
+              MENU
             </button>
           )}
         </div>

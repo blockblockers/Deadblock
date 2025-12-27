@@ -126,7 +126,7 @@ export const COLOR_PRESETS = {
  * @param {number} maxDuration - Maximum animation duration in seconds (default: 25)
  */
 const FloatingPiecesBackground = memo(({ 
-  count = 18, // UPDATED: Increased from 15 to 18 (20% increase)
+  count = 20, // UPDATED: Increased from 15 to 20 (33% increase)
   colors = null,
   colorPreset = 'default',
   minSize = 0.6,
