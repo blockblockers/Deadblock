@@ -1,5 +1,6 @@
 // useGameState.js - Custom hook for managing local game state
 // CRITICAL: This hook must export startNewGame, setGameMode, and all other functions App.jsx needs
+// PATCHED: Clockwise rotation (r + 3) % 4 instead of (r + 1) % 4
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   createEmptyBoard, 
@@ -69,10 +70,11 @@ export const useGameState = () => {
     soundManager.playPieceSelect();
   }, [usedPieces, gameOver]);
 
-  // Rotate the selected piece
+  // Rotate the selected piece - PATCHED: Now rotates CLOCKWISE
   const rotatePiece = useCallback(() => {
     if (!selectedPiece && !pendingMove) return;
-    setRotation(r => (r + 1) % 4);
+    // PATCHED: Changed from (r + 1) % 4 to (r + 3) % 4 for clockwise rotation
+    setRotation(r => (r + 3) % 4);
     soundManager.playPieceRotate();
   }, [selectedPiece, pendingMove]);
 

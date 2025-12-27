@@ -1,4 +1,5 @@
 // FloatingPiecesBackground - Reusable animated background with floating pentomino pieces
+// UPDATED: Increased default count by 20% (15 -> 18)
 // Use this component on any game/menu screen to add the animated block background
 
 import { useMemo, memo, useState, useEffect } from 'react';
@@ -11,7 +12,7 @@ const FloatingPiece = memo(({ piece, startX, startY, delay, duration, color, glo
   const minY = Math.min(...coords.map(([, y]) => y));
   
   // Create unique keyframe name based on movement parameters
-  const keyframeName = `float-${Math.abs(Math.round(floatX * 10))}-${Math.abs(Math.round(floatY * 10))}-${Math.round(rotation)}`;
+  const keyframeName = `float-bg-${Math.abs(Math.round(floatX * 10))}-${Math.abs(Math.round(floatY * 10))}-${Math.round(rotation)}`;
   
   return (
     <div
@@ -50,17 +51,15 @@ const FloatingPiece = memo(({ piece, startX, startY, delay, duration, color, glo
         {coords.map(([x, y], idx) => (
           <div
             key={idx}
-            className="absolute rounded-sm"
+            className="absolute rounded-sm animate-sparkle-bg"
             style={{
               width: 8,
               height: 8,
               left: (x - minX) * 10,
               top: (y - minY) * 10,
               backgroundColor: color,
-              boxShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}50, inset 0 0 4px rgba(255,255,255,0.3)`,
-              animation: `sparkle-bg ${1.5 + (idx * 0.2)}s ease-in-out infinite`,
+              boxShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}50`,
               animationDelay: `${delay + idx * 0.1}s`,
-              border: `1px solid rgba(255,255,255,0.2)`,
             }}
           />
         ))}
@@ -71,27 +70,23 @@ const FloatingPiece = memo(({ piece, startX, startY, delay, duration, color, glo
 
 FloatingPiece.displayName = 'FloatingPiece';
 
-// Default color sets
+// Default colors - cyan/purple cyberpunk theme
 const DEFAULT_COLORS = [
   { color: '#22d3ee', glow: 'rgba(34,211,238,0.6)' },   // cyan
-  { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },   // pink
   { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },   // purple
-  { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },    // green
-  { color: '#f59e0b', glow: 'rgba(245,158,11,0.6)' },   // amber
+  { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },   // pink
   { color: '#6366f1', glow: 'rgba(99,102,241,0.6)' },   // indigo
 ];
 
-// Online/amber themed colors
+// Online mode colors - amber/orange
 const ONLINE_COLORS = [
-  { color: '#fbbf24', glow: 'rgba(251,191,36,0.7)' },   // amber (primary)
-  { color: '#f97316', glow: 'rgba(249,115,22,0.65)' },  // orange
-  { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan accent
-  { color: '#a855f7', glow: 'rgba(168,85,247,0.5)' },   // purple accent
-  { color: '#fcd34d', glow: 'rgba(252,211,77,0.6)' },   // yellow
+  { color: '#fbbf24', glow: 'rgba(251,191,36,0.6)' },   // amber
+  { color: '#f97316', glow: 'rgba(249,115,22,0.6)' },   // orange
   { color: '#fb923c', glow: 'rgba(251,146,60,0.6)' },   // orange light
+  { color: '#ea580c', glow: 'rgba(234,88,12,0.6)' },    // orange dark
 ];
 
-// Speed/puzzle mode themed colors
+// Speed puzzle colors - red/orange intensity
 const SPEED_COLORS = [
   { color: '#ef4444', glow: 'rgba(239,68,68,0.6)' },    // red
   { color: '#f97316', glow: 'rgba(249,115,22,0.6)' },   // orange
@@ -122,7 +117,7 @@ export const COLOR_PRESETS = {
 /**
  * FloatingPiecesBackground - Animated pentomino pieces floating in the background
  * 
- * @param {number} count - Number of floating pieces (default: 12)
+ * @param {number} count - Number of floating pieces (default: 18, increased from 15 by 20%)
  * @param {Array} colors - Array of {color, glow} objects (default: DEFAULT_COLORS)
  * @param {string} colorPreset - Use a preset: 'default', 'online', 'speed', 'green', 'purple'
  * @param {number} minSize - Minimum piece scale (default: 0.6)
@@ -131,7 +126,7 @@ export const COLOR_PRESETS = {
  * @param {number} maxDuration - Maximum animation duration in seconds (default: 25)
  */
 const FloatingPiecesBackground = memo(({ 
-  count = 12,
+  count = 18, // UPDATED: Increased from 15 to 18 (20% increase)
   colors = null,
   colorPreset = 'default',
   minSize = 0.6,
@@ -190,6 +185,9 @@ const FloatingPiecesBackground = memo(({
             opacity: 1; 
             transform: scale(1.1);
           }
+        }
+        .animate-sparkle-bg {
+          animation: sparkle-bg 2s ease-in-out infinite;
         }
       `}</style>
       

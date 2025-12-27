@@ -2,8 +2,9 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
+// PATCHED: Clockwise rotation, always scroll, removed header menu, orange forfeit
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Flag, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -22,7 +23,6 @@ import HeadToHead from './HeadToHead';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
 import TierIcon from './TierIcon';
 import PlacementAnimation, { usePlacementAnimation } from './PlacementAnimation';
-import FinalBoardView from './FinalBoardView';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
@@ -180,10 +180,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [rematchAccepted, setRematchAccepted] = useState(false);
   const [rematchDeclined, setRematchDeclined] = useState(false);
   const [newGameFromRematch, setNewGameFromRematch] = useState(null);
-  
-  // Final board view state
-  const [showFinalBoard, setShowFinalBoard] = useState(false);
-  const [moveHistory, setMoveHistory] = useState([]);
   
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
@@ -747,36 +743,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     };
   }, [currentGameId, userId, updateGameState]);
 
-  // Load move history for FinalBoardView
-  const loadMoveHistory = useCallback(async () => {
-    if (!currentGameId) return;
-    
-    try {
-      console.log('[OnlineGameScreen] Loading move history for game:', currentGameId);
-      
-      const { data, error } = await gameSyncService.getGameMoves(currentGameId);
-      
-      if (error) {
-        console.error('[OnlineGameScreen] Error loading move history:', error);
-        return;
-      }
-      
-      if (data && Array.isArray(data)) {
-        console.log('[OnlineGameScreen] Loaded', data.length, 'moves');
-        setMoveHistory(data);
-      }
-    } catch (err) {
-      console.error('[OnlineGameScreen] Failed to load move history:', err);
-    }
-  }, [currentGameId]);
-
-  // Load move history when game ends
-  useEffect(() => {
-    if (game?.status === 'completed' && moveHistory.length === 0) {
-      loadMoveHistory();
-    }
-  }, [game?.status, moveHistory.length, loadMoveHistory]);
-
   // Subscribe to chat messages for notification when chat is closed
   // Chat notification subscription - FIXED: Use supabase directly
   useEffect(() => {
@@ -866,9 +832,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     soundManager.playClickSound('neutral');
   }, [pendingMove]);
 
+  // PATCHED: Clockwise rotation (was counterclockwise)
   const handleRotate = useCallback(() => {
     if (!selectedPiece) return;
-    setRotation((r) => (r + 1) % 4);
+    setRotation((r) => (r + 3) % 4);
     soundManager.playPieceRotate();
   }, [selectedPiece]);
 
@@ -1157,7 +1124,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     <div 
       className="min-h-screen bg-slate-950 overflow-x-hidden"
       style={{ 
-        overflowY: needsScroll ? 'auto' : 'hidden',
+        // PATCHED: Always enable scrolling on all devices
+        overflowY: 'auto',
         touchAction: isDragging ? 'none' : 'pan-y'
       }}
     >
@@ -1188,15 +1156,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
-          {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
+          {/* PATCHED: Header - REMOVED duplicate menu button, kept only title and timer */}
           <div className="flex items-center justify-between mb-2">
-            <button
-              onClick={handleLeave}
-              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
-            >
-              <ArrowLeft size={16} />
-              Menu
-            </button>
+            {/* Empty spacer for balance */}
+            <div className="w-16" />
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
@@ -1387,9 +1350,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 Flip
               </GlowOrbButton>
               {game?.status === 'active' && (
+                // PATCHED: Changed from slate to amber for orange forfeit button
                 <GlowOrbButton
                   onClick={handleQuitOrForfeit}
-                  color="slate"
+                  color="amber"
                   className="flex items-center gap-1 justify-center flex-1"
                 >
                   <Flag size={14} />
@@ -1537,13 +1501,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               window.location.href = window.location.origin;
             }
           }}
-          onViewFinalBoard={() => {
-            // Load move history if not already loaded
-            if (moveHistory.length === 0) {
-              loadMoveHistory();
-            }
-            setShowFinalBoard(true);
-          }}
         />
       )}
 
@@ -1671,24 +1628,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`
         ) : null}
       />
-
-      {/* Final Board View Modal */}
-      {showFinalBoard && (
-        <FinalBoardView
-          board={board}
-          boardPieces={boardPieces}
-          moveHistory={moveHistory}
-          player1Name={game?.player1_id === user?.id 
-            ? (profile?.display_name || profile?.username || 'You')
-            : (opponent?.display_name || opponent?.username || 'Opponent')
-          }
-          player2Name={game?.player1_id === user?.id 
-            ? (opponent?.display_name || opponent?.username || 'Opponent')
-            : (profile?.display_name || profile?.username || 'You')
-          }
-          onClose={() => setShowFinalBoard(false)}
-        />
-      )}
     </div>
   );
 };

@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Display final board state with move order numbers
+// ENHANCED: Added gold shimmer on last moved piece
 // Shows each piece with its move number overlay for game analysis
 import { useState, useEffect, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause } from 'lucide-react';
@@ -8,6 +9,11 @@ import { soundManager } from '../utils/soundManager';
 
 /**
  * FinalBoardView - Shows the final game board with move order numbers
+ * 
+ * ENHANCED: 
+ * - Different colors for Player 1 (cyan) and Player 2 (orange)
+ * - Move order numbers on each piece
+ * - Gold shimmering highlight on the last moved piece
  * 
  * @param {Object} props
  * @param {Array} props.board - Final board state (8x8 grid)
@@ -29,13 +35,16 @@ const FinalBoardView = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1000); // ms per move
 
-  // Build cell move numbers by calculating piece cells from move data
-  const cellMoveNumbers = useMemo(() => {
+  // Build cell move numbers and track which cells belong to last move
+  const { cellMoveNumbers, lastMoveCells } = useMemo(() => {
     const cellMap = {};
+    const lastCells = new Set();
     
     if (!moveHistory || moveHistory.length === 0) {
-      return cellMap;
+      return { cellMoveNumbers: cellMap, lastMoveCells: lastCells };
     }
+
+    const lastMoveNumber = moveHistory.length;
 
     // Process each move and calculate which cells it occupies
     moveHistory.forEach((move, index) => {
@@ -67,6 +76,11 @@ const FinalBoardView = ({
                 moveNumber,
                 player: board[cellRow]?.[cellCol] || ((index % 2) + 1)
               };
+              
+              // Track last move cells
+              if (moveNumber === lastMoveNumber) {
+                lastCells.add(key);
+              }
             }
           });
         }
@@ -75,7 +89,7 @@ const FinalBoardView = ({
       }
     });
 
-    return cellMap;
+    return { cellMoveNumbers: cellMap, lastMoveCells: lastCells };
   }, [board, moveHistory]);
 
   // Build board states at each move for replay
@@ -196,7 +210,7 @@ const FinalBoardView = ({
     soundManager.playClickSound('soft');
   };
 
-  // Get cell color based on player
+  // Get cell color based on player - ENHANCED colors
   const getCellColor = (player) => {
     if (player === 1) {
       return 'bg-gradient-to-br from-cyan-400 to-cyan-600';
@@ -240,15 +254,15 @@ const FinalBoardView = ({
           </button>
         </div>
 
-        {/* Legend */}
+        {/* Legend - ENHANCED with clearer player colors */}
         <div className="flex justify-center gap-6 mb-4 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-br from-cyan-400 to-cyan-600" />
-            <span className="text-cyan-300">{player1Name}</span>
+            <div className="w-5 h-5 rounded bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+            <span className="text-cyan-300 font-medium">{player1Name}</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded bg-gradient-to-br from-orange-400 to-orange-600" />
-            <span className="text-orange-300">{player2Name}</span>
+            <div className="w-5 h-5 rounded bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_0_8px_rgba(251,146,60,0.5)]" />
+            <span className="text-orange-300 font-medium">{player2Name}</span>
           </div>
         </div>
 
@@ -268,6 +282,7 @@ const FinalBoardView = ({
                 const cellValue = displayBoard[row]?.[col];
                 const moveInfo = cellMoveNumbers[cellKey];
                 const isOccupied = cellValue !== null && cellValue !== 0;
+                const isLastMove = lastMoveCells.has(cellKey);
                 
                 // Show move number only on final view
                 const showMoveNumber = showingFinalWithNumbers && moveInfo && isOccupied;
@@ -279,16 +294,30 @@ const FinalBoardView = ({
                       relative aspect-square rounded-sm flex items-center justify-center
                       ${isOccupied ? getCellColor(cellValue) : 'bg-slate-700/30'}
                       ${isOccupied ? 'shadow-sm' : ''}
+                      ${showingFinalWithNumbers && isLastMove ? 'gold-shimmer-cell' : ''}
                       transition-all duration-200
                     `}
                   >
+                    {/* ENHANCED: Gold shimmer overlay for last moved piece */}
+                    {showingFinalWithNumbers && isLastMove && (
+                      <div className="absolute inset-0 rounded-sm overflow-hidden pointer-events-none">
+                        <div className="absolute inset-0 gold-shimmer-effect" />
+                        <div className="absolute inset-0 border-2 border-amber-300/70 rounded-sm" />
+                      </div>
+                    )}
+                    
                     {/* Move number overlay */}
                     {showMoveNumber && (
                       <div className={`
                         absolute inset-0 flex items-center justify-center
                         text-[10px] sm:text-xs font-bold
-                        ${cellValue === 1 ? 'text-cyan-900' : 'text-orange-900'}
-                        bg-white/30 rounded-sm
+                        ${isLastMove 
+                          ? 'text-amber-900 bg-amber-300/50' 
+                          : cellValue === 1 
+                            ? 'text-cyan-900 bg-white/30' 
+                            : 'text-orange-900 bg-white/30'
+                        }
+                        rounded-sm z-10
                       `}>
                         {moveInfo.moveNumber}
                       </div>
@@ -304,6 +333,16 @@ const FinalBoardView = ({
             )}
           </div>
         </div>
+
+        {/* Last Move Indicator */}
+        {showingFinalWithNumbers && moveHistory.length > 0 && (
+          <div className="text-center mb-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 border border-amber-500/30 rounded-full text-xs text-amber-300">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              Last move highlighted in gold
+            </span>
+          </div>
+        )}
 
         {/* Playback Controls */}
         {moveHistory.length > 0 && (
@@ -406,6 +445,40 @@ const FinalBoardView = ({
           Close
         </button>
       </div>
+
+      {/* ENHANCED: Gold shimmer animation styles */}
+      <style>{`
+        .gold-shimmer-cell {
+          box-shadow: 0 0 15px rgba(251,191,36,0.6), 0 0 30px rgba(251,191,36,0.3);
+        }
+        
+        .gold-shimmer-effect {
+          background: linear-gradient(
+            135deg,
+            transparent 0%,
+            transparent 40%,
+            rgba(251,191,36,0.4) 45%,
+            rgba(255,255,255,0.6) 50%,
+            rgba(251,191,36,0.4) 55%,
+            transparent 60%,
+            transparent 100%
+          );
+          background-size: 300% 300%;
+          animation: gold-shimmer 2s ease-in-out infinite;
+        }
+        
+        @keyframes gold-shimmer {
+          0% {
+            background-position: 200% 200%;
+          }
+          50% {
+            background-position: 0% 0%;
+          }
+          100% {
+            background-position: -200% -200%;
+          }
+        }
+      `}</style>
     </div>
   );
 };

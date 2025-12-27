@@ -1,4 +1,5 @@
 // GameOverModal.jsx - Game over modal with animations
+// UPDATED: Added AI level for AI games and opponent username for online games
 // UPDATED: Added "View Final Board" button for online games
 import { useState, useEffect, useMemo } from 'react';
 import { Trophy, Skull, RotateCcw, RefreshCw, Home, X, Sliders, Eye } from 'lucide-react';
@@ -198,6 +199,17 @@ const GridShatter = () => {
   );
 };
 
+// ====== DIFFICULTY LABEL HELPER ======
+const getDifficultyLabel = (difficulty) => {
+  switch (difficulty) {
+    case 'beginner': return 'BEGINNER A.I.';
+    case 'intermediate': return 'INTERMEDIATE A.I.';
+    case 'expert': return 'EXPERT A.I.';
+    case 'hard': return 'HARD A.I.';
+    default: return 'A.I.';
+  }
+};
+
 // ====== MAIN MODAL ======
 
 const GameOverModal = ({ 
@@ -211,9 +223,9 @@ const GameOverModal = ({
   onMenu, 
   onRematch, 
   onDifficultySelect, 
-  onViewFinalBoard,  // NEW: Callback to view final board with move numbers
-  opponentName, 
-  difficulty 
+  onViewFinalBoard,  // Callback to view final board with move numbers
+  opponentName,      // Opponent username for online games
+  difficulty         // AI difficulty level for AI games
 }) => {
   const [animationType, setAnimationType] = useState(0);
 
@@ -231,7 +243,9 @@ const GameOverModal = ({
   // Simple, clear messaging
   const is2Player = gameMode === '2player';
   const isOnline = gameMode === 'online';
+  const isAI = gameMode === 'ai';
   
+  // UPDATED: Enhanced title with AI level and opponent name
   const getTitle = () => {
     if (isPuzzle) return isWin ? 'COMPLETE!' : 'FAILED';
     if (is2Player) return winner === 1 ? 'PLAYER 1 WINS!' : 'PLAYER 2 WINS!';
@@ -239,10 +253,23 @@ const GameOverModal = ({
     return isWin ? 'YOU WIN!' : 'YOU LOSE';
   };
 
+  // UPDATED: Enhanced subtitle with AI level and opponent name
   const getSubtitle = () => {
     if (isPuzzle) return isWin ? 'Puzzle solved successfully' : 'No moves remaining';
     if (is2Player) return winner === 1 ? 'Player 1 dominated the board' : 'Player 2 dominated the board';
-    if (isOnline) return isWin ? `You defeated ${opponentName || 'your opponent'}` : `${opponentName || 'Opponent'} wins this round`;
+    if (isOnline) {
+      const oppDisplay = opponentName || 'Opponent';
+      return isWin 
+        ? `You defeated ${oppDisplay}` 
+        : `${oppDisplay} wins this round`;
+    }
+    // AI mode - include difficulty level
+    if (isAI && difficulty) {
+      const diffLabel = getDifficultyLabel(difficulty);
+      return isWin 
+        ? `You defeated the ${diffLabel}` 
+        : `The ${diffLabel} wins this round`;
+    }
     return isWin ? 'You defeated the A.I.' : 'The A.I. wins this round';
   };
 
@@ -318,6 +345,30 @@ const GameOverModal = ({
         {/* Subtitle */}
         <p className="text-center text-slate-400 text-sm mb-6">{getSubtitle()}</p>
 
+        {/* UPDATED: AI Difficulty Badge for AI games */}
+        {isAI && difficulty && (
+          <div className="flex justify-center mb-4">
+            <div className={`px-3 py-1 rounded-full text-xs font-bold ${
+              difficulty === 'expert' || difficulty === 'hard'
+                ? 'bg-purple-500/30 text-purple-300 border border-purple-500/50'
+                : difficulty === 'intermediate'
+                  ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50'
+                  : 'bg-green-500/30 text-green-300 border border-green-500/50'
+            }`}>
+              {getDifficultyLabel(difficulty).toUpperCase()}
+            </div>
+          </div>
+        )}
+
+        {/* UPDATED: Opponent name badge for online games */}
+        {isOnline && opponentName && (
+          <div className="flex justify-center mb-4">
+            <div className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/30 text-amber-300 border border-amber-500/50">
+              vs {opponentName}
+            </div>
+          </div>
+        )}
+
         {/* Buttons */}
         <div className="space-y-2">
           {isOnline ? (
@@ -331,7 +382,7 @@ const GameOverModal = ({
                 </button>
               )}
               
-              {/* VIEW FINAL BOARD - NEW BUTTON */}
+              {/* VIEW FINAL BOARD button */}
               {onViewFinalBoard && (
                 <button onClick={handleViewFinalBoard}
                   className="w-full py-3 rounded-lg font-bold tracking-wide flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-500 text-white transition-all border border-amber-400/30"

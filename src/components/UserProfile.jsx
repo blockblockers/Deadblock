@@ -4,6 +4,7 @@
 // 2. Tier-colored styling throughout
 // 3. Clickable opponents in match history
 // 4. Final Board View for completed games
+// PATCHED: Centered title matching other menus (size="medium" with subtitle)
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, Swords, Award, Gamepad2, Zap, LayoutGrid } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -193,8 +194,8 @@ const UserProfile = ({ onBack }) => {
       {/* Content */}
       <div className="relative min-h-screen px-4 py-8">
         <div className="max-w-md mx-auto">
-          {/* Header */}
-          <div className="flex items-center gap-4 mb-6">
+          {/* Header - Centered title matching other menus */}
+          <div className="flex items-center justify-between mb-4">
             <button
               onClick={handleBack}
               className="p-2 transition-colors"
@@ -202,7 +203,19 @@ const UserProfile = ({ onBack }) => {
             >
               <ArrowLeft size={24} />
             </button>
-            <NeonTitle size="small" />
+            
+            <div className="text-center flex-1">
+              <NeonTitle text="DEADBLOCK" size="medium" />
+              <div 
+                className="text-[10px] font-bold tracking-[0.3em] uppercase mt-0"
+                style={{ color: hexToRgba(glowColor, 0.8) }}
+              >
+                PLAYER PROFILE
+              </div>
+            </div>
+            
+            {/* Spacer for balance */}
+            <div className="w-10" />
           </div>
 
           {/* Profile Card - Tier themed */}

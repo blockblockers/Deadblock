@@ -1,6 +1,7 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
+// PATCHED: Submit button always visible (disabled when no pending move), rotation handled by useGameState
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, FlipHorizontal } from 'lucide-react';
 import GameBoard from './GameBoard';
@@ -1061,27 +1062,28 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             draggedPiece={draggedPiece}
           />
           
-          {/* Confirm/Cancel Controls - Only show when there's a pending move */}
-          {pendingMove && (
-            <div className="flex gap-2 justify-center mt-2">
-              <button
-                onClick={confirmMove}
-                disabled={!pendingMove || !(() => {
-                  const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-                  return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
-                })()}
-                className="flex-1 max-w-32 px-3 py-2 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)] disabled:opacity-30 disabled:shadow-none"
-              >
-                <CheckCircle size={14} />CONFIRM
-              </button>
+          {/* Submit/Confirm and Cancel Controls - PATCHED: Submit always visible */}
+          <div className="flex gap-2 justify-center mt-2">
+            <button
+              onClick={confirmMove}
+              disabled={!pendingMove || !(() => {
+                if (!pendingMove) return false;
+                const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+                return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+              })()}
+              className="flex-1 max-w-32 px-3 py-2 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)] disabled:opacity-30 disabled:shadow-none"
+            >
+              <CheckCircle size={14} />SUBMIT
+            </button>
+            {pendingMove && (
               <button
                 onClick={cancelMove}
                 className="flex-1 max-w-32 px-3 py-2 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
               >
                 <X size={14} />CANCEL
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
         
         {/* Bottom padding for scroll */}
