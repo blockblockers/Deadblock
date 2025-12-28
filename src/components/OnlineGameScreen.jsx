@@ -226,8 +226,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
+    // v7.7 FIX: Account for the visual offset of the floating piece (40px up from touch)
+    const visualY = clientY - 40;
+    
     const relX = clientX - left;
-    const relY = clientY - top;
+    const relY = visualY - top;
     
     if (relX < 0 || relX > width || relY < 0 || relY > height) {
       return null;
@@ -1243,6 +1246,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   currentPlayer={myPlayerNumber}
                   onCellClick={handleCellClick}
                   onPendingPieceDragStart={handleBoardDragStart}
+                  // v7.7: Pass drag preview info for highlighting during drag
+                  isDragging={isDragging}
+                  dragPreviewCell={dragPreviewCell}
+                  draggedPiece={draggedPiece}
+                  dragRotation={rotation}
+                  dragFlipped={flipped}
                 />
                 {/* Placement Animation Overlay */}
                 {placementAnimation && (

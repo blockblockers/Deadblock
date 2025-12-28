@@ -1,10 +1,9 @@
 // FinalBoardView.jsx - Display final board state with SpectatorView-like styling
-// v7.7 ENHANCED:
-// - Styled like SpectatorView for consistent replay experience
-// - Shows player panels with tier icons, ratings, winner crown
-// - Uses GameBoard component for proper piece rendering
-// - Playback controls at bottom like a media player
-// - "REPLAY" badge instead of "LIVE"
+// v7.8 FIXES:
+// - Correct ELO scores from game data
+// - Piece-specific colors (not just cyan/orange)
+// - Clear move order with last piece prominently highlighted
+// - Fixed cellCol bug in move number calculation
 
 import { useState, useEffect, useMemo } from 'react';
 import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause, Loader, Film, Trophy, Clock } from 'lucide-react';
@@ -26,19 +25,20 @@ const hexToRgba = (hex, alpha) => {
 /**
  * FinalBoardView - Shows game replay with SpectatorView-like styling
  * 
- * Features:
- * - Player panels with tier icons and ratings
- * - Winner crown indicator
+ * v7.8 Features:
+ * - Player panels with tier icons and CORRECT ELO ratings
+ * - Piece-specific colors from pieceColors map
+ * - Move numbers clearly visible
+ * - Last move prominently highlighted with golden glow
  * - Move-by-move replay with playback controls
- * - Final board state with move numbers overlay
  */
 const FinalBoardView = ({ 
   board, 
   boardPieces, 
   moveHistory = [],
   isLoadingMoves = false,
-  player1 = null,      // { username, rating, id }
-  player2 = null,      // { username, rating, id }
+  player1 = null,      // { username, rating/elo_rating, id }
+  player2 = null,      // { username, rating/elo_rating, id }
   player1Name = 'Player 1',
   player2Name = 'Player 2',
   player1Rating = 1200,
@@ -53,17 +53,17 @@ const FinalBoardView = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1000);
 
-  // Extract player info
+  // Extract player info - check multiple possible rating field names
   const p1Name = player1?.username || player1Name;
   const p2Name = player2?.username || player2Name;
-  const p1Rating = player1?.rating || player1?.elo_rating || player1Rating;
-  const p2Rating = player2?.rating || player2?.elo_rating || player2Rating;
+  const p1Rating = player1?.elo_rating || player1?.rating || player1?.elo || player1Rating || 1200;
+  const p2Rating = player2?.elo_rating || player2?.rating || player2?.elo || player2Rating || 1200;
   const p1Id = player1?.id;
   const p2Id = player2?.id;
 
   // Determine winner
-  const isPlayer1Winner = winner === 'player1' || winnerId === p1Id;
-  const isPlayer2Winner = winner === 'player2' || winnerId === p2Id;
+  const isPlayer1Winner = winner === 'player1' || winnerId === p1Id || (winnerId && winnerId === p1Id);
+  const isPlayer2Winner = winner === 'player2' || winnerId === p2Id || (winnerId && winnerId === p2Id);
 
   // Get tier info for both players
   const player1Tier = ratingService.getRatingTier(p1Rating);
@@ -82,8 +82,8 @@ const FinalBoardView = ({
     return boardPieces && typeof boardPieces === 'object' ? boardPieces : {};
   }, [boardPieces]);
 
-  // Build cell move numbers
-  const cellMoveNumbers = useMemo(() => {
+  // Build comprehensive cell info map from move history
+  const cellInfoMap = useMemo(() => {
     const cellMap = {};
     if (!moveHistory || moveHistory.length === 0) return cellMap;
 
@@ -102,11 +102,13 @@ const FinalBoardView = ({
         if (coords && coords.length > 0) {
           coords.forEach(([dx, dy]) => {
             const cellRow = anchorRow + dy;
-            const cellCol = anchorCol + dx;
+            const cellCol = anchorCol + dx; // FIXED: was colIdx (bug)
             if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-              cellMap[`${cellRow},${colIdx}`] = {
+              cellMap[`${cellRow},${cellCol}`] = {
                 moveNumber,
-                player: (index % 2) + 1
+                player: (index % 2) + 1,
+                pieceType,
+                isLastMove: moveNumber === moveHistory.length
               };
             }
           });
@@ -263,37 +265,14 @@ const FinalBoardView = ({
     ? new Date(gameDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
 
-  // Build cell move numbers for display (fix the bug in cellMoveNumbers)
-  const getCellMoveNumber = (rowIdx, colIdx) => {
-    if (!moveHistory || moveHistory.length === 0) return null;
-    
-    for (let i = 0; i < moveHistory.length; i++) {
-      const move = moveHistory[i];
-      const moveNumber = move.move_number || (i + 1);
-      const pieceType = move.piece_type;
-      const anchorRow = move.row;
-      const anchorCol = move.col;
-      const rotation = move.rotation || 0;
-      const flipped = move.flipped || false;
-
-      if (pieceType === undefined || anchorRow === undefined || anchorCol === undefined) continue;
-
-      try {
-        const coords = getPieceCoords(pieceType, rotation, flipped);
-        if (coords) {
-          for (const [dx, dy] of coords) {
-            const cellRow = anchorRow + dy;
-            const cellCol = anchorCol + dx;
-            if (cellRow === rowIdx && cellCol === colIdx) {
-              return { moveNumber, player: (i % 2) + 1 };
-            }
-          }
-        }
-      } catch (e) {
-        // Skip
-      }
-    }
-    return null;
+  // Get cell info from map
+  const getCellInfo = (rowIdx, colIdx) => {
+    return cellInfoMap[`${rowIdx},${colIdx}`] || null;
+  };
+  
+  // Get piece type from displayBoardPieces
+  const getPieceType = (rowIdx, colIdx) => {
+    return displayBoardPieces[`${rowIdx},${colIdx}`] || null;
   };
 
   return (
@@ -320,7 +299,7 @@ const FinalBoardView = ({
         </div>
       </div>
 
-      {/* Players Panel - Like SpectatorView */}
+      {/* Players Panel - Shows CORRECT ELO ratings */}
       <div className="bg-slate-800/50 p-3 flex-shrink-0">
         <div className="max-w-md mx-auto flex items-center justify-between">
           {/* Player 1 */}
@@ -346,7 +325,10 @@ const FinalBoardView = ({
                 {p1Name}
                 {isPlayer1Winner && ' 👑'}
               </div>
-              <div className="text-slate-500 text-xs" style={{ color: hexToRgba(player1Tier.glowColor, 0.8) }}>
+              <div 
+                className="text-xs font-medium"
+                style={{ color: hexToRgba(player1Tier.glowColor, 0.9) }}
+              >
                 {p1Rating} ELO
               </div>
             </div>
@@ -367,7 +349,10 @@ const FinalBoardView = ({
                 {isPlayer2Winner && '👑 '}
                 {p2Name}
               </div>
-              <div className="text-slate-500 text-xs" style={{ color: hexToRgba(player2Tier.glowColor, 0.8) }}>
+              <div 
+                className="text-xs font-medium"
+                style={{ color: hexToRgba(player2Tier.glowColor, 0.9) }}
+              >
                 {p2Rating} ELO
               </div>
             </div>
@@ -400,7 +385,7 @@ const FinalBoardView = ({
           </span>
         ) : showingFinalWithNumbers ? (
           <span className="text-amber-400 font-medium">
-            Game Over - {isPlayer1Winner ? p1Name : p2Name} wins! • {moveHistory.length} moves
+            Game Over - {isPlayer1Winner ? p1Name : isPlayer2Winner ? p2Name : 'Winner'} wins! • {moveHistory.length} moves
           </span>
         ) : (
           <span className="text-slate-300">
@@ -421,7 +406,7 @@ const FinalBoardView = ({
           </div>
         ) : (
           <div className="w-full max-w-md">
-            {/* Using custom board rendering to show move numbers */}
+            {/* Board grid with piece-specific colors */}
             <div 
               className="grid grid-cols-8 gap-1 p-3 rounded-xl bg-slate-800/50 border border-slate-700/50"
               style={{ 
@@ -432,16 +417,24 @@ const FinalBoardView = ({
               {displayBoard.map((row, rowIdx) =>
                 row.map((cellValue, colIdx) => {
                   const key = `${rowIdx},${colIdx}`;
-                  const moveInfo = showingFinalWithNumbers ? getCellMoveNumber(rowIdx, colIdx) : null;
+                  const cellInfo = showingFinalWithNumbers ? getCellInfo(rowIdx, colIdx) : null;
                   const isOccupied = cellValue !== null && cellValue !== 0;
-                  const showMoveNumber = showingFinalWithNumbers && moveInfo && moveHistory.length > 0;
-                  const isLastMove = showingFinalWithNumbers && moveInfo?.moveNumber === moveHistory.length;
+                  const showMoveNumber = showingFinalWithNumbers && cellInfo && moveHistory.length > 0;
+                  const isLastMove = cellInfo?.isLastMove;
                   
-                  // Determine cell color based on player
+                  // Get piece type - from cellInfo (move history) or displayBoardPieces
+                  const pieceType = cellInfo?.pieceType || getPieceType(rowIdx, colIdx);
+                  
+                  // Use PIECE-SPECIFIC colors (like the main game board)
                   let cellBg = 'bg-slate-700/30';
                   let cellGlow = '';
                   
-                  if (isOccupied) {
+                  if (isOccupied && pieceType && pieceColors[pieceType]) {
+                    // Use the specific piece color from pieceColors
+                    cellBg = pieceColors[pieceType];
+                    cellGlow = '0 0 8px rgba(255, 255, 255, 0.15)';
+                  } else if (isOccupied) {
+                    // Fallback to player colors if piece type unknown
                     if (cellValue === 1) {
                       cellBg = 'bg-gradient-to-br from-cyan-400 to-cyan-600';
                       cellGlow = '0 0 10px rgba(34, 211, 238, 0.4)';
@@ -457,31 +450,41 @@ const FinalBoardView = ({
                       className={`
                         aspect-square rounded-md relative overflow-hidden
                         ${cellBg}
-                        ${isLastMove ? 'ring-2 ring-amber-400 ring-offset-1 ring-offset-slate-900' : ''}
+                        ${isLastMove ? 'last-move-highlight z-10' : ''}
                         transition-all duration-200
                       `}
-                      style={{ boxShadow: isOccupied ? cellGlow : 'none' }}
+                      style={{ 
+                        boxShadow: isLastMove 
+                          ? '0 0 0 3px rgba(251, 191, 36, 0.9), 0 0 20px rgba(251, 191, 36, 0.6), 0 0 40px rgba(251, 191, 36, 0.3)'
+                          : (isOccupied ? cellGlow : 'none'),
+                        transform: isLastMove ? 'scale(1.05)' : 'scale(1)'
+                      }}
                     >
                       {/* Cell shine */}
                       {isOccupied && (
                         <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/25" />
                       )}
                       
-                      {/* Move number */}
+                      {/* Move number with better visibility */}
                       {showMoveNumber && (
-                        <div className={`
-                          absolute inset-0 flex items-center justify-center
-                          text-[10px] sm:text-xs font-bold
-                          ${cellValue === 1 ? 'text-cyan-950' : 'text-orange-950'}
-                          bg-white/40
-                        `}>
-                          {moveInfo.moveNumber}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span 
+                            className={`
+                              font-bold rounded shadow-md
+                              ${isLastMove 
+                                ? 'bg-amber-500 text-amber-950 text-sm sm:text-base px-1.5 py-0.5 animate-pulse' 
+                                : 'bg-black/50 text-white text-[9px] sm:text-[10px] px-1 py-0.5'
+                              }
+                            `}
+                          >
+                            {cellInfo.moveNumber}
+                          </span>
                         </div>
                       )}
                       
-                      {/* Last move shimmer */}
+                      {/* Last move shimmer effect */}
                       {isLastMove && (
-                        <div className="absolute inset-0 animate-pulse bg-amber-400/20" />
+                        <div className="absolute inset-0 last-move-shimmer" />
                       )}
                     </div>
                   );
@@ -490,19 +493,36 @@ const FinalBoardView = ({
             </div>
 
             {/* Legend */}
-            <div className="flex justify-center gap-6 mt-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
-                <span className={isPlayer1Winner ? 'text-amber-300 font-bold' : 'text-slate-400'}>
-                  {p1Name}
-                </span>
+            <div className="mt-4 space-y-2">
+              {/* Player legend */}
+              <div className="flex justify-center gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-[0_0_8px_rgba(34,211,238,0.5)]" />
+                  <span className={isPlayer1Winner ? 'text-amber-300 font-bold' : 'text-slate-400'}>
+                    {p1Name} {isPlayer1Winner && '👑'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
+                  <span className={isPlayer2Winner ? 'text-amber-300 font-bold' : 'text-slate-400'}>
+                    {p2Name} {isPlayer2Winner && '👑'}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded bg-gradient-to-br from-orange-400 to-orange-600 shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
-                <span className={isPlayer2Winner ? 'text-amber-300 font-bold' : 'text-slate-400'}>
-                  {p2Name}
-                </span>
-              </div>
+              
+              {/* Move info legend */}
+              {showingFinalWithNumbers && moveHistory.length > 0 && (
+                <div className="flex justify-center items-center gap-4 text-xs text-slate-500">
+                  <div className="flex items-center gap-1">
+                    <span className="bg-black/50 text-white px-1.5 py-0.5 rounded text-[10px]">3</span>
+                    <span>= Move #</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="bg-amber-500 text-amber-950 px-1.5 py-0.5 rounded text-[10px] font-bold animate-pulse">{moveHistory.length}</span>
+                    <span>= Last move</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -608,6 +628,42 @@ const FinalBoardView = ({
           </button>
         </div>
       )}
+
+      {/* CSS for last move highlight */}
+      <style>{`
+        .last-move-highlight {
+          animation: last-move-pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes last-move-pulse {
+          0%, 100% { 
+            box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.9), 0 0 20px rgba(251, 191, 36, 0.6);
+          }
+          50% { 
+            box-shadow: 0 0 0 4px rgba(251, 191, 36, 1), 0 0 30px rgba(251, 191, 36, 0.8), 0 0 50px rgba(251, 191, 36, 0.4);
+          }
+        }
+        
+        .last-move-shimmer {
+          background: linear-gradient(
+            135deg,
+            transparent 0%,
+            transparent 30%,
+            rgba(251, 191, 36, 0.3) 45%,
+            rgba(251, 191, 36, 0.5) 50%,
+            rgba(251, 191, 36, 0.3) 55%,
+            transparent 70%,
+            transparent 100%
+          );
+          background-size: 300% 300%;
+          animation: last-move-sweep 2s ease-in-out infinite;
+        }
+        
+        @keyframes last-move-sweep {
+          0% { background-position: 100% 100%; }
+          100% { background-position: -100% -100%; }
+        }
+      `}</style>
     </div>
   );
 };

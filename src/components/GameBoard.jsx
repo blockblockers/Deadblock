@@ -12,6 +12,7 @@ import { pieceColors } from '../utils/pieces';
  * 
  * Renders the 8x8 game grid with placed pieces and pending move preview.
  * v7.7: Very slow ambient animations (8-15s cycles), interesting visual effects
+ * v7.7 ENHANCED: Shows drag preview highlighting on board during drag
  */
 const GameBoard = forwardRef(({
   board,
@@ -28,6 +29,12 @@ const GameBoard = forwardRef(({
   selectedPiece,
   customColors,
   onPendingPieceDragStart,
+  // v7.7: Drag preview props for highlighting during drag
+  isDragging = false,
+  dragPreviewCell = null,
+  draggedPiece = null,
+  dragRotation = 0,
+  dragFlipped = false,
 }, ref) => {
   // Ensure board is properly formatted
   const safeBoard = Array.isArray(board) 
@@ -36,36 +43,26 @@ const GameBoard = forwardRef(({
   
   const safeBoardPieces = boardPieces || {};
   
-  // Random ambient effects for placed pieces - very slow, elegant animations
-  const [ambientEffects, setAmbientEffects] = useState({});
+  // Simple rolling glow effect with random timing per cell
+  const [glowTimings, setGlowTimings] = useState({});
   
   useEffect(() => {
-    // Generate random ambient effects for placed pieces
-    const effects = {};
-    // More effect variety with weighted chances
-    const effectTypes = [
-      'orbiting-highlight',  // Rotating highlight around edges
-      'breathing',           // Gentle brightness pulse
-      'corner-glow',         // Glowing corners
-      'edge-shimmer',        // Shimmer along edges
-      'none',                // Some pieces stay static for contrast
-    ];
+    // Generate random timing for rolling glow effect on each cell
+    const timings = {};
     
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         if (safeBoard[row]?.[col]) {
-          const rand = Math.random();
-          const typeIndex = Math.floor(rand * effectTypes.length);
-          effects[`${row},${col}`] = {
-            type: effectTypes[typeIndex],
-            delay: -Math.random() * 10, // Negative delay = start mid-animation
-            duration: 8 + Math.random() * 7, // 8-15 second cycles (very slow)
-            direction: Math.random() > 0.5 ? 1 : -1, // Randomize direction
+          timings[`${row},${col}`] = {
+            // Random delay so cells don't all glow at the same time (0-15 seconds)
+            delay: Math.random() * 15,
+            // Slow duration (8-14 seconds per cycle)
+            duration: 8 + Math.random() * 6,
           };
         }
       }
     }
-    setAmbientEffects(effects);
+    setGlowTimings(timings);
   }, [safeBoard]);
   
   // Helper to get piece name - handles both 2D array and object formats
@@ -138,6 +135,32 @@ const GameBoard = forwardRef(({
     });
   }
 
+  // v7.7: Calculate drag preview cells (highlighting during drag)
+  let dragPreviewCells = [];
+  let dragPreviewValid = false;
+  let dragPreviewPieceColor = null;
+  if (isDragging && dragPreviewCell && draggedPiece) {
+    const dragCoords = getPieceCoords(draggedPiece, dragRotation, dragFlipped);
+    dragPreviewPieceColor = pieceColors[draggedPiece] || 'bg-gradient-to-br from-cyan-400 to-blue-500';
+    
+    let validCells = 0;
+    let totalCells = dragCoords.length;
+    
+    dragCoords.forEach(([dx, dy]) => {
+      const cellRow = dragPreviewCell.row + dy;
+      const cellCol = dragPreviewCell.col + dx;
+      if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+        const existingCell = safeBoard[cellRow]?.[cellCol];
+        const isValid = existingCell === null || existingCell === 0 || existingCell === undefined;
+        if (isValid) validCells++;
+        dragPreviewCells.push({ row: cellRow, col: cellCol, isValid });
+      }
+    });
+    
+    // Valid if all cells can be placed
+    dragPreviewValid = validCells === totalCells && canPlacePiece(safeBoard, dragPreviewCell.row, dragPreviewCell.col, dragCoords);
+  }
+
   // Get color classes based on game mode and player
   const getPlayerColorClass = (cellValue) => {
     if (customColors) {
@@ -183,14 +206,19 @@ const GameBoard = forwardRef(({
             const isOccupied = cellValue !== null && cellValue !== 0 && cellValue !== undefined;
             const pieceName = getPieceName(rowIdx, colIdx);
             
+            // v7.7: Check if this cell is part of drag preview
+            const dragPreviewInfo = dragPreviewCells.find(p => p.row === rowIdx && p.col === colIdx);
+            const isDragPreview = !!dragPreviewInfo;
+            const isDragPreviewValid = dragPreviewInfo?.isValid !== false;
+            
             // Get piece-specific color or player color
             const pieceColor = pieceName ? pieceColors[pieceName] : null;
             const colorClass = isOccupied 
               ? (pieceColor || getPlayerColorClass(cellValue))
               : '';
             
-            // Ambient effect for this cell
-            const ambient = ambientEffects[`${rowIdx},${colIdx}`];
+            // Rolling glow timing for this cell
+            const glowTiming = glowTimings[`${rowIdx},${colIdx}`];
             
             // Calculate pending index for stagger effect
             const pendingIndex = isPending ? pendingCells.findIndex(p => p.row === rowIdx && p.col === colIdx) : -1;
@@ -217,50 +245,13 @@ const GameBoard = forwardRef(({
                   <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/20 pointer-events-none" />
                 )}
                 
-                {/* Elegant ambient effects for placed pieces - very slow animations */}
-                {isOccupied && ambient?.type === 'orbiting-highlight' && (
+                {/* Simple rolling glow effect - slow diagonal shine that moves across the piece */}
+                {isOccupied && glowTiming && (
                   <div 
-                    className="absolute inset-0 orbiting-highlight pointer-events-none"
+                    className="absolute inset-0 rolling-glow pointer-events-none"
                     style={{ 
-                      animationDelay: `${ambient.delay}s`,
-                      animationDuration: `${ambient.duration}s`,
-                      animationDirection: ambient.direction > 0 ? 'normal' : 'reverse'
-                    }}
-                  />
-                )}
-                {isOccupied && ambient?.type === 'breathing' && (
-                  <div 
-                    className="absolute inset-0 breathing-effect pointer-events-none"
-                    style={{ 
-                      animationDelay: `${ambient.delay}s`,
-                      animationDuration: `${ambient.duration}s`
-                    }}
-                  />
-                )}
-                {isOccupied && ambient?.type === 'corner-glow' && (
-                  <>
-                    <div 
-                      className="absolute corner-glow-tl pointer-events-none"
-                      style={{ 
-                        animationDelay: `${ambient.delay}s`,
-                        animationDuration: `${ambient.duration}s`
-                      }}
-                    />
-                    <div 
-                      className="absolute corner-glow-br pointer-events-none"
-                      style={{ 
-                        animationDelay: `${ambient.delay - ambient.duration / 2}s`,
-                        animationDuration: `${ambient.duration}s`
-                      }}
-                    />
-                  </>
-                )}
-                {isOccupied && ambient?.type === 'edge-shimmer' && (
-                  <div 
-                    className="absolute inset-0 edge-shimmer pointer-events-none"
-                    style={{ 
-                      animationDelay: `${ambient.delay}s`,
-                      animationDuration: `${ambient.duration}s`
+                      animationDelay: `-${glowTiming.delay}s`,
+                      animationDuration: `${glowTiming.duration}s`
                     }}
                   />
                 )}
@@ -308,6 +299,44 @@ const GameBoard = forwardRef(({
                 {/* Player drop effect */}
                 {isPlayerAnimating && (
                   <div className="absolute inset-0 player-drop-effect rounded-md" />
+                )}
+
+                {/* v7.7: Drag preview highlighting - shows where piece will land during drag */}
+                {isDragPreview && !isOccupied && (
+                  <>
+                    {/* Preview background with piece color */}
+                    <div 
+                      className={`absolute inset-0 ${dragPreviewPieceColor} rounded-md opacity-60`}
+                    />
+                    
+                    {/* Shine overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/15 rounded-md" />
+                    
+                    {/* Validity border */}
+                    <div 
+                      className="absolute inset-0 rounded-md pointer-events-none drag-preview-pulse"
+                      style={{
+                        border: isDragPreviewValid 
+                          ? '2px solid rgba(34, 211, 238, 0.8)' 
+                          : '2px solid rgba(239, 68, 68, 0.8)',
+                        boxShadow: isDragPreviewValid 
+                          ? '0 0 12px rgba(34, 211, 238, 0.5), inset 0 0 8px rgba(34, 211, 238, 0.3)'
+                          : '0 0 12px rgba(239, 68, 68, 0.5), inset 0 0 8px rgba(239, 68, 68, 0.3)'
+                      }}
+                    />
+                  </>
+                )}
+                
+                {/* v7.7: Drag preview on occupied cell (invalid) */}
+                {isDragPreview && isOccupied && (
+                  <div 
+                    className="absolute inset-0 rounded-md pointer-events-none"
+                    style={{
+                      border: '2px solid rgba(239, 68, 68, 0.9)',
+                      boxShadow: '0 0 15px rgba(239, 68, 68, 0.6), inset 0 0 10px rgba(239, 68, 68, 0.4)',
+                      background: 'rgba(239, 68, 68, 0.2)'
+                    }}
+                  />
                 )}
               </div>
             );
@@ -484,110 +513,51 @@ const GameBoard = forwardRef(({
         }
         
         /* ============================================
-           PLACED PIECE AMBIENT EFFECTS
-           Very slow, elegant, interesting animations
+           v7.7: DRAG PREVIEW HIGHLIGHTING
+           Shows where piece will land during drag
            ============================================ */
-        
-        /* Orbiting highlight - light travels around the edges */
-        .orbiting-highlight {
-          background: conic-gradient(
-            from 0deg,
-            transparent 0deg,
-            transparent 315deg,
-            rgba(255, 255, 255, 0.4) 340deg,
-            rgba(255, 255, 255, 0.6) 355deg,
-            rgba(255, 255, 255, 0.4) 360deg
-          );
-          animation: orbit-rotate 12s linear infinite;
-          opacity: 0.7;
+        .drag-preview-pulse {
+          animation: drag-preview-glow 0.8s ease-in-out infinite;
         }
         
-        @keyframes orbit-rotate {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        /* Breathing effect - gentle brightness pulse */
-        .breathing-effect {
-          background: radial-gradient(
-            ellipse at center,
-            rgba(255, 255, 255, 0.15) 0%,
-            transparent 60%
-          );
-          animation: breathe 10s ease-in-out infinite;
-        }
-        
-        @keyframes breathe {
+        @keyframes drag-preview-glow {
           0%, 100% { 
-            opacity: 0.3;
-            transform: scale(0.8);
-            filter: brightness(1);
+            opacity: 0.7;
+            transform: scale(1);
           }
           50% { 
-            opacity: 0.8;
-            transform: scale(1.1);
-            filter: brightness(1.1);
+            opacity: 1;
+            transform: scale(1.02);
           }
         }
         
-        /* Corner glow - alternating corner highlights */
-        .corner-glow-tl {
-          width: 50%;
-          height: 50%;
-          top: 0;
-          left: 0;
-          background: radial-gradient(
-            circle at top left,
-            rgba(255, 255, 255, 0.5) 0%,
-            transparent 70%
+        /* ============================================
+           PLACED PIECE AMBIENT EFFECTS
+           Simple rolling glow - slow diagonal shine
+           ============================================ */
+        
+        /* Rolling glow - subtle diagonal light sweep across the cell */
+        .rolling-glow {
+          background: linear-gradient(
+            135deg,
+            transparent 0%,
+            transparent 40%,
+            rgba(255, 255, 255, 0.2) 48%,
+            rgba(255, 255, 255, 0.3) 50%,
+            rgba(255, 255, 255, 0.2) 52%,
+            transparent 60%,
+            transparent 100%
           );
-          animation: corner-pulse 10s ease-in-out infinite;
+          background-size: 400% 400%;
+          animation: rolling-glow-sweep linear infinite;
         }
         
-        .corner-glow-br {
-          width: 50%;
-          height: 50%;
-          bottom: 0;
-          right: 0;
-          background: radial-gradient(
-            circle at bottom right,
-            rgba(255, 255, 255, 0.5) 0%,
-            transparent 70%
-          );
-          animation: corner-pulse 10s ease-in-out infinite;
-        }
-        
-        @keyframes corner-pulse {
-          0%, 100% { opacity: 0.2; }
-          50% { opacity: 0.7; }
-        }
-        
-        /* Edge shimmer - light travels along all edges */
-        .edge-shimmer {
-          background: 
-            linear-gradient(to right, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%),
-            linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
-          background-size: 200% 2px, 2px 200%;
-          background-position: -100% 0, 0 -100%;
-          background-repeat: no-repeat;
-          animation: edge-travel 12s ease-in-out infinite;
-        }
-        
-        @keyframes edge-travel {
+        @keyframes rolling-glow-sweep {
           0% { 
-            background-position: -100% 0, 0 -100%;
+            background-position: 150% 150%;
           }
-          25% {
-            background-position: 200% 0, 0 -100%;
-          }
-          50% {
-            background-position: 200% 100%, 0 200%;
-          }
-          75% {
-            background-position: -100% 100%, 100% 200%;
-          }
-          100% {
-            background-position: -100% 0, 100% -100%;
+          100% { 
+            background-position: -50% -50%;
           }
         }
       `}</style>

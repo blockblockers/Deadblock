@@ -398,7 +398,13 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
         {/* Content - Scrollable */}
         <div 
           className="flex-1 overflow-y-auto p-4"
-          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+          style={{ 
+            WebkitOverflowScrolling: 'touch', 
+            overscrollBehavior: 'contain', 
+            touchAction: 'pan-y',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(100, 116, 139, 0.4) transparent'
+          }}
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">

@@ -274,18 +274,23 @@ const UserProfile = ({ onBack }) => {
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 scroll-container"
-      style={{
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: 'pan-y pinch-zoom',
-        minHeight: '100dvh',
-        position: 'fixed',
-        inset: 0,
-      }}
+      className="scroll-page bg-slate-950"
     >
+      <style>{`
+        .scroll-page {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          touch-action: pan-y pinch-zoom;
+          min-height: 100dvh;
+        }
+      `}</style>
       <div className="p-4 pb-8 max-w-md mx-auto">
         {/* Header - Title centered with absolute positioning */}
         <div className="relative flex items-center justify-center mb-6">

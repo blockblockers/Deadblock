@@ -23,8 +23,8 @@ import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Drag detection constants
-const DRAG_THRESHOLD = 10;
-const SCROLL_ANGLE_THRESHOLD = 60;
+const DRAG_THRESHOLD = 5; // Reduced for faster drag start
+const SCROLL_ANGLE_THRESHOLD = 65; // Slightly increased to favor dragging
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -273,6 +273,7 @@ const GameScreen = ({
   // ==========================================
   
   // Calculate which board cell the drag position is over
+  // v7.7 FIX: Account for the visual offset of the floating piece (40px up from touch)
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -280,8 +281,12 @@ const GameScreen = ({
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
+    // The floating piece is shown 40px above the touch point
+    // So we calculate based on where the piece CENTER actually appears
+    const visualY = clientY - 40;
+    
     const relX = clientX - left;
-    const relY = clientY - top;
+    const relY = visualY - top;
     
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
@@ -571,7 +576,8 @@ const GameScreen = ({
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
-        touchAction: isDragging ? 'none' : 'pan-y',
+        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom',
+        overscrollBehavior: 'contain',
       } : {}}
     >
       {/* Dynamic grid background */}
@@ -637,6 +643,12 @@ const GameScreen = ({
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
+                // v7.7: Pass drag preview info for highlighting during drag
+                isDragging={isDragging}
+                dragPreviewCell={dragPreviewCell}
+                draggedPiece={draggedPiece}
+                dragRotation={rotation}
+                dragFlipped={flipped}
               />
             </div>
 

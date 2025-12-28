@@ -1,8 +1,8 @@
 // Online Menu - Hub for online features
-// v7.7: 
-// - Moved pending rematches into Challenge a Player submenu
-// - Added notification badge for pending rematch approvals
-// - Fixed invite link deletion (X button now works)
+// v7.8: 
+// - Optimized scroll handling with ScrollContainer
+// - Fixed nested scroll containers for better touch responsiveness
+// - Improved submenu scroll behavior
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -915,15 +915,7 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden scroll-container"
-      style={{ 
-        WebkitOverflowScrolling: 'touch', 
-        touchAction: 'pan-y pinch-zoom',
-        height: '100%',
-        width: '100%',
-        overscrollBehavior: 'contain',
-        minHeight: '100dvh',
-      }}
+      className="scroll-page bg-slate-950"
     >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
@@ -1319,10 +1311,7 @@ const OnlineMenu = ({
                       <RefreshCw size={14} />
                       PENDING REMATCHES ({pendingRematches.length})
                     </h4>
-                    <div 
-                      className="space-y-2 max-h-40 overflow-y-auto pr-1"
-                      style={{ WebkitOverflowScrolling: 'touch' }}
-                    >
+                    <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '160px' }}>
                       {pendingRematches.map(rematch => (
                         <div
                           key={rematch.id}
@@ -1422,7 +1411,7 @@ const OnlineMenu = ({
                   
                   {/* Search Results */}
                   {searchResults.length > 0 && (
-                    <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <div className="scroll-list space-y-2 mt-3 pr-1" style={{ maxHeight: '192px' }}>
                       {searchResults.map(user => {
                         const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
                         return (
@@ -1522,7 +1511,7 @@ const OnlineMenu = ({
                     {inviteLinks.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-slate-700/50">
                         <p className="text-slate-400 text-xs mb-2 font-medium">Your active invite links:</p>
-                        <div className="space-y-2 max-h-40 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '160px' }}>
                           {inviteLinks.map(invite => (
                             <div
                               key={invite.id}
@@ -1597,10 +1586,7 @@ const OnlineMenu = ({
                   <Mail size={16} />
                   GAME INVITES ({receivedInvites.length})
                 </h3>
-                <div 
-                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
-                >
+                <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '240px' }}>
                   {receivedInvites.map(invite => (
                     <div
                       key={invite.id}
@@ -1648,10 +1634,7 @@ const OnlineMenu = ({
                   <Clock size={16} />
                   PENDING INVITES ({sentInvites.length})
                 </h3>
-                <div 
-                  className="space-y-2 max-h-40 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
-                >
+                <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '160px' }}>
                   {sentInvites.map(invite => {
                     // Get the best display name available
                     const displayName = invite.to_user?.username 
@@ -1840,7 +1823,7 @@ const OnlineMenu = ({
             </div>
             
             {/* Content */}
-            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="scroll-modal p-4 space-y-4" style={{ maxHeight: '70vh' }}>
               {/* What is ELO explanation */}
               <div className="space-y-2">
                 <p className="text-sm text-slate-300">
@@ -2002,7 +1985,7 @@ const OnlineMenu = ({
             </div>
             
             {/* Games List */}
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
+            <div className="scroll-modal p-4" style={{ maxHeight: '60vh' }}>
               {activeGames.length === 0 ? (
                 <div className="text-center py-8">
                   <Swords className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2068,7 +2051,7 @@ const OnlineMenu = ({
             </div>
             
             {/* Games List */}
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
+            <div className="scroll-modal p-4" style={{ maxHeight: '60vh' }}>
               {recentGames.length === 0 ? (
                 <div className="text-center py-8">
                   <History className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2263,6 +2246,66 @@ const OnlineMenu = ({
         }
         .group:hover .group-hover\\:animate-shine {
           animation: shine 1.5s ease-in-out;
+        }
+        
+        /* Scroll styles */
+        .scroll-page {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          touch-action: pan-y pinch-zoom;
+        }
+        
+        .scroll-modal {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          touch-action: pan-y;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+        }
+        
+        .scroll-modal::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .scroll-modal::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .scroll-modal::-webkit-scrollbar-thumb {
+          background: rgba(100, 116, 139, 0.4);
+          border-radius: 3px;
+        }
+        
+        .scroll-list {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior-y: contain;
+          touch-action: pan-y;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+        }
+        
+        .scroll-list::-webkit-scrollbar {
+          width: 4px;
+        }
+        
+        .scroll-list::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .scroll-list::-webkit-scrollbar-thumb {
+          background: rgba(100, 116, 139, 0.4);
+          border-radius: 2px;
         }
       `}</style>
     </div>

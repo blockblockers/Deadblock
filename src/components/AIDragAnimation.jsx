@@ -224,86 +224,46 @@ const AIDragAnimation = memo(({
         </div>
       )}
 
-      {/* Main floating piece */}
+      {/* Main floating piece - NO background container, just the blocks */}
       <div
         className="fixed pointer-events-none z-[9999]"
         style={{
           left: position.x,
           top: position.y,
           transform: `translate(-50%, -50%) ${
-            phase === 'lifting' ? 'scale(1.2)' : 
+            phase === 'lifting' ? 'scale(1.15)' : 
             phase === 'dropping' ? 'scale(0.95)' : 
-            'scale(1.1)'
+            'scale(1.05)'
           }`,
           transition: phase === 'flying' ? 'none' : 'transform 150ms ease-out',
         }}
       >
-        {/* Outer glow */}
-        <div 
-          className="absolute rounded-2xl"
+        {/* Piece grid - transparent, only blocks visible with glow */}
+        <div
           style={{
-            left: -15,
-            top: -15,
-            right: -15,
-            bottom: -15,
-            background: 'rgba(168, 85, 247, 0.3)',
-            boxShadow: `
-              0 0 40px rgba(168, 85, 247, 0.6),
-              0 0 80px rgba(168, 85, 247, 0.4),
-              0 0 120px rgba(168, 85, 247, 0.2)
-            `,
-            filter: 'blur(10px)',
-            animation: 'ai-glow-pulse 0.5s ease-in-out infinite',
-          }}
-        />
-        
-        {/* Piece container */}
-        <div 
-          className="relative bg-slate-900/90 rounded-xl p-2 border-2 border-purple-400"
-          style={{
-            boxShadow: '0 0 30px rgba(168, 85, 247, 0.5), inset 0 0 20px rgba(168, 85, 247, 0.1)',
+            display: 'grid',
+            gridTemplateColumns: `repeat(${maxX - minX + 1}, ${cellSize}px)`,
+            gap: `${gap}px`,
+            filter: 'drop-shadow(0 0 20px rgba(168, 85, 247, 0.6)) drop-shadow(0 0 40px rgba(168, 85, 247, 0.3))',
           }}
         >
-          {/* Piece grid */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${maxX - minX + 1}, ${cellSize}px)`,
-              gap: `${gap}px`,
-            }}
-          >
-            {coords.map(([x, y], idx) => (
-              <div
-                key={idx}
-                className={`rounded-md relative overflow-hidden ${colorClass}`}
-                style={{
-                  width: cellSize,
-                  height: cellSize,
-                  gridColumn: x - minX + 1,
-                  gridRow: y - minY + 1,
-                  boxShadow: '0 0 10px rgba(168, 85, 247, 0.4)',
-                }}
-              >
-                {/* Cell shine */}
-                <div className="absolute inset-0 bg-gradient-to-br from-white/40 via-transparent to-black/20" />
-                {/* Scan line */}
-                <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.2)_2px,rgba(255,255,255,0.2)_4px)]" />
-              </div>
-            ))}
-          </div>
-          
-          {/* Corner accents */}
-          <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 border-purple-300 rounded-tl" />
-          <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 border-purple-300 rounded-tr" />
-          <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 border-purple-300 rounded-bl" />
-          <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 border-purple-300 rounded-br" />
-        </div>
-
-        {/* AI indicator label */}
-        <div 
-          className="absolute -bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow-[0_0_15px_rgba(168,85,247,0.6)]"
-        >
-          AI MOVE
+          {coords.map(([x, y], idx) => (
+            <div
+              key={idx}
+              className={`rounded-md sm:rounded-lg relative overflow-hidden ${colorClass}`}
+              style={{
+                width: cellSize,
+                height: cellSize,
+                gridColumn: x - minX + 1,
+                gridRow: y - minY + 1,
+                boxShadow: '0 0 15px rgba(168, 85, 247, 0.5), inset 0 0 8px rgba(255,255,255,0.2)',
+                border: '2px solid rgba(168, 85, 247, 0.6)',
+              }}
+            >
+              {/* Cell shine */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/35 via-transparent to-black/20" />
+            </div>
+          ))}
         </div>
       </div>
 
