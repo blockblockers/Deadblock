@@ -1,5 +1,5 @@
 // FloatingPiecesBackground - Reusable animated background with floating pentomino pieces
-// v7.7: Removed delay - animations start immediately when screen opens
+// v7.7: Uses negative animation-delay so pieces start mid-animation (already moving)
 // Use this component on any game/menu screen to add the animated block background
 
 import { useMemo, memo } from 'react';
@@ -148,13 +148,16 @@ const FloatingPiecesBackground = memo(({
       const seed = i * 1.618033988749895; // Golden ratio
       const pseudoRandom = (n) => ((Math.sin(seed * n) + 1) / 2);
       
+      const duration = minDuration + pseudoRandom(5) * (maxDuration - minDuration);
+      
       return {
         id: i,
         piece: pieceNames[Math.floor(pseudoRandom(1) * pieceNames.length)],
         startX: pseudoRandom(2) * 95 + 2.5, // Keep away from edges
         startY: pseudoRandom(3) * 90 + 5,
-        delay: pseudoRandom(4) * 8,
-        duration: minDuration + pseudoRandom(5) * (maxDuration - minDuration),
+        // v7.7 FIX: Use NEGATIVE delay to start mid-animation (pieces already moving)
+        delay: -pseudoRandom(4) * duration,
+        duration,
         color: colorChoice.color,
         glowColor: colorChoice.glow,
         size: minSize + pseudoRandom(6) * (maxSize - minSize),

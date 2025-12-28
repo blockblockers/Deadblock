@@ -193,6 +193,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  // v7.7: Track preview cell separately without updating board preview
+  const [dragPreviewCell, setDragPreviewCell] = useState(null);
+  // v7.7: Track if at least one cell can be placed (for partial overlap drops)
+  const [hasValidCell, setHasValidCell] = useState(false);
   
   // Refs
   const boardRef = useRef(null);
@@ -301,28 +305,55 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+      // v7.7: Track preview cell WITHOUT updating board preview during drag
+      setDragPreviewCell(cell);
+      
+      // Check validity
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(valid);
+      const perfectValid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(perfectValid);
+      
+      // v7.7: Check if at least one cell can be placed (for rotation adjustment)
+      let validCellCount = 0;
+      coords.forEach(([dx, dy]) => {
+        const cellRow = cell.row + dy;
+        const cellCol = cell.col + dx;
+        if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+          const existing = board[cellRow]?.[cellCol];
+          if (existing === null || existing === 0 || existing === undefined) {
+            validCellCount++;
+          }
+        }
+      });
+      setHasValidCell(validCellCount > 0);
     } else {
       setIsValidDrop(false);
+      setHasValidCell(false);
+      setDragPreviewCell(null);
     }
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   const endDrag = useCallback(() => {
     if (!isDragging) return;
     
+    // v7.7: Set pending move AFTER dropping (not during drag)
+    // Allow drop if at least one cell is valid (for rotation adjustment)
+    if (dragPreviewCell && hasValidCell && draggedPiece) {
+      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
+    }
+    
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
+    setHasValidCell(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging]);
+  }, [isDragging, dragPreviewCell, hasValidCell, draggedPiece]);
 
   const createDragHandlers = useCallback((piece) => {
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) {
@@ -1144,7 +1175,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       {/* Floating pieces background animation - amber/online theme */}
       <FloatingPiecesBackground colorPreset="online" />
 
-      {/* Drag Overlay */}
+      {/* Drag Overlay - v7.7: No board preview during drag */}
       {isDragging && draggedPiece && (
         <DragOverlay
           piece={draggedPiece}
@@ -1153,6 +1184,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           position={dragPosition}
           offset={dragOffset}
           isValidDrop={isValidDrop}
+          hasValidCell={hasValidCell}
         />
       )}
 

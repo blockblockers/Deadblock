@@ -198,7 +198,7 @@ const MenuScreen = ({
                   color="bg-gradient-to-br from-amber-500 to-orange-600"
                   glowColor="rgba(251,191,36,0.5)"
                   title="ONLINE MULTIPLAYER"
-                  subtitle={isOfflineMode ? "Sign in for ranked play" : (isAuthenticated ? "Ranked matches vs humans" : "Sign in to play")}
+                  subtitle={isOfflineMode ? "Sign in for ranked play" : (isAuthenticated ? "Ranked matches vs humans" : "Sign in for ranked play")}
                   textColor="text-amber-300"
                   hoverTextColor="group-hover:text-amber-200"
                 />

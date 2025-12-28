@@ -1,5 +1,8 @@
 // Online Menu - Hub for online features
-// v7.7: Added pending rematches section
+// v7.7: 
+// - Moved pending rematches into Challenge a Player submenu
+// - Added notification badge for pending rematch approvals
+// - Fixed invite link deletion (X button now works)
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -912,14 +915,14 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
+      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden scroll-container"
       style={{ 
         WebkitOverflowScrolling: 'touch', 
-        touchAction: 'pan-y pinch-zoom', // Allow zoom
+        touchAction: 'pan-y pinch-zoom',
         height: '100%',
         width: '100%',
         overscrollBehavior: 'contain',
-        minHeight: '100dvh', // Dynamic viewport height
+        minHeight: '100dvh',
       }}
     >
       {/* Themed Grid background */}
@@ -956,11 +959,7 @@ const OnlineMenu = ({
           minHeight: '100%',
           paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
           paddingTop: 'max(24px, env(safe-area-inset-top))',
-          touchAction: 'pan-y',
-          WebkitOverflowScrolling: 'touch',
-        }}
-        onTouchMove={(e) => {
-          // Allow vertical scrolling by not preventing default
+          touchAction: 'pan-y pinch-zoom',
         }}
       >
         <div className="w-full max-w-md">
@@ -1283,6 +1282,18 @@ const OnlineMenu = ({
                 e.currentTarget.style.background = '';
               }}
             >
+              {/* v7.7: Notification badge for pending rematches needing approval */}
+              {(() => {
+                const rematchesNeedingApproval = pendingRematches.filter(r => !r.is_sender).length;
+                if (rematchesNeedingApproval > 0) {
+                  return (
+                    <div className="absolute -top-1 -right-1 z-10 min-w-[20px] h-5 px-1.5 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/50 animate-pulse">
+                      <span className="text-xs font-bold text-white">{rematchesNeedingApproval}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
               </div>
@@ -1300,6 +1311,90 @@ const OnlineMenu = ({
             {/* Expanded Challenge Options */}
             {showSearch && (
               <div className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30 space-y-3" style={{ boxShadow: '0 0 15px rgba(168,85,247,0.15)' }}>
+                
+                {/* v7.7: Pending Rematches Section - Moved inside Challenge a Player */}
+                {pendingRematches.length > 0 && (
+                  <div className="bg-amber-900/20 rounded-lg p-3 border border-amber-500/30">
+                    <h4 className="text-amber-400 font-bold text-xs mb-2 flex items-center gap-2">
+                      <RefreshCw size={14} />
+                      PENDING REMATCHES ({pendingRematches.length})
+                    </h4>
+                    <div 
+                      className="space-y-2 max-h-40 overflow-y-auto pr-1"
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                    >
+                      {pendingRematches.map(rematch => (
+                        <div
+                          key={rematch.id}
+                          className="flex items-center justify-between p-2.5 bg-slate-800/50 rounded-lg border border-amber-500/20"
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500/30 to-orange-500/30 flex items-center justify-center border border-amber-500/40">
+                              <span className="text-amber-400 font-bold text-xs">
+                                {rematch.opponent_name?.[0]?.toUpperCase() || '?'}
+                              </span>
+                            </div>
+                            <div>
+                              <div className="text-white text-sm font-medium">
+                                {rematch.opponent_name || 'Opponent'}
+                              </div>
+                              <div className="text-xs">
+                                {rematch.is_sender ? (
+                                  <span className="text-amber-400/70 flex items-center gap-1">
+                                    <Clock size={10} />
+                                    Waiting...
+                                  </span>
+                                ) : (
+                                  <span className="text-green-400/70">
+                                    Wants a rematch!
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-1.5">
+                            {!rematch.is_sender ? (
+                              <>
+                                <button
+                                  onClick={() => handleAcceptRematch(rematch)}
+                                  disabled={processingInvite === rematch.id}
+                                  className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-500 transition-all disabled:opacity-50 flex items-center gap-1"
+                                >
+                                  {processingInvite === rematch.id ? (
+                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <Check size={10} />
+                                  )}
+                                </button>
+                                <button
+                                  onClick={() => handleDeclineRematch(rematch)}
+                                  disabled={processingInvite === rematch.id}
+                                  className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs hover:bg-slate-600 transition-all disabled:opacity-50"
+                                >
+                                  <X size={10} />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => handleCancelRematch(rematch)}
+                                disabled={processingInvite === rematch.id}
+                                className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs hover:bg-slate-600 transition-all disabled:opacity-50"
+                              >
+                                {processingInvite === rematch.id ? (
+                                  <div className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <X size={10} />
+                                )}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Option 1: Search by Username/Email */}
                 <div className="bg-slate-900/50 rounded-lg p-3 border border-purple-500/20">
                   <div className="flex items-center gap-2 mb-2">
@@ -1589,95 +1684,6 @@ const OnlineMenu = ({
                       </div>
                     );
                   })}
-                </div>
-              </div>
-            )}
-
-            {/* v7.7: Pending Rematches Section */}
-            {pendingRematches.length > 0 && (
-              <div className="bg-slate-800/30 rounded-xl p-4 mb-4 border border-amber-500/30">
-                <h3 className="text-amber-400 font-bold text-sm mb-3 flex items-center gap-2">
-                  <RefreshCw size={16} />
-                  PENDING REMATCHES ({pendingRematches.length})
-                </h3>
-                <div 
-                  className="space-y-2 max-h-48 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
-                >
-                  {pendingRematches.map(rematch => (
-                    <div
-                      key={rematch.id}
-                      className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-amber-500/20"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500/30 to-orange-500/30 flex items-center justify-center border border-amber-500/40">
-                          <span className="text-amber-400 font-bold text-sm">
-                            {rematch.opponent_name?.[0]?.toUpperCase() || '?'}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="text-white text-sm font-medium">
-                            {rematch.opponent_name || 'Opponent'}
-                          </div>
-                          <div className="text-xs">
-                            {rematch.is_sender ? (
-                              <span className="text-amber-400/70 flex items-center gap-1">
-                                <Clock size={10} />
-                                Waiting for response...
-                              </span>
-                            ) : (
-                              <span className="text-green-400/70">
-                                Wants a rematch!
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        {!rematch.is_sender ? (
-                          <>
-                            <button
-                              onClick={() => handleAcceptRematch(rematch)}
-                              disabled={processingInvite === rematch.id}
-                              className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-500 transition-all disabled:opacity-50 flex items-center gap-1"
-                            >
-                              {processingInvite === rematch.id ? (
-                                <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                <>
-                                  <Check size={12} />
-                                  Accept
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => handleDeclineRematch(rematch)}
-                              disabled={processingInvite === rematch.id}
-                              className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-600 transition-all disabled:opacity-50"
-                            >
-                              Decline
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleCancelRematch(rematch)}
-                            disabled={processingInvite === rematch.id}
-                            className="px-3 py-1.5 bg-slate-700 text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center gap-1"
-                          >
-                            {processingInvite === rematch.id ? (
-                              <div className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
-                            ) : (
-                              <>
-                                <X size={12} />
-                                Cancel
-                              </>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}

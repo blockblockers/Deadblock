@@ -228,6 +228,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  // v7.7: Track preview cell separately without updating board preview
+  const [dragPreviewCell, setDragPreviewCell] = useState(null);
+  // v7.7: Track if at least one cell can be placed (for partial overlap drops)
+  const [hasValidCell, setHasValidCell] = useState(false);
   
   // Refs
   const timerRef = useRef(null);
@@ -324,28 +328,38 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     return { row, col };
   }, []);
 
-  // Update drag position and check validity
+  // Update drag position - v7.7: NO board preview during drag, allow partial overlap
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPiece) {
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(valid);
+      // v7.7: Track preview cell WITHOUT updating board preview
+      setDragPreviewCell(cell);
       
-      if (valid && setPendingMove) {
-        setPendingMove({
-          piece: draggedPiece,
-          row: cell.row,
-          col: cell.col,
-          coords
-        });
-      }
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const perfectValid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(perfectValid);
+      
+      // v7.7: Check if at least one cell can be placed (for rotation adjustment)
+      let validCellCount = 0;
+      coords.forEach(([dx, dy]) => {
+        const cellRow = cell.row + dy;
+        const cellCol = cell.col + dx;
+        if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+          const existing = board[cellRow]?.[cellCol];
+          if (existing === null || existing === 0 || existing === undefined) {
+            validCellCount++;
+          }
+        }
+      });
+      setHasValidCell(validCellCount > 0);
     } else {
       setIsValidDrop(false);
+      setHasValidCell(false);
+      setDragPreviewCell(null);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // Keep current piece in ref to avoid stale closures
   const draggedPieceRef = useRef(null);
@@ -354,56 +368,46 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     draggedPieceRef.current = draggedPiece;
   }, [draggedPiece]);
 
-  // End drag - either place piece or cancel
+  // End drag - v7.7: Set pendingMove AFTER drop, allow partial overlap
   const endDrag = useCallback(() => {
     const currentPiece = draggedPieceRef.current;
     console.log('[WeeklyChallenge] endDrag called:', { isDragging, draggedPiece: currentPiece });
     
-    // Recompute validity based on current drag position
-    if (currentPiece && dragPosition && boardBoundsRef.current) {
-      const cell = calculateBoardCell(dragPosition.x, dragPosition.y);
-      if (cell) {
-        const coords = getPieceCoords(currentPiece, rotation, flipped);
-        const valid = canPlacePiece(board, cell.row, cell.col, coords);
-        
-        console.log('[WeeklyChallenge] endDrag computed:', { cell, valid, piece: currentPiece });
-        
-        if (valid) {
-          // Select piece first, then set pending move
-          selectPiece(currentPiece);
-          
-          // Set pending move after piece is selected
-          setTimeout(() => {
-            setPendingMove({
-              piece: currentPiece,
-              row: cell.row,
-              col: cell.col,
-              coords
-            });
-            console.log('[WeeklyChallenge] Valid drop, pending move set for:', currentPiece);
-          }, 10);
-          
-          soundManager.playPieceSelect();
-        } else {
-          // Invalid drop - clear
-          setPendingMove(null);
-          console.log('[WeeklyChallenge] Invalid drop position');
-        }
-      } else {
-        // Outside board - clear
-        setPendingMove(null);
-        console.log('[WeeklyChallenge] Drop outside board');
-      }
+    // v7.7: Allow drop if at least one cell is valid (for rotation adjustment)
+    if (currentPiece && dragPreviewCell && hasValidCell) {
+      const coords = getPieceCoords(currentPiece, rotation, flipped);
+      
+      // Select piece first, then set pending move
+      selectPiece(currentPiece);
+      
+      // Set pending move after piece is selected
+      setTimeout(() => {
+        setPendingMove({
+          piece: currentPiece,
+          row: dragPreviewCell.row,
+          col: dragPreviewCell.col,
+          coords
+        });
+        console.log('[WeeklyChallenge] Drop with partial overlap allowed for:', currentPiece);
+      }, 10);
+      
+      soundManager.playPieceSelect();
+    } else {
+      // No valid cells - clear
+      if (setPendingMove) setPendingMove(null);
+      console.log('[WeeklyChallenge] Drop cancelled - no valid cells');
     }
     
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
+    setHasValidCell(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove]);
+  }, [dragPreviewCell, hasValidCell, rotation, flipped, selectPiece, setPendingMove]);
 
   // Create drag handlers for piece tray - FIXED WITH LOGGING
   const createDragHandlers = useCallback((piece) => {
@@ -844,7 +848,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Drag Overlay */}
+      {/* Drag Overlay - v7.7: No board preview during drag */}
       {isDragging && draggedPiece && (
         <DragOverlay
           piece={draggedPiece}
@@ -853,6 +857,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           position={dragPosition}
           offset={dragOffset}
           isValidDrop={isValidDrop}
+          hasValidCell={hasValidCell}
         />
       )}
       

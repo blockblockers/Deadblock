@@ -651,6 +651,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  // v7.7: Track preview cell separately without updating board preview
+  const [dragPreviewCell, setDragPreviewCell] = useState(null);
+  // v7.7: Track if at least one cell can be placed (for partial overlap drops)
+  const [hasValidCell, setHasValidCell] = useState(false);
 
   // -------------------------------------------------------------------------
   // REFS - For values that shouldn't trigger re-renders
@@ -734,44 +738,62 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     return { row, col };
   }, []);
 
-  // Update drag position and check validity
+  // Update drag position - v7.7: NO board preview during drag, allow partial overlap
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPiece) {
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(valid);
+      // v7.7: Track preview cell WITHOUT updating board preview
+      setDragPreviewCell(cell);
       
-      if (valid) {
-        setPendingMove({
-          piece: draggedPiece,
-          row: cell.row,
-          col: cell.col,
-          coords
-        });
-      }
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const perfectValid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(perfectValid);
+      
+      // v7.7: Check if at least one cell can be placed (for rotation adjustment)
+      let validCellCount = 0;
+      coords.forEach(([dx, dy]) => {
+        const cellRow = cell.row + dy;
+        const cellCol = cell.col + dx;
+        if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+          const existing = board[cellRow]?.[cellCol];
+          if (existing === null || existing === 0 || existing === undefined) {
+            validCellCount++;
+          }
+        }
+      });
+      setHasValidCell(validCellCount > 0);
     } else {
       setIsValidDrop(false);
+      setHasValidCell(false);
+      setDragPreviewCell(null);
     }
   }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
-  // End drag - either place piece or cancel
+  // End drag - v7.7: Set pendingMove AFTER drop, allow partial overlap
   const endDrag = useCallback(() => {
-    if (isValidDrop && pendingMove) {
-      // Keep pending move for confirmation
-      setSelectedPiece(pendingMove.piece);
+    // v7.7: Allow drop if at least one cell is valid (for rotation adjustment)
+    if (hasValidCell && dragPreviewCell && draggedPiece) {
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      setPendingMove({
+        piece: draggedPiece,
+        row: dragPreviewCell.row,
+        col: dragPreviewCell.col,
+        coords
+      });
+      setSelectedPiece(draggedPiece);
     } else {
-      // Cancel if invalid drop
       setPendingMove(null);
     }
     
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
+    setHasValidCell(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
-  }, [isValidDrop, pendingMove]);
+  }, [hasValidCell, dragPreviewCell, draggedPiece, rotation, flipped]);
 
   // Create drag handlers for piece tray
   const createDragHandlers = useCallback((piece) => {
@@ -1406,7 +1428,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         {/* Game board */}
         {(gameState === GAME_STATES.PLAYING || gameState === GAME_STATES.SUCCESS) && (
           <>
-            {/* Drag Overlay */}
+            {/* Drag Overlay - v7.7: No board preview during drag */}
             {isDragging && draggedPiece && (
               <DragOverlay
                 piece={draggedPiece}
@@ -1415,6 +1437,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                 position={dragPosition}
                 offset={dragOffset}
                 isValidDrop={isValidDrop}
+                hasValidCell={hasValidCell}
               />
             )}
             

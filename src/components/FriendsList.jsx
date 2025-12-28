@@ -1,13 +1,116 @@
 // FriendsList - View and manage friends
-// UPDATED: Added request game, opponent info for spectating, view profile
+// v7.7 UPDATES:
+// - Swapped Eye (watch) icon for Swords (challenge) on friend rows
+// - Shows active game count instead of "Playing vs X"
+// - Added popup to select which game to spectate
 import { useState, useEffect } from 'react';
-import { Users, UserPlus, UserMinus, Search, Clock, Check, X, Eye, Circle, AlertTriangle, User, Swords, ChevronRight } from 'lucide-react';
+import { Users, UserPlus, UserMinus, Search, Clock, Check, X, Eye, Circle, AlertTriangle, User, Swords, ChevronRight, Gamepad2 } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { spectatorService } from '../services/spectatorService';
 import { inviteService } from '../services/inviteService';
 import { soundManager } from '../utils/soundManager';
 import TierIcon from './TierIcon';
+
+// Helper to convert hex to rgba
+const hexToRgba = (hex, alpha) => {
+  if (!hex || !hex.startsWith('#')) return `rgba(100, 116, 139, ${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+// Spectate Game Selection Modal
+const SpectateGamesModal = ({ friend, games, onSpectate, onClose }) => {
+  if (!games || games.length === 0) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+      <div className="bg-slate-900 rounded-xl max-w-sm w-full overflow-hidden border border-green-500/30 shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-green-500/20">
+          <div className="flex items-center gap-2">
+            <Eye className="text-green-400" size={20} />
+            <h3 className="font-bold text-green-300">Watch {friend?.username}'s Games</h3>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Games list */}
+        <div className="p-4 max-h-[60vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="space-y-3">
+            {games.map(game => {
+              // Determine opponent (the one who is NOT the friend)
+              const opponent = game.player1?.id === friend.id ? game.player2 : game.player1;
+              const opponentTier = ratingService.getRatingTier(opponent?.rating || opponent?.elo_rating || 1200);
+              
+              return (
+                <button
+                  key={game.id}
+                  onClick={() => {
+                    soundManager.playButtonClick();
+                    onSpectate(game.id);
+                  }}
+                  className="w-full p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 hover:border-green-500/50 hover:bg-slate-800 transition-all text-left group"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {/* VS indicator */}
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                          {friend.username?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <span className="text-slate-500 text-xs font-bold">VS</span>
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                          style={{ 
+                            background: `linear-gradient(135deg, ${hexToRgba(opponentTier.glowColor, 0.8)}, ${hexToRgba(opponentTier.glowColor, 0.4)})` 
+                          }}
+                        >
+                          {opponent?.username?.[0]?.toUpperCase() || '?'}
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <div className="text-white text-sm font-medium">
+                          vs {opponent?.username || 'Unknown'}
+                        </div>
+                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                          <TierIcon shape={opponentTier.shape} glowColor={opponentTier.glowColor} size="small" />
+                          <span>{opponent?.rating || opponent?.elo_rating || 1200}</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      <span className="text-green-400 text-xs font-medium group-hover:text-green-300">
+                        Watch →
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-slate-800">
+          <button
+            onClick={onClose}
+            className="w-full py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClose }) => {
   const [activeTab, setActiveTab] = useState('friends'); // friends, requests, add
@@ -22,6 +125,10 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
   const [error, setError] = useState(null);
   const [sendingInvite, setSendingInvite] = useState(null);
   const [sentGameInvites, setSentGameInvites] = useState(new Set());
+  
+  // v7.7: State for spectate game selection popup
+  const [spectateModalFriend, setSpectateModalFriend] = useState(null);
+  const [spectateModalGames, setSpectateModalGames] = useState([]);
 
   // Load friends data
   useEffect(() => {
@@ -44,7 +151,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
       if (requestsResult.data) setPendingRequests(requestsResult.data);
       if (sentResult.data) setSentRequests(sentResult.data);
 
-      // Load friend games for spectating
+      // Load ALL active games for ALL friends (for spectating)
       if (friendsResult.data?.length > 0) {
         const friendIds = friendsResult.data.map(f => f.id);
         const { data: games } = await spectatorService.getFriendGames(friendIds);
@@ -152,27 +259,52 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
     setSendingInvite(null);
   };
 
-  // Check if friend is in a game and get game details
-  const getFriendGame = (friendId) => {
-    return friendGames.find(g => 
+  // v7.7: Get ALL games for a specific friend
+  const getFriendGames = (friendId) => {
+    return friendGames.filter(g => 
       g.player1?.id === friendId || g.player2?.id === friendId
     );
   };
 
-  // Get the opponent in a game
-  const getOpponent = (game, friendId) => {
-    if (!game) return null;
-    return game.player1?.id === friendId ? game.player2 : game.player1;
+  // v7.7: Get count of active games for a friend
+  const getFriendActiveGameCount = (friendId) => {
+    return getFriendGames(friendId).length;
+  };
+
+  // v7.7: Handle clicking watch button - show popup if multiple games
+  const handleWatchClick = (friend) => {
+    const games = getFriendGames(friend.id);
+    
+    if (games.length === 0) return;
+    
+    if (games.length === 1) {
+      // Only one game, spectate directly
+      onSpectate?.(games[0].id);
+    } else {
+      // Multiple games, show selection popup
+      soundManager.playButtonClick();
+      setSpectateModalFriend(friend);
+      setSpectateModalGames(games);
+    }
+  };
+
+  // v7.7: Handle spectate selection from popup
+  const handleSpectateFromPopup = (gameId) => {
+    setSpectateModalFriend(null);
+    setSpectateModalGames([]);
+    onSpectate?.(gameId);
   };
 
   // Get online status indicator
   const getStatusIndicator = (friend) => {
-    const game = getFriendGame(friend.id);
-    if (game) {
+    const gameCount = getFriendActiveGameCount(friend.id);
+    if (gameCount > 0) {
       return (
         <div className="flex items-center gap-1">
           <Circle size={8} className="fill-green-400 text-green-400" />
-          <span className="text-green-400 text-xs">In Game</span>
+          <span className="text-green-400 text-xs">
+            {gameCount === 1 ? '1 game' : `${gameCount} games`}
+          </span>
         </div>
       );
     }
@@ -197,6 +329,19 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      {/* Spectate Games Selection Modal */}
+      {spectateModalFriend && spectateModalGames.length > 0 && (
+        <SpectateGamesModal
+          friend={spectateModalFriend}
+          games={spectateModalGames}
+          onSpectate={handleSpectateFromPopup}
+          onClose={() => {
+            setSpectateModalFriend(null);
+            setSpectateModalGames([]);
+          }}
+        />
+      )}
+
       <div 
         className="bg-slate-900 rounded-xl max-w-md w-full max-h-[85vh] overflow-hidden border border-amber-500/30 shadow-xl flex flex-col"
       >
@@ -253,7 +398,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
         {/* Content - Scrollable */}
         <div 
           className="flex-1 overflow-y-auto p-4"
-          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
         >
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -273,7 +418,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                 <p className="text-slate-500 text-sm mt-1">Add friends to challenge them to games!</p>
                 <button
                   onClick={() => setActiveTab('add')}
-                  className="mt-4 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-400"
+                  className="mt-4 px-4 py-2 bg-amber-500 text-slate-900 rounded-lg text-sm font-medium hover:bg-amber-400"
                 >
                   Find Friends
                 </button>
@@ -281,10 +426,10 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
             ) : (
               <div className="space-y-2">
                 {friends.map(friend => {
-                  const friendGame = getFriendGame(friend.id);
-                  const opponent = getOpponent(friendGame, friend.id);
                   const tier = getTier(friend.rating || friend.elo_rating);
+                  const glowColor = tier.glowColor;
                   const hasInviteSent = sentGameInvites.has(friend.id);
+                  const activeGameCount = getFriendActiveGameCount(friend.id);
                   
                   return (
                     <div 
@@ -310,25 +455,28 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                               <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
                             </div>
                             <div className="flex items-center gap-2 text-xs">
-                              <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
-                              <span className={tier.color}>{friend.rating || 1200}</span>
+                              <div 
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded"
+                                style={{ 
+                                  background: hexToRgba(glowColor, 0.15),
+                                  border: `1px solid ${hexToRgba(glowColor, 0.3)}`
+                                }}
+                              >
+                                <TierIcon shape={tier.shape} glowColor={glowColor} size="small" />
+                                <span style={{ color: glowColor }} className="font-medium">
+                                  {friend.rating || friend.elo_rating || 1200}
+                                </span>
+                              </div>
                               <span className="text-slate-600">•</span>
                               {getStatusIndicator(friend)}
                             </div>
                           </div>
                         </button>
                         
+                        {/* Action Buttons - v7.7: Always show Challenge, then Remove */}
                         <div className="flex items-center gap-1 ml-2">
-                          {friendGame ? (
-                            <button
-                              onClick={() => onSpectate?.(friendGame.id)}
-                              className="p-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors"
-                              title="Watch game"
-                            >
-                              <Eye size={18} />
-                            </button>
-                          ) : !hasInviteSent ? (
-                            // FIXED: Always show challenge button (works for offline friends too)
+                          {/* Challenge button - always visible */}
+                          {!hasInviteSent ? (
                             <button
                               onClick={() => sendGameInvite(friend)}
                               disabled={sendingInvite === friend.id}
@@ -345,11 +493,13 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                                 <Swords size={18} />
                               )}
                             </button>
-                          ) : hasInviteSent ? (
+                          ) : (
                             <div className="px-2 py-1 bg-slate-700 text-slate-400 rounded text-xs">
                               Invited
                             </div>
-                          ) : null}
+                          )}
+                          
+                          {/* Remove friend button */}
                           <button
                             onClick={() => removeFriend(friend.friendshipId)}
                             className="p-2 text-slate-500 hover:text-red-400 transition-colors"
@@ -360,23 +510,25 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                         </div>
                       </div>
                       
-                      {/* Game Info - Show opponent when spectating is available */}
-                      {friendGame && opponent && (
+                      {/* v7.7: Active Games Info - Show count and watch button */}
+                      {activeGameCount > 0 && (
                         <div className="mt-2 pt-2 border-t border-slate-700/50">
                           <div className="flex items-center justify-between text-xs">
                             <div className="flex items-center gap-2 text-slate-400">
-                              <Swords size={12} className="text-green-400" />
-                              <span>Playing vs</span>
-                              <span className="text-white font-medium">{opponent.username || 'Unknown'}</span>
-                              {opponent.rating && (
-                                <span className="text-slate-500">({opponent.rating})</span>
-                              )}
+                              <Gamepad2 size={12} className="text-green-400" />
+                              <span>
+                                {activeGameCount === 1 
+                                  ? '1 active game' 
+                                  : `${activeGameCount} active games`
+                                }
+                              </span>
                             </div>
                             <button
-                              onClick={() => onSpectate?.(friendGame.id)}
-                              className="text-green-400 hover:text-green-300 font-medium"
+                              onClick={() => handleWatchClick(friend)}
+                              className="flex items-center gap-1 text-green-400 hover:text-green-300 font-medium px-2 py-1 bg-green-500/10 rounded hover:bg-green-500/20 transition-colors"
                             >
-                              Watch →
+                              <Eye size={12} />
+                              Watch
                             </button>
                           </div>
                         </div>

@@ -2,9 +2,10 @@
 // FIXES:
 // 1. Fixed getInviteByCode to use direct query instead of non-existent RPC
 // 2. Added acceptInviteByCode function for invite link flow
-// 3. Fixed cancelInviteLink to properly update status
+// 3. Fixed cancelInviteLink to use DELETE method (v7.7)
 // 4. Enhanced search to include username AND display_name
-// 5. v7.7: Added filtering to exclude used invite links (game_id check)
+// 5. v7.7: Improved getInviteLinks query to filter game_id=null at database level
+// 6. v7.7: Invite links expire after 7 days and are properly removed after accept/deny
 import { isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
@@ -506,8 +507,11 @@ class InviteService {
 
       const now = new Date().toISOString();
       
-      // Query for pending and sent invites that haven't expired
-      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${now}&order=created_at.desc`;
+      // v7.7 FIX: Query only for pending and sent invites that:
+      // - Haven't expired (expires_at > now)
+      // - Don't have a game_id (means not yet accepted)
+      // - Status is pending or sent (not cancelled, accepted, or expired)
+      const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${now}&game_id=is.null&order=created_at.desc`;
 
       console.log('[InviteService] Fetching invite links for user:', userId);
       
@@ -528,28 +532,12 @@ class InviteService {
 
       const data = await response.json();
       
-      // v7.7 FIX: Additional filter as safety net for edge cases
-      // Filter out invites that have a game_id (means they were used)
-      // or have a status other than pending/sent
-      const activeInvites = (data || []).filter(invite => {
-        // Only include invites that are truly pending or sent
-        if (invite.status !== 'pending' && invite.status !== 'sent') {
-          console.log('[InviteService] Filtering out invite with status:', invite.status);
-          return false;
-        }
-        // Also exclude if a game_id exists (means it was accepted/used)
-        if (invite.game_id) {
-          console.log('[InviteService] Filtering out invite with game_id:', invite.game_id);
-          return false;
-        }
-        return true;
-      });
-      
-      console.log('[InviteService] Got', activeInvites.length, 'active invite links (filtered from', data?.length || 0, ')');
+      // v7.7: No additional client-side filtering needed since query is more precise
+      console.log('[InviteService] Got', data?.length || 0, 'active invite links');
       
       const appUrl = window.location.origin;
       
-      const invitesWithLinks = activeInvites.map(invite => ({
+      const invitesWithLinks = (data || []).map(invite => ({
         ...invite,
         inviteLink: `${appUrl}/?invite=${invite.invite_code}`,
         recipientName: invite.to_email?.startsWith('friend_') ? 'Friend' : invite.to_email
@@ -569,23 +557,36 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { error: { message: 'Not authenticated' } };
 
-      console.log('[InviteService] Canceling invite link:', inviteId);
+      console.log('[InviteService] Deleting invite link:', inviteId, 'for user:', userId);
 
+      // v7.7 FIX: Use DELETE method to actually remove the invite link
+      // This ensures the link is removed from the database entirely
       const url = `${SUPABASE_URL}/rest/v1/email_invites?id=eq.${inviteId}&from_user_id=eq.${userId}`;
 
       const response = await fetch(url, {
-        method: 'PATCH',
-        headers: { ...headers, 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ status: 'expired' })
+        method: 'DELETE',
+        headers: { ...headers, 'Prefer': 'return=minimal' }
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[InviteService] Cancel failed:', response.status, errorText);
-        return { error: { message: response.statusText } };
+        console.error('[InviteService] Delete failed:', response.status, errorText);
+        
+        // Fallback: Try PATCH to set status to 'cancelled' if DELETE fails (RLS issue)
+        console.log('[InviteService] Attempting fallback PATCH...');
+        const patchResponse = await fetch(url, {
+          method: 'PATCH',
+          headers: { ...headers, 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+        
+        if (!patchResponse.ok) {
+          console.error('[InviteService] Fallback PATCH also failed');
+          return { error: { message: 'Failed to delete invite link' } };
+        }
       }
       
-      console.log('[InviteService] Invite link cancelled successfully');
+      console.log('[InviteService] Invite link deleted successfully');
       return { error: null };
     } catch (e) {
       console.error('cancelInviteLink exception:', e);

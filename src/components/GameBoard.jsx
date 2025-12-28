@@ -1,5 +1,5 @@
 // GameBoard.jsx - Main game board component
-// v7.7: Slower, more elegant animations - vibrant shiny pieces with slow rolling movement
+// v7.7: Elegant ambient animations - orbiting highlights, breathing effects, corner glows, edge shimmers
 // CHANGED: Allow dropping pieces even with conflicts (for rotation adjustment)
 // This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
 
@@ -11,7 +11,7 @@ import { pieceColors } from '../utils/pieces';
  * GameBoard Component
  * 
  * Renders the 8x8 game grid with placed pieces and pending move preview.
- * v7.7: Slower animations, more vibrant pieces, allows conflict placement for rotation
+ * v7.7: Very slow ambient animations (8-15s cycles), interesting visual effects
  */
 const GameBoard = forwardRef(({
   board,
@@ -36,22 +36,31 @@ const GameBoard = forwardRef(({
   
   const safeBoardPieces = boardPieces || {};
   
-  // Random ambient effects for placed pieces - slower, more subtle
+  // Random ambient effects for placed pieces - very slow, elegant animations
   const [ambientEffects, setAmbientEffects] = useState({});
   
   useEffect(() => {
     // Generate random ambient effects for placed pieces
     const effects = {};
-    const effectTypes = ['shine', 'glow', 'shimmer', 'none', 'none']; // 60% chance of effect
+    // More effect variety with weighted chances
+    const effectTypes = [
+      'orbiting-highlight',  // Rotating highlight around edges
+      'breathing',           // Gentle brightness pulse
+      'corner-glow',         // Glowing corners
+      'edge-shimmer',        // Shimmer along edges
+      'none',                // Some pieces stay static for contrast
+    ];
     
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         if (safeBoard[row]?.[col]) {
           const rand = Math.random();
+          const typeIndex = Math.floor(rand * effectTypes.length);
           effects[`${row},${col}`] = {
-            type: effectTypes[Math.floor(rand * effectTypes.length)],
-            delay: Math.random() * 3, // Stagger animations
-            duration: 4 + Math.random() * 3 // 4-7 second cycles
+            type: effectTypes[typeIndex],
+            delay: -Math.random() * 10, // Negative delay = start mid-animation
+            duration: 8 + Math.random() * 7, // 8-15 second cycles (very slow)
+            direction: Math.random() > 0.5 ? 1 : -1, // Randomize direction
           };
         }
       }
@@ -208,28 +217,47 @@ const GameBoard = forwardRef(({
                   <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/20 pointer-events-none" />
                 )}
                 
-                {/* Vibrant ambient effects for placed pieces */}
-                {isOccupied && ambient?.type === 'shine' && (
+                {/* Elegant ambient effects for placed pieces - very slow animations */}
+                {isOccupied && ambient?.type === 'orbiting-highlight' && (
                   <div 
-                    className="absolute inset-0 ambient-shine pointer-events-none"
+                    className="absolute inset-0 orbiting-highlight pointer-events-none"
+                    style={{ 
+                      animationDelay: `${ambient.delay}s`,
+                      animationDuration: `${ambient.duration}s`,
+                      animationDirection: ambient.direction > 0 ? 'normal' : 'reverse'
+                    }}
+                  />
+                )}
+                {isOccupied && ambient?.type === 'breathing' && (
+                  <div 
+                    className="absolute inset-0 breathing-effect pointer-events-none"
                     style={{ 
                       animationDelay: `${ambient.delay}s`,
                       animationDuration: `${ambient.duration}s`
                     }}
                   />
                 )}
-                {isOccupied && ambient?.type === 'glow' && (
-                  <div 
-                    className="absolute inset-0 ambient-glow pointer-events-none"
-                    style={{ 
-                      animationDelay: `${ambient.delay}s`,
-                      animationDuration: `${ambient.duration}s`
-                    }}
-                  />
+                {isOccupied && ambient?.type === 'corner-glow' && (
+                  <>
+                    <div 
+                      className="absolute corner-glow-tl pointer-events-none"
+                      style={{ 
+                        animationDelay: `${ambient.delay}s`,
+                        animationDuration: `${ambient.duration}s`
+                      }}
+                    />
+                    <div 
+                      className="absolute corner-glow-br pointer-events-none"
+                      style={{ 
+                        animationDelay: `${ambient.delay - ambient.duration / 2}s`,
+                        animationDuration: `${ambient.duration}s`
+                      }}
+                    />
+                  </>
                 )}
-                {isOccupied && ambient?.type === 'shimmer' && (
+                {isOccupied && ambient?.type === 'edge-shimmer' && (
                   <div 
-                    className="absolute inset-0 ambient-shimmer pointer-events-none"
+                    className="absolute inset-0 edge-shimmer pointer-events-none"
                     style={{ 
                       animationDelay: `${ambient.delay}s`,
                       animationDuration: `${ambient.duration}s`
@@ -456,65 +484,111 @@ const GameBoard = forwardRef(({
         }
         
         /* ============================================
-           PLACED PIECE AMBIENT EFFECTS - VIBRANT & SLOW
+           PLACED PIECE AMBIENT EFFECTS
+           Very slow, elegant, interesting animations
            ============================================ */
         
-        /* Rolling shine - slow diagonal sweep */
-        .ambient-shine {
-          background: linear-gradient(
-            135deg,
-            transparent 0%,
-            transparent 35%,
-            rgba(255, 255, 255, 0.4) 45%,
-            rgba(255, 255, 255, 0.5) 50%,
-            rgba(255, 255, 255, 0.4) 55%,
-            transparent 65%,
-            transparent 100%
+        /* Orbiting highlight - light travels around the edges */
+        .orbiting-highlight {
+          background: conic-gradient(
+            from 0deg,
+            transparent 0deg,
+            transparent 315deg,
+            rgba(255, 255, 255, 0.4) 340deg,
+            rgba(255, 255, 255, 0.6) 355deg,
+            rgba(255, 255, 255, 0.4) 360deg
           );
-          background-size: 300% 300%;
-          animation: ambient-shine-roll 6s ease-in-out infinite;
+          animation: orbit-rotate 12s linear infinite;
+          opacity: 0.7;
         }
         
-        @keyframes ambient-shine-roll {
-          0% { background-position: 100% 100%; }
-          50% { background-position: 0% 0%; }
-          100% { background-position: 100% 100%; }
+        @keyframes orbit-rotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
         
-        /* Soft pulsing glow */
-        .ambient-glow {
-          box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.3);
-          animation: ambient-glow-pulse 5s ease-in-out infinite;
+        /* Breathing effect - gentle brightness pulse */
+        .breathing-effect {
+          background: radial-gradient(
+            ellipse at center,
+            rgba(255, 255, 255, 0.15) 0%,
+            transparent 60%
+          );
+          animation: breathe 10s ease-in-out infinite;
         }
         
-        @keyframes ambient-glow-pulse {
+        @keyframes breathe {
           0%, 100% { 
-            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.2);
+            opacity: 0.3;
+            transform: scale(0.8);
             filter: brightness(1);
           }
           50% { 
-            box-shadow: inset 0 0 25px rgba(255, 255, 255, 0.4);
-            filter: brightness(1.15);
+            opacity: 0.8;
+            transform: scale(1.1);
+            filter: brightness(1.1);
           }
         }
         
-        /* Horizontal shimmer - very slow */
-        .ambient-shimmer {
-          background: linear-gradient(
-            90deg,
-            transparent 0%,
-            rgba(255, 255, 255, 0.2) 25%,
-            rgba(255, 255, 255, 0.35) 50%,
-            rgba(255, 255, 255, 0.2) 75%,
-            transparent 100%
+        /* Corner glow - alternating corner highlights */
+        .corner-glow-tl {
+          width: 50%;
+          height: 50%;
+          top: 0;
+          left: 0;
+          background: radial-gradient(
+            circle at top left,
+            rgba(255, 255, 255, 0.5) 0%,
+            transparent 70%
           );
-          background-size: 200% 100%;
-          animation: ambient-shimmer-sweep 8s ease-in-out infinite;
+          animation: corner-pulse 10s ease-in-out infinite;
         }
         
-        @keyframes ambient-shimmer-sweep {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
+        .corner-glow-br {
+          width: 50%;
+          height: 50%;
+          bottom: 0;
+          right: 0;
+          background: radial-gradient(
+            circle at bottom right,
+            rgba(255, 255, 255, 0.5) 0%,
+            transparent 70%
+          );
+          animation: corner-pulse 10s ease-in-out infinite;
+        }
+        
+        @keyframes corner-pulse {
+          0%, 100% { opacity: 0.2; }
+          50% { opacity: 0.7; }
+        }
+        
+        /* Edge shimmer - light travels along all edges */
+        .edge-shimmer {
+          background: 
+            linear-gradient(to right, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%),
+            linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+          background-size: 200% 2px, 2px 200%;
+          background-position: -100% 0, 0 -100%;
+          background-repeat: no-repeat;
+          animation: edge-travel 12s ease-in-out infinite;
+        }
+        
+        @keyframes edge-travel {
+          0% { 
+            background-position: -100% 0, 0 -100%;
+          }
+          25% {
+            background-position: 200% 0, 0 -100%;
+          }
+          50% {
+            background-position: 200% 100%, 0 200%;
+          }
+          75% {
+            background-position: -100% 100%, 100% 200%;
+          }
+          100% {
+            background-position: -100% 0, 100% -100%;
+          }
         }
       `}</style>
     </div>

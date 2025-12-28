@@ -695,13 +695,21 @@ function AppContent() {
     return (
       <>
         <MenuScreen
-          isOfflineMode={isOfflineMode}
           onStartGame={handleStartGame}
-          onShowTutorial={() => setShowHowToPlay(true)}
-          onShowSettings={() => setShowSettings(true)}
-          onShowProfile={() => setShowProfileModal(true)}
+          onPuzzleSelect={() => setGameMode('puzzle-select')}
           onWeeklyChallenge={handleWeeklyChallenge}
-          profile={profile}
+          showHowToPlay={showHowToPlay}
+          onToggleHowToPlay={setShowHowToPlay}
+          showSettings={showSettings}
+          onToggleSettings={setShowSettings}
+          isOnlineEnabled={false}
+          isAuthenticated={false}
+          isOfflineMode={isOfflineMode}
+          onShowProfile={() => setShowProfileModal(true)}
+          onSignIn={() => setGameMode('auth')}
+          onPuzzleHover={preloadPuzzleComponents}
+          onOnlineHover={preloadOnlineComponents}
+          onWeeklyHover={preloadWeeklyComponents}
         />
         <WelcomeModal
           isOpen={showWelcomeModal}
@@ -725,20 +733,42 @@ function AppContent() {
     return (
       <>
         <MenuScreen
-          isOfflineMode={isOfflineMode}
           onStartGame={handleStartGame}
-          onShowTutorial={() => setShowHowToPlay(true)}
-          onShowSettings={() => setShowSettings(true)}
-          onShowProfile={() => setShowProfileModal(true)}
+          onPuzzleSelect={() => setGameMode('puzzle-select')}
           onWeeklyChallenge={handleWeeklyChallenge}
-          profile={profile}
+          showHowToPlay={showHowToPlay}
+          onToggleHowToPlay={setShowHowToPlay}
+          showSettings={showSettings}
+          onToggleSettings={setShowSettings}
+          isOnlineEnabled={isOnlineEnabled}
+          isAuthenticated={isAuthenticated}
+          isOfflineMode={isOfflineMode}
+          onShowProfile={() => setShowProfileModal(true)}
+          onSignIn={() => setGameMode('auth')}
+          onPuzzleHover={preloadPuzzleComponents}
+          onOnlineHover={preloadOnlineComponents}
+          onWeeklyHover={preloadWeeklyComponents}
         />
-        {showProfileModal && (
-          <Suspense fallback={<div className="fixed inset-0 bg-black/80 flex items-center justify-center"><div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full" /></div>}>
-            <PlayerStatsModal
-              onClose={() => setShowProfileModal(false)}
-            />
-          </Suspense>
+        <LazyInline>
+          <PlayerStatsModal
+            isOpen={showProfileModal}
+            onClose={() => setShowProfileModal(false)}
+            isOffline={isOfflineMode}
+          />
+        </LazyInline>
+        {showWelcomeModal && profile && (
+          <WelcomeModal
+            username={profile.username || profile.display_name || 'Player'}
+            onClose={() => {
+              setShowWelcomeModal(false);
+              clearNewUser();
+            }}
+            onEditUsername={() => {
+              setShowWelcomeModal(false);
+              clearNewUser();
+              setShowProfileModal(true);
+            }}
+          />
         )}
       </>
     );

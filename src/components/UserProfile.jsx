@@ -1,10 +1,12 @@
 // User Profile Screen - Enhanced with ELO changes in match history and proper Final Board View
 // FIXES:
-// 1. Shows +/- ELO changes in match history boxes
+// 1. Shows +/- ELO changes in match history boxes (with fallback calculation)
 // 2. Fetches game moves for Final Board View
 // 3. Uses username priority (same as PlayerProfileCard)
 // 4. Tier-colored styling throughout
 // 5. Clickable opponents in match history
+// 6. v7.7: Fixed title centering in header
+// 7. v7.7: ELO change fallback calculation when rating_history missing
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, TrendingUp, TrendingDown, Swords, Award, Gamepad2, Zap, LayoutGrid, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -158,6 +160,7 @@ const UserProfile = ({ onBack }) => {
     try {
       const { data } = await ratingService.getRatingHistory(profile.id, 50);
       if (data) {
+        console.log('[UserProfile] Loaded rating history:', data.length, 'entries');
         setRatingHistory(data);
       }
     } catch (err) {
@@ -166,9 +169,37 @@ const UserProfile = ({ onBack }) => {
   };
 
   // Get ELO change for a specific game
-  const getEloChangeForGame = (gameId) => {
+  // Falls back to calculated estimate if no history entry exists
+  const getEloChangeForGame = (gameId, game) => {
+    // First try to find from rating history
     const historyEntry = ratingHistory.find(h => h.game_id === gameId);
-    return historyEntry ? historyEntry.change : null;
+    if (historyEntry) {
+      return historyEntry.change;
+    }
+    
+    // Fallback: Calculate estimated change based on ratings using ELO formula
+    if (game && profile) {
+      const won = game.winner_id === profile.id;
+      const playerRating = profile.rating || profile.elo_rating || 1000;
+      
+      // Get opponent rating from game data
+      let opponentRating = 1000;
+      if (game.player1_id === profile.id) {
+        opponentRating = game.player2?.elo_rating || game.player2?.rating || 1000;
+      } else {
+        opponentRating = game.player1?.elo_rating || game.player1?.rating || 1000;
+      }
+      
+      // ELO calculation: K-factor of 32
+      const kFactor = 32;
+      const expected = 1.0 / (1.0 + Math.pow(10, (opponentRating - playerRating) / 400));
+      const result = won ? 1 : 0;
+      const estimatedChange = Math.round(kFactor * (result - expected));
+      
+      return estimatedChange;
+    }
+    
+    return null;
   };
 
   const handleSave = async () => {
@@ -243,7 +274,7 @@ const UserProfile = ({ onBack }) => {
 
   return (
     <div 
-      className="min-h-screen bg-slate-950"
+      className="min-h-screen bg-slate-950 scroll-container"
       style={{
         overflowY: 'auto',
         overflowX: 'hidden',
@@ -251,22 +282,25 @@ const UserProfile = ({ onBack }) => {
         overscrollBehavior: 'contain',
         touchAction: 'pan-y pinch-zoom',
         minHeight: '100dvh',
+        position: 'fixed',
+        inset: 0,
       }}
     >
       <div className="p-4 pb-8 max-w-md mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Header - Title centered with absolute positioning */}
+        <div className="relative flex items-center justify-center mb-6">
+          {/* Back button - absolute left */}
           <button
             onClick={handleBack}
-            className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+            className="absolute left-0 flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
           >
             <ArrowLeft size={20} />
             <span className="text-sm">Back</span>
           </button>
+          
+          {/* Centered Title */}
+          <NeonTitle text="PROFILE" size="medium" />
         </div>
-        
-        {/* Title - Centered like other menus */}
-        <NeonTitle text="PROFILE" size="medium" />
 
         {/* Profile Card - Tier themed */}
         <div 
@@ -432,7 +466,7 @@ const UserProfile = ({ onBack }) => {
                 const won = game.winner_id === profile?.id;
                 const opponent = getOpponentInfo(game);
                 const opponentRankInfo = getRankInfo(opponent.rating);
-                const eloChange = getEloChangeForGame(game.id);
+                const eloChange = getEloChangeForGame(game.id, game);
                 
                 return (
                   <div

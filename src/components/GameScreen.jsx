@@ -1,5 +1,8 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
-// UPDATED: Added drag-and-drop for pieces from tray to board
+// v7.7 FIXES: 
+// - No board preview during drag (only floating piece shown)
+// - Allow dropping with partial overlap (for rotation adjustment)
+// - Improved mobile touch handling
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Flag, XCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -216,6 +219,10 @@ const GameScreen = ({
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  // v7.7: Track preview cell separately without updating board preview
+  const [dragPreviewCell, setDragPreviewCell] = useState(null);
+  // v7.7: Track if at least one cell can be placed (for partial overlap drops)
+  const [hasValidCell, setHasValidCell] = useState(false);
   const boardRef = useRef(null);
   const trayRef = useRef(null); // Ref for PieceTray (used by AI drag animation)
   const boardBoundsRef = useRef(null);
@@ -347,7 +354,7 @@ const GameScreen = ({
     document.body.style.touchAction = 'none';
   }, [gameOver, gameMode, currentPlayer, setPendingMove]);
 
-  // Update drag position
+  // Update drag position - v7.7: NO board preview during drag, allow partial overlap drops
   const updateDrag = useCallback((clientX, clientY) => {
     if (!isDragging || !draggedPiece) return;
     
@@ -361,37 +368,59 @@ const GameScreen = ({
     // Calculate which cell we're over
     const cell = calculateBoardCell(clientX, clientY);
     
-    if (cell && setPendingMove) {
-      // Update pending move for visual feedback
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+    if (cell) {
+      // v7.7: Track preview cell WITHOUT updating board preview
+      setDragPreviewCell(cell);
       
-      // Check if valid drop position
+      // Check validity
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(valid);
+      const perfectValid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(perfectValid);
+      
+      // v7.7: Check if at least one cell can be placed (for rotation adjustment)
+      // This allows dropping even with partial overlap
+      let validCellCount = 0;
+      coords.forEach(([dx, dy]) => {
+        const cellRow = cell.row + dy;
+        const cellCol = cell.col + dx;
+        if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
+          const existing = board[cellRow]?.[cellCol];
+          if (existing === null || existing === 0 || existing === undefined) {
+            validCellCount++;
+          }
+        }
+      });
+      setHasValidCell(validCellCount > 0);
     } else {
       setIsValidDrop(false);
+      setHasValidCell(false);
+      setDragPreviewCell(null);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
-  // End drag
+  // End drag - v7.7: Set pendingMove ONLY after drop, allow partial overlap drops
   const endDrag = useCallback(() => {
     if (!isDragging) return;
     
-    // Keep pending move for user to confirm/adjust
-    // They can still use D-pad and rotate/flip
+    // v7.7: Set pending move AFTER dropping (not during drag)
+    // Allow drop if at least one cell is valid (for rotation adjustment)
+    if (dragPreviewCell && hasValidCell && draggedPiece && setPendingMove) {
+      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
+    }
     
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
+    setHasValidCell(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     // Re-enable scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging]);
+  }, [isDragging, dragPreviewCell, hasValidCell, draggedPiece, setPendingMove]);
 
   // Create drag handlers for PieceTray
   const createDragHandlers = useCallback((piece) => {
@@ -679,6 +708,7 @@ const GameScreen = ({
       </div>
 
       {/* Drag Overlay - floating piece following cursor/finger */}
+      {/* v7.7: No board preview during drag, only shows floating piece */}
       <DragOverlay
         isDragging={isDragging}
         piece={draggedPiece}
@@ -687,6 +717,7 @@ const GameScreen = ({
         rotation={rotation}
         flipped={flipped}
         isValid={isValidDrop}
+        hasValidCell={hasValidCell}
       />
 
       {/* AI Drag Animation - shows piece flying from tray to board during AI moves */}
