@@ -713,6 +713,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const DRAG_THRESHOLD = 10;
   const SCROLL_ANGLE_THRESHOLD = 60;
   
+  // v7.9 FIX: Allow positions outside the grid for overflow placement
+  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
+  const MIN_POSITION = -OVERFLOW_AMOUNT;
+  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
+  
   // Calculate which board cell the drag position is over
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -724,14 +729,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
-    if (relX < 0 || relX > width || relY < 0 || relY > height) {
-      return null;
-    }
-    
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    return { row, col };
+    // Allow positions outside the grid bounds for overflow placement
+    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
+      return { row, col };
+    }
+    return null;
   }, []);
 
   // Update drag position and check validity
@@ -1173,8 +1178,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     }
     
     const [dr, dc] = DIRECTION_DELTAS[direction];
-    const newRow = pendingMove.row + dr;
-    const newCol = pendingMove.col + dc;
+    // Allow positions outside the grid bounds for overflow placement (within reasonable limits)
+    const newRow = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.row + dr));
+    const newCol = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.col + dc));
     
     console.log('[SpeedPuzzle] Moving piece:', { from: { row: pendingMove.row, col: pendingMove.col }, to: { row: newRow, col: newCol } });
     

@@ -96,6 +96,12 @@ export const useGameState = () => {
   }, [gameOver, gameMode, currentPlayer, selectedPiece, pendingMove]);
 
   // Move pending piece with D-pad
+  // Allow positions outside the grid so pieces can extend beyond boundaries
+  // This enables rotating pieces at edges without forcing them back onto the grid
+  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
+  const MIN_POSITION = -OVERFLOW_AMOUNT;
+  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
+  
   const movePendingPiece = useCallback((direction) => {
     if (!pendingMove) return;
     
@@ -107,8 +113,9 @@ export const useGameState = () => {
     };
     
     const [dRow, dCol] = deltas[direction] || [0, 0];
-    const newRow = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.row + dRow));
-    const newCol = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.col + dCol));
+    // Allow positions outside the grid bounds for overflow placement
+    const newRow = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.row + dRow));
+    const newCol = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.col + dCol));
     
     setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     soundManager.playClickSound('move');

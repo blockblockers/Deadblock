@@ -808,7 +808,8 @@
         <p>© 2024 DEADBLOCK. Free to play puzzle strategy game.</p>
         <p style="margin-top: 8px;">
           <a href="/">Play Now</a> • 
-          <a href="mailto:support@deadblock.app">Contact</a>
+          <a href="/privacy">Privacy Policy</a> • 
+          <a href="/cdn-cgi/l/email-protection#23505653534c51576347464247414f4c40480d425353">Contact</a>
         </p>
       </footer>
     </div>
@@ -836,6 +837,16 @@
   <!-- App Root -->
   <div id="root"></div>
   
+  <!-- Static Privacy Policy Link - Always visible for Google OAuth verification -->
+  <noscript>
+    <div style="text-align: center; padding: 20px; color: #64748b; font-size: 12px;">
+      <a href="https://deadblock.app/privacy" style="color: #22d3ee;">Privacy Policy</a>
+    </div>
+  </noscript>
+  <div id="static-footer" style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 4px; font-size: 10px; background: rgba(2, 6, 23, 0.9); z-index: 1; pointer-events: none;">
+    <a href="https://deadblock.app/privacy" style="color: #64748b; text-decoration: none; pointer-events: auto;">Privacy Policy</a>
+  </div>
+  
   <!-- Install Prompt (only shown on web, hidden in native apps) -->
   <div id="install-prompt">
     <p class="prompt-title">INSTALL DEADBLOCK</p>
@@ -857,7 +868,7 @@
     ">Already installed? Click here</button>
   </div>
   
-  <script type="module" src="/src/main.jsx"></script>
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script type="module" src="/src/main.jsx"></script>
   
   <script>
     // =====================================================
@@ -1088,12 +1099,4 @@
       }, { passive: true });
       document.addEventListener('touchmove', (e) => {
         const touchY = e.touches[0].clientY;
-        if (window.scrollY === 0 && touchY > lastTouchY && e.cancelable) {
-          e.preventDefault();
-        }
-        lastTouchY = touchY;
-      }, { passive: false });
-    }
-  </script>
-</body>
-</html>
+        if (window.scrollY === 0 && touchY > lastTouchY 

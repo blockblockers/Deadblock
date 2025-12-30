@@ -223,6 +223,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   // =========================================================================
   // DRAG HANDLERS
   // =========================================================================
+  // v7.9 FIX: Allow positions outside the grid for overflow placement
+  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
+  const MIN_POSITION = -OVERFLOW_AMOUNT;
+  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
   
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -234,11 +238,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     const relX = clientX - left;
     const relY = clientY - top;
     
-    if (relX < 0 || relX > width || relY < 0 || relY > height) {
-      return null;
-    }
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
     
-    return { row: Math.floor(relY / cellHeight), col: Math.floor(relX / cellWidth) };
+    // Allow positions outside the grid bounds for overflow placement
+    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
+      return { row, col };
+    }
+    return null;
   }, []);
 
   const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
@@ -835,8 +842,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     const deltas = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
     const [dRow, dCol] = deltas[direction];
     
-    const newRow = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.row + dRow));
-    const newCol = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.col + dCol));
+    // Allow positions outside the grid bounds for overflow placement
+    const newRow = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.row + dRow));
+    const newCol = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.col + dCol));
     
     setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     soundManager.playClickSound('neutral');

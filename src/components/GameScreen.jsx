@@ -275,6 +275,11 @@ const GameScreen = ({
   
   // Calculate which board cell the drag position is over
   // v7.7 FIX: Account for the visual offset of the floating piece (40px up from touch)
+  // v7.9 FIX: Allow positions outside the grid for overflow placement (top/left)
+  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
+  const MIN_POSITION = -OVERFLOW_AMOUNT;
+  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
+  
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -292,7 +297,9 @@ const GameScreen = ({
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+    // Allow positions outside the grid bounds for overflow placement
+    // This enables pieces to be dragged partially outside the board
+    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
       return { row, col };
     }
     return null;

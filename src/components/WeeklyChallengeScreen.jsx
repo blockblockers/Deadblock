@@ -302,6 +302,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     console.log('[WeeklyChallenge] Drag started successfully for:', piece);
   }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove]);
   
+  // v7.9 FIX: Allow positions outside the grid for overflow placement
+  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
+  const MIN_POSITION = -OVERFLOW_AMOUNT;
+  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
+  
   // Calculate which board cell the drag position is over
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -313,14 +318,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const relX = clientX - left;
     const relY = clientY - top;
     
-    if (relX < 0 || relX > width || relY < 0 || relY > height) {
-      return null;
-    }
-    
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    return { row, col };
+    // Allow positions outside the grid bounds for overflow placement
+    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
+      return { row, col };
+    }
+    return null;
   }, []);
 
   // Update drag position and check validity
