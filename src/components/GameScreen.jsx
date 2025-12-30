@@ -255,11 +255,12 @@ const GameScreen = ({
   }, [pendingMove, rotation, flipped, board]);
 
   // Show game over modal when game ends
+  // v7.8: Increased delay to allow winning animation to complete
   useEffect(() => {
     if (gameOver && winner !== null) {
       const delay = setTimeout(() => {
         setShowGameOverModal(true);
-      }, 500);
+      }, 1500); // Longer delay for winning animation
       return () => clearTimeout(delay);
     }
   }, [gameOver, winner]);
@@ -571,14 +572,16 @@ const GameScreen = ({
 
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { 
+      className="bg-slate-950"
+      style={{ 
+        minHeight: '100vh',
+        minHeight: '100dvh', // Dynamic viewport height for mobile
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
         touchAction: isDragging ? 'none' : 'pan-y pinch-zoom',
         overscrollBehavior: 'contain',
-      } : {}}
+      }}
     >
       {/* Dynamic grid background */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
@@ -594,8 +597,8 @@ const GameScreen = ({
       <FloatingPiecesBackground />
 
       {/* Main content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
-        <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
+      <div className="relative min-h-screen flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2">
           
           {/* Title - CONSISTENT sizing across all game modes */}
           <div className="text-center mb-2">
@@ -612,7 +615,7 @@ const GameScreen = ({
           </div>
 
           {/* Game Area */}
-          <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
+          <div className="w-full max-w-md">
             
             {/* Player Bar - with difficulty shown between YOU and AI */}
             <PlayerBar 
@@ -698,7 +701,7 @@ const GameScreen = ({
           </div>
 
           {/* Piece Tray with drag handlers */}
-          <div ref={trayRef} className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
+          <div ref={trayRef}>
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
@@ -715,7 +718,8 @@ const GameScreen = ({
             />
           </div>
           
-          {needsScroll && <div className="h-8" />}
+          {/* Bottom spacing for small screens */}
+          <div className="h-8 sm:h-4" />
         </div>
       </div>
 
@@ -758,6 +762,8 @@ const GameScreen = ({
           onNewGame={onReset}
           onMenu={onMenu}
           onDifficultySelect={onDifficultySelect}
+          difficulty={aiDifficulty}
+          puzzleDifficulty={puzzleDifficulty}
         />
       )}
 
@@ -834,6 +840,11 @@ const GameScreen = ({
         @keyframes error-pulse {
           0%, 100% { box-shadow: 0 0 15px rgba(239,68,68,0.4); }
           50% { box-shadow: 0 0 25px rgba(239,68,68,0.6); }
+        }
+        
+        /* v7.8: Allow scroll pass-through on interactive elements */
+        button, [role="button"], input, textarea, select, a {
+          touch-action: manipulation;
         }
       `}</style>
     </div>

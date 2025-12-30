@@ -1,4 +1,5 @@
 // Achievements - View and track achievements
+// v7.8: Updated categories to match database (weekly, speed, puzzle, online, ai, general)
 import { useState, useEffect } from 'react';
 import { Trophy, Lock, Star, X, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import achievementService from '../services/achievementService';
@@ -58,7 +59,7 @@ const Achievements = ({ userId, onClose, viewOnly = false, playerName = null }) 
   };
 
   // Group achievements by category
-  const categories = ['all', 'games', 'skill', 'social', 'special'];
+  const categories = ['all', 'weekly', 'speed', 'puzzle', 'online', 'ai', 'general'];
   
   const filteredAchievements = selectedCategory === 'all' 
     ? achievements 
@@ -74,10 +75,12 @@ const Achievements = ({ userId, onClose, viewOnly = false, playerName = null }) 
 
   const getCategoryIcon = (cat) => {
     switch (cat) {
-      case 'games': return '🎮';
-      case 'skill': return '⚡';
-      case 'social': return '👥';
-      case 'special': return '✨';
+      case 'weekly': return '📅';
+      case 'speed': return '⚡';
+      case 'puzzle': return '🧩';
+      case 'online': return '🌐';
+      case 'ai': return '🤖';
+      case 'general': return '🎮';
       default: return '🏆';
     }
   };

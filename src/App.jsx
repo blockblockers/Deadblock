@@ -93,10 +93,6 @@ function AppContent() {
   const [spectatingGameId, setSpectatingGameId] = useState(null);
   const [replayGameId, setReplayGameId] = useState(null);
   
-  // NEW v7.7: Multi-game spectating support
-  const [spectatingFriendGames, setSpectatingFriendGames] = useState([]);
-  const [spectatingGameIndex, setSpectatingGameIndex] = useState(0);
-  
   // Weekly challenge state
   const [currentWeeklyChallenge, setCurrentWeeklyChallenge] = useState(null);
   
@@ -107,6 +103,9 @@ function AppContent() {
   
   // State for welcome modal
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  
+  // v7.8: Track if new user joined via invite link (to show tutorial)
+  const [showTutorialOnJoin, setShowTutorialOnJoin] = useState(false);
   
   // Show welcome modal when new user is detected
   useEffect(() => {
@@ -188,6 +187,16 @@ function AppContent() {
           setInviteInfo(null);
           setInviteError(null);
           localStorage.removeItem('deadblock_pending_invite_code');
+          
+          // v7.8: Check if this is a new user - show tutorial
+          // A user is considered "new" if they just created their account
+          const isFirstGame = !localStorage.getItem('deadblock_has_played_online');
+          if (isFirstGame || isNewUser) {
+            console.log('[App] New user joining via invite - will show tutorial');
+            setShowTutorialOnJoin(true);
+            localStorage.setItem('deadblock_has_played_online', 'true');
+          }
+          
           // Go directly to the game
           setOnlineGameId(data.game_id);
           if (setGameModeFn) setGameModeFn('online-game');
@@ -553,12 +562,10 @@ function AppContent() {
     setGameMode('online-game');
   };
 
-  // Handle spectate game - UPDATED v7.7: Support multiple games
-  const handleSpectateGame = (gameId, friendGames = [], gameIndex = 0) => {
-    console.log('handleSpectateGame called:', gameId, 'with', friendGames?.length || 0, 'friend games');
+  // Handle spectate game
+  const handleSpectateGame = (gameId) => {
+    console.log('handleSpectateGame called:', gameId);
     setSpectatingGameId(gameId);
-    setSpectatingFriendGames(friendGames);
-    setSpectatingGameIndex(gameIndex);
     setGameMode('spectate');
   };
 
@@ -627,109 +634,161 @@ function AppContent() {
     hasPassedEntryAuth,
     isOnlineEnabled,
     gameMode,
-    hasProfile: !!profile
+    hasProfile: !!profile,
   });
-
+  
+  // INLINE OAuth completion handling - if we're in OAuth callback but user is authenticated,
+  // trigger the redirect immediately instead of waiting for effect
+  if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
+    console.log('=== INLINE OAuth completion - triggering redirect ===');
+    // Use setTimeout to avoid state update during render
+    setTimeout(() => {
+      setHasRedirectedAfterOAuth(true);
+      clearOAuthCallback?.();
+      setHasPassedEntryAuth(true);
+      setIsOfflineMode(false);
+      
+      const hadOnlineIntent = pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true';
+      localStorage.removeItem('deadblock_pending_online_intent');
+      setPendingOnlineIntent(false);
+      
+      if (hadOnlineIntent) {
+        console.log('OAuth complete - going to online menu');
+        setGameMode('online-menu');
+      } else {
+        console.log('OAuth complete - going to main menu');
+        setGameMode(null);
+      }
+    }, 0);
+    
+    // Show brief loading while redirect processes
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
+        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        <div className="relative z-10 mb-8">
+          <NeonTitle size="large" />
+        </div>
+        <div className="relative z-10 w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="relative z-10 text-amber-300 text-sm font-medium tracking-wider">WELCOME BACK...</p>
+      </div>
+    );
+  }
+  
   if (showAuthLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
-        <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(251,191,36,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.4) 1px, transparent 1px)',
+        {/* Grid background */}
+        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(rgba(251,191,36,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(251,191,36,0.3) 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }} />
-        <NeonTitle />
-        <div className="animate-spin w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full mx-auto mt-8" />
-        <p className="text-amber-300 mt-4">
-          {loadingStuck ? 'Still loading... Please wait' : 'Loading...'}
+        
+        {/* Title */}
+        <div className="relative z-10 mb-8">
+          <NeonTitle size="large" />
+        </div>
+        
+        {/* Spinner */}
+        <div className="relative z-10 w-12 h-12 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="relative z-10 text-amber-300 text-sm font-medium tracking-wider">
+          {isOAuthCallback ? 'SIGNING YOU IN...' : 'LOADING...'}
         </p>
         {loadingStuck && (
-          <button
-            onClick={() => {
-              clearOAuthCallback?.();
-              setHasPassedEntryAuth(true);
-              setGameMode(null);
-            }}
-            className="mt-4 px-4 py-2 bg-slate-700 text-slate-300 rounded hover:bg-slate-600"
-          >
-            Continue to Menu
-          </button>
+          <div className="relative z-10 mt-6 text-center">
+            <p className="text-slate-400 text-xs mb-3">Taking longer than expected...</p>
+            <button
+              onClick={() => {
+                // Clear all Supabase related storage and reload
+                Object.keys(localStorage).forEach(key => {
+                  if (key.startsWith('sb-') || key.includes('supabase')) {
+                    localStorage.removeItem(key);
+                  }
+                });
+                // Clear pending online intent
+                localStorage.removeItem('deadblock_pending_online_intent');
+                // Clear session storage too
+                sessionStorage.clear();
+                // Force reload to root
+                window.location.replace('/');
+              }}
+              className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg text-sm hover:bg-slate-600"
+            >
+              Reset & Reload
+            </button>
+          </div>
         )}
       </div>
     );
   }
 
-  // Show entry auth screen if:
-  // 1. Online is enabled
-  // 2. User hasn't passed entry auth yet
-  // 3. Not in offline mode
-  // 4. No pending invite (invites skip entry screen)
-  const hasPendingInvite = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
-  if (isOnlineEnabled && !hasPassedEntryAuth && !isOfflineMode && !hasPendingInvite) {
+  // Debug logging - comprehensive state dump
+  console.log('App render state:', { 
+    gameMode, 
+    onlineGameId, 
+    isAuthenticated, 
+    authLoading, 
+    isOAuthCallback, 
+    hasPassedEntryAuth, 
+    isOfflineMode,
+    showOnlineAuthPrompt,
+    isOnlineEnabled,
+    hasProfile: !!profile
+  });
+
+  // Show Entry Auth Screen first (before anything else)
+  // Skip if:
+  // 1. Already passed entry screen
+  // 2. Auth is still loading
+  // 3. OAuth callback in progress  
+  // 4. User is already authenticated (effect will set hasPassedEntryAuth)
+  const shouldShowEntryAuth = !hasPassedEntryAuth && !authLoading && !isOAuthCallback && !isAuthenticated;
+  console.log('Entry auth check:', { shouldShowEntryAuth, hasPassedEntryAuth, authLoading, isOAuthCallback, isAuthenticated });
+  
+  if (shouldShowEntryAuth) {
     console.log('Rendering: EntryAuthScreen');
     return (
-      <EntryAuthScreen 
-        onAuthComplete={handleEntryAuthComplete}
+      <EntryAuthScreen
+        onComplete={handleEntryAuthComplete}
         onOfflineMode={handleOfflineMode}
       />
     );
   }
 
-  // Show online auth prompt (overlay) when in offline mode and user clicks online
+  // Online Auth Prompt (for offline users trying to go online)
   if (showOnlineAuthPrompt) {
-    console.log('Rendering: EntryAuthScreen (overlay for online access)');
+    console.log('Rendering: Online Auth Prompt for destination:', pendingAuthDestination);
     return (
-      <div className="relative">
-        <EntryAuthScreen 
-          onAuthComplete={handleOnlineAuthSuccess}
-          onOfflineMode={() => {
-            setShowOnlineAuthPrompt(false);
-          }}
-          isOverlay={true}
-        />
-      </div>
+      <EntryAuthScreen
+        onComplete={handleOnlineAuthSuccess}
+        onOfflineMode={() => {
+          // Clear pending online intent and destination when user cancels
+          localStorage.removeItem('deadblock_pending_online_intent');
+          localStorage.removeItem('deadblock_pending_auth_destination');
+          setPendingOnlineIntent(false);
+          setPendingAuthDestination('online-menu');
+          setShowOnlineAuthPrompt(false);
+        }}
+        forceOnlineOnly={false}
+        intendedDestination={pendingAuthDestination}
+      />
     );
   }
 
-  // Show welcome modal for new users
-  if (showWelcomeModal && profile) {
-    return (
-      <>
-        <MenuScreen
-          onStartGame={handleStartGame}
-          onPuzzleSelect={() => setGameMode('puzzle-select')}
-          onWeeklyChallenge={handleWeeklyChallenge}
-          showHowToPlay={showHowToPlay}
-          onToggleHowToPlay={setShowHowToPlay}
-          showSettings={showSettings}
-          onToggleSettings={setShowSettings}
-          isOnlineEnabled={false}
-          isAuthenticated={false}
-          isOfflineMode={isOfflineMode}
-          onShowProfile={() => setShowProfileModal(true)}
-          onSignIn={() => setGameMode('auth')}
-          onPuzzleHover={preloadPuzzleComponents}
-          onOnlineHover={preloadOnlineComponents}
-          onWeeklyHover={preloadWeeklyComponents}
-        />
-        <WelcomeModal
-          isOpen={showWelcomeModal}
-          username={profile?.username || profile?.display_name || 'Player'}
-          onClose={() => {
-            setShowWelcomeModal(false);
-            clearNewUser?.();
-          }}
-        />
-      </>
-    );
-  }
-
-  // =====================================================
-  // MAIN MENU
-  // =====================================================
-
-  // Render Main Menu Screen
-  if (!gameMode) {
-    console.log('Rendering: MenuScreen');
+  // Render Menu Screen - this should be the default after auth
+  // Changed from !gameMode to explicit null check plus fallback
+  if (gameMode === null || gameMode === undefined) {
+    console.log('Rendering: MenuScreen (gameMode is null/undefined)');
+    console.log('MenuScreen props:', { isOnlineEnabled, isAuthenticated, isOfflineMode, hasProfile: !!profile });
+    
+    // If user just authenticated but hasPassedEntryAuth not set yet, set it now
+    if (isAuthenticated && !hasPassedEntryAuth) {
+      console.log('Setting hasPassedEntryAuth from render');
+      // Schedule for next tick to avoid state update during render
+      setTimeout(() => setHasPassedEntryAuth(true), 0);
+    }
     return (
       <>
         <MenuScreen
@@ -745,6 +804,7 @@ function AppContent() {
           isOfflineMode={isOfflineMode}
           onShowProfile={() => setShowProfileModal(true)}
           onSignIn={() => setGameMode('auth')}
+          // Preload components on hover for better UX
           onPuzzleHover={preloadPuzzleComponents}
           onOnlineHover={preloadOnlineComponents}
           onWeeklyHover={preloadWeeklyComponents}
@@ -756,6 +816,8 @@ function AppContent() {
             isOffline={isOfflineMode}
           />
         </LazyInline>
+        
+        {/* Welcome modal for new users */}
         {showWelcomeModal && profile && (
           <WelcomeModal
             username={profile.username || profile.display_name || 'Player'}
@@ -778,10 +840,64 @@ function AppContent() {
   // ONLINE MODES (Lazy loaded with Suspense)
   // =====================================================
 
-  // Render Matchmaking Screen
+  // Auth Screen (Login/Signup)
+  if (gameMode === 'auth') {
+    console.log('Rendering: EntryAuthScreen for auth mode with inviteInfo:', !!inviteInfo);
+    return (
+      <EntryAuthScreen
+        onComplete={() => {
+          // After auth, check if we need to accept an invite
+          const inviteCode = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
+          if (inviteCode && profile?.id) {
+            // Invite will be processed by the invite acceptance effect
+            setGameMode(null); // Go to menu, invite effect will handle the rest
+          } else {
+            setGameMode('online-menu');
+          }
+        }}
+        onOfflineMode={() => {
+          setPendingInviteCode(null);
+          setInviteInfo(null);
+          setInviteError(null);
+          localStorage.removeItem('deadblock_pending_invite_code');
+          setGameMode(null);
+        }}
+        inviteInfo={inviteInfo}
+        inviteLoading={inviteLoading}
+        inviteError={inviteError}
+        onCancelInvite={() => {
+          setPendingInviteCode(null);
+          setInviteInfo(null);
+          localStorage.removeItem('deadblock_pending_invite_code');
+          setInviteError(null);
+          setGameMode(null);
+        }}
+        forceOnlineOnly={!!inviteInfo}
+      />
+    );
+  }
+
+  // Online Menu/Lobby
+  if (gameMode === 'online-menu') {
+    return (
+      <LazyWrapper message="Loading online lobby...">
+        <OnlineMenu
+          onFindMatch={() => setGameMode('matchmaking')}
+          onViewProfile={() => setGameMode('profile')}
+          onViewLeaderboard={() => setGameMode('leaderboard')}
+          onResumeGame={handleResumeGame}
+          onSpectateGame={handleSpectateGame}
+          onViewReplay={handleViewReplay}
+          onBack={() => setGameMode(null)}
+        />
+      </LazyWrapper>
+    );
+  }
+
+  // Matchmaking Screen
   if (gameMode === 'matchmaking') {
     return (
-      <LazyWrapper message="Finding match...">
+      <LazyWrapper message="Finding opponents...">
         <MatchmakingScreen
           onMatchFound={handleMatchFound}
           onCancel={() => setGameMode('online-menu')}
@@ -790,11 +906,13 @@ function AppContent() {
     );
   }
 
-  // Render Online Game (includes OnlineMenu when no game)
-  if (gameMode === 'online-menu' || gameMode === 'online-game') {
+  // Online Game
+  if (gameMode === 'online-game') {
     if (!onlineGameId) {
+      console.error('online-game mode but no gameId, redirecting to menu');
+      // Reset to online menu if we somehow got here without a game ID
       return (
-        <LazyWrapper message="Loading online menu...">
+        <LazyWrapper message="Loading online lobby...">
           <OnlineMenu
             onFindMatch={() => setGameMode('matchmaking')}
             onViewProfile={() => setGameMode('profile')}
@@ -816,6 +934,8 @@ function AppContent() {
             setOnlineGameId(null);
             setGameMode('online-menu');
           }}
+          showTutorial={showTutorialOnJoin}
+          onTutorialClose={() => setShowTutorialOnJoin(false)}
         />
       </LazyWrapper>
     );
@@ -843,7 +963,7 @@ function AppContent() {
     );
   }
 
-  // Spectate Game - UPDATED v7.7: Multi-game support
+  // Spectate Game
   if (gameMode === 'spectate') {
     return (
       <LazyWrapper message="Loading spectator view...">
@@ -852,17 +972,7 @@ function AppContent() {
           userId={profile?.id}
           onClose={() => {
             setSpectatingGameId(null);
-            setSpectatingFriendGames([]);
-            setSpectatingGameIndex(0);
             setGameMode('online-menu');
-          }}
-          // NEW v7.7: Multi-game props
-          friendGames={spectatingFriendGames}
-          currentGameIndex={spectatingGameIndex}
-          onSwitchGame={(newGameId, newIndex) => {
-            console.log('Switching to game:', newGameId, 'at index:', newIndex);
-            setSpectatingGameId(newGameId);
-            setSpectatingGameIndex(newIndex);
           }}
         />
       </LazyWrapper>

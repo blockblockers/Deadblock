@@ -200,7 +200,15 @@ const GridShatter = () => {
 };
 
 // ====== DIFFICULTY LABEL HELPER ======
-const getDifficultyLabel = (difficulty) => {
+const getDifficultyLabel = (difficulty, isPuzzle = false) => {
+  if (isPuzzle) {
+    switch (difficulty) {
+      case 'easy': return 'EASY';
+      case 'medium': return 'MEDIUM';
+      case 'hard': return 'HARD';
+      default: return '';
+    }
+  }
   switch (difficulty) {
     case 'beginner': return 'BEGINNER A.I.';
     case 'intermediate': return 'INTERMEDIATE A.I.';
@@ -224,7 +232,8 @@ const GameOverModal = ({
   onRematch, 
   onDifficultySelect, 
   opponentName,      // Opponent username for online games
-  difficulty         // AI difficulty level for AI games
+  difficulty,        // AI difficulty level for AI games
+  puzzleDifficulty   // v7.8: Puzzle difficulty level
 }) => {
   const [animationType, setAnimationType] = useState(0);
 
@@ -251,9 +260,17 @@ const GameOverModal = ({
     return isWin ? 'YOU WIN!' : 'YOU LOSE';
   };
 
-  // Subtitle with AI level and opponent name
+  // Subtitle with AI level, puzzle difficulty, and opponent name
   const getSubtitle = () => {
-    if (isPuzzle) return isWin ? 'Puzzle solved successfully' : 'No moves remaining';
+    // v7.8: Show puzzle difficulty
+    if (isPuzzle) {
+      const diffLabel = puzzleDifficulty ? getDifficultyLabel(puzzleDifficulty, true) : '';
+      if (isWin) {
+        return diffLabel ? `${diffLabel} puzzle solved!` : 'Puzzle solved successfully';
+      } else {
+        return diffLabel ? `${diffLabel} puzzle failed` : 'No moves remaining';
+      }
+    }
     if (is2Player) return winner === 1 ? 'Player 1 dominated the board' : 'Player 2 dominated the board';
     if (isOnline) {
       const oppDisplay = opponentName || 'Opponent';

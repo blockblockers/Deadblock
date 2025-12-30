@@ -1,5 +1,5 @@
 // GameBoard.jsx - Main game board component
-// v7.7: Elegant ambient animations - orbiting highlights, breathing effects, corner glows, edge shimmers
+// v7.8: Breathing glow animation - pieces glow up/down at random intervals
 // CHANGED: Allow dropping pieces even with conflicts (for rotation adjustment)
 // This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
 
@@ -11,7 +11,7 @@ import { pieceColors } from '../utils/pieces';
  * GameBoard Component
  * 
  * Renders the 8x8 game grid with placed pieces and pending move preview.
- * v7.7: Very slow ambient animations (8-15s cycles), interesting visual effects
+ * v7.8: Breathing glow effect - pieces slowly pulse in intensity at random intervals
  * v7.7 ENHANCED: Shows drag preview highlighting on board during drag
  */
 const GameBoard = forwardRef(({
@@ -43,21 +43,26 @@ const GameBoard = forwardRef(({
   
   const safeBoardPieces = boardPieces || {};
   
-  // Simple rolling glow effect with random timing per cell
+  // Breathing glow effect with random timing per cell
   const [glowTimings, setGlowTimings] = useState({});
   
   useEffect(() => {
-    // Generate random timing for rolling glow effect on each cell
+    // Generate random timing for breathing glow effect on each cell
+    // v7.8: Each piece glows up and down at its own rhythm
+    // - Random delay ensures pieces don't pulse in sync
+    // - Duration controls how long each breath takes (one direction)
+    // - With 'alternate', a 12s duration = 12s up + 12s down = 24s full cycle
     const timings = {};
     
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         if (safeBoard[row]?.[col]) {
           timings[`${row},${col}`] = {
-            // Random delay so cells don't all glow at the same time (0-15 seconds)
-            delay: Math.random() * 15,
-            // Slow duration (8-14 seconds per cycle)
-            duration: 8 + Math.random() * 6,
+            // Wide random delay so pieces glow at different times (0-30 seconds)
+            delay: Math.random() * 30,
+            // Duration for one direction of breathing (6-10 seconds)
+            // Full cycle will be 12-20 seconds (up + down)
+            duration: 6 + Math.random() * 4,
           };
         }
       }
@@ -111,6 +116,7 @@ const GameBoard = forwardRef(({
 
   // Calculate AI animating cells (for drag animation)
   let aiAnimatingCells = [];
+  const isAiWinningMove = aiAnimatingMove?.isWinning || false;
   if (aiAnimatingMove) {
     const aiCoords = getPieceCoords(aiAnimatingMove.piece, aiAnimatingMove.rotation || 0, aiAnimatingMove.flipped || false);
     aiCoords.forEach(([dx, dy]) => {
@@ -124,6 +130,7 @@ const GameBoard = forwardRef(({
 
   // Calculate player animating cells (after confirm)
   let playerAnimatingCells = [];
+  const isPlayerWinningMove = playerAnimatingMove?.isWinning || false;
   if (playerAnimatingMove) {
     const playerCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rotation || 0, playerAnimatingMove.flipped || false);
     playerCoords.forEach(([dx, dy]) => {
@@ -223,18 +230,42 @@ const GameBoard = forwardRef(({
             // Calculate pending index for stagger effect
             const pendingIndex = isPending ? pendingCells.findIndex(p => p.row === rowIdx && p.col === colIdx) : -1;
             
+            // v7.8: Handle touch start for re-dragging pending pieces
+            const handlePendingTouchStart = (e) => {
+              if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
+              
+              // Get touch position
+              const touch = e.touches[0];
+              const rect = e.currentTarget.getBoundingClientRect();
+              
+              // Start drag of the pending piece
+              onPendingPieceDragStart(pendingMove.piece, touch.clientX, touch.clientY, rect);
+            };
+            
+            // v7.8: Handle mouse down for re-dragging pending pieces (desktop)
+            const handlePendingMouseDown = (e) => {
+              if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
+              if (e.button !== 0) return; // Left click only
+              
+              const rect = e.currentTarget.getBoundingClientRect();
+              onPendingPieceDragStart(pendingMove.piece, e.clientX, e.clientY, rect);
+            };
+            
             return (
               <div
                 key={`${rowIdx}-${colIdx}`}
                 onClick={() => handleCellClick(rowIdx, colIdx)}
+                onTouchStart={isPending ? handlePendingTouchStart : undefined}
+                onMouseDown={isPending ? handlePendingMouseDown : undefined}
                 className={`
-                  w-9 h-9 sm:w-12 sm:h-12 rounded-md relative overflow-hidden
+                  game-cell w-9 h-9 sm:w-12 sm:h-12 rounded-md relative overflow-hidden
                   transition-all duration-300 cursor-pointer
                   ${isOccupied ? colorClass : 'bg-slate-700/40 hover:bg-slate-600/50'}
                   ${isOccupied ? 'shadow-lg' : ''}
                   ${isOverlapping ? 'overlap-cell' : ''}
-                  ${isAiAnimating ? 'ai-placing-cell' : ''}
-                  ${isPlayerAnimating ? 'player-placing-cell' : ''}
+                  ${isAiAnimating ? (isAiWinningMove ? 'ai-winning-cell' : 'ai-placing-cell') : ''}
+                  ${isPlayerAnimating ? (isPlayerWinningMove ? 'player-winning-cell' : 'player-placing-cell') : ''}
+                  ${isPending ? 'pending cursor-grab active:cursor-grabbing' : ''}
                 `}
                 style={isPending ? {
                   animationDelay: `${pendingIndex * 0.15}s`
@@ -245,10 +276,10 @@ const GameBoard = forwardRef(({
                   <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/20 pointer-events-none" />
                 )}
                 
-                {/* Simple rolling glow effect - slow diagonal shine that moves across the piece */}
+                {/* Breathing glow effect - intensity pulses slowly, each piece at random timing */}
                 {isOccupied && glowTiming && (
                   <div 
-                    className="absolute inset-0 rolling-glow pointer-events-none"
+                    className="absolute inset-0 rolling-glow pointer-events-none rounded-md"
                     style={{ 
                       animationDelay: `-${glowTiming.delay}s`,
                       animationDuration: `${glowTiming.duration}s`
@@ -482,6 +513,12 @@ const GameBoard = forwardRef(({
           border: 2px solid rgba(168, 85, 247, 0.8) !important;
         }
         
+        /* v7.8: AI WINNING MOVE ANIMATION - Golden pulsing glow */
+        .ai-winning-cell {
+          animation: winning-pulse 0.5s ease-in-out infinite alternate;
+          border: 3px solid rgba(251, 191, 36, 1) !important;
+        }
+        
         .ai-drop-effect {
           background: radial-gradient(circle, rgba(168, 85, 247, 0.6) 0%, transparent 70%);
           animation: ai-drop 0.5s ease-out;
@@ -500,6 +537,32 @@ const GameBoard = forwardRef(({
             0 0 20px rgba(34, 211, 238, 0.8),
             0 0 40px rgba(34, 211, 238, 0.4) !important;
           border: 2px solid rgba(34, 211, 238, 0.8) !important;
+        }
+        
+        /* v7.8: PLAYER WINNING MOVE ANIMATION - Golden pulsing glow */
+        .player-winning-cell {
+          animation: winning-pulse 0.5s ease-in-out infinite alternate;
+          border: 3px solid rgba(251, 191, 36, 1) !important;
+        }
+        
+        /* v7.8: Winning move pulse animation - shared by both AI and player */
+        @keyframes winning-pulse {
+          0% { 
+            box-shadow: 
+              0 0 20px rgba(251, 191, 36, 0.9),
+              0 0 40px rgba(251, 191, 36, 0.6),
+              0 0 60px rgba(251, 191, 36, 0.3),
+              inset 0 0 15px rgba(251, 191, 36, 0.4);
+            transform: scale(1);
+          }
+          100% { 
+            box-shadow: 
+              0 0 30px rgba(251, 191, 36, 1),
+              0 0 60px rgba(251, 191, 36, 0.8),
+              0 0 90px rgba(251, 191, 36, 0.4),
+              inset 0 0 25px rgba(251, 191, 36, 0.6);
+            transform: scale(1.05);
+          }
         }
         
         .player-drop-effect {
@@ -533,32 +596,46 @@ const GameBoard = forwardRef(({
         
         /* ============================================
            PLACED PIECE AMBIENT EFFECTS
-           Simple rolling glow - slow diagonal shine
+           v7.8: Breathing glow - intensity pulses up and down
            ============================================ */
         
-        /* Rolling glow - subtle diagonal light sweep across the cell */
+        /* Breathing glow - overall piece glow that intensifies and fades */
         .rolling-glow {
-          background: linear-gradient(
-            135deg,
-            transparent 0%,
-            transparent 40%,
-            rgba(255, 255, 255, 0.2) 48%,
-            rgba(255, 255, 255, 0.3) 50%,
-            rgba(255, 255, 255, 0.2) 52%,
-            transparent 60%,
+          background: radial-gradient(
+            ellipse at center,
+            rgba(255, 255, 255, 0.25) 0%,
+            rgba(255, 255, 255, 0.15) 30%,
+            rgba(255, 255, 255, 0.05) 60%,
             transparent 100%
           );
-          background-size: 400% 400%;
-          animation: rolling-glow-sweep linear infinite;
+          animation: breathing-glow ease-in-out infinite alternate;
         }
         
-        @keyframes rolling-glow-sweep {
+        @keyframes breathing-glow {
           0% { 
-            background-position: 150% 150%;
+            opacity: 0;
+            transform: scale(0.95);
           }
           100% { 
-            background-position: -50% -50%;
+            opacity: 1;
+            transform: scale(1.02);
           }
+        }
+        
+        /* v7.8: Allow scroll pass-through on board cells */
+        /* Cells without pending pieces allow scroll */
+        .game-cell {
+          touch-action: manipulation;
+        }
+        
+        /* Pending piece cells can be dragged */
+        .game-cell.pending {
+          touch-action: none;
+          cursor: grab;
+        }
+        
+        .game-cell.pending:active {
+          cursor: grabbing;
         }
       `}</style>
     </div>

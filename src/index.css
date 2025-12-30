@@ -10,6 +10,7 @@
 
 /* =============================================================================
    ROOT & BODY STYLES - Scroll Foundation
+   v7.8: CRITICAL FIX - Allow scrolling by removing position:fixed and overflow:hidden
    ============================================================================= */
 
 * {
@@ -21,30 +22,71 @@ html, body {
   padding: 0;
   width: 100%;
   min-height: 100%;
-  overscroll-behavior: none;
+  /* Allow vertical scroll, prevent horizontal */
+  overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
 }
 
 html {
-  /* Prevent pull-to-refresh on mobile */
-  overscroll-behavior-y: none;
+  /* Prevent pull-to-refresh but allow normal scroll */
+  overscroll-behavior-y: contain;
+  /* iOS momentum scrolling */
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #0f172a;
   color: white;
-  /* Prevent iOS Safari bounce effect on body */
-  position: fixed;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+  /* v7.8: REMOVED position:fixed and overflow:hidden - these block scrolling! */
+  /* Allow body to scroll naturally */
+  min-height: 100vh;
+  min-height: 100dvh; /* Dynamic viewport height for mobile */
 }
 
 #root {
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  /* v7.8: Use min-height instead of height to allow content growth */
+  min-height: 100vh;
+  min-height: 100dvh;
+  /* Allow scroll */
+  overflow-x: hidden;
+}
+
+/* =============================================================================
+   INTERACTIVE ELEMENTS - SCROLL PASS-THROUGH
+   v7.8: CRITICAL - Allow scroll to work over buttons, inputs, links, etc.
+   ============================================================================= */
+
+/* All interactive elements use 'manipulation' which allows:
+   - Tap/click actions
+   - Pan gestures (scroll)
+   - Pinch zoom
+   But NOT double-tap zoom (which causes 300ms delay) */
+button,
+[role="button"],
+input,
+textarea,
+select,
+a,
+label,
+.clickable,
+.btn {
+  touch-action: manipulation;
+}
+
+/* During drag operations, disable scroll completely */
+body.is-dragging,
+body.is-dragging * {
+  touch-action: none !important;
+  overflow: hidden !important;
+}
+
+/* Draggable elements need touch-action: none */
+.draggable,
+[draggable="true"],
+.drag-handle {
+  touch-action: none;
 }
 
 /* =============================================================================
@@ -473,6 +515,34 @@ body {
   .compact-gap {
     gap: 6px !important;
   }
+  
+  /* v7.8: Force scrolling on very small screens */
+  body, #root {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+}
+
+/* v7.8: iPhone mini and other small screens - ensure scroll works */
+@media (max-height: 700px) {
+  /* Force scroll on small height devices */
+  html, body {
+    height: auto;
+    min-height: 100%;
+    overflow-y: auto;
+  }
+  
+  #root {
+    height: auto;
+    min-height: 100%;
+  }
+  
+  /* Add extra bottom padding for navigation */
+  .scroll-container,
+  .scroll-page,
+  .scroll-y {
+    padding-bottom: 100px;
+  }
 }
 
 /* Extra bottom padding for home indicator on newer iPhones */
@@ -581,233 +651,4 @@ body {
 
 .animate-fadeInUp {
   animation: fadeInUp 0.3s ease-out;
-}
-
-/* =============================================================================
-   CRITICAL FIX: Allow scrolling through all interactive elements
-   ============================================================================= */
-
-/* All buttons should allow scroll-through */
-button,
-[role="button"],
-.btn,
-input[type="button"],
-input[type="submit"] {
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-
-/* Tailwind button classes */
-button[class*="px-"],
-button[class*="py-"],
-button[class*="p-"],
-button[class*="bg-"],
-button[class*="rounded"] {
-  touch-action: manipulation !important;
-}
-
-/* All clickable cards, boxes, and containers should allow scroll */
-[class*="rounded-xl"],
-[class*="rounded-2xl"],
-[class*="rounded-lg"],
-[class*="bg-slate"],
-[class*="bg-gradient"],
-[class*="backdrop-blur"],
-.card,
-.box,
-.menu-item,
-.game-card,
-.player-card {
-  touch-action: pan-y pinch-zoom;
-}
-
-/* Divs with click handlers (common pattern) */
-div[class*="cursor-pointer"],
-div[class*="hover:"],
-div[role="button"] {
-  touch-action: manipulation;
-}
-
-/* Links should allow scroll */
-a {
-  touch-action: manipulation;
-}
-
-/* Input fields - allow scroll but also text selection */
-input[type="text"],
-input[type="email"],
-input[type="password"],
-input[type="search"],
-textarea {
-  touch-action: manipulation;
-}
-
-/* =============================================================================
-   SCROLLABLE CONTAINER IMPROVEMENTS
-   ============================================================================= */
-
-/* Main scroll containers - ensure children don't block scroll */
-.scroll-container,
-.scroll-y,
-.scroll-fix,
-.scrollable-container {
-  touch-action: pan-y pinch-zoom !important;
-  -webkit-overflow-scrolling: touch !important;
-}
-
-/* Ensure nested elements inherit scroll behavior */
-.scroll-container *,
-.scroll-y *,
-.scroll-fix * {
-  /* Don't set touch-action: none on children unless explicitly needed */
-}
-
-/* Override for elements that specifically need to block scroll (game board during play) */
-.no-scroll,
-.touch-none,
-[data-no-scroll="true"] {
-  touch-action: none !important;
-}
-
-/* =============================================================================
-   SPECIFIC COMPONENT FIXES
-   ============================================================================= */
-
-/* Online Menu - cards and buttons */
-.online-menu-card,
-[class*="backdrop-blur"] {
-  touch-action: pan-y pinch-zoom;
-}
-
-/* Profile cards */
-.profile-card,
-.player-profile {
-  touch-action: pan-y;
-}
-
-/* Game history items */
-.match-history-item,
-.game-history-item {
-  touch-action: manipulation;
-}
-
-/* Modal content - should scroll if content is tall */
-.modal-content,
-.modal-scroll {
-  touch-action: pan-y;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Dropdown/Select menus */
-select,
-[role="listbox"],
-[role="menu"] {
-  touch-action: manipulation;
-}
-
-/* =============================================================================
-   iOS SPECIFIC FIXES
-   ============================================================================= */
-
-@supports (-webkit-touch-callout: none) {
-  /* iOS: Ensure all tappable elements allow scroll passthrough */
-  button,
-  a,
-  [role="button"],
-  input,
-  select,
-  textarea {
-    touch-action: manipulation;
-    /* Prevent iOS "sticky" hover states */
-    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
-  }
-  
-  /* iOS: Fix for scroll containers */
-  .scroll-container,
-  .scroll-y,
-  .scroll-fix,
-  [style*="overflow"] {
-    -webkit-overflow-scrolling: touch;
-    /* Force GPU acceleration for smoother scroll */
-    transform: translate3d(0, 0, 0);
-  }
-  
-  /* iOS: Prevent zoom on double-tap for buttons */
-  button {
-    touch-action: manipulation;
-  }
-}
-
-/* =============================================================================
-   ANDROID SPECIFIC FIXES
-   ============================================================================= */
-
-@supports not (-webkit-touch-callout: none) {
-  /* Android: Smoother scroll on containers */
-  .scroll-container,
-  .scroll-y {
-    scroll-behavior: smooth;
-  }
-}
-
-/* =============================================================================
-   PREVENT ACCIDENTAL ZOOM
-   ============================================================================= */
-
-/* Prevent zoom on all interactive elements */
-input,
-select,
-textarea,
-button {
-  font-size: 16px; /* Prevents iOS auto-zoom on focus */
-}
-
-/* =============================================================================
-   DRAG AND DROP EXCEPTIONS
-   ============================================================================= */
-
-/* During active drag, disable scroll */
-body.dragging-active,
-body.dragging-active * {
-  touch-action: none !important;
-  overflow: hidden !important;
-}
-
-/* Piece tray - horizontal scroll only */
-.piece-tray,
-[class*="piece-tray"] {
-  touch-action: pan-x;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Game board - no scroll during gameplay */
-.game-board,
-[class*="game-board"],
-.board-container {
-  touch-action: none;
-}
-
-/* =============================================================================
-   UTILITY CLASSES FOR MANUAL CONTROL
-   ============================================================================= */
-
-/* Force scroll passthrough */
-.scroll-passthrough {
-  touch-action: pan-y pinch-zoom !important;
-  pointer-events: auto;
-}
-
-/* Force no scroll (for game board, etc) */
-.no-touch-scroll {
-  touch-action: none !important;
-}
-
-/* Allow all gestures (zoom + scroll) */
-.touch-all {
-  touch-action: auto;
-}
-
-/* Manipulation only (tap + scroll, no zoom) */
-.touch-manipulation {
-  touch-action: manipulation;
 }

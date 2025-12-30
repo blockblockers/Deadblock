@@ -1,7 +1,6 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
-// PATCHED: Submit button above piece tray (like other game boards), more prominent, retry button removed
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, FlipHorizontal } from 'lucide-react';
 import GameBoard from './GameBoard';
@@ -228,10 +227,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
-  // v7.7: Track preview cell separately without updating board preview
-  const [dragPreviewCell, setDragPreviewCell] = useState(null);
-  // v7.7: Track if at least one cell can be placed (for partial overlap drops)
-  const [hasValidCell, setHasValidCell] = useState(false);
   
   // Refs
   const timerRef = useRef(null);
@@ -328,38 +323,28 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     return { row, col };
   }, []);
 
-  // Update drag position - v7.7: NO board preview during drag, allow partial overlap
+  // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPiece) {
-      // v7.7: Track preview cell WITHOUT updating board preview
-      setDragPreviewCell(cell);
-      
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const perfectValid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(perfectValid);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
       
-      // v7.7: Check if at least one cell can be placed (for rotation adjustment)
-      let validCellCount = 0;
-      coords.forEach(([dx, dy]) => {
-        const cellRow = cell.row + dy;
-        const cellCol = cell.col + dx;
-        if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-          const existing = board[cellRow]?.[cellCol];
-          if (existing === null || existing === 0 || existing === undefined) {
-            validCellCount++;
-          }
-        }
-      });
-      setHasValidCell(validCellCount > 0);
+      if (valid && setPendingMove) {
+        setPendingMove({
+          piece: draggedPiece,
+          row: cell.row,
+          col: cell.col,
+          coords
+        });
+      }
     } else {
       setIsValidDrop(false);
-      setHasValidCell(false);
-      setDragPreviewCell(null);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // Keep current piece in ref to avoid stale closures
   const draggedPieceRef = useRef(null);
@@ -368,46 +353,56 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     draggedPieceRef.current = draggedPiece;
   }, [draggedPiece]);
 
-  // End drag - v7.7: Set pendingMove AFTER drop, allow partial overlap
+  // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
     const currentPiece = draggedPieceRef.current;
     console.log('[WeeklyChallenge] endDrag called:', { isDragging, draggedPiece: currentPiece });
     
-    // v7.7: Allow drop if at least one cell is valid (for rotation adjustment)
-    if (currentPiece && dragPreviewCell && hasValidCell) {
-      const coords = getPieceCoords(currentPiece, rotation, flipped);
-      
-      // Select piece first, then set pending move
-      selectPiece(currentPiece);
-      
-      // Set pending move after piece is selected
-      setTimeout(() => {
-        setPendingMove({
-          piece: currentPiece,
-          row: dragPreviewCell.row,
-          col: dragPreviewCell.col,
-          coords
-        });
-        console.log('[WeeklyChallenge] Drop with partial overlap allowed for:', currentPiece);
-      }, 10);
-      
-      soundManager.playPieceSelect();
-    } else {
-      // No valid cells - clear
-      if (setPendingMove) setPendingMove(null);
-      console.log('[WeeklyChallenge] Drop cancelled - no valid cells');
+    // Recompute validity based on current drag position
+    if (currentPiece && dragPosition && boardBoundsRef.current) {
+      const cell = calculateBoardCell(dragPosition.x, dragPosition.y);
+      if (cell) {
+        const coords = getPieceCoords(currentPiece, rotation, flipped);
+        const valid = canPlacePiece(board, cell.row, cell.col, coords);
+        
+        console.log('[WeeklyChallenge] endDrag computed:', { cell, valid, piece: currentPiece });
+        
+        if (valid) {
+          // Select piece first, then set pending move
+          selectPiece(currentPiece);
+          
+          // Set pending move after piece is selected
+          setTimeout(() => {
+            setPendingMove({
+              piece: currentPiece,
+              row: cell.row,
+              col: cell.col,
+              coords
+            });
+            console.log('[WeeklyChallenge] Valid drop, pending move set for:', currentPiece);
+          }, 10);
+          
+          soundManager.playPieceSelect();
+        } else {
+          // Invalid drop - clear
+          setPendingMove(null);
+          console.log('[WeeklyChallenge] Invalid drop position');
+        }
+      } else {
+        // Outside board - clear
+        setPendingMove(null);
+        console.log('[WeeklyChallenge] Drop outside board');
+      }
     }
     
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
-    setHasValidCell(false);
-    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [dragPreviewCell, hasValidCell, rotation, flipped, selectPiece, setPendingMove]);
+  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove]);
 
   // Create drag handlers for piece tray - FIXED WITH LOGGING
   const createDragHandlers = useCallback((piece) => {
@@ -832,14 +827,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Game in progress
   return (
     <div 
-      className="min-h-screen bg-slate-950"
+      className="bg-slate-950"
       style={{ 
+        minHeight: '100vh',
+        minHeight: '100dvh', // Dynamic viewport height for mobile
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
         overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom', // Allow zoom
-        minHeight: '100dvh', // Dynamic viewport height for mobile
+        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom'
       }}
     >
       {/* Background */}
@@ -848,7 +844,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         backgroundSize: '40px 40px'
       }} />
       
-      {/* Drag Overlay - v7.7: No board preview during drag */}
+      {/* Drag Overlay */}
       {isDragging && draggedPiece && (
         <DragOverlay
           piece={draggedPiece}
@@ -857,7 +853,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           position={dragPosition}
           offset={dragOffset}
           isValidDrop={isValidDrop}
-          hasValidCell={hasValidCell}
         />
       )}
       
@@ -1017,12 +1012,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             </div>
           )}
           
-          {/* Control Buttons - Above Piece Tray (no retry button) */}
-          <div className="flex gap-1 justify-center mb-2">
+          {/* Control Buttons - Above Piece Tray with Menu button */}
+          <div className="flex gap-1 justify-between mb-2 flex-wrap">
             {/* Menu Button - Goes to main game menu */}
             <button
               onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
-              className="px-3 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
             >
               <ArrowLeft size={12} />MENU
             </button>
@@ -1030,7 +1025,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             {/* Rotate Button */}
             <button
               onClick={rotatePiece}
-              className="px-3 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+              className="flex-1 px-1.5 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
               disabled={!selectedPiece && !pendingMove}
             >
               <RotateCcw size={12} />ROTATE
@@ -1039,34 +1034,19 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             {/* Flip Button */}
             <button
               onClick={flipPiece}
-              className="px-3 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
+              className="flex-1 px-1.5 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
               disabled={!selectedPiece && !pendingMove}
             >
               <FlipHorizontal size={12} />FLIP
             </button>
-          </div>
-          
-          {/* CONFIRM BUTTON - Prominent, always visible, above piece tray */}
-          <div className="flex gap-2 justify-center mb-2">
+            
+            {/* Retry Button */}
             <button
-              onClick={confirmMove}
-              disabled={!pendingMove || !(() => {
-                if (!pendingMove) return false;
-                const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-                return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
-              })()}
-              className="flex-1 max-w-xs px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-base flex items-center justify-center gap-2 font-black border-2 border-green-400/50 shadow-[0_0_25px_rgba(74,222,128,0.6),inset_0_1px_0_rgba(255,255,255,0.2)] disabled:opacity-30 disabled:shadow-none disabled:from-slate-600 disabled:to-slate-700 disabled:border-slate-500/30 transition-all duration-200 active:scale-95"
+              onClick={handleRestart}
+              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
             >
-              <CheckCircle size={20} />CONFIRM
+              <RotateCcw size={12} />RETRY
             </button>
-            {pendingMove && (
-              <button
-                onClick={cancelMove}
-                className="px-4 py-3 bg-slate-700/80 hover:bg-slate-600/80 text-slate-300 rounded-xl text-sm flex items-center justify-center gap-2 border border-slate-500/30"
-              >
-                <X size={16} />CANCEL
-              </button>
-            )}
           </div>
           
           {/* Piece Tray */}
@@ -1082,6 +1062,28 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             isDragging={isDragging}
             draggedPiece={draggedPiece}
           />
+          
+          {/* Confirm/Cancel Controls - Only show when there's a pending move */}
+          {pendingMove && (
+            <div className="flex gap-2 justify-center mt-2">
+              <button
+                onClick={confirmMove}
+                disabled={!pendingMove || !(() => {
+                  const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+                  return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+                })()}
+                className="flex-1 max-w-32 px-3 py-2 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)] disabled:opacity-30 disabled:shadow-none"
+              >
+                <CheckCircle size={14} />CONFIRM
+              </button>
+              <button
+                onClick={cancelMove}
+                className="flex-1 max-w-32 px-3 py-2 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              >
+                <X size={14} />CANCEL
+              </button>
+            </div>
+          )}
         </div>
         
         {/* Bottom padding for scroll */}
@@ -1112,6 +1114,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           onMenu={onMenu}
         />
       )}
+      
+      {/* v7.8: Scroll styles for small screens */}
+      <style>{`
+        /* Allow scroll pass-through on interactive elements */
+        button, [role="button"], input, textarea, select, a {
+          touch-action: manipulation;
+        }
+      `}</style>
     </div>
   );
 };

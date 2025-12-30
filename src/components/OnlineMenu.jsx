@@ -2232,9 +2232,16 @@ const OnlineMenu = ({
           boardPieces={selectedGameForFinalView.board_pieces}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          winnerId={selectedGameForFinalView.winner_id}
+          player1={selectedGameForFinalView.player1}
+          player2={selectedGameForFinalView.player2}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
           player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          player1Rating={selectedGameForFinalView.player1?.elo_rating || selectedGameForFinalView.player1_rating_before || 1200}
+          player2Rating={selectedGameForFinalView.player2?.elo_rating || selectedGameForFinalView.player2_rating_before || 1200}
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
+          moveHistory={selectedGameForFinalView.move_history || []}
+          gameDate={selectedGameForFinalView.created_at}
         />
       )}
       
@@ -2248,13 +2255,12 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
         
-        /* Scroll styles */
+        /* Scroll styles - v7.8: Fixed for small screens like iPhone mini */
         .scroll-page {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
+          /* CRITICAL: Don't use position:fixed - breaks iOS scroll */
+          min-height: 100vh;
+          min-height: 100dvh; /* Dynamic viewport height for mobile */
+          width: 100%;
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
@@ -2266,7 +2272,7 @@ const OnlineMenu = ({
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
-          overscroll-behavior: contain;
+          overscroll-behavior-y: contain;
           touch-action: pan-y;
           scrollbar-width: thin;
           scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
@@ -2306,6 +2312,11 @@ const OnlineMenu = ({
         .scroll-list::-webkit-scrollbar-thumb {
           background: rgba(100, 116, 139, 0.4);
           border-radius: 2px;
+        }
+        
+        /* CRITICAL: Allow scroll pass-through on interactive elements */
+        button, [role="button"], input, textarea, select, a {
+          touch-action: manipulation;
         }
       `}</style>
     </div>

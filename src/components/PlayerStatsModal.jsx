@@ -1,8 +1,9 @@
 // Player Stats Modal - Comprehensive stats display
-// FIXES:
+// v7.8 ENHANCEMENTS:
 // 1. Uses username priority (same as PlayerProfileCard)
 // 2. Enhanced tier-based theming
 // 3. Scroll behavior on mobile
+// 4. Weekly Challenge podium breakdown (1st, 2nd, 3rd place counts)
 
 import { useState, useEffect, useRef } from 'react';
 import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal } from 'lucide-react';
@@ -46,7 +47,9 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const [savingUsername, setSavingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [expandedSection, setExpandedSection] = useState('overview');
-  const [weeklyPodiums, setWeeklyPodiums] = useState(0); // Top 3 weekly finishes
+  // v7.8: Enhanced weekly challenge stats with podium breakdown
+  const [weeklyPodiums, setWeeklyPodiums] = useState(0); // Total top 3 finishes
+  const [weeklyStats, setWeeklyStats] = useState({ first: 0, second: 0, third: 0, total: 0 });
   const scrollContainerRef = useRef(null);
   
   // Get tier info for theming
@@ -80,14 +83,30 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       setStats(statsService.calculateDerivedStats(data));
     }
     
-    // Load weekly challenge podium count (top 3 finishes)
+    // v7.8: Load detailed weekly challenge podium stats (1st, 2nd, 3rd)
     if (profile?.id) {
       try {
-        console.log('[PlayerStatsModal] Loading weekly podium count for:', profile.id);
-        const result = await weeklyChallengeService.getUserPodiumCount(profile.id);
-        console.log('[PlayerStatsModal] Weekly podium result:', result);
-        if (result?.data !== null && result?.data !== undefined) {
-          setWeeklyPodiums(result.data);
+        console.log('[PlayerStatsModal] Loading weekly podium breakdown for:', profile.id);
+        
+        // Try to get detailed breakdown first
+        const detailedResult = await weeklyChallengeService.getUserPodiumBreakdown?.(profile.id);
+        if (detailedResult?.data) {
+          console.log('[PlayerStatsModal] Weekly podium breakdown:', detailedResult.data);
+          setWeeklyStats({
+            first: detailedResult.data.first || 0,
+            second: detailedResult.data.second || 0,
+            third: detailedResult.data.third || 0,
+            total: detailedResult.data.total || 0
+          });
+          setWeeklyPodiums(detailedResult.data.total || 0);
+        } else {
+          // Fallback to simple count
+          const result = await weeklyChallengeService.getUserPodiumCount(profile.id);
+          console.log('[PlayerStatsModal] Weekly podium result:', result);
+          if (result?.data !== null && result?.data !== undefined) {
+            setWeeklyPodiums(result.data);
+            setWeeklyStats({ first: 0, second: 0, third: 0, total: result.data });
+          }
         }
       } catch (err) {
         console.log('[PlayerStatsModal] Weekly podium count error:', err);
@@ -517,25 +536,52 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     </div>
                   </div>
                   
-                  {/* Weekly Challenge Stats */}
-                  {weeklyPodiums > 0 && (
-                    <div 
-                      className="p-3 rounded-lg"
-                      style={{ 
-                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
-                        border: '1px solid rgba(234, 179, 8, 0.3)'
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Medal size={14} className="text-amber-400" />
-                        <span className="text-slate-300 text-sm font-medium">Weekly Challenge</span>
-                      </div>
-                      <div className="text-sm">
-                        <span className="text-slate-500">Top 3 Finishes: </span>
-                        <span className="text-amber-400 font-bold">{weeklyPodiums}</span>
-                      </div>
+                  {/* Weekly Challenge Stats - v7.8: Enhanced with podium breakdown */}
+                  <div 
+                    className="p-3 rounded-lg"
+                    style={{ 
+                      backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                      border: '1px solid rgba(234, 179, 8, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <Medal size={14} className="text-amber-400" />
+                      <span className="text-slate-300 text-sm font-medium">Weekly Challenge</span>
                     </div>
-                  )}
+                    
+                    {weeklyPodiums > 0 ? (
+                      <div className="space-y-2">
+                        {/* Podium breakdown */}
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="text-center p-2 bg-amber-900/30 rounded-lg border border-amber-500/30">
+                            <div className="text-lg">🥇</div>
+                            <div className="text-amber-300 font-bold text-lg">{weeklyStats.first || 0}</div>
+                            <div className="text-slate-500 text-[10px]">1st Place</div>
+                          </div>
+                          <div className="text-center p-2 bg-slate-700/30 rounded-lg border border-slate-500/30">
+                            <div className="text-lg">🥈</div>
+                            <div className="text-slate-300 font-bold text-lg">{weeklyStats.second || 0}</div>
+                            <div className="text-slate-500 text-[10px]">2nd Place</div>
+                          </div>
+                          <div className="text-center p-2 bg-orange-900/30 rounded-lg border border-orange-500/30">
+                            <div className="text-lg">🥉</div>
+                            <div className="text-orange-300 font-bold text-lg">{weeklyStats.third || 0}</div>
+                            <div className="text-slate-500 text-[10px]">3rd Place</div>
+                          </div>
+                        </div>
+                        
+                        {/* Total podiums */}
+                        <div className="text-center text-sm">
+                          <span className="text-slate-500">Total Top 3 Finishes: </span>
+                          <span className="text-amber-400 font-bold">{weeklyPodiums}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500 text-center py-2">
+                        No top 3 finishes yet. Keep competing!
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Speed Puzzle Stats */}
                   <div 

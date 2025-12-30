@@ -510,16 +510,22 @@ const FinalBoardView = ({
                 </div>
               </div>
               
-              {/* Move info legend */}
+              {/* Move info legend - v7.8: Added Winning Move indicator */}
               {showingFinalWithNumbers && moveHistory.length > 0 && (
-                <div className="flex justify-center items-center gap-4 text-xs text-slate-500">
+                <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 text-xs text-slate-500">
                   <div className="flex items-center gap-1">
                     <span className="bg-black/50 text-white px-1.5 py-0.5 rounded text-[10px]">3</span>
                     <span>= Move #</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="bg-amber-500 text-amber-950 px-1.5 py-0.5 rounded text-[10px] font-bold animate-pulse">{moveHistory.length}</span>
-                    <span>= Last move</span>
+                    <div 
+                      className="w-4 h-4 rounded border-2 border-amber-400"
+                      style={{ 
+                        boxShadow: '0 0 8px rgba(251, 191, 36, 0.6), inset 0 0 4px rgba(251, 191, 36, 0.3)',
+                        background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.1))'
+                      }}
+                    />
+                    <span className="text-amber-400 font-medium">= Winning Move</span>
                   </div>
                 </div>
               )}

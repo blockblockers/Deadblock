@@ -2,10 +2,9 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
-// PATCHED: Clockwise rotation, always scroll, removed header menu, orange forfeit
-// v7.7: Added onBackToMenu to RematchModal for navigation while keeping request active
+// v7.8: Added HowToPlay tutorial for new users joining via invite
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle } from 'lucide-react';
+import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -24,6 +23,7 @@ import HeadToHead from './HeadToHead';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
 import TierIcon from './TierIcon';
 import PlacementAnimation, { usePlacementAnimation } from './PlacementAnimation';
+import HowToPlayModal from './HowToPlayModal';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
@@ -144,9 +144,18 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
   );
 };
 
-const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
+const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = false, onTutorialClose }) => {
   const { user, profile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
+  
+  // v7.8: State for showing tutorial modal
+  const [showHowToPlay, setShowHowToPlay] = useState(showTutorial);
+  
+  // v7.8: Handle tutorial close and notify parent
+  const handleTutorialClose = useCallback(() => {
+    setShowHowToPlay(false);
+    onTutorialClose?.();
+  }, [onTutorialClose]);
   
   // Track the current game (can change on rematch)
   const [currentGameId, setCurrentGameId] = useState(gameId);
@@ -193,10 +202,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
-  // v7.7: Track preview cell separately without updating board preview
-  const [dragPreviewCell, setDragPreviewCell] = useState(null);
-  // v7.7: Track if at least one cell can be placed (for partial overlap drops)
-  const [hasValidCell, setHasValidCell] = useState(false);
   
   // Refs
   const boardRef = useRef(null);
@@ -226,11 +231,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
-    // v7.7 FIX: Account for the visual offset of the floating piece (40px up from touch)
-    const visualY = clientY - 40;
-    
     const relX = clientX - left;
-    const relY = visualY - top;
+    const relY = clientY - top;
     
     if (relX < 0 || relX > width || relY < 0 || relY > height) {
       return null;
@@ -308,55 +310,28 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
-      // v7.7: Track preview cell WITHOUT updating board preview during drag
-      setDragPreviewCell(cell);
-      
-      // Check validity
+      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const perfectValid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(perfectValid);
-      
-      // v7.7: Check if at least one cell can be placed (for rotation adjustment)
-      let validCellCount = 0;
-      coords.forEach(([dx, dy]) => {
-        const cellRow = cell.row + dy;
-        const cellCol = cell.col + dx;
-        if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-          const existing = board[cellRow]?.[cellCol];
-          if (existing === null || existing === 0 || existing === undefined) {
-            validCellCount++;
-          }
-        }
-      });
-      setHasValidCell(validCellCount > 0);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
     } else {
       setIsValidDrop(false);
-      setHasValidCell(false);
-      setDragPreviewCell(null);
     }
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   const endDrag = useCallback(() => {
     if (!isDragging) return;
     
-    // v7.7: Set pending move AFTER dropping (not during drag)
-    // Allow drop if at least one cell is valid (for rotation adjustment)
-    if (dragPreviewCell && hasValidCell && draggedPiece) {
-      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
-    }
-    
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
-    setHasValidCell(false);
-    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, dragPreviewCell, hasValidCell, draggedPiece]);
+  }, [isDragging]);
 
   const createDragHandlers = useCallback((piece) => {
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) {
@@ -867,10 +842,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     soundManager.playClickSound('neutral');
   }, [pendingMove]);
 
-  // PATCHED: Clockwise rotation (was counterclockwise)
   const handleRotate = useCallback(() => {
     if (!selectedPiece) return;
-    setRotation((r) => (r + 3) % 4);
+    setRotation((r) => (r + 1) % 4);
     soundManager.playPieceRotate();
   }, [selectedPiece]);
 
@@ -1148,7 +1122,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
           <button onClick={handleLeave} className="px-6 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">
-            MENU
+            Game Menu
           </button>
         </div>
       </div>
@@ -1157,14 +1131,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 overflow-x-hidden"
+      className="bg-slate-950"
       style={{ 
-        // PATCHED: Always enable scrolling on all devices with zoom support
-        overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom', // Allow zoom
+        minHeight: '100vh',
         minHeight: '100dvh', // Dynamic viewport height for mobile
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom',
+        overscrollBehavior: 'contain',
       }}
     >
       {/* Background effects */}
@@ -1178,7 +1153,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       {/* Floating pieces background animation - amber/online theme */}
       <FloatingPiecesBackground colorPreset="online" />
 
-      {/* Drag Overlay - v7.7: No board preview during drag */}
+      {/* Drag Overlay */}
       {isDragging && draggedPiece && (
         <DragOverlay
           piece={draggedPiece}
@@ -1187,18 +1162,22 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           position={dragPosition}
           offset={dragOffset}
           isValidDrop={isValidDrop}
-          hasValidCell={hasValidCell}
         />
       )}
 
       {/* Main content */}
-      <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
-        <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
+      <div className="relative z-10 min-h-screen">
+        <div className="max-w-lg mx-auto p-2 sm:p-4">
           
-          {/* PATCHED: Header - REMOVED duplicate menu button, kept only title and timer */}
+          {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
           <div className="flex items-center justify-between mb-2">
-            {/* Empty spacer for balance */}
-            <div className="w-16" />
+            <button
+              onClick={handleLeave}
+              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
+            >
+              <ArrowLeft size={16} />
+              Menu
+            </button>
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
@@ -1246,12 +1225,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   currentPlayer={myPlayerNumber}
                   onCellClick={handleCellClick}
                   onPendingPieceDragStart={handleBoardDragStart}
-                  // v7.7: Pass drag preview info for highlighting during drag
-                  isDragging={isDragging}
-                  dragPreviewCell={dragPreviewCell}
-                  draggedPiece={draggedPiece}
-                  dragRotation={rotation}
-                  dragFlipped={flipped}
                 />
                 {/* Placement Animation Overlay */}
                 {placementAnimation && (
@@ -1376,7 +1349,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="red"
                 className="flex-1"
               >
-                MENU
+                Menu
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleRotate}
@@ -1384,7 +1357,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="cyan"
                 className="flex-1"
               >
-                ROTATE
+                Rotate
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleFlip}
@@ -1392,13 +1365,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="purple"
                 className="flex-1"
               >
-                FLIP
+                Flip
               </GlowOrbButton>
               {game?.status === 'active' && (
-                // PATCHED: Changed from slate to amber for orange forfeit button
                 <GlowOrbButton
                   onClick={handleQuitOrForfeit}
-                  color="amber"
+                  color="slate"
                   className="flex items-center gap-1 justify-center flex-1"
                 >
                   <Flag size={14} />
@@ -1415,7 +1387,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   color="slate"
                   className="flex-1"
                 >
-                  CANCEL
+                  Cancel
                 </GlowOrbButton>
                 <GlowOrbButton
                   onClick={handleConfirm}
@@ -1423,7 +1395,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   color="green"
                   className="flex-1"
                 >
-                  CONFIRM
+                  Confirm
                 </GlowOrbButton>
               </div>
             )}
@@ -1661,17 +1633,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             setShowRematchModal(false);
           }
         }}
-        // NEW v7.7: Navigate to menu while keeping rematch request active
-        onBackToMenu={() => {
-          setShowRematchModal(false);
-          setShowGameOver(false);
-          // Navigate to menu - rematch request stays active in database
-          if (typeof onLeave === 'function') {
-            onLeave();
-          } else {
-            window.location.href = window.location.origin;
-          }
-        }}
         isRequester={isRematchRequester}
         requesterName={isRematchRequester ? 'You' : (opponent?.display_name || opponent?.username || 'Opponent')}
         isWaiting={rematchWaiting}
@@ -1684,6 +1645,25 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`
         ) : null}
       />
+      
+      {/* v7.8: How to Play tutorial for new users */}
+      <HowToPlayModal 
+        isOpen={showHowToPlay} 
+        onClose={handleTutorialClose} 
+      />
+      
+      {/* v7.8: Scroll styles for small screens */}
+      <style>{`
+        /* Allow scroll pass-through on interactive elements */
+        button, [role="button"], input, textarea, select, a {
+          touch-action: manipulation;
+        }
+        
+        /* Bottom spacing for safe area */
+        .safe-bottom {
+          padding-bottom: max(16px, env(safe-area-inset-bottom));
+        }
+      `}</style>
     </div>
   );
 };

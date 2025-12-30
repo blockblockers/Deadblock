@@ -1,7 +1,5 @@
 // useGameState.js - Custom hook for managing local game state
 // CRITICAL: This hook must export startNewGame, setGameMode, and all other functions App.jsx needs
-// PATCHED: Clockwise rotation (r + 3) % 4 instead of (r + 1) % 4
-// ENHANCED: AI move animation with longer duration, sound effects, and phase indicator
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   createEmptyBoard, 
@@ -71,11 +69,10 @@ export const useGameState = () => {
     soundManager.playPieceSelect();
   }, [usedPieces, gameOver]);
 
-  // Rotate the selected piece - PATCHED: Now rotates CLOCKWISE
+  // Rotate the selected piece
   const rotatePiece = useCallback(() => {
     if (!selectedPiece && !pendingMove) return;
-    // PATCHED: Changed from (r + 1) % 4 to (r + 3) % 4 for clockwise rotation
-    setRotation(r => (r + 3) % 4);
+    setRotation(r => (r + 1) % 4);
     soundManager.playPieceRotate();
   }, [selectedPiece, pendingMove]);
 
@@ -172,15 +169,31 @@ export const useGameState = () => {
       setRotation(0);
       setFlipped(false);
       setPendingMove(null);
-      setPlayerAnimatingMove(null);
       
       // Check for game over
       const newUsedPieces = [...usedPieces, pendingMove.piece];
       if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
-        setGameOver(true);
-        setWinner(currentPlayer);
+        // v7.8: Player wins - keep animation showing for longer with winning flag
+        setPlayerAnimatingMove({
+          piece: pendingMove.piece,
+          row: pendingMove.row,
+          col: pendingMove.col,
+          rotation,
+          flipped,
+          isWinning: true, // Mark as winning move for special animation
+        });
+        
+        // Play win sound
         soundManager.playWin();
+        
+        // Wait for winning animation before setting game over
+        setTimeout(() => {
+          setPlayerAnimatingMove(null);
+          setGameOver(true);
+          setWinner(currentPlayer);
+        }, 1200); // Longer delay for winning animation
       } else {
+        setPlayerAnimatingMove(null);
         setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
       }
     }, 200);
@@ -195,15 +208,14 @@ export const useGameState = () => {
     soundManager.playCancel();
   }, []);
 
-  // AI Move logic - ENHANCED with visual drag animation from tray to board
-  // The animation has two phases: 'dragging' (visual flight) and 'placing' (board glow)
+  // AI Move logic
   const makeAIMove = useCallback(async () => {
     if (gameOver || currentPlayer !== 2) return;
     if (gameMode !== 'ai' && gameMode !== 'puzzle') return;
     
     setIsAIThinking(true);
     
-    // Add delay for realistic gameplay (thinking time)
+    // Add delay for realistic gameplay
     await new Promise(resolve => setTimeout(resolve, AI_MOVE_DELAY));
     
     try {
@@ -218,38 +230,16 @@ export const useGameState = () => {
         return;
       }
       
-      // ENHANCED: Play piece select sound when AI "picks up" piece
-      soundManager.playPieceSelect();
-      
-      // Phase 1: DRAGGING - Show piece flying from tray to board
-      // The AIDragAnimation component will render when phase is 'dragging'
+      // Animate AI move
       setAiAnimatingMove({
         piece: move.pieceType,
         row: move.row,
         col: move.col,
         rotation: move.rot,
         flipped: move.flip,
-        phase: 'dragging', // AIDragAnimation renders during this phase
       });
       
-      // Wait for drag animation (component will take ~800ms)
-      await new Promise(resolve => setTimeout(resolve, 850));
-      
-      // Phase 2: PLACING - Show piece glowing on board
-      setAiAnimatingMove({
-        piece: move.pieceType,
-        row: move.row,
-        col: move.col,
-        rotation: move.rot,
-        flipped: move.flip,
-        phase: 'placing', // GameBoard shows glow effect during this phase
-      });
-      
-      // Brief delay for placement glow effect
       await new Promise(resolve => setTimeout(resolve, 400));
-      
-      // Play placement sound
-      soundManager.playConfirm();
       
       // Place the piece
       const coords = getPieceCoords(move.pieceType, move.rot, move.flip);
@@ -266,15 +256,30 @@ export const useGameState = () => {
       setBoard(newBoard);
       setBoardPieces(newBoardPieces);
       setUsedPieces(prev => [...prev, move.pieceType]);
-      setAiAnimatingMove(null);
       
       // Check for game over
       const newUsedPieces = [...usedPieces, move.pieceType];
       if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
+        // v7.8: AI wins - keep animation showing for longer, then trigger game over
+        // Keep the winning piece highlighted
+        setAiAnimatingMove({
+          piece: move.pieceType,
+          row: move.row,
+          col: move.col,
+          rotation: move.rot,
+          flipped: move.flip,
+          isWinning: true, // Mark as winning move for special animation
+        });
+        
+        // Wait for winning animation to play before showing game over
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        
+        setAiAnimatingMove(null);
         setGameOver(true);
         setWinner(2);
         soundManager.playLose();
       } else {
+        setAiAnimatingMove(null);
         setCurrentPlayer(1);
       }
     } catch (err) {

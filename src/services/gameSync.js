@@ -3,7 +3,6 @@
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
 // - Subscription handler properly validates callbacks
-// - updatePlayerStats now includes ELO rating update via direct fetch
 import { supabase } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
@@ -321,132 +320,44 @@ class GameSyncService {
     }
   }
 
-  // =====================================================
-  // FIXED: Update player statistics after game ends
-  // Now includes ELO rating update via direct fetch RPC
-  // =====================================================
+  // Update player statistics after game ends
   async updatePlayerStats(gameId, winnerId) {
-    const headers = getAuthHeaders();
-    if (!headers) {
-      console.error('gameSync.updatePlayerStats: No auth headers');
-      return;
-    }
+    if (!supabase) return;
 
     try {
       const { data: game } = await this.getGame(gameId);
-      if (!game) {
-        console.error('gameSync.updatePlayerStats: Game not found');
-        return;
-      }
+      if (!game) return;
 
       const player1Id = game.player1_id;
       const player2Id = game.player2_id;
       const loserId = winnerId === player1Id ? player2Id : player1Id;
 
-      console.log('gameSync.updatePlayerStats: Updating stats for winner:', winnerId, 'loser:', loserId);
+      // Get current stats
+      const headers = getAuthHeaders();
+      if (!headers) return;
 
-      // Update winner stats using direct fetch RPC
-      try {
-        const winnerResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/increment_wins`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ p_user_id: winnerId })
-          }
-        );
-        
-        if (!winnerResponse.ok) {
-          console.warn('gameSync.updatePlayerStats: increment_wins failed:', await winnerResponse.text());
-        } else {
-          console.log('gameSync.updatePlayerStats: Winner wins incremented');
+      // Update winner stats
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/rpc/increment_wins`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ p_user_id: winnerId })
         }
-      } catch (e) {
-        console.error('gameSync.updatePlayerStats: Error incrementing winner wins:', e);
-      }
+      ).catch(() => {});
 
-      // Update loser stats using direct fetch RPC
-      try {
-        const loserResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/increment_losses`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ p_user_id: loserId })
-          }
-        );
-        
-        if (!loserResponse.ok) {
-          console.warn('gameSync.updatePlayerStats: increment_losses failed:', await loserResponse.text());
-        } else {
-          console.log('gameSync.updatePlayerStats: Loser losses incremented');
+      // Update loser stats
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/rpc/increment_losses`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ p_user_id: loserId })
         }
-      } catch (e) {
-        console.error('gameSync.updatePlayerStats: Error incrementing loser losses:', e);
-      }
-
-      // =====================================================
-      // NEW: Update ELO ratings using direct fetch RPC
-      // This is the key fix for ELO not updating!
-      // =====================================================
-      try {
-        console.log('gameSync.updatePlayerStats: Calling update_ratings_after_game RPC...');
-        const ratingResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/update_ratings_after_game`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              p_game_id: gameId,
-              p_winner_id: winnerId
-            })
-          }
-        );
-        
-        if (!ratingResponse.ok) {
-          const errorText = await ratingResponse.text();
-          console.error('gameSync.updatePlayerStats: ELO update failed:', ratingResponse.status, errorText);
-        } else {
-          console.log('gameSync.updatePlayerStats: ELO ratings updated successfully!');
-        }
-      } catch (e) {
-        console.error('gameSync.updatePlayerStats: Error updating ELO:', e);
-      }
-
-      // Check achievements for both players
-      try {
-        await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/check_achievements`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              p_user_id: winnerId,
-              p_game_id: gameId
-            })
-          }
-        );
-        
-        await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/check_achievements`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-              p_user_id: loserId,
-              p_game_id: gameId
-            })
-          }
-        );
-        console.log('gameSync.updatePlayerStats: Achievements checked');
-      } catch (e) {
-        console.error('gameSync.updatePlayerStats: Error checking achievements:', e);
-      }
-      
-      console.log('gameSync.updatePlayerStats: All updates completed');
+      ).catch(() => {});
 
     } catch (e) {
-      console.error('gameSync.updatePlayerStats: Exception:', e.message);
+      console.error('gameSync.updatePlayerStats: Error:', e.message);
     }
   }
 
@@ -483,7 +394,7 @@ class GameSyncService {
       if (opponentIds.length > 0) {
         const uniqueIds = [...new Set(opponentIds)];
         const profilesResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating`,
+          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating,elo_rating`,
           { headers }
         );
 
@@ -546,7 +457,7 @@ class GameSyncService {
       if (allPlayerIds.size > 0) {
         const uniqueIds = [...allPlayerIds];
         const profilesResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating`,
+          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating,elo_rating`,
           { headers }
         );
 
