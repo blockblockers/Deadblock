@@ -914,9 +914,7 @@ const OnlineMenu = ({
   const hasMyTurnGames = activeGames?.some(game => game && gameSyncService.isPlayerTurn(game, profile?.id)) || false;
 
   return (
-    <div 
-      className="scroll-page bg-slate-950"
-    >
+    <div className="scroll-page bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -951,7 +949,7 @@ const OnlineMenu = ({
           minHeight: '100%',
           paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
           paddingTop: 'max(24px, env(safe-area-inset-top))',
-          touchAction: 'pan-y pinch-zoom',
+          /* v7.9: Removed touch-action - let it inherit from scroll-page */
         }}
       >
         <div className="w-full max-w-md">
@@ -2256,25 +2254,12 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
         
-        /* Scroll styles - v7.8: Fixed for small screens like iPhone mini */
-        .scroll-page {
-          /* CRITICAL: Don't use position:fixed - breaks iOS scroll */
-          min-height: 100vh;
-          min-height: 100dvh; /* Dynamic viewport height for mobile */
-          width: 100%;
-          overflow-y: auto;
-          overflow-x: hidden;
-          -webkit-overflow-scrolling: touch;
-          overscroll-behavior: contain;
-          touch-action: pan-y pinch-zoom;
-        }
-        
+        /* v7.9: Scrollable modals and lists */
         .scroll-modal {
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
           overscroll-behavior-y: contain;
-          touch-action: pan-y;
           scrollbar-width: thin;
           scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
         }
@@ -2297,7 +2282,6 @@ const OnlineMenu = ({
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
           overscroll-behavior-y: contain;
-          touch-action: pan-y;
           scrollbar-width: thin;
           scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
         }
@@ -2313,11 +2297,6 @@ const OnlineMenu = ({
         .scroll-list::-webkit-scrollbar-thumb {
           background: rgba(100, 116, 139, 0.4);
           border-radius: 2px;
-        }
-        
-        /* CRITICAL: Allow scroll pass-through on interactive elements */
-        button, [role="button"], input, textarea, select, a {
-          touch-action: manipulation;
         }
       `}</style>
     </div>

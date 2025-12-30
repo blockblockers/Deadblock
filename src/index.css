@@ -1,6 +1,6 @@
 /* =============================================================================
    DEADBLOCK - Global Styles
-   UPDATED: Enhanced scroll handling for all devices (iOS, Android, Desktop)
+   v7.9: FIXED scroll handling - removed conflicting position:fixed rules
    ============================================================================= */
 
 /* Base Tailwind imports */
@@ -10,7 +10,10 @@
 
 /* =============================================================================
    ROOT & BODY STYLES - Scroll Foundation
-   v7.8: CRITICAL FIX - Allow scrolling by removing position:fixed and overflow:hidden
+   v7.9: CRITICAL - Body and #root must allow content to scroll!
+   
+   THE FIX: Removed the duplicate body/root styles that were setting
+   position:fixed and overflow:hidden, which blocked all scrolling.
    ============================================================================= */
 
 * {
@@ -25,6 +28,9 @@ html, body {
   /* Allow vertical scroll, prevent horizontal */
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+  /* v7.9: Allow scroll behavior */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 html {
@@ -38,24 +44,26 @@ body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #0f172a;
   color: white;
-  /* v7.8: REMOVED position:fixed and overflow:hidden - these block scrolling! */
-  /* Allow body to scroll naturally */
+  /* v7.9: Use min-height, NOT position:fixed + overflow:hidden */
   min-height: 100vh;
   min-height: 100dvh; /* Dynamic viewport height for mobile */
+  /* Hardware acceleration for smooth scrolling */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
 }
 
 #root {
   width: 100%;
-  /* v7.8: Use min-height instead of height to allow content growth */
+  /* v7.9: Use min-height to allow content growth and scrolling */
   min-height: 100vh;
   min-height: 100dvh;
-  /* Allow scroll */
+  /* Allow vertical scroll */
   overflow-x: hidden;
 }
 
 /* =============================================================================
    INTERACTIVE ELEMENTS - SCROLL PASS-THROUGH
-   v7.8: CRITICAL - Allow scroll to work over buttons, inputs, links, etc.
+   v7.9: Allow scroll to work over buttons, inputs, links, etc.
    ============================================================================= */
 
 /* All interactive elements use 'manipulation' which allows:
@@ -90,7 +98,7 @@ body.is-dragging * {
 }
 
 /* =============================================================================
-   SCROLL CONTAINER UTILITIES - UPDATED for all devices
+   SCROLL CONTAINER UTILITIES
    ============================================================================= */
 
 /* Primary vertical scroll (menus, lists, pages) */
@@ -103,7 +111,7 @@ body.is-dragging * {
   scroll-behavior: smooth;
 }
 
-/* UPDATED: Enhanced scroll container for iOS/Android/Desktop compatibility */
+/* Enhanced scroll container for iOS/Android/Desktop compatibility */
 .scroll-container {
   overflow-y: auto;
   overflow-x: hidden;
@@ -116,7 +124,7 @@ body.is-dragging * {
   transform: translateZ(0);
 }
 
-/* UPDATED: Fix for scroll-back issues on all devices */
+/* Fix for scroll-back issues on all devices */
 .scroll-fix {
   overflow-y: auto;
   overflow-x: hidden;
@@ -128,6 +136,16 @@ body.is-dragging * {
   transform: translate3d(0, 0, 0);
   /* Prevent stuck scrolling */
   will-change: scroll-position;
+}
+
+/* v7.9: Full-page scroll container (for OnlineMenu, UserProfile, etc.) */
+.scroll-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Horizontal scroll (piece trays, carousels) */
@@ -154,7 +172,7 @@ body.is-dragging * {
 }
 
 /* =============================================================================
-   iOS/IPAD SPECIFIC FIXES - UPDATED
+   iOS/IPAD SPECIFIC FIXES
    ============================================================================= */
 
 @supports (-webkit-touch-callout: none) {
@@ -165,23 +183,24 @@ body.is-dragging * {
     transform: translateZ(0);
   }
   
-  /* Prevent rubber-banding on body */
+  /* Hardware acceleration for body on iOS */
   body {
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
   }
   
-  /* UPDATED: Fix iOS scroll-back issues */
+  /* Fix iOS scroll-back issues */
   .scroll-container,
   .scroll-fix,
-  .scroll-y {
+  .scroll-y,
+  .scroll-page {
     /* Enable smooth scrolling on iOS */
     -webkit-overflow-scrolling: touch;
     /* Prevent scroll momentum causing stuck scroll */
     scroll-behavior: auto;
   }
   
-  /* UPDATED: Fix for stuck scroll on iOS after direction change */
+  /* Fix for stuck scroll on iOS after direction change */
   .ios-scroll-fix {
     -webkit-overflow-scrolling: touch;
     transform: translate3d(0, 0, 0);
@@ -190,7 +209,7 @@ body.is-dragging * {
   }
 }
 
-/* UPDATED: Android-specific scroll fixes */
+/* Android-specific scroll fixes */
 @supports not (-webkit-touch-callout: none) {
   .scroll-container,
   .scroll-fix {
@@ -415,35 +434,9 @@ body.is-dragging * {
   }
 }
 
-/* =====================================================
-   GLOBAL SCROLL AND PADDING IMPROVEMENTS
-   Add this to your main CSS file (e.g., index.css or App.css)
-   
-   These styles improve scrolling on all screens, especially
-   for small devices like iPhone mini.
-   ===================================================== */
-
-/* Root HTML/Body scroll behavior */
-html, body {
-  overscroll-behavior: contain;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Prevent body scrolling issues on iOS */
-body {
-  position: fixed;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* App container should handle scrolling */
-#root {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-}
+/* =============================================================================
+   SAFE AREA AND PADDING UTILITIES
+   ============================================================================= */
 
 /* Safe area insets for notched devices */
 .safe-area-padding {
@@ -460,7 +453,7 @@ body {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
-  height: 100%;
+  min-height: 100%;
   width: 100%;
 }
 
@@ -484,6 +477,10 @@ body {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* =============================================================================
+   RESPONSIVE BREAKPOINTS
+   ============================================================================= */
 
 /* Minimal padding for small screens */
 @media (max-width: 375px) {
@@ -515,28 +512,10 @@ body {
   .compact-gap {
     gap: 6px !important;
   }
-  
-  /* v7.8: Force scrolling on very small screens */
-  body, #root {
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
 }
 
-/* v7.8: iPhone mini and other small screens - ensure scroll works */
+/* v7.9: Small height screens - ensure scroll works */
 @media (max-height: 700px) {
-  /* Force scroll on small height devices */
-  html, body {
-    height: auto;
-    min-height: 100%;
-    overflow-y: auto;
-  }
-  
-  #root {
-    height: auto;
-    min-height: 100%;
-  }
-  
   /* Add extra bottom padding for navigation */
   .scroll-container,
   .scroll-page,

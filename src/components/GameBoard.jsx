@@ -48,11 +48,12 @@ const GameBoard = forwardRef(({
   const safeBoardPieces = boardPieces || {};
   
   // Breathing glow effect with random timing per cell
+  // v7.9: Edge-only glow using piece colors (no white flash inside)
   const [glowTimings, setGlowTimings] = useState({});
   
   useEffect(() => {
     // Generate random timing for breathing glow effect on each cell
-    // v7.8: Each piece glows up and down at its own rhythm
+    // v7.9: Each piece glows up and down at its own rhythm
     // - Random delay ensures pieces don't pulse in sync
     // - Duration controls how long each breath takes (one direction)
     // - With 'alternate', a 12s duration = 12s up + 12s down = 24s full cycle
@@ -64,9 +65,9 @@ const GameBoard = forwardRef(({
           timings[`${row},${col}`] = {
             // Wide random delay so pieces glow at different times (0-30 seconds)
             delay: Math.random() * 30,
-            // Duration for one direction of breathing (6-10 seconds)
-            // Full cycle will be 12-20 seconds (up + down)
-            duration: 6 + Math.random() * 4,
+            // Duration for one direction of breathing (8-14 seconds for slower effect)
+            // Full cycle will be 16-28 seconds (up + down)
+            duration: 8 + Math.random() * 6,
           };
         }
       }
@@ -291,18 +292,21 @@ const GameBoard = forwardRef(({
                   userSelect: 'none'
                 } : undefined}
               >
-                {/* Base shine layer for occupied cells - always visible */}
+                {/* Base shine layer for occupied cells - subtle highlight */}
                 {isOccupied && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/20 pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/15 pointer-events-none" />
                 )}
                 
-                {/* Breathing glow effect - intensity pulses slowly, each piece at random timing */}
+                {/* v7.9: Breathing edge glow effect - slow pulse on edges using piece's own color */}
                 {isOccupied && glowTiming && (
                   <div 
-                    className="absolute inset-0 rolling-glow pointer-events-none rounded-md"
+                    className={`absolute inset-0 pointer-events-none rounded-md ${
+                      cellValue === 1 ? 'breathing-glow-cyan' : 
+                      gameMode === '2player' ? 'breathing-glow-pink' : 'breathing-glow-orange'
+                    }`}
                     style={{ 
                       animationDelay: `-${glowTiming.delay}s`,
-                      animationDuration: `${glowTiming.duration}s`
+                      animationDuration: `${glowTiming.duration}s`,
                     }}
                   />
                 )}
@@ -313,13 +317,13 @@ const GameBoard = forwardRef(({
                     {/* Base color */}
                     <div className={`absolute inset-0 ${pendingPieceColor} rounded-md`} />
                     
-                    {/* Shine overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/20 rounded-md" />
+                    {/* Subtle highlight overlay - reduced white */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/15 rounded-md" />
                     
                     {/* Subtle pulse glow */}
                     <div className={`absolute inset-0 pending-glow ${isPendingValid ? 'valid' : 'invalid'} rounded-md`} />
                     
-                    {/* Rolling shine effect - slow and elegant */}
+                    {/* Rolling edge glow effect - slow and elegant */}
                     <div className="absolute inset-0 pending-shine rounded-md overflow-hidden" />
                   </>
                 )}
@@ -360,8 +364,8 @@ const GameBoard = forwardRef(({
                       className={`absolute inset-0 ${dragPreviewPieceColor} rounded-md opacity-60`}
                     />
                     
-                    {/* Shine overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/15 rounded-md" />
+                    {/* Subtle highlight overlay - reduced */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/10 rounded-md" />
                     
                     {/* Validity border */}
                     <div 
@@ -470,16 +474,17 @@ const GameBoard = forwardRef(({
         }
         
         .pending-shine {
+          /* v7.9: Subtle edge glow sweep instead of white flash */
           background: linear-gradient(
             120deg,
             transparent 0%,
             transparent 40%,
-            rgba(255, 255, 255, 0.3) 50%,
+            rgba(34, 211, 238, 0.2) 50%,
             transparent 60%,
             transparent 100%
           );
           background-size: 200% 100%;
-          animation: pending-shine-roll 4s ease-in-out infinite;
+          animation: pending-shine-roll 5s ease-in-out infinite;
         }
         
         @keyframes pending-shine-roll {
@@ -551,13 +556,31 @@ const GameBoard = forwardRef(({
         }
         
         .ai-drop-effect {
-          background: radial-gradient(circle, rgba(168, 85, 247, 0.6) 0%, transparent 70%);
-          animation: ai-drop 0.5s ease-out;
+          /* v7.9: Edge glow animation instead of radial flash */
+          animation: ai-drop-glow 0.6s ease-out;
         }
         
-        @keyframes ai-drop {
-          0% { transform: scale(1.5); opacity: 0; }
-          100% { transform: scale(1); opacity: 1; }
+        @keyframes ai-drop-glow {
+          0% { 
+            opacity: 0;
+            box-shadow: 
+              0 0 20px rgba(168, 85, 247, 0.9),
+              0 0 40px rgba(168, 85, 247, 0.6),
+              0 0 60px rgba(168, 85, 247, 0.3);
+          }
+          50% {
+            opacity: 1;
+            box-shadow: 
+              0 0 25px rgba(168, 85, 247, 0.8),
+              0 0 50px rgba(168, 85, 247, 0.5),
+              0 0 75px rgba(168, 85, 247, 0.25);
+          }
+          100% { 
+            opacity: 1;
+            box-shadow: 
+              0 0 6px rgba(168, 85, 247, 0.3),
+              0 0 12px rgba(168, 85, 247, 0.15);
+          }
         }
         
         /* ============================================
@@ -597,13 +620,31 @@ const GameBoard = forwardRef(({
         }
         
         .player-drop-effect {
-          background: radial-gradient(circle, rgba(34, 211, 238, 0.6) 0%, transparent 70%);
-          animation: player-drop 0.5s ease-out;
+          /* v7.9: Edge glow animation instead of radial flash */
+          animation: player-drop-glow 0.6s ease-out;
         }
         
-        @keyframes player-drop {
-          0% { transform: scale(1.5); opacity: 0; }
-          100% { transform: scale(1); opacity: 1; }
+        @keyframes player-drop-glow {
+          0% { 
+            opacity: 0;
+            box-shadow: 
+              0 0 20px rgba(34, 211, 238, 0.9),
+              0 0 40px rgba(34, 211, 238, 0.6),
+              0 0 60px rgba(34, 211, 238, 0.3);
+          }
+          50% {
+            opacity: 1;
+            box-shadow: 
+              0 0 25px rgba(34, 211, 238, 0.8),
+              0 0 50px rgba(34, 211, 238, 0.5),
+              0 0 75px rgba(34, 211, 238, 0.25);
+          }
+          100% { 
+            opacity: 1;
+            box-shadow: 
+              0 0 6px rgba(34, 211, 238, 0.3),
+              0 0 12px rgba(34, 211, 238, 0.15);
+          }
         }
         
         /* ============================================
@@ -651,29 +692,66 @@ const GameBoard = forwardRef(({
         
         /* ============================================
            PLACED PIECE AMBIENT EFFECTS
-           v7.8: Breathing glow - intensity pulses up and down
+           v7.9: Breathing edge glow - similar to NeonTitle effect
+           - Edge-only glow using box-shadow (no white flash inside)
+           - Uses piece's own color (cyan/orange/pink)
+           - Slow, random timing so pieces don't glow in sync
            ============================================ */
         
-        /* Breathing glow - overall piece glow that intensifies and fades */
-        .rolling-glow {
-          background: radial-gradient(
-            ellipse at center,
-            rgba(255, 255, 255, 0.25) 0%,
-            rgba(255, 255, 255, 0.15) 30%,
-            rgba(255, 255, 255, 0.05) 60%,
-            transparent 100%
-          );
-          animation: breathing-glow ease-in-out infinite alternate;
+        /* Cyan breathing glow (Player 1) */
+        .breathing-glow-cyan {
+          animation: breathing-cyan ease-in-out infinite alternate;
         }
         
-        @keyframes breathing-glow {
+        @keyframes breathing-cyan {
           0% { 
-            opacity: 0;
-            transform: scale(0.95);
+            box-shadow: 
+              0 0 3px rgba(34, 211, 238, 0.2),
+              0 0 6px rgba(34, 211, 238, 0.1);
           }
           100% { 
-            opacity: 1;
-            transform: scale(1.02);
+            box-shadow: 
+              0 0 8px rgba(34, 211, 238, 0.5),
+              0 0 16px rgba(34, 211, 238, 0.3),
+              0 0 24px rgba(34, 211, 238, 0.15);
+          }
+        }
+        
+        /* Orange breathing glow (AI / Player 2 in AI mode) */
+        .breathing-glow-orange {
+          animation: breathing-orange ease-in-out infinite alternate;
+        }
+        
+        @keyframes breathing-orange {
+          0% { 
+            box-shadow: 
+              0 0 3px rgba(251, 146, 60, 0.2),
+              0 0 6px rgba(251, 146, 60, 0.1);
+          }
+          100% { 
+            box-shadow: 
+              0 0 8px rgba(251, 146, 60, 0.5),
+              0 0 16px rgba(251, 146, 60, 0.3),
+              0 0 24px rgba(251, 146, 60, 0.15);
+          }
+        }
+        
+        /* Pink breathing glow (Player 2 in 2-player mode) */
+        .breathing-glow-pink {
+          animation: breathing-pink ease-in-out infinite alternate;
+        }
+        
+        @keyframes breathing-pink {
+          0% { 
+            box-shadow: 
+              0 0 3px rgba(236, 72, 153, 0.2),
+              0 0 6px rgba(236, 72, 153, 0.1);
+          }
+          100% { 
+            box-shadow: 
+              0 0 8px rgba(236, 72, 153, 0.5),
+              0 0 16px rgba(236, 72, 153, 0.3),
+              0 0 24px rgba(236, 72, 153, 0.15);
           }
         }
         

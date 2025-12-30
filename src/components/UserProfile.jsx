@@ -273,40 +273,14 @@ const UserProfile = ({ onBack }) => {
   const playerDisplayName = profile?.username || profile?.display_name || 'Player';
 
   return (
-    <div 
-      className="scroll-page bg-slate-950"
-    >
+    <div className="scroll-page bg-slate-950">
       <style>{`
-        /* v7.9: Comprehensive scroll styles for all mobile devices */
-        .scroll-page {
-          /* CRITICAL: Don't use position:fixed - breaks iOS scroll */
-          min-height: 100vh;
-          min-height: 100dvh; /* Dynamic viewport height for mobile */
-          width: 100%;
-          overflow-y: auto;
-          overflow-x: hidden;
-          -webkit-overflow-scrolling: touch;
-          overscroll-behavior: contain;
-          touch-action: pan-y pinch-zoom;
-        }
-        
-        /* Allow touch interactions on buttons while still allowing scroll */
-        .scroll-page button,
-        .scroll-page [role="button"],
-        .scroll-page a,
-        .scroll-page input,
-        .scroll-page textarea,
-        .scroll-page select {
-          touch-action: manipulation;
-        }
-        
-        /* Scrollable lists within the page */
+        /* v7.9: Scrollable lists within the page */
         .scroll-list {
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
           overscroll-behavior-y: contain;
-          touch-action: pan-y;
           scrollbar-width: thin;
           scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
         }
