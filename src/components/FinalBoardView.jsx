@@ -108,7 +108,8 @@ const FinalBoardView = ({
                 moveNumber,
                 player: (index % 2) + 1,
                 pieceType,
-                isLastMove: moveNumber === moveHistory.length
+                // v7.9 FIX: Use index comparison for more reliable last move detection
+                isLastMove: index === moveHistory.length - 1
               };
             }
           });

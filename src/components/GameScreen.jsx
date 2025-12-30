@@ -340,6 +340,7 @@ const GameScreen = ({
   }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
 
   // Handle starting drag from a pending piece on the board
+  // v7.9 FIX: When dragging from board, center piece under touch point
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
@@ -349,13 +350,12 @@ const GameScreen = ({
       setPendingMove(null);
     }
     
-    // Start the drag
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
-    
+    // v7.9 FIX: Center the piece under the touch/click point
+    // Unlike dragging from tray (which uses the piece preview center),
+    // board drag should just center under finger for better UX
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
-    setDragOffset({ x: offsetX, y: offsetY });
+    setDragOffset({ x: 0, y: 0 }); // Center under touch point
     setIsDragging(true);
     hasDragStartedRef.current = true;
     

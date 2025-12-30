@@ -504,6 +504,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
 
   // Handle dragging from board (moving pending piece)
+  // v7.9 FIX: Pass null for elementRect so piece centers under touch point
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     console.log('[WeeklyChallenge] handleBoardDragStart:', piece);
     if (gameOver || !gameStarted) return;
@@ -513,7 +514,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       setPendingMove(null);
     }
     
-    startDrag(piece, clientX, clientY, elementRect);
+    // Pass null for elementRect to center piece under touch point
+    startDrag(piece, clientX, clientY, null);
   }, [gameOver, gameStarted, pendingMove, setPendingMove, startDrag]);
 
   // Global move/end handlers for drag

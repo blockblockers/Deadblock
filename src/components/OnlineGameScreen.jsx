@@ -203,6 +203,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   
+  // v7.9: Track opponent's last move for highlighting
+  const [lastMoveCells, setLastMoveCells] = useState(null);
+  
   // Refs
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
@@ -280,6 +283,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   }, [game?.status, usedPieces, isMyTurn]);
 
   // FIXED: Handle drag from pending piece on board
+  // v7.9 FIX: Center piece under touch point when dragging from board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     if (game?.status !== 'active' || !isMyTurn) return;
     
@@ -290,12 +294,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
-    
+    // v7.9 FIX: Center the piece under the touch/click point
+    // Unlike dragging from tray (which uses the piece preview center),
+    // board drag should just center under finger for better UX
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
-    setDragOffset({ x: offsetX, y: offsetY });
+    setDragOffset({ x: 0, y: 0 }); // Center under touch point
     setIsDragging(true);
     hasDragStartedRef.current = true;
     
@@ -612,6 +616,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
           return { row, col };
         });
         
+        // v7.9: Track opponent's last move for persistent highlighting
+        setLastMoveCells(newCells);
+        
         const boardRect = boardRef.current.getBoundingClientRect();
         const cellSize = boardRect.width / BOARD_SIZE;
         
@@ -873,6 +880,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     
     moveInProgressRef.current = true;
     console.log('handleConfirm: Starting...', { pendingMove, rotation, flipped });
+
+    // v7.9: Clear opponent's last move highlight when we make our move
+    setLastMoveCells(null);
 
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
@@ -1233,6 +1243,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
                   currentPlayer={myPlayerNumber}
                   onCellClick={handleCellClick}
                   onPendingPieceDragStart={handleBoardDragStart}
+                  lastMoveCells={lastMoveCells}
                 />
                 {/* Placement Animation Overlay */}
                 {placementAnimation && (

@@ -277,10 +277,11 @@ const UserProfile = ({ onBack }) => {
       className="scroll-page bg-slate-950"
     >
       <style>{`
+        /* v7.9: Comprehensive scroll styles for all mobile devices */
         .scroll-page {
-          /* v7.8: Don't use position:fixed - breaks iOS scroll */
+          /* CRITICAL: Don't use position:fixed - breaks iOS scroll */
           min-height: 100vh;
-          min-height: 100dvh;
+          min-height: 100dvh; /* Dynamic viewport height for mobile */
           width: 100%;
           overflow-y: auto;
           overflow-x: hidden;
@@ -289,9 +290,38 @@ const UserProfile = ({ onBack }) => {
           touch-action: pan-y pinch-zoom;
         }
         
-        /* Allow scroll pass-through on interactive elements */
-        button, [role="button"], input, textarea, select, a {
+        /* Allow touch interactions on buttons while still allowing scroll */
+        .scroll-page button,
+        .scroll-page [role="button"],
+        .scroll-page a,
+        .scroll-page input,
+        .scroll-page textarea,
+        .scroll-page select {
           touch-action: manipulation;
+        }
+        
+        /* Scrollable lists within the page */
+        .scroll-list {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior-y: contain;
+          touch-action: pan-y;
+          scrollbar-width: thin;
+          scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+        }
+        
+        .scroll-list::-webkit-scrollbar {
+          width: 4px;
+        }
+        
+        .scroll-list::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        
+        .scroll-list::-webkit-scrollbar-thumb {
+          background: rgba(100, 116, 139, 0.4);
+          border-radius: 2px;
         }
       `}</style>
       <div className="p-4 pb-8 max-w-md mx-auto">
@@ -596,8 +626,9 @@ const UserProfile = ({ onBack }) => {
           player2={selectedGameForFinalView.player2}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
           player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          player1Rating={selectedGameForFinalView.player1?.elo_rating || selectedGameForFinalView.player1_rating_before || 1200}
-          player2Rating={selectedGameForFinalView.player2?.elo_rating || selectedGameForFinalView.player2_rating_before || 1200}
+          // v7.9 FIX: Prioritize game-time ratings over current profile ratings
+          player1Rating={selectedGameForFinalView.player1_rating_before || selectedGameForFinalView.player1_rating_after || selectedGameForFinalView.player1?.elo_rating || 1200}
+          player2Rating={selectedGameForFinalView.player2_rating_before || selectedGameForFinalView.player2_rating_after || selectedGameForFinalView.player2?.elo_rating || 1200}
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
           gameDate={selectedGameForFinalView.created_at}
         />

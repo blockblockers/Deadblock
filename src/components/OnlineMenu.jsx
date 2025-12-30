@@ -2237,8 +2237,9 @@ const OnlineMenu = ({
           player2={selectedGameForFinalView.player2}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
           player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          player1Rating={selectedGameForFinalView.player1?.elo_rating || selectedGameForFinalView.player1_rating_before || 1200}
-          player2Rating={selectedGameForFinalView.player2?.elo_rating || selectedGameForFinalView.player2_rating_before || 1200}
+          // v7.9 FIX: Prioritize game-time ratings over current profile ratings
+          player1Rating={selectedGameForFinalView.player1_rating_before || selectedGameForFinalView.player1_rating_after || selectedGameForFinalView.player1?.elo_rating || 1200}
+          player2Rating={selectedGameForFinalView.player2_rating_before || selectedGameForFinalView.player2_rating_after || selectedGameForFinalView.player2?.elo_rating || 1200}
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
           moveHistory={selectedGameForFinalView.move_history || []}
           gameDate={selectedGameForFinalView.created_at}

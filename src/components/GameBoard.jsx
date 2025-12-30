@@ -1,5 +1,6 @@
 // GameBoard.jsx - Main game board component
 // v7.8: Breathing glow animation - pieces glow up/down at random intervals
+// v7.9: Added lastMoveCells for highlighting opponent's previous move
 // CHANGED: Allow dropping pieces even with conflicts (for rotation adjustment)
 // This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
 
@@ -12,6 +13,7 @@ import { pieceColors } from '../utils/pieces';
  * 
  * Renders the 8x8 game grid with placed pieces and pending move preview.
  * v7.8: Breathing glow effect - pieces slowly pulse in intensity at random intervals
+ * v7.9: Added lastMoveCells prop for highlighting opponent's previous move
  * v7.7 ENHANCED: Shows drag preview highlighting on board during drag
  */
 const GameBoard = forwardRef(({
@@ -35,6 +37,8 @@ const GameBoard = forwardRef(({
   draggedPiece = null,
   dragRotation = 0,
   dragFlipped = false,
+  // v7.9: Last move highlighting for online play
+  lastMoveCells = null, // Array of { row, col } for opponent's last placed piece
 }, ref) => {
   // Ensure board is properly formatted
   const safeBoard = Array.isArray(board) 
@@ -213,6 +217,9 @@ const GameBoard = forwardRef(({
             const isOccupied = cellValue !== null && cellValue !== 0 && cellValue !== undefined;
             const pieceName = getPieceName(rowIdx, colIdx);
             
+            // v7.9: Check if this cell is part of opponent's last move
+            const isLastMove = lastMoveCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
+            
             // v7.7: Check if this cell is part of drag preview
             const dragPreviewInfo = dragPreviewCells.find(p => p.row === rowIdx && p.col === colIdx);
             const isDragPreview = !!dragPreviewInfo;
@@ -231,8 +238,13 @@ const GameBoard = forwardRef(({
             const pendingIndex = isPending ? pendingCells.findIndex(p => p.row === rowIdx && p.col === colIdx) : -1;
             
             // v7.8: Handle touch start for re-dragging pending pieces
+            // v7.9: Fixed - prevent default to stop browser from capturing touch for scrolling
             const handlePendingTouchStart = (e) => {
               if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
+              
+              // Prevent default to stop browser scroll/gesture handling
+              e.preventDefault();
+              e.stopPropagation();
               
               // Get touch position
               const touch = e.touches[0];
@@ -243,9 +255,14 @@ const GameBoard = forwardRef(({
             };
             
             // v7.8: Handle mouse down for re-dragging pending pieces (desktop)
+            // v7.9: Fixed - prevent default to avoid text selection
             const handlePendingMouseDown = (e) => {
               if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
               if (e.button !== 0) return; // Left click only
+              
+              // Prevent default to stop text selection
+              e.preventDefault();
+              e.stopPropagation();
               
               const rect = e.currentTarget.getBoundingClientRect();
               onPendingPieceDragStart(pendingMove.piece, e.clientX, e.clientY, rect);
@@ -266,9 +283,12 @@ const GameBoard = forwardRef(({
                   ${isAiAnimating ? (isAiWinningMove ? 'ai-winning-cell' : 'ai-placing-cell') : ''}
                   ${isPlayerAnimating ? (isPlayerWinningMove ? 'player-winning-cell' : 'player-placing-cell') : ''}
                   ${isPending ? 'pending cursor-grab active:cursor-grabbing' : ''}
+                  ${isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating ? 'last-move-cell' : ''}
                 `}
                 style={isPending ? {
-                  animationDelay: `${pendingIndex * 0.15}s`
+                  animationDelay: `${pendingIndex * 0.15}s`,
+                  touchAction: 'none', // v7.9: Prevent browser touch handling on draggable cells
+                  userSelect: 'none'
                 } : undefined}
               >
                 {/* Base shine layer for occupied cells - always visible */}
@@ -366,6 +386,17 @@ const GameBoard = forwardRef(({
                       border: '2px solid rgba(239, 68, 68, 0.9)',
                       boxShadow: '0 0 15px rgba(239, 68, 68, 0.6), inset 0 0 10px rgba(239, 68, 68, 0.4)',
                       background: 'rgba(239, 68, 68, 0.2)'
+                    }}
+                  />
+                )}
+                
+                {/* v7.9: Last move highlight - shows opponent's most recent move */}
+                {isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating && (
+                  <div 
+                    className="absolute inset-0 rounded-md pointer-events-none last-move-indicator"
+                    style={{
+                      border: '2px solid rgba(251, 191, 36, 0.8)',
+                      boxShadow: '0 0 12px rgba(251, 191, 36, 0.5), inset 0 0 6px rgba(251, 191, 36, 0.3)'
                     }}
                   />
                 )}
@@ -591,6 +622,30 @@ const GameBoard = forwardRef(({
           50% { 
             opacity: 1;
             transform: scale(1.02);
+          }
+        }
+        
+        /* ============================================
+           v7.9: LAST MOVE HIGHLIGHTING
+           Shows opponent's most recent move with amber glow
+           ============================================ */
+        .last-move-cell {
+          position: relative;
+          z-index: 2;
+        }
+        
+        .last-move-indicator {
+          animation: last-move-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes last-move-pulse {
+          0%, 100% { 
+            border-color: rgba(251, 191, 36, 0.6);
+            box-shadow: 0 0 8px rgba(251, 191, 36, 0.4), inset 0 0 4px rgba(251, 191, 36, 0.2);
+          }
+          50% { 
+            border-color: rgba(251, 191, 36, 1);
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.7), inset 0 0 8px rgba(251, 191, 36, 0.4);
           }
         }
         
