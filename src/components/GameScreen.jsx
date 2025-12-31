@@ -22,10 +22,6 @@ import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
-// Drag detection constants
-const DRAG_THRESHOLD = 5; // Reduced for faster drag start
-const SCROLL_ANGLE_THRESHOLD = 65; // Slightly increased to favor dragging
-
 // Theme configurations for each difficulty
 const difficultyThemes = {
   beginner: {
@@ -305,17 +301,6 @@ const GameScreen = ({
     return null;
   }, []);
 
-  // Check if movement is a scroll gesture (mostly vertical)
-  const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
-    const dx = Math.abs(currentX - startX);
-    const dy = Math.abs(currentY - startY);
-    
-    if (dx + dy < DRAG_THRESHOLD) return null;
-    
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    return angle > SCROLL_ANGLE_THRESHOLD;
-  }, []);
-
   // Start drag from piece tray
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     if (gameOver || usedPieces.includes(piece)) return;
@@ -436,50 +421,31 @@ const GameScreen = ({
   }, [isDragging, dragPreviewCell, hasValidCell, draggedPiece, setPendingMove]);
 
   // Create drag handlers for PieceTray
+  // v7.9: Improved - starts drag immediately on touchstart (no waiting for movement)
+  // This makes drag feel instant. Scroll still works on the game container itself.
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece)) return {};
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
 
-    let startX = 0;
-    let startY = 0;
-    let elementRect = null;
-    let gestureDecided = false;
-
+    // Touch handlers - start drag IMMEDIATELY on touchstart
     const handleTouchStart = (e) => {
+      // Prevent default to stop browser from trying to scroll
+      e.preventDefault();
+      e.stopPropagation();
+      
       const touch = e.touches[0];
-      startX = touch.clientX;
-      startY = touch.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
-      gestureDecided = false;
-      dragStartRef.current = { x: startX, y: startY };
+      const elementRect = e.currentTarget.getBoundingClientRect();
+      
+      // Start drag immediately - no waiting for movement threshold
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
     const handleTouchMove = (e) => {
-      if (gestureDecided && !hasDragStartedRef.current) return;
+      if (!hasDragStartedRef.current) return;
+      e.preventDefault();
       
       const touch = e.touches[0];
-      const currentX = touch.clientX;
-      const currentY = touch.clientY;
-      
-      if (!gestureDecided) {
-        const isScroll = isScrollGesture(startX, startY, currentX, currentY);
-        
-        if (isScroll === null) return;
-        
-        gestureDecided = true;
-        
-        if (isScroll) {
-          return; // It's a scroll
-        } else {
-          e.preventDefault();
-          startDrag(piece, currentX, currentY, elementRect);
-        }
-      }
-      
-      if (hasDragStartedRef.current) {
-        e.preventDefault();
-        updateDrag(currentX, currentY);
-      }
+      updateDrag(touch.clientX, touch.clientY);
     };
 
     const handleTouchEnd = (e) => {
@@ -487,15 +453,14 @@ const GameScreen = ({
         e.preventDefault();
         endDrag();
       }
-      gestureDecided = false;
     };
 
-    // Mouse handlers for desktop
+    // Mouse handlers for desktop - also immediate
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
-      startX = e.clientX;
-      startY = e.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
+      e.preventDefault();
+      
+      const elementRect = e.currentTarget.getBoundingClientRect();
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
@@ -505,7 +470,7 @@ const GameScreen = ({
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
     };
-  }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
+  }, [gameOver, usedPieces, gameMode, currentPlayer, startDrag, updateDrag, endDrag]);
 
   // Global mouse move/up handlers for desktop drag
   useEffect(() => {

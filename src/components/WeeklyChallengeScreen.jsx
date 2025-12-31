@@ -263,9 +263,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // =========================================================================
   // DRAG AND DROP HANDLERS - FIXED WITH DIAGNOSTIC LOGGING
   // =========================================================================
-  
-  const DRAG_THRESHOLD = 8;
-  const SCROLL_ANGLE_THRESHOLD = 60;
 
   // Helper function to start drag (consistent with OnlineGameScreen)
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
@@ -422,73 +419,45 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       return {};
     }
 
-    let startX = 0, startY = 0, elementRect = null, isDragGesture = false;
-    let touchStartTime = 0;
-
-    // Touch start - capture initial position
+    // v7.9: Touch handlers - start drag immediately on touchstart
     const handleTouchStart = (e) => {
       console.log('[WeeklyChallenge] handleTouchStart for:', piece);
+      
+      // Prevent default to stop browser from trying to scroll
+      e.preventDefault();
+      e.stopPropagation();
+      
       const touch = e.touches[0];
-      startX = touch.clientX;
-      startY = touch.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
-      isDragGesture = false;
-      touchStartTime = Date.now();
-      hasDragStartedRef.current = false;
-      dragStartRef.current = { x: startX, y: startY };
+      const elementRect = e.currentTarget.getBoundingClientRect();
       
       if (boardRef.current) {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
+      
+      // Start drag immediately - no waiting for movement threshold
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
-    // Touch move - detect gesture type and start drag if appropriate
     const handleTouchMove = (e) => {
+      if (!hasDragStartedRef.current) return;
+      e.preventDefault();
+      
       const touch = e.touches[0];
-      const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      const elapsed = Date.now() - touchStartTime;
-      
-      // Determine if this is a drag gesture
-      if (!isDragGesture && distance > DRAG_THRESHOLD) {
-        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
-        
-        if (isHorizontalish || elapsed < 150) {
-          isDragGesture = true;
-          console.log('[WeeklyChallenge] Recognized drag gesture');
-        } else {
-          console.log('[WeeklyChallenge] Detected vertical scroll, ignoring');
-          return;
-        }
-      }
-      
-      // Start drag if gesture detected and threshold met
-      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
-        e.preventDefault();
-        startDrag(piece, touch.clientX, touch.clientY, elementRect);
-      }
-      
-      // Continue updating drag position
-      if (hasDragStartedRef.current) {
-        e.preventDefault();
-        updateDrag(touch.clientX, touch.clientY);
-      }
+      updateDrag(touch.clientX, touch.clientY);
     };
 
-    // Touch end
     const handleTouchEnd = () => {
       console.log('[WeeklyChallenge] handleTouchEnd, dragStarted:', hasDragStartedRef.current);
       if (hasDragStartedRef.current) {
         endDrag();
       }
-      isDragGesture = false;
     };
 
     // Mouse down - immediate drag for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
       console.log('[WeeklyChallenge] handleMouseDown for:', piece);
+      e.preventDefault();
       
       const rect = e.currentTarget.getBoundingClientRect();
       startDrag(piece, e.clientX, e.clientY, rect);

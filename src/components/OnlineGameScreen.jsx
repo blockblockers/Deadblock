@@ -31,10 +31,6 @@ import { ratingService } from '../services/ratingService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { realtimeManager } from '../services/realtimeManager';
 
-// Drag detection constants
-const DRAG_THRESHOLD = 5; // Reduced from 10 for faster drag response on phones
-const SCROLL_ANGLE_THRESHOLD = 60;
-
 // Orange/Amber theme for online mode
 const theme = {
   gridColor: 'rgba(251,191,36,0.4)',
@@ -251,13 +247,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     return null;
   }, []);
 
-  const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
-    const deltaX = Math.abs(currentX - startX);
-    const deltaY = Math.abs(currentY - startY);
-    const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
-    return angle > SCROLL_ANGLE_THRESHOLD;
-  }, []);
-
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) return;
     
@@ -344,73 +333,48 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     document.body.style.touchAction = '';
   }, [isDragging]);
 
+  // Create drag handlers for PieceTray
+  // v7.9: Improved - starts drag immediately on touchstart (no waiting for movement)
+  // This makes drag feel instant. Scroll still works on the game container itself.
   const createDragHandlers = useCallback((piece) => {
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) {
       return {};
     }
 
-    let startX = 0, startY = 0, elementRect = null, isDragGesture = false;
-    let touchStartTime = 0;
-
+    // Touch handlers - start drag IMMEDIATELY on touchstart
     const handleTouchStart = (e) => {
-      const touch = e.touches[0];
-      startX = touch.clientX;
-      startY = touch.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
-      isDragGesture = false;
-      touchStartTime = Date.now();
-      hasDragStartedRef.current = false;
-      dragStartRef.current = { x: startX, y: startY };
+      // Prevent default to stop browser from trying to scroll
+      e.preventDefault();
+      e.stopPropagation();
       
-      // Prevent default to avoid scroll interference during potential drag
-      // e.preventDefault(); // Don't prevent yet - wait for gesture detection
+      const touch = e.touches[0];
+      const elementRect = e.currentTarget.getBoundingClientRect();
+      
+      // Start drag immediately - no waiting for movement threshold
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
     const handleTouchMove = (e) => {
+      if (!hasDragStartedRef.current) return;
+      e.preventDefault();
+      
       const touch = e.touches[0];
-      const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      const elapsed = Date.now() - touchStartTime;
-      
-      // Quick gesture detection - if moved enough within 150ms, it's likely a drag
-      if (!isDragGesture && distance > DRAG_THRESHOLD) {
-        // Check if this is more horizontal than vertical (drag vs scroll)
-        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
-        
-        // If moving mostly horizontal, or if it's a quick gesture, treat as drag
-        if (isHorizontalish || elapsed < 150) {
-          isDragGesture = true;
-        } else {
-          // Vertical scroll - don't interfere
-          return;
-        }
-      }
-      
-      // Start dragging if we've decided it's a drag gesture
-      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
-        e.preventDefault();
-        startDrag(piece, touch.clientX, touch.clientY, elementRect);
-      }
-      
-      // Continue drag updates
+      updateDrag(touch.clientX, touch.clientY);
+    };
+
+    const handleTouchEnd = (e) => {
       if (hasDragStartedRef.current) {
         e.preventDefault();
-        updateDrag(touch.clientX, touch.clientY);
+        endDrag();
       }
     };
 
-    const handleTouchEnd = () => {
-      if (hasDragStartedRef.current) endDrag();
-      isDragGesture = false;
-    };
-
+    // Mouse handlers for desktop - also immediate
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
-      startX = e.clientX;
-      startY = e.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
-      // FIXED: Actually start the drag for desktop/mouse events
+      e.preventDefault();
+      
+      const elementRect = e.currentTarget.getBoundingClientRect();
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
@@ -420,7 +384,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
     };
-  }, [game?.status, usedPieces, isMyTurn, isScrollGesture, startDrag, updateDrag, endDrag]);
+  }, [game?.status, usedPieces, isMyTurn, startDrag, updateDrag, endDrag]);
 
   // Global mouse handlers
   useEffect(() => {
@@ -520,6 +484,24 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
             if (!isSender && !showRematchModal && !rematchDeclined) {
               setShowRematchModal(true);
               soundManager.playSound('notification');
+              
+              // Send browser notification if page is not visible
+              if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+                try {
+                  const opponentName = opponent?.display_name || opponent?.username || 'Opponent';
+                  new Notification('Deadblock - Rematch Request', {
+                    body: `${opponentName} wants a rematch!`,
+                    icon: '/pwa-192x192.png',
+                    badge: '/pwa-192x192.png',
+                    tag: 'deadblock-rematch',
+                    renotify: true,
+                    requireInteraction: true,
+                    silent: false
+                  });
+                } catch (err) {
+                  console.log('[OnlineGameScreen] Browser notification failed:', err);
+                }
+              }
             }
             
             // If we're the requester, show waiting state
@@ -656,6 +638,24 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
         turnStartRef.current = Date.now();
         // Play notification sound when it becomes our turn
         soundManager.playSound('notification');
+        
+        // Send browser notification if page is not visible
+        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+          try {
+            const opponentName = opp?.display_name || opp?.username || 'Opponent';
+            new Notification('Deadblock - Your Turn!', {
+              body: `${opponentName} made a move. It's your turn to play!`,
+              icon: '/pwa-192x192.png',
+              badge: '/pwa-192x192.png',
+              tag: 'deadblock-turn',
+              renotify: true,
+              requireInteraction: false,
+              silent: false
+            });
+          } catch (err) {
+            console.log('[OnlineGameScreen] Browser notification failed:', err);
+          }
+        }
       }
 
       // FIXED: Game over detection
@@ -791,6 +791,24 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
             console.log('[OnlineGameScreen] New chat message from opponent!');
             setHasUnreadChat(true);
             soundManager.playSound('notification');
+            
+            // Send browser notification if page is not visible
+            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+              try {
+                const senderName = opponent?.display_name || opponent?.username || 'Opponent';
+                new Notification('Deadblock - New Message', {
+                  body: `${senderName}: ${payload.new.message?.substring(0, 50) || 'Sent a message'}${payload.new.message?.length > 50 ? '...' : ''}`,
+                  icon: '/pwa-192x192.png',
+                  badge: '/pwa-192x192.png',
+                  tag: 'deadblock-chat',
+                  renotify: true,
+                  requireInteraction: false,
+                  silent: false
+                });
+              } catch (err) {
+                console.log('[OnlineGameScreen] Browser notification failed:', err);
+              }
+            }
           }
         }
       )

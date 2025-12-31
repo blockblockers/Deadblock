@@ -808,9 +808,7 @@
         <p>© 2024 DEADBLOCK. Free to play puzzle strategy game.</p>
         <p style="margin-top: 8px;">
           <a href="/">Play Now</a> • 
-          <a href="/privacy">Privacy Policy</a> • 
-          <a href="/terms">Terms of Service</a> • 
-          <a href="mailto:support@deadblock.app">Contact</a>
+          <a href="/cdn-cgi/l/email-protection#74070104041b0600341011151016181b171f5a150404">Contact</a>
         </p>
       </footer>
     </div>
@@ -997,10 +995,7 @@
         const dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10) + 1;
         localStorage.setItem('pwa-dismiss-count', dismissCount.toString());
         
-        // After 2 dismissals, don't show again
-        if (dismissCount >= 2) {
-          pwaLog('Dismissed twice - permanent dismiss');
-          localStorage.setItem('pwa-was-installed', 'true');
+        // After 2 wa-was-installed', 'true');
           localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
         } else {
           pwaLog('Dismissed (' + dismissCount + '/2) - will show again in 7 days');
@@ -1101,16 +1096,16 @@
   <!-- Noscript fallback for crawlers with JavaScript disabled -->
   <noscript>
     <div style="text-align: center; padding: 20px; color: #64748b; font-size: 12px;">
-      <a href="https://deadblock.app/privacy" style="color: #22d3ee;">Privacy Policy</a> · 
-      <a href="https://deadblock.app/terms" style="color: #22d3ee;">Terms of Service</a>
+      <a href="https://deadblock.app/privacy" style="color: #22d3ee; text-decoration: underline;">Privacy Policy</a> · 
+      <a href="https://deadblock.app/terms" style="color: #22d3ee; text-decoration: underline;">Terms of Service</a>
     </div>
   </noscript>
 
   <!-- Static footer - Always visible for Google OAuth verification -->
-  <div id="static-footer" style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 4px; font-size: 10px; background: rgba(2, 6, 23, 0.9); z-index: 1; pointer-events: none;">
-    <a href="https://deadblock.app/privacy" style="color: #64748b; text-decoration: none; pointer-events: auto;">Privacy Policy</a>
-    <span style="color: #475569; margin: 0 6px;">·</span>
-    <a href="https://deadblock.app/terms" style="color: #64748b; text-decoration: none; pointer-events: auto;">Terms of Service</a>
+  <div id="static-footer" style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 6px 4px; font-size: 10px; background: rgba(2, 6, 23, 0.95); z-index: 1; pointer-events: none;">
+    <a href="https://deadblock.app/privacy" style="color: #64748b; text-decoration: underline; pointer-events: auto;">Privacy Policy</a>
+    <span style="color: #475569; margin: 0 8px;">·</span>
+    <a href="https://deadblock.app/terms" style="color: #64748b; text-decoration: underline; pointer-events: auto;">Terms of Service</a>
   </div>
 </body>
 </html>

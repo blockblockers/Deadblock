@@ -1,192 +1,198 @@
-// Push Notification Service for Online Games
-// Handles web push notifications for game events
+// notificationService.js - Browser notification service for Deadblock
+// Handles permission requests and sending browser notifications
 
 class NotificationService {
   constructor() {
     this.permission = 'default';
-    this.supported = 'Notification' in window;
-    this.serviceWorkerReady = false;
+    this.initialized = false;
+    this.promptDismissed = false;
   }
 
-  // Initialize notification service
   async init() {
-    if (!this.supported) {
-      console.log('Notifications not supported');
-      return false;
+    if (this.initialized) return;
+    
+    if (!('Notification' in window)) {
+      console.log('[NotificationService] Browser does not support notifications');
+      this.permission = 'denied';
+      this.initialized = true;
+      return;
     }
 
     this.permission = Notification.permission;
+    this.initialized = true;
     
-    // Check if service worker is ready
-    if ('serviceWorker' in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.ready;
-        this.serviceWorkerReady = !!registration;
-      } catch (e) {
-        console.log('Service worker not ready for notifications');
-      }
+    // Check if user has dismissed the prompt before
+    try {
+      this.promptDismissed = localStorage.getItem('deadblock_notification_prompt_dismissed') === 'true';
+    } catch (e) {
+      this.promptDismissed = false;
     }
+    
+    console.log('[NotificationService] Initialized with permission:', this.permission);
+  }
 
+  isEnabled() {
     return this.permission === 'granted';
   }
 
-  // Request notification permission
+  isBlocked() {
+    return this.permission === 'denied';
+  }
+
+  shouldPrompt() {
+    // Show prompt if:
+    // 1. Notifications are supported
+    // 2. Permission hasn't been granted or denied
+    // 3. User hasn't dismissed the prompt before
+    return (
+      'Notification' in window &&
+      this.permission === 'default' &&
+      !this.promptDismissed
+    );
+  }
+
+  dismissPrompt() {
+    this.promptDismissed = true;
+    try {
+      localStorage.setItem('deadblock_notification_prompt_dismissed', 'true');
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }
+
   async requestPermission() {
-    if (!this.supported) {
-      return { granted: false, error: 'Notifications not supported' };
+    if (!('Notification' in window)) {
+      return 'denied';
     }
 
     try {
       const result = await Notification.requestPermission();
       this.permission = result;
+      console.log('[NotificationService] Permission result:', result);
       
+      // Send test notification if granted
       if (result === 'granted') {
-        // Save preference
-        localStorage.setItem('notificationsEnabled', 'true');
-        return { granted: true };
-      } else if (result === 'denied') {
-        localStorage.setItem('notificationsEnabled', 'false');
-        return { granted: false, error: 'Permission denied' };
+        this.sendNotification('Notifications Enabled', {
+          body: 'You will now receive notifications for game events!',
+          tag: 'deadblock-test',
+          silent: true
+        });
       }
       
-      return { granted: false, error: 'Permission dismissed' };
+      return result;
     } catch (err) {
-      console.error('Error requesting notification permission:', err);
-      return { granted: false, error: err.message };
+      console.error('[NotificationService] Permission request failed:', err);
+      return 'denied';
     }
   }
 
-  // Check if notifications are enabled
-  isEnabled() {
-    return this.supported && this.permission === 'granted';
-  }
-
-  // Check if we should prompt for permission
-  shouldPrompt() {
-    if (!this.supported) return false;
-    if (this.permission === 'granted' || this.permission === 'denied') return false;
-    
-    // Don't prompt if user has dismissed before
-    const dismissed = localStorage.getItem('notificationPromptDismissed');
-    if (dismissed) {
-      const dismissedTime = parseInt(dismissed, 10);
-      // Only prompt again after 7 days
-      if (Date.now() - dismissedTime < 7 * 24 * 60 * 60 * 1000) {
-        return false;
-      }
-    }
-    
-    return true;
-  }
-
-  // Mark prompt as dismissed
-  dismissPrompt() {
-    localStorage.setItem('notificationPromptDismissed', Date.now().toString());
-  }
-
-  // Send a local notification
-  async notify(title, options = {}) {
+  sendNotification(title, options = {}) {
     if (!this.isEnabled()) {
-      console.log('Notifications not enabled');
+      console.log('[NotificationService] Notifications not enabled');
       return null;
     }
 
-    const defaultOptions = {
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png',
-      vibrate: [100, 50, 100],
-      requireInteraction: false,
-      silent: false,
-      tag: 'deadblock-notification',
-      ...options
-    };
+    if (!document.hidden) {
+      // Don't send notification if page is visible
+      console.log('[NotificationService] Page is visible, skipping notification');
+      return null;
+    }
 
     try {
-      // Try service worker notification first (works in background)
-      if (this.serviceWorkerReady && navigator.serviceWorker.controller) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification(title, defaultOptions);
-        return true;
-      }
-      
-      // Fallback to regular notification (foreground only)
-      const notification = new Notification(title, defaultOptions);
-      
-      notification.onclick = () => {
+      const notification = new Notification(title, {
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        requireInteraction: false,
+        silent: false,
+        ...options
+      });
+
+      // Auto-close after 10 seconds
+      setTimeout(() => notification.close(), 10000);
+
+      // Handle click - focus the app
+      notification.onclick = (event) => {
+        event.preventDefault();
         window.focus();
         notification.close();
-        options.onClick?.();
+        
+        // If there's a URL in the data, navigate to it
+        if (options.data?.url) {
+          window.location.href = options.data.url;
+        }
       };
-      
+
       return notification;
     } catch (err) {
-      console.error('Error showing notification:', err);
+      console.error('[NotificationService] Failed to send notification:', err);
       return null;
     }
   }
 
-  // Game-specific notifications
-  
-  // Notify when it's your turn
-  notifyYourTurn(opponentName, gameId) {
-    return this.notify('Your Turn!', {
-      body: `${opponentName} made their move. It's your turn to play!`,
-      tag: `turn-${gameId}`,
-      data: { type: 'your_turn', gameId },
-      requireInteraction: true,
-      actions: [
-        { action: 'play', title: 'Play Now' }
-      ]
+  // Convenience methods for specific notification types
+  notifyYourTurn(opponentName) {
+    return this.sendNotification('Deadblock - Your Turn!', {
+      body: `${opponentName} made a move. It's your turn to play!`,
+      tag: 'deadblock-turn',
+      renotify: true
     });
   }
 
-  // Notify when you receive a game invite
-  notifyGameInvite(fromUsername, inviteId) {
-    return this.notify('Game Invite!', {
-      body: `${fromUsername} wants to play Deadblock with you!`,
-      tag: `invite-${inviteId}`,
-      data: { type: 'invite', inviteId },
-      requireInteraction: true,
-      actions: [
-        { action: 'accept', title: 'Accept' },
-        { action: 'decline', title: 'Decline' }
-      ]
+  notifyChatMessage(senderName, message) {
+    const truncated = message?.length > 50 
+      ? message.substring(0, 50) + '...' 
+      : message || 'Sent a message';
+      
+    return this.sendNotification('Deadblock - New Message', {
+      body: `${senderName}: ${truncated}`,
+      tag: 'deadblock-chat',
+      renotify: true
     });
   }
 
-  // Notify when opponent accepts your invite
+  notifyRematchRequest(opponentName) {
+    return this.sendNotification('Deadblock - Rematch Request', {
+      body: `${opponentName} wants a rematch!`,
+      tag: 'deadblock-rematch',
+      renotify: true,
+      requireInteraction: true
+    });
+  }
+
+  notifyGameInvite(senderName, inviteId) {
+    return this.sendNotification('Deadblock - Game Invite', {
+      body: `${senderName} challenged you to a game!`,
+      tag: `deadblock-invite-${inviteId}`,
+      renotify: true,
+      requireInteraction: true,
+      data: { url: '/online', inviteId }
+    });
+  }
+
   notifyInviteAccepted(opponentName, gameId) {
-    return this.notify('Game Started!', {
-      body: `${opponentName} accepted your invite. Game on!`,
-      tag: `game-start-${gameId}`,
-      data: { type: 'game_start', gameId }
+    return this.sendNotification('Deadblock - Invite Accepted', {
+      body: `${opponentName} accepted your challenge! Game is starting...`,
+      tag: `deadblock-game-${gameId}`,
+      renotify: true,
+      data: { url: `/game/${gameId}`, gameId }
     });
   }
 
-  // Notify game result
-  notifyGameResult(won, opponentName, gameId) {
-    const title = won ? '🏆 Victory!' : '💀 Defeat';
-    const body = won 
-      ? `You defeated ${opponentName}!`
-      : `${opponentName} won this round. Try again?`;
-    
-    return this.notify(title, {
+  notifyGameOver(isWin, opponentName) {
+    const title = isWin ? 'Deadblock - Victory!' : 'Deadblock - Game Over';
+    const body = isWin 
+      ? `You beat ${opponentName}!` 
+      : `${opponentName} won the game.`;
+      
+    return this.sendNotification(title, {
       body,
-      tag: `result-${gameId}`,
-      data: { type: 'game_result', gameId, won }
-    });
-  }
-
-  // Notify opponent forfeit
-  notifyOpponentForfeit(opponentName, gameId) {
-    return this.notify('You Win!', {
-      body: `${opponentName} forfeited the game.`,
-      tag: `forfeit-${gameId}`,
-      data: { type: 'forfeit', gameId }
+      tag: 'deadblock-gameover',
+      renotify: true
     });
   }
 }
 
-// Create singleton instance
+// Export singleton instance
 export const notificationService = new NotificationService();
+
 export default notificationService;

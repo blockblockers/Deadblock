@@ -709,10 +709,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // DRAG AND DROP HANDLERS
   // -------------------------------------------------------------------------
   
-  // Drag detection constants
-  const DRAG_THRESHOLD = 10;
-  const SCROLL_ANGLE_THRESHOLD = 60;
-  
   // v7.9 FIX: Allow positions outside the grid for overflow placement
   const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
   const MIN_POSITION = -OVERFLOW_AMOUNT;
@@ -787,58 +783,44 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       return { clientX: e.clientX, clientY: e.clientY };
     };
 
-    // Touch handlers - require drag threshold before starting
+    // v7.9: Touch handlers - start drag immediately on touchstart
     const handleTouchStart = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
       
+      // Prevent default to stop browser from trying to scroll
+      e.preventDefault();
+      e.stopPropagation();
+      
       const { clientX, clientY } = getClientPos(e);
-      dragStartRef.current = { x: clientX, y: clientY };
-      hasDragStartedRef.current = false;
       
       // Update board bounds
       if (boardRef.current) {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
+      
+      // Start drag immediately - no waiting for movement threshold
+      hasDragStartedRef.current = true;
+      setIsDragging(true);
+      setDraggedPiece(piece);
+      setSelectedPiece(piece);
+      setPendingMove(null);
+      setDragPosition({ x: clientX, y: clientY });
+      setDragOffset({ x: 0, y: 0 });
+      
+      soundManager.playPieceSelect();
     };
 
     const handleTouchMove = (e) => {
+      if (!hasDragStartedRef.current) return;
       if (gameState !== GAME_STATES.PLAYING) return;
       
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+      
       const { clientX, clientY } = getClientPos(e);
-      const deltaX = clientX - dragStartRef.current.x;
-      const deltaY = clientY - dragStartRef.current.y;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      
-      // Check if this is a vertical scroll gesture
-      if (!hasDragStartedRef.current && distance > 5) {
-        const angle = Math.abs(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
-        const isVertical = angle > SCROLL_ANGLE_THRESHOLD && angle < (180 - SCROLL_ANGLE_THRESHOLD);
-        
-        if (isVertical) {
-          return; // Let it scroll
-        }
-      }
-      
-      if (distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
-        hasDragStartedRef.current = true;
-        setIsDragging(true);
-        setDraggedPiece(piece);
-        setSelectedPiece(piece);
-        setPendingMove(null);
-        setDragOffset({ x: 0, y: 0 });
-        
-        if (e.cancelable) {
-          e.preventDefault();
-        }
-      }
-      
-      if (hasDragStartedRef.current) {
-        if (e.cancelable) {
-          e.preventDefault();
-        }
-        updateDrag(clientX, clientY);
-      }
+      updateDrag(clientX, clientY);
     };
 
     const handleTouchEnd = () => {
@@ -848,12 +830,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       hasDragStartedRef.current = false;
     };
 
-    // FIXED: Desktop mouse handler - start drag immediately on mousedown
+    // Desktop mouse handler - start drag immediately on mousedown
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
       
+      e.preventDefault();
       const { clientX, clientY } = e;
       
       // Update board bounds

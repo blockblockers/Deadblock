@@ -1,82 +1,105 @@
-// Notification Prompt - Ask users to enable notifications
-import { useState, useEffect } from 'react';
-import { Bell, X } from 'lucide-react';
+// NotificationPrompt.jsx - Prompt user to enable browser notifications
+// Shows a non-intrusive banner asking for notification permission
+
+import { useState } from 'react';
+import { Bell, BellOff, X } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 
 const NotificationPrompt = ({ onDismiss }) => {
-  const [visible, setVisible] = useState(false);
   const [requesting, setRequesting] = useState(false);
-
-  useEffect(() => {
-    // Check if we should show the prompt
-    const checkPrompt = async () => {
-      await notificationService.init();
-      if (notificationService.shouldPrompt()) {
-        // Delay showing prompt slightly
-        setTimeout(() => setVisible(true), 2000);
-      }
-    };
-    checkPrompt();
-  }, []);
+  const [result, setResult] = useState(null);
 
   const handleEnable = async () => {
     setRequesting(true);
-    const { granted } = await notificationService.requestPermission();
+    const permission = await notificationService.requestPermission();
+    setResult(permission);
     setRequesting(false);
     
-    if (granted) {
-      // Show a test notification
-      notificationService.notify('Notifications Enabled!', {
-        body: 'You\'ll be notified when it\'s your turn to play.',
-        tag: 'welcome'
-      });
-    }
-    
-    handleDismiss();
+    // Auto-dismiss after showing result
+    setTimeout(() => {
+      onDismiss?.();
+    }, permission === 'granted' ? 1500 : 2500);
   };
 
   const handleDismiss = () => {
     notificationService.dismissPrompt();
-    setVisible(false);
     onDismiss?.();
   };
 
-  if (!visible) return null;
+  // Don't render if result is showing success
+  if (result === 'granted') {
+    return (
+      <div className="fixed bottom-20 left-4 right-4 max-w-sm mx-auto z-50 animate-fade-in">
+        <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl p-4 shadow-lg border border-green-400/30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-500/30 flex items-center justify-center">
+              <Bell className="w-5 h-5 text-green-200" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-bold">Notifications Enabled!</p>
+              <p className="text-green-200 text-sm">You'll be notified when it's your turn</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (result === 'denied') {
+    return (
+      <div className="fixed bottom-20 left-4 right-4 max-w-sm mx-auto z-50 animate-fade-in">
+        <div className="bg-gradient-to-r from-slate-700 to-slate-800 rounded-xl p-4 shadow-lg border border-slate-600/30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-slate-600/50 flex items-center justify-center">
+              <BellOff className="w-5 h-5 text-slate-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white font-bold">Notifications Blocked</p>
+              <p className="text-slate-400 text-sm">You can enable them in browser settings</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-40 animate-slide-up">
-      <div className="max-w-md mx-auto bg-slate-900/95 backdrop-blur-md rounded-xl p-4 border border-amber-500/30 shadow-[0_0_30px_rgba(251,191,36,0.2)]">
+    <div className="fixed bottom-20 left-4 right-4 max-w-sm mx-auto z-50 animate-slide-up">
+      <div className="bg-gradient-to-r from-amber-600/95 to-orange-600/95 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-amber-400/30">
+        <button
+          onClick={handleDismiss}
+          className="absolute top-2 right-2 p-1 text-amber-200/60 hover:text-white transition-colors"
+        >
+          <X size={18} />
+        </button>
+        
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
-            <Bell size={20} className="text-amber-400" />
+          <div className="w-10 h-10 rounded-full bg-amber-500/30 flex items-center justify-center flex-shrink-0">
+            <Bell className="w-5 h-5 text-amber-200" />
           </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-white font-bold text-sm mb-1">Enable Notifications?</h3>
-            <p className="text-slate-400 text-xs mb-3">
-              Get notified when it's your turn, when you receive game invites, and more.
+          
+          <div className="flex-1 pr-4">
+            <p className="text-white font-bold">Enable Notifications?</p>
+            <p className="text-amber-100/80 text-sm mt-1">
+              Get notified when it's your turn or when you receive a challenge
             </p>
-            <div className="flex gap-2">
+            
+            <div className="flex gap-2 mt-3">
               <button
                 onClick={handleEnable}
                 disabled={requesting}
-                className="px-4 py-1.5 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50"
+                className="flex-1 py-2 px-3 bg-white/20 hover:bg-white/30 text-white font-bold rounded-lg transition-all text-sm disabled:opacity-50"
               >
                 {requesting ? 'Enabling...' : 'Enable'}
               </button>
               <button
                 onClick={handleDismiss}
-                className="px-4 py-1.5 text-slate-500 text-sm hover:text-slate-300 transition-colors"
+                className="py-2 px-3 text-amber-200/80 hover:text-white transition-colors text-sm"
               >
-                Not Now
+                Not now
               </button>
             </div>
           </div>
-          <button
-            onClick={handleDismiss}
-            className="text-slate-500 hover:text-slate-300 transition-colors"
-          >
-            <X size={18} />
-          </button>
         </div>
       </div>
       
@@ -93,6 +116,13 @@ const NotificationPrompt = ({ onDismiss }) => {
         }
         .animate-slide-up {
           animation: slide-up 0.3s ease-out;
+        }
+        @keyframes fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.3s ease-out;
         }
       `}</style>
     </div>
