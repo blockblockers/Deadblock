@@ -1,9 +1,12 @@
-// Settings Modal - Enhanced with notifications and app install options
-// UPDATED: Added Push Notifications toggle and Install App button
+// SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// UPDATED: Added push notification subscription management
+// Place in src/components/SettingsModal.jsx
+
 import { useState, useEffect } from 'react';
 import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music, Key, Lock, Eye, EyeOff, Check, Loader, Mail, Trash2, Bell, BellOff, Download, Smartphone, ExternalLink } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { useAuth } from '../contexts/AuthContext';
+import { pushNotificationService } from '../services/pushNotificationService';
 
 const SettingsModal = ({ isOpen, onClose }) => {
   const { 
@@ -25,7 +28,14 @@ const SettingsModal = ({ isOpen, onClose }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
   
-  // Notification states
+  // Push Notification states
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState('default');
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState(null);
+  
+  // Browser Notification states (fallback)
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('default');
   const [requestingNotifications, setRequestingNotifications] = useState(false);
@@ -55,9 +65,22 @@ const SettingsModal = ({ isOpen, onClose }) => {
   const isGoogleUser = user?.app_metadata?.provider === 'google' || 
                        user?.identities?.some(i => i.provider === 'google');
   
-  // Initialize notification and PWA states
+  // Initialize push notifications and other states
   useEffect(() => {
-    // Check notification permission
+    const initPushNotifications = async () => {
+      // Initialize push service
+      const supported = await pushNotificationService.init();
+      setPushSupported(supported);
+      
+      if (supported) {
+        setPushPermission(pushNotificationService.getPermissionStatus());
+        setPushSubscribed(pushNotificationService.isSubscribed());
+      }
+    };
+    
+    initPushNotifications();
+    
+    // Check basic notification permission
     if ('Notification' in window) {
       setNotificationPermission(Notification.permission);
       setNotificationsEnabled(Notification.permission === 'granted');
@@ -102,155 +125,131 @@ const SettingsModal = ({ isOpen, onClose }) => {
     }
   }, [isOpen, isPasswordRecovery]);
 
-  if (!isOpen) return null;
-
-  const handleToggleSound = () => {
-    const newState = !soundEnabled;
-    setSoundEnabled(newState);
-    soundManager.setSoundEnabled(newState);
-    if (newState) {
-      soundManager.playButtonClick();
-    }
-  };
-
-  const handleToggleMusic = () => {
-    const newState = !musicEnabled;
-    setMusicEnabled(newState);
-    soundManager.setMusicEnabled(newState);
-    soundManager.playButtonClick();
-  };
-
-  const handleToggleVibration = () => {
-    const newState = !vibrationEnabled;
-    setVibrationEnabled(newState);
-    soundManager.setVibrationEnabled(newState);
-    if (newState) {
-      soundManager.vibrate(50);
-    }
-    soundManager.playButtonClick();
-  };
-
-  // Handle notification toggle
-  const handleToggleNotifications = async () => {
-    soundManager.playButtonClick();
+  // Handle push notification subscription toggle
+  const handlePushToggle = async () => {
+    if (!pushSupported || !user?.id) return;
     
-    if (!('Notification' in window)) {
-      alert('Notifications are not supported in this browser');
-      return;
-    }
-    
-    if (notificationsEnabled) {
-      // Can't programmatically disable - user must do it in browser settings
-      alert('To disable notifications, please update your browser settings for this site.');
-      return;
-    }
-    
-    setRequestingNotifications(true);
+    setPushLoading(true);
+    setPushError(null);
     
     try {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
-      setNotificationsEnabled(permission === 'granted');
-      
-      if (permission === 'granted') {
-        // Show test notification
-        new Notification('Deadblock', {
-          body: 'Notifications enabled! You\'ll receive game updates.',
-          icon: '/icons/icon-192.png',
-        });
-      } else if (permission === 'denied') {
-        alert('Notifications were blocked. You can enable them in your browser settings.');
+      if (pushSubscribed) {
+        // Unsubscribe
+        await pushNotificationService.unsubscribe(user.id);
+        setPushSubscribed(false);
+        soundManager.playClickSound?.('click');
+      } else {
+        // Subscribe
+        const result = await pushNotificationService.subscribe(user.id);
+        
+        if (result.success) {
+          setPushSubscribed(true);
+          setPushPermission('granted');
+          soundManager.playClickSound?.('success');
+          
+          // Show test notification
+          setTimeout(() => {
+            pushNotificationService.sendTestNotification();
+          }, 500);
+        } else {
+          if (result.reason === 'permission_denied') {
+            setPushPermission('denied');
+            setPushError('Notification permission was denied. Please enable in browser settings.');
+          } else {
+            setPushError('Failed to enable notifications. Please try again.');
+          }
+        }
       }
     } catch (error) {
-      console.error('Error requesting notification permission:', error);
+      console.error('[SettingsModal] Push toggle error:', error);
+      setPushError('An error occurred. Please try again.');
     } finally {
-      setRequestingNotifications(false);
+      setPushLoading(false);
+    }
+  };
+  
+  // Handle basic notification toggle (fallback)
+  const handleNotificationToggle = async () => {
+    if (notificationPermission === 'denied') {
+      return;
+    }
+    
+    if (notificationPermission === 'default') {
+      setRequestingNotifications(true);
+      try {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        setNotificationsEnabled(permission === 'granted');
+        
+        if (permission === 'granted') {
+          // Show test notification
+          new Notification('Notifications Enabled!', {
+            body: 'You will now receive notifications when it\'s your turn.',
+            icon: '/pwa-192x192.png'
+          });
+        }
+      } catch (err) {
+        console.error('Notification permission error:', err);
+      } finally {
+        setRequestingNotifications(false);
+      }
     }
   };
 
-  // Handle app install
-  const handleInstallApp = async () => {
-    soundManager.playButtonClick();
-    
-    if (isIOS) {
-      setShowIOSInstructions(true);
-      return;
-    }
-    
-    if (!deferredPrompt) {
-      // No install prompt available - might already be installed or not supported
-      alert('App installation is not available. You may have already installed the app, or your browser doesn\'t support installation.');
-      return;
-    }
-    
-    try {
+  // Handle PWA install
+  const handleInstall = async () => {
+    if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      
       if (outcome === 'accepted') {
-        console.log('User accepted the install prompt');
         setIsInstalled(true);
       }
-      
       setDeferredPrompt(null);
-    } catch (error) {
-      console.error('Error installing app:', error);
+    } else if (isIOS) {
+      setShowIOSInstructions(true);
     }
   };
-
-  const handleResetLocalData = () => {
-    soundManager.playButtonClick();
-    setShowResetConfirm(true);
+  
+  // Toggle handlers for audio
+  const toggleSound = () => {
+    soundManager.toggleSound();
+    setSoundEnabled(soundManager.isSoundEnabled());
+    soundManager.playClickSound?.('click');
   };
-
-  const handleConfirmReset = async () => {
-    setResetting(true);
-    try {
-      // Clear ALL localStorage
-      localStorage.clear();
-      
-      // Clear Supabase auth data specifically
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('sb-') || key.includes('supabase')) {
-          localStorage.removeItem(key);
-        }
-      });
-      
-      // Clear sessionStorage too
-      sessionStorage.clear();
-      
-      // Force full page reload to entry auth
-      window.location.replace('/');
-    } catch (error) {
-      console.error('Error resetting data:', error);
-      setResetting(false);
+  
+  const toggleMusic = () => {
+    soundManager.toggleMusic();
+    setMusicEnabled(soundManager.isMusicEnabled());
+    soundManager.playClickSound?.('click');
+  };
+  
+  const toggleVibration = () => {
+    soundManager.toggleVibration();
+    setVibrationEnabled(soundManager.isVibrationEnabled());
+    if (soundManager.isVibrationEnabled()) {
+      soundManager.vibrate([50]);
     }
   };
-
+  
+  // Handle sign out
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
-      localStorage.removeItem('deadblock_settings');
-      
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('sb-') || key.includes('supabase')) {
-          localStorage.removeItem(key);
-        }
-      });
-      
-      const result = await signOut();
-      
-      if (result?.error) {
-        console.error('Sign out error:', result.error);
+      // Unsubscribe from push notifications before signing out
+      if (pushSubscribed && user?.id) {
+        await pushNotificationService.unsubscribe(user.id);
       }
-      
-      window.location.replace('/');
-    } catch (error) {
-      console.error('Error signing out:', error);
-      window.location.replace('/');
+      await signOut();
+      onClose();
+    } catch (err) {
+      console.error('Sign out error:', err);
+    } finally {
+      setSigningOut(false);
+      setShowSignOutConfirm(false);
     }
   };
-
+  
+  // Handle password update (when in recovery mode)
   const handleUpdatePassword = async () => {
     setPasswordError('');
     setPasswordSuccess('');
@@ -259,487 +258,471 @@ const SettingsModal = ({ isOpen, onClose }) => {
       setPasswordError('Password must be at least 6 characters');
       return;
     }
+    
     if (newPassword !== confirmPassword) {
       setPasswordError('Passwords do not match');
       return;
     }
     
     setUpdatingPassword(true);
-    
     try {
       const { error } = await updatePassword(newPassword);
-      
       if (error) {
         setPasswordError(error.message || 'Failed to update password');
       } else {
         setPasswordSuccess('Password updated successfully!');
         setNewPassword('');
         setConfirmPassword('');
-        soundManager.playButtonClick();
-        
-        if (isPasswordRecovery) {
-          clearPasswordRecovery?.();
+        // Clear the recovery state
+        if (clearPasswordRecovery) {
+          clearPasswordRecovery();
         }
-        
         setTimeout(() => {
           setShowPasswordReset(false);
           setPasswordSuccess('');
         }, 2000);
       }
-    } catch (error) {
-      setPasswordError(error.message || 'An error occurred');
+    } catch (err) {
+      setPasswordError('An error occurred');
     } finally {
       setUpdatingPassword(false);
     }
   };
-
+  
+  // Handle sending password reset email
   const handleSendResetEmail = async () => {
-    if (!user?.email) {
-      setResetEmailError('No email address found');
-      return;
-    }
-    
-    setSendingResetEmail(true);
     setResetEmailError('');
+    setSendingResetEmail(true);
     
     try {
-      const { error } = await resetPassword(user.email);
-      
+      const { error } = await resetPassword(user?.email);
       if (error) {
         setResetEmailError(error.message || 'Failed to send reset email');
       } else {
         setResetEmailSent(true);
       }
-    } catch (error) {
-      setResetEmailError(error.message || 'An error occurred');
+    } catch (err) {
+      setResetEmailError('An error occurred');
     } finally {
       setSendingResetEmail(false);
     }
   };
-
-  const handleClose = () => {
-    soundManager.playButtonClick();
-    setShowPasswordReset(false);
-    setShowSendResetEmail(false);
-    setPasswordError('');
-    setPasswordSuccess('');
-    setNewPassword('');
-    setConfirmPassword('');
-    onClose();
-  };
-
+  
+  if (!isOpen) return null;
+  
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="w-full max-w-sm max-h-[90vh] bg-gradient-to-br from-slate-900 via-purple-950/30 to-slate-900 rounded-2xl border border-purple-500/40 shadow-[0_0_60px_rgba(168,85,247,0.3)] flex flex-col overflow-hidden">
-        
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl w-full max-w-sm max-h-[90vh] overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.2)] flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-purple-500/20 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-black text-white">Settings</h2>
-            <button
-              onClick={handleClose}
-              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </div>
+        <div className="flex items-center justify-between p-4 border-b border-cyan-500/20 flex-shrink-0">
+          <h2 className="text-lg font-bold text-cyan-300">Settings</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <X size={20} className="text-slate-400" />
+          </button>
         </div>
-
+        
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          
-          {/* Audio Settings */}
-          <div>
-            <h3 className="text-xs font-semibold text-slate-500 tracking-wider mb-3">AUDIO</h3>
-            <div className="space-y-2">
-              {/* Sound Toggle */}
-              <button
-                onClick={handleToggleSound}
-                className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-purple-500/50 hover:bg-slate-800 transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  {soundEnabled ? <Volume2 size={20} className="text-purple-400" /> : <VolumeX size={20} className="text-slate-500" />}
-                  <span className="text-white font-medium text-sm group-hover:text-purple-300 transition-colors">Sound Effects</span>
-                </div>
-                <div className={`w-10 h-6 rounded-full transition-colors ${soundEnabled ? 'bg-purple-600' : 'bg-slate-600'}`}>
-                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform mt-0.5 ${soundEnabled ? 'translate-x-4.5 ml-0.5' : 'translate-x-0.5'}`} />
-                </div>
-              </button>
-
-              {/* Music Toggle */}
-              <button
-                onClick={handleToggleMusic}
-                className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-purple-500/50 hover:bg-slate-800 transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <Music size={20} className={musicEnabled ? 'text-purple-400' : 'text-slate-500'} />
-                  <span className="text-white font-medium text-sm group-hover:text-purple-300 transition-colors">Background Music</span>
-                </div>
-                <div className={`w-10 h-6 rounded-full transition-colors ${musicEnabled ? 'bg-purple-600' : 'bg-slate-600'}`}>
-                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform mt-0.5 ${musicEnabled ? 'translate-x-4.5 ml-0.5' : 'translate-x-0.5'}`} />
-                </div>
-              </button>
-
-              {/* Vibration Toggle */}
-              <button
-                onClick={handleToggleVibration}
-                className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-purple-500/50 hover:bg-slate-800 transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <Vibrate size={20} className={vibrationEnabled ? 'text-purple-400' : 'text-slate-500'} />
-                  <span className="text-white font-medium text-sm group-hover:text-purple-300 transition-colors">Haptic Feedback</span>
-                </div>
-                <div className={`w-10 h-6 rounded-full transition-colors ${vibrationEnabled ? 'bg-purple-600' : 'bg-slate-600'}`}>
-                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform mt-0.5 ${vibrationEnabled ? 'translate-x-4.5 ml-0.5' : 'translate-x-0.5'}`} />
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Notifications Section - NEW */}
-          <div className="border-t border-slate-700/50 pt-4">
-            <h3 className="text-xs font-semibold text-slate-500 tracking-wider mb-3">NOTIFICATIONS</h3>
+          {/* Sound Settings */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Audio</h3>
             
             <button
-              onClick={handleToggleNotifications}
-              disabled={requestingNotifications}
-              className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-cyan-500/50 hover:bg-slate-800 transition-all group"
+              onClick={toggleSound}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                soundEnabled 
+                  ? 'bg-cyan-600/20 border border-cyan-500/30' 
+                  : 'bg-slate-700/50 border border-slate-600/30'
+              }`}
             >
               <div className="flex items-center gap-3">
-                {notificationsEnabled ? (
-                  <Bell size={20} className="text-cyan-400" />
-                ) : (
-                  <BellOff size={20} className="text-slate-500" />
-                )}
-                <div className="text-left">
-                  <div className="text-white font-medium text-sm group-hover:text-cyan-300 transition-colors">
-                    {requestingNotifications ? 'Requesting...' : 'Push Notifications'}
-                  </div>
-                  <div className="text-slate-500 text-xs">
-                    {notificationPermission === 'denied' 
-                      ? 'Blocked in browser settings'
-                      : notificationsEnabled 
-                        ? 'Receive game updates' 
-                        : 'Get notified when it\'s your turn'}
-                  </div>
-                </div>
+                {soundEnabled ? <Volume2 size={20} className="text-cyan-400" /> : <VolumeX size={20} className="text-slate-500" />}
+                <span className={soundEnabled ? 'text-white' : 'text-slate-400'}>Sound Effects</span>
               </div>
-              {requestingNotifications ? (
-                <Loader size={20} className="text-cyan-400 animate-spin" />
-              ) : (
-                <div className={`w-10 h-6 rounded-full transition-colors ${notificationsEnabled ? 'bg-cyan-600' : 'bg-slate-600'}`}>
-                  <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform mt-0.5 ${notificationsEnabled ? 'translate-x-4.5 ml-0.5' : 'translate-x-0.5'}`} />
-                </div>
-              )}
+              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${soundEnabled ? 'bg-cyan-500' : 'bg-slate-600'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${soundEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+            </button>
+            
+            <button
+              onClick={toggleMusic}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                musicEnabled 
+                  ? 'bg-cyan-600/20 border border-cyan-500/30' 
+                  : 'bg-slate-700/50 border border-slate-600/30'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Music size={20} className={musicEnabled ? 'text-cyan-400' : 'text-slate-500'} />
+                <span className={musicEnabled ? 'text-white' : 'text-slate-400'}>Background Music</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${musicEnabled ? 'bg-cyan-500' : 'bg-slate-600'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${musicEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+            </button>
+            
+            <button
+              onClick={toggleVibration}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                vibrationEnabled 
+                  ? 'bg-cyan-600/20 border border-cyan-500/30' 
+                  : 'bg-slate-700/50 border border-slate-600/30'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Vibrate size={20} className={vibrationEnabled ? 'text-cyan-400' : 'text-slate-500'} />
+                <span className={vibrationEnabled ? 'text-white' : 'text-slate-400'}>Haptic Feedback</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${vibrationEnabled ? 'bg-cyan-500' : 'bg-slate-600'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${vibrationEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
             </button>
           </div>
-
-          {/* App Installation Section - NEW */}
-          <div className="border-t border-slate-700/50 pt-4">
-            <h3 className="text-xs font-semibold text-slate-500 tracking-wider mb-3">APP INSTALLATION</h3>
-            
-            {isInstalled ? (
-              <div className="flex items-center gap-3 p-3 bg-green-900/30 rounded-lg border border-green-500/30">
-                <Check size={20} className="text-green-400" />
-                <div>
-                  <div className="text-green-300 font-medium text-sm">App Installed</div>
-                  <div className="text-green-400/70 text-xs">Deadblock is installed on your device</div>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={handleInstallApp}
-                className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-amber-500/50 hover:bg-slate-800 transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  {isIOS ? (
-                    <Smartphone size={20} className="text-amber-400" />
-                  ) : (
-                    <Download size={20} className="text-amber-400" />
-                  )}
-                  <div className="text-left">
-                    <div className="text-white font-medium text-sm group-hover:text-amber-300 transition-colors">
-                      Install Deadblock
+          
+          {/* Push Notifications Section */}
+          {isAuthenticated && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Notifications</h3>
+              
+              {pushSupported ? (
+                <>
+                  <button
+                    onClick={handlePushToggle}
+                    disabled={pushLoading || pushPermission === 'denied'}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                      pushSubscribed 
+                        ? 'bg-green-600/20 border border-green-500/30' 
+                        : pushPermission === 'denied'
+                          ? 'bg-red-900/20 border border-red-500/30'
+                          : 'bg-slate-700/50 border border-slate-600/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {pushLoading ? (
+                        <Loader size={20} className="text-cyan-400 animate-spin" />
+                      ) : pushSubscribed ? (
+                        <Bell size={20} className="text-green-400" />
+                      ) : (
+                        <BellOff size={20} className={pushPermission === 'denied' ? 'text-red-400' : 'text-slate-500'} />
+                      )}
+                      <div className="text-left">
+                        <span className={pushSubscribed ? 'text-white' : pushPermission === 'denied' ? 'text-red-300' : 'text-slate-400'}>
+                          Push Notifications
+                        </span>
+                        <p className="text-xs text-slate-500">
+                          {pushSubscribed 
+                            ? 'Enabled - even when app is closed' 
+                            : pushPermission === 'denied'
+                              ? 'Blocked - enable in browser settings'
+                              : 'Get notified when it\'s your turn'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-slate-500 text-xs">
-                      {isIOS 
-                        ? 'Add to Home Screen for the best experience'
-                        : 'Install as an app on your device'}
+                    {!pushLoading && pushPermission !== 'denied' && (
+                      <div className={`w-10 h-6 rounded-full p-1 transition-colors ${pushSubscribed ? 'bg-green-500' : 'bg-slate-600'}`}>
+                        <div className={`w-4 h-4 rounded-full bg-white transition-transform ${pushSubscribed ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </div>
+                    )}
+                    {pushPermission === 'denied' && (
+                      <span className="text-xs text-red-400">Blocked</span>
+                    )}
+                  </button>
+                  
+                  {pushError && (
+                    <p className="text-xs text-red-400 px-3">{pushError}</p>
+                  )}
+                </>
+              ) : (
+                // Fallback to basic browser notifications
+                <button
+                  onClick={handleNotificationToggle}
+                  disabled={requestingNotifications || notificationPermission === 'denied'}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                    notificationsEnabled 
+                      ? 'bg-green-600/20 border border-green-500/30' 
+                      : notificationPermission === 'denied'
+                        ? 'bg-red-900/20 border border-red-500/30'
+                        : 'bg-slate-700/50 border border-slate-600/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {requestingNotifications ? (
+                      <Loader size={20} className="text-cyan-400 animate-spin" />
+                    ) : notificationsEnabled ? (
+                      <Bell size={20} className="text-green-400" />
+                    ) : (
+                      <BellOff size={20} className={notificationPermission === 'denied' ? 'text-red-400' : 'text-slate-500'} />
+                    )}
+                    <div className="text-left">
+                      <span className={notificationsEnabled ? 'text-white' : 'text-slate-400'}>
+                        Browser Notifications
+                      </span>
+                      <p className="text-xs text-slate-500">
+                        {notificationsEnabled 
+                          ? 'Enabled (when tab is open)' 
+                          : notificationPermission === 'denied'
+                            ? 'Blocked - enable in browser settings'
+                            : 'Works when browser is open'}
+                      </p>
                     </div>
                   </div>
-                </div>
-                <ExternalLink size={18} className="text-slate-400 group-hover:text-amber-400 transition-colors" />
-              </button>
-            )}
-            
-            {/* iOS Instructions Modal */}
-            {showIOSInstructions && (
-              <div className="mt-3 p-3 bg-amber-900/30 rounded-lg border border-amber-500/30">
-                <h4 className="text-amber-300 font-bold text-sm mb-2">To Install on iOS:</h4>
-                <ol className="text-amber-100/80 text-xs space-y-1">
-                  <li>1. Tap the <strong>Share</strong> button (□↑) in Safari</li>
-                  <li>2. Scroll down and tap <strong>"Add to Home Screen"</strong></li>
-                  <li>3. Tap <strong>"Add"</strong> in the top right</li>
-                </ol>
-                <button
-                  onClick={() => setShowIOSInstructions(false)}
-                  className="mt-2 text-xs text-amber-400 hover:text-amber-300"
-                >
-                  Got it
+                  {notificationPermission !== 'denied' && (
+                    <div className={`w-10 h-6 rounded-full p-1 transition-colors ${notificationsEnabled ? 'bg-green-500' : 'bg-slate-600'}`}>
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </div>
+                  )}
                 </button>
+              )}
+            </div>
+          )}
+          
+          {/* App Installation Section */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">App Installation</h3>
+            
+            {isInstalled ? (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-600/20 border border-green-500/30">
+                <Check size={20} className="text-green-400" />
+                <div>
+                  <span className="text-white">App Installed</span>
+                  <p className="text-xs text-green-400/80">Running as standalone app</p>
+                </div>
+              </div>
+            ) : isIOS ? (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowIOSInstructions(!showIOSInstructions)}
+                  className="w-full flex items-center justify-between p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Smartphone size={20} className="text-slate-400" />
+                    <span className="text-slate-300">Install App</span>
+                  </div>
+                  <span className="text-xs text-slate-500">iOS</span>
+                </button>
+                
+                {showIOSInstructions && (
+                  <div className="p-3 rounded-lg bg-blue-900/20 border border-blue-500/30 text-sm space-y-2">
+                    <p className="text-blue-300 font-medium">To install on iOS:</p>
+                    <ol className="text-blue-200/80 space-y-1 list-decimal list-inside text-xs">
+                      <li>Tap the Share button <span className="inline-block w-4 h-4 bg-blue-400/30 rounded text-center text-xs">↑</span></li>
+                      <li>Scroll down and tap "Add to Home Screen"</li>
+                      <li>Tap "Add" to confirm</li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            ) : deferredPrompt ? (
+              <button
+                onClick={handleInstall}
+                className="w-full flex items-center justify-between p-3 rounded-lg bg-cyan-600/20 border border-cyan-500/30 hover:bg-cyan-600/30 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Download size={20} className="text-cyan-400" />
+                  <div className="text-left">
+                    <span className="text-white">Install App</span>
+                    <p className="text-xs text-cyan-400/80">Add to home screen</p>
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30">
+                <Smartphone size={20} className="text-slate-500" />
+                <div>
+                  <span className="text-slate-400">App Installation</span>
+                  <p className="text-xs text-slate-500">Not available in this browser</p>
+                </div>
               </div>
             )}
           </div>
-
-          {/* Password Section - for email/password users only */}
-          {isAuthenticated && !isGoogleUser && (
-            <div className="border-t border-slate-700/50 pt-4">
-              <h3 className="text-xs font-semibold text-slate-500 tracking-wider mb-3">SECURITY</h3>
+          
+          {/* Account Section */}
+          {isAuthenticated && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Account</h3>
               
-              {!showPasswordReset && !showSendResetEmail ? (
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setShowPasswordReset(true)}
-                    className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-purple-500/50 hover:bg-slate-800 transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Key size={20} className="text-purple-400" />
-                      <div className="text-left">
-                        <div className="text-white font-medium text-sm group-hover:text-purple-300 transition-colors">Change Password</div>
-                        <div className="text-slate-500 text-xs">Update your account password</div>
-                      </div>
-                    </div>
-                  </button>
-                  
-                  <button
-                    onClick={() => setShowSendResetEmail(true)}
-                    className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-purple-500/50 hover:bg-slate-800 transition-all group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Mail size={20} className="text-purple-400" />
-                      <div className="text-left">
-                        <div className="text-white font-medium text-sm group-hover:text-purple-300 transition-colors">Send Reset Email</div>
-                        <div className="text-slate-500 text-xs">Get a password reset link</div>
-                      </div>
-                    </div>
-                  </button>
+              {/* Show account email */}
+              <div className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30">
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail size={16} className="text-slate-500" />
+                  <span className="text-slate-400 truncate">{user?.email}</span>
                 </div>
-              ) : showPasswordReset ? (
-                <div className="space-y-3 p-3 bg-slate-800/30 rounded-lg border border-purple-500/20">
-                  <div className="flex items-center justify-between">
-                    <span className="text-purple-300 font-medium text-sm">Change Password</span>
-                    <button onClick={() => setShowPasswordReset(false)} className="text-slate-400 hover:text-white">
-                      <X size={16} />
-                    </button>
+                {isGoogleUser && (
+                  <div className="mt-1 text-xs text-slate-500 flex items-center gap-1">
+                    <ExternalLink size={12} />
+                    Signed in with Google
                   </div>
+                )}
+              </div>
+              
+              {/* Password Reset - Only show for non-Google users or if in recovery mode */}
+              {(!isGoogleUser || isPasswordRecovery) && !showPasswordReset && !showSendResetEmail && (
+                <button
+                  onClick={() => setShowSendResetEmail(true)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-slate-700 transition-colors text-left"
+                >
+                  <Key size={20} className="text-slate-400" />
+                  <div>
+                    <span className="text-slate-300">Change Password</span>
+                    <p className="text-xs text-slate-500">Send password reset email</p>
+                  </div>
+                </button>
+              )}
+              
+              {/* Password Reset Form (for recovery mode) */}
+              {showPasswordReset && (
+                <div className="space-y-3 p-3 rounded-lg bg-amber-900/20 border border-amber-500/30">
+                  <h4 className="text-amber-300 font-bold flex items-center gap-2">
+                    <Key size={16} />
+                    Set New Password
+                  </h4>
                   
                   <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input
                       type={showNewPassword ? 'text' : 'password'}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="New password"
-                      className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm focus:border-purple-500 focus:outline-none pr-10"
+                      className="w-full pl-10 pr-10 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none text-sm"
                     />
                     <button
                       type="button"
                       onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
                     >
-                      {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
                   
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
-                    className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-sm focus:border-purple-500 focus:outline-none"
-                  />
-                  
-                  {passwordError && <p className="text-red-400 text-xs">{passwordError}</p>}
-                  {passwordSuccess && <p className="text-green-400 text-xs flex items-center gap-1"><Check size={14} /> {passwordSuccess}</p>}
-                  
-                  <button
-                    onClick={handleUpdatePassword}
-                    disabled={updatingPassword || !newPassword || !confirmPassword}
-                    className="w-full py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    {updatingPassword ? <><Loader size={16} className="animate-spin" /> Updating...</> : 'Update Password'}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3 p-3 bg-slate-800/30 rounded-lg border border-purple-500/20">
-                  <div className="flex items-center justify-between">
-                    <span className="text-purple-300 font-medium text-sm">Send Reset Email</span>
-                    <button onClick={() => { setShowSendResetEmail(false); setResetEmailSent(false); setResetEmailError(''); }} className="text-slate-400 hover:text-white">
-                      <X size={16} />
-                    </button>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      className="w-full pl-10 pr-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none text-sm"
+                    />
                   </div>
                   
-                  {resetEmailSent ? (
-                    <div className="text-green-400 text-sm flex items-center gap-2">
-                      <Check size={16} />
-                      Reset email sent to {user?.email}
-                    </div>
-                  ) : (
-                    <>
-                      <p className="text-slate-400 text-xs">Send a password reset link to {user?.email}</p>
-                      {resetEmailError && <p className="text-red-400 text-xs">{resetEmailError}</p>}
-                      <button
-                        onClick={handleSendResetEmail}
-                        disabled={sendingResetEmail}
-                        className="w-full py-2 bg-purple-600 hover:bg-purple-500 disabled:bg-slate-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                      >
-                        {sendingResetEmail ? <><Loader size={16} className="animate-spin" /> Sending...</> : 'Send Reset Email'}
-                      </button>
-                    </>
+                  {passwordError && (
+                    <p className="text-red-400 text-xs">{passwordError}</p>
                   )}
+                  
+                  {passwordSuccess && (
+                    <p className="text-green-400 text-xs flex items-center gap-1">
+                      <Check size={14} /> {passwordSuccess}
+                    </p>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleUpdatePassword}
+                      disabled={updatingPassword}
+                      className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
+                    >
+                      {updatingPassword ? 'Updating...' : 'Update Password'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPasswordReset(false);
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setPasswordError('');
+                      }}
+                      className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Send Reset Email Form */}
+              {showSendResetEmail && !showPasswordReset && (
+                <div className="space-y-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30">
+                  {!resetEmailSent ? (
+                    <>
+                      <p className="text-sm text-slate-300">
+                        Send a password reset link to <span className="text-cyan-400">{user?.email}</span>?
+                      </p>
+                      
+                      {resetEmailError && (
+                        <p className="text-red-400 text-xs">{resetEmailError}</p>
+                      )}
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSendResetEmail}
+                          disabled={sendingResetEmail}
+                          className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
+                        >
+                          {sendingResetEmail ? 'Sending...' : 'Send Reset Email'}
+                        </button>
+                        <button
+                          onClick={() => setShowSendResetEmail(false)}
+                          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-2">
+                      <Check size={24} className="text-green-400 mx-auto mb-2" />
+                      <p className="text-green-400 font-bold">Reset Email Sent!</p>
+                      <p className="text-sm text-slate-400 mt-1">Check your inbox for the reset link</p>
+                      <button
+                        onClick={() => {
+                          setShowSendResetEmail(false);
+                          setResetEmailSent(false);
+                        }}
+                        className="mt-3 text-cyan-400 text-sm hover:text-cyan-300"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Sign Out */}
+              {!showSignOutConfirm ? (
+                <button
+                  onClick={() => setShowSignOutConfirm(true)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-red-900/30 hover:border-red-500/30 transition-colors text-left group"
+                >
+                  <LogOut size={20} className="text-slate-400 group-hover:text-red-400" />
+                  <span className="text-slate-300 group-hover:text-red-300">Sign Out</span>
+                </button>
+              ) : (
+                <div className="space-y-2 p-3 rounded-lg bg-red-900/20 border border-red-500/30">
+                  <p className="text-red-300 text-sm">Are you sure you want to sign out?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSignOut}
+                      disabled={signingOut}
+                      className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
+                    >
+                      {signingOut ? 'Signing out...' : 'Sign Out'}
+                    </button>
+                    <button
+                      onClick={() => setShowSignOutConfirm(false)}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
           )}
-
-          {/* Account Info (if authenticated) */}
-          {isAuthenticated && profile && (
-            <div className="border-t border-slate-700/50 pt-4">
-              <h3 className="text-xs font-semibold text-slate-500 tracking-wider mb-3">ACCOUNT</h3>
-              <div className="p-3 bg-slate-800/30 rounded-lg border border-slate-700/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-white font-bold">
-                    {profile?.username?.[0]?.toUpperCase() || 'U'}
-                  </div>
-                  <div>
-                    <div className="text-white font-medium">{profile?.username || 'User'}</div>
-                    <div className="text-slate-500 text-xs">{user?.email}</div>
-                    {isGoogleUser && <div className="text-slate-500 text-xs flex items-center gap-1 mt-0.5">via Google</div>}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Data Management */}
-          <div className="border-t border-slate-700/50 pt-4">
-            <h3 className="text-xs font-semibold text-slate-500 tracking-wider mb-3">DATA MANAGEMENT</h3>
-            
-            <button
-              onClick={handleResetLocalData}
-              className="w-full flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-amber-500/50 hover:bg-slate-800 transition-all group"
-            >
-              <div className="flex items-center gap-3">
-                <RotateCcw size={20} className="text-amber-400" />
-                <div className="text-left">
-                  <div className="text-white font-medium text-sm group-hover:text-amber-300 transition-colors">Reset All Data</div>
-                  <div className="text-slate-500 text-xs">Clear all local data and sign out</div>
-                </div>
-              </div>
-            </button>
-
-            {isAuthenticated && (
-              <button
-                onClick={() => setShowSignOutConfirm(true)}
-                className="w-full mt-2 flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-red-500/50 hover:bg-slate-800 transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <LogOut size={20} className="text-red-400" />
-                  <div className="text-left">
-                    <div className="text-white font-medium text-sm group-hover:text-red-300 transition-colors">Sign Out</div>
-                    <div className="text-slate-500 text-xs">Log out of your account</div>
-                  </div>
-                </div>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-purple-500/20 flex-shrink-0">
-          <button
-            onClick={handleClose}
-            className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white font-bold rounded-lg transition-all shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-          >
-            DONE
-          </button>
         </div>
       </div>
-
-      {/* Reset Confirmation Modal */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-60 p-4">
-          <div className="bg-slate-900 rounded-xl max-w-xs w-full overflow-hidden border border-amber-500/50 shadow-[0_0_40px_rgba(251,191,36,0.3)]">
-            <div className="p-5 text-center">
-              <Trash2 size={48} className="mx-auto text-amber-400 mb-3" />
-              <h3 className="text-lg font-bold text-white mb-2">Reset All Data?</h3>
-              <p className="text-slate-400 text-sm mb-5">
-                This will clear all local data, settings, and sign you out. This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowResetConfirm(false)}
-                  className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-colors"
-                  disabled={resetting}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmReset}
-                  className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                  disabled={resetting}
-                >
-                  {resetting ? (
-                    <>
-                      <Loader size={16} className="animate-spin" />
-                      Resetting...
-                    </>
-                  ) : (
-                    'Reset All'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sign Out Confirmation Modal */}
-      {showSignOutConfirm && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-60 p-4">
-          <div className="bg-slate-900 rounded-xl max-w-xs w-full overflow-hidden border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)]">
-            <div className="p-5 text-center">
-              <AlertTriangle size={48} className="mx-auto text-red-400 mb-3" />
-              <h3 className="text-lg font-bold text-white mb-2">Sign Out?</h3>
-              <p className="text-slate-400 text-sm mb-5">
-                You'll need to sign in again to access online features and your stats.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowSignOutConfirm(false)}
-                  className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg transition-colors"
-                  disabled={signingOut}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSignOut}
-                  className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                  disabled={signingOut}
-                >
-                  {signingOut ? (
-                    <>
-                      <Loader size={16} className="animate-spin" />
-                      Signing out...
-                    </>
-                  ) : (
-                    'Sign Out'
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

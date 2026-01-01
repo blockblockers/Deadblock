@@ -141,7 +141,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
 };
 
 const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = false, onTutorialClose }) => {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
   // v7.8: State for showing tutorial modal
@@ -218,6 +218,18 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
 
   const userId = user?.id;
   const hasMovesPlayed = usedPieces.length > 0;
+
+  // Refresh profile after game ends to update ELO display
+  useEffect(() => {
+    if (showGameOver && refreshProfile) {
+      // Small delay to allow database to update
+      const timer = setTimeout(() => {
+        console.log('[OnlineGameScreen] Refreshing profile after game end to update ELO');
+        refreshProfile();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [showGameOver, refreshProfile]);
 
   // =========================================================================
   // DRAG HANDLERS

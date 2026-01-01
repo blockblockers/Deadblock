@@ -336,7 +336,32 @@ class GameSyncService {
       const headers = getAuthHeaders();
       if (!headers) return;
 
-      // Update winner stats
+      // CRITICAL: Update ELO ratings first
+      console.log('gameSync.updatePlayerStats: Updating ELO ratings...');
+      try {
+        const eloResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/rpc/update_ratings_after_game`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ 
+              p_game_id: gameId, 
+              p_winner_id: winnerId 
+            })
+          }
+        );
+        
+        if (eloResponse.ok) {
+          console.log('gameSync.updatePlayerStats: ELO ratings updated successfully');
+        } else {
+          const errorText = await eloResponse.text();
+          console.error('gameSync.updatePlayerStats: ELO update failed:', errorText);
+        }
+      } catch (eloError) {
+        console.error('gameSync.updatePlayerStats: ELO update exception:', eloError.message);
+      }
+
+      // Update winner stats (win count)
       await fetch(
         `${SUPABASE_URL}/rest/v1/rpc/increment_wins`,
         {
@@ -346,7 +371,7 @@ class GameSyncService {
         }
       ).catch(() => {});
 
-      // Update loser stats
+      // Update loser stats (loss count)
       await fetch(
         `${SUPABASE_URL}/rest/v1/rpc/increment_losses`,
         {

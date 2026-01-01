@@ -3,6 +3,7 @@ import { useGameState } from './hooks/useGameState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isSupabaseConfigured } from './utils/supabase';
 import { useRealtimeConnection } from './hooks/useRealtimeConnection';
+import { pushNotificationService } from './services/pushNotificationService';
 
 // Core screens (always loaded - used frequently)
 import MenuScreen from './components/MenuScreen';
@@ -287,6 +288,34 @@ function AppContent() {
     flipPiece,
     resetCurrentPuzzle,
   } = useGameState();
+
+  // Initialize push notifications service
+  useEffect(() => {
+    const initPushNotifications = async () => {
+      try {
+        const supported = await pushNotificationService.init();
+        console.log('[App] Push notifications supported:', supported);
+        
+        // Set up message listener for notification clicks from service worker
+        pushNotificationService.setupMessageListener((message) => {
+          console.log('[App] Message from service worker:', message);
+          if (message.type === 'NOTIFICATION_CLICK' && message.url) {
+            // Handle navigation from notification click
+            if (message.data?.gameId) {
+              setOnlineGameId(message.data.gameId);
+              setGameMode('online-game');
+            } else if (message.url.includes('/online')) {
+              setGameMode('online-menu');
+            }
+          }
+        });
+      } catch (err) {
+        console.error('[App] Push notification init failed:', err);
+      }
+    };
+    
+    initPushNotifications();
+  }, [setGameMode]);
 
   // Check if user was already authenticated (skip entry screen)
   // This handles page refresh, OAuth return, and any other case where user is authenticated

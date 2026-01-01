@@ -261,8 +261,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   } = useGameState();
   
   // =========================================================================
-  // DRAG AND DROP HANDLERS - FIXED WITH DIAGNOSTIC LOGGING
+  // DRAG AND DROP HANDLERS - v7.11 INSTANT DRAG FIX
   // =========================================================================
+  
+  // v7.11: Instant drag - no threshold needed for touch
 
   // Helper function to start drag (consistent with OnlineGameScreen)
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
@@ -299,11 +301,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     console.log('[WeeklyChallenge] Drag started successfully for:', piece);
   }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove]);
   
-  // v7.9 FIX: Allow positions outside the grid for overflow placement
-  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
-  const MIN_POSITION = -OVERFLOW_AMOUNT;
-  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
-  
   // Calculate which board cell the drag position is over
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -315,14 +312,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const relX = clientX - left;
     const relY = clientY - top;
     
+    if (relX < 0 || relX > width || relY < 0 || relY > height) {
+      return null;
+    }
+    
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    // Allow positions outside the grid bounds for overflow placement
-    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
-      return { row, col };
-    }
-    return null;
+    return { row, col };
   }, []);
 
   // Update drag position and check validity
@@ -406,7 +403,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     document.body.style.touchAction = '';
   }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove]);
 
-  // Create drag handlers for piece tray - FIXED WITH LOGGING
+  // v7.11: Create drag handlers for piece tray - INSTANT DRAG on touch
   const createDragHandlers = useCallback((piece) => {
     console.log('[WeeklyChallenge] createDragHandlers called for:', piece, { 
       gameOver, 
@@ -419,7 +416,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       return {};
     }
 
-    // v7.9: Touch handlers - start drag immediately on touchstart
+    // Touch handlers - start drag IMMEDIATELY on touchstart
     const handleTouchStart = (e) => {
       console.log('[WeeklyChallenge] handleTouchStart for:', piece);
       
@@ -446,14 +443,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       updateDrag(touch.clientX, touch.clientY);
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e) => {
       console.log('[WeeklyChallenge] handleTouchEnd, dragStarted:', hasDragStartedRef.current);
       if (hasDragStartedRef.current) {
+        e.preventDefault();
         endDrag();
       }
     };
 
-    // Mouse down - immediate drag for desktop
+    // Mouse down - also immediate drag for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
       console.log('[WeeklyChallenge] handleMouseDown for:', piece);
@@ -473,7 +471,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
 
   // Handle dragging from board (moving pending piece)
-  // v7.9 FIX: Pass null for elementRect so piece centers under touch point
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     console.log('[WeeklyChallenge] handleBoardDragStart:', piece);
     if (gameOver || !gameStarted) return;
@@ -483,8 +480,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       setPendingMove(null);
     }
     
-    // Pass null for elementRect to center piece under touch point
-    startDrag(piece, clientX, clientY, null);
+    startDrag(piece, clientX, clientY, elementRect);
   }, [gameOver, gameStarted, pendingMove, setPendingMove, startDrag]);
 
   // Global move/end handlers for drag
@@ -803,15 +799,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Game in progress
   return (
     <div 
-      className="bg-slate-950"
+      className="min-h-screen bg-slate-950"
       style={{ 
-        minHeight: '100vh',
-        minHeight: '100dvh', // Dynamic viewport height for mobile
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
         overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom'
+        touchAction: isDragging ? 'none' : 'pan-y'
       }}
     >
       {/* Background */}
@@ -1090,14 +1084,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           onMenu={onMenu}
         />
       )}
-      
-      {/* v7.8: Scroll styles for small screens */}
-      <style>{`
-        /* Allow scroll pass-through on interactive elements */
-        button, [role="button"], input, textarea, select, a {
-          touch-action: manipulation;
-        }
-      `}</style>
     </div>
   );
 };

@@ -1,8 +1,5 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
-// v7.7 FIXES: 
-// - No board preview during drag (only floating piece shown)
-// - Allow dropping with partial overlap (for rotation adjustment)
-// - Improved mobile touch handling
+// UPDATED: Added drag-and-drop for pieces from tray to board
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Flag, XCircle } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -14,13 +11,16 @@ import DPad from './DPad';
 import GameStatus from './GameStatus';
 import GameOverModal from './GameOverModal';
 import DragOverlay from './DragOverlay';
-import AIDragAnimation from './AIDragAnimation';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+
+// Drag detection constants
+// v7.11: Instant drag - no threshold needed for touch, starts immediately
+const DRAG_THRESHOLD = 5; // Only used for board position calculation
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -215,12 +215,7 @@ const GameScreen = ({
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
-  // v7.7: Track preview cell separately without updating board preview
-  const [dragPreviewCell, setDragPreviewCell] = useState(null);
-  // v7.7: Track if at least one cell can be placed (for partial overlap drops)
-  const [hasValidCell, setHasValidCell] = useState(false);
   const boardRef = useRef(null);
-  const trayRef = useRef(null); // Ref for PieceTray (used by AI drag animation)
   const boardBoundsRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const hasDragStartedRef = useRef(false);
@@ -251,12 +246,11 @@ const GameScreen = ({
   }, [pendingMove, rotation, flipped, board]);
 
   // Show game over modal when game ends
-  // v7.8: Increased delay to allow winning animation to complete
   useEffect(() => {
     if (gameOver && winner !== null) {
       const delay = setTimeout(() => {
         setShowGameOverModal(true);
-      }, 1500); // Longer delay for winning animation
+      }, 500);
       return () => clearTimeout(delay);
     }
   }, [gameOver, winner]);
@@ -270,12 +264,6 @@ const GameScreen = ({
   // ==========================================
   
   // Calculate which board cell the drag position is over
-  // v7.7 FIX: Account for the visual offset of the floating piece (40px up from touch)
-  // v7.9 FIX: Allow positions outside the grid for overflow placement (top/left)
-  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
-  const MIN_POSITION = -OVERFLOW_AMOUNT;
-  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
-  
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -283,19 +271,13 @@ const GameScreen = ({
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
-    // The floating piece is shown 40px above the touch point
-    // So we calculate based on where the piece CENTER actually appears
-    const visualY = clientY - 40;
-    
     const relX = clientX - left;
-    const relY = visualY - top;
+    const relY = clientY - top;
     
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    // Allow positions outside the grid bounds for overflow placement
-    // This enables pieces to be dragged partially outside the board
-    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
+    if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
       return { row, col };
     }
     return null;
@@ -325,7 +307,6 @@ const GameScreen = ({
   }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
 
   // Handle starting drag from a pending piece on the board
-  // v7.9 FIX: When dragging from board, center piece under touch point
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
@@ -335,12 +316,13 @@ const GameScreen = ({
       setPendingMove(null);
     }
     
-    // v7.9 FIX: Center the piece under the touch/click point
-    // Unlike dragging from tray (which uses the piece preview center),
-    // board drag should just center under finger for better UX
+    // Start the drag
+    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
+    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
-    setDragOffset({ x: 0, y: 0 }); // Center under touch point
+    setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
     hasDragStartedRef.current = true;
     
@@ -352,7 +334,7 @@ const GameScreen = ({
     document.body.style.touchAction = 'none';
   }, [gameOver, gameMode, currentPlayer, setPendingMove]);
 
-  // Update drag position - v7.7: NO board preview during drag, allow partial overlap drops
+  // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
     if (!isDragging || !draggedPiece) return;
     
@@ -366,63 +348,40 @@ const GameScreen = ({
     // Calculate which cell we're over
     const cell = calculateBoardCell(clientX, clientY);
     
-    if (cell) {
-      // v7.7: Track preview cell WITHOUT updating board preview
-      setDragPreviewCell(cell);
+    if (cell && setPendingMove) {
+      // Update pending move for visual feedback
+      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
       
-      // Check validity
+      // Check if valid drop position
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const perfectValid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(perfectValid);
-      
-      // v7.7: Check if at least one cell can be placed (for rotation adjustment)
-      // This allows dropping even with partial overlap
-      let validCellCount = 0;
-      coords.forEach(([dx, dy]) => {
-        const cellRow = cell.row + dy;
-        const cellCol = cell.col + dx;
-        if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-          const existing = board[cellRow]?.[cellCol];
-          if (existing === null || existing === 0 || existing === undefined) {
-            validCellCount++;
-          }
-        }
-      });
-      setHasValidCell(validCellCount > 0);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
     } else {
       setIsValidDrop(false);
-      setHasValidCell(false);
-      setDragPreviewCell(null);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
-  // End drag - v7.7: Set pendingMove ONLY after drop, allow partial overlap drops
+  // End drag
   const endDrag = useCallback(() => {
     if (!isDragging) return;
     
-    // v7.7: Set pending move AFTER dropping (not during drag)
-    // Allow drop if at least one cell is valid (for rotation adjustment)
-    if (dragPreviewCell && hasValidCell && draggedPiece && setPendingMove) {
-      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
-    }
+    // Keep pending move for user to confirm/adjust
+    // They can still use D-pad and rotate/flip
     
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
-    setHasValidCell(false);
-    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     // Re-enable scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, dragPreviewCell, hasValidCell, draggedPiece, setPendingMove]);
+  }, [isDragging]);
 
   // Create drag handlers for PieceTray
-  // v7.9: Improved - starts drag immediately on touchstart (no waiting for movement)
-  // This makes drag feel instant. Scroll still works on the game container itself.
+  // v7.11: Create drag handlers for PieceTray - INSTANT DRAG on touch
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece)) return {};
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
@@ -544,16 +503,13 @@ const GameScreen = ({
 
   return (
     <div 
-      className="bg-slate-950"
-      style={{ 
-        minHeight: '100vh',
-        minHeight: '100dvh', // Dynamic viewport height for mobile
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      style={needsScroll ? { 
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
-        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom',
-        overscrollBehavior: 'contain',
-      }}
+        touchAction: isDragging ? 'none' : 'pan-y',
+      } : {}}
     >
       {/* Dynamic grid background */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
@@ -569,8 +525,8 @@ const GameScreen = ({
       <FloatingPiecesBackground />
 
       {/* Main content */}
-      <div className="relative min-h-screen flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2">
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
+        <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
           
           {/* Title - CONSISTENT sizing across all game modes */}
           <div className="text-center mb-2">
@@ -587,7 +543,7 @@ const GameScreen = ({
           </div>
 
           {/* Game Area */}
-          <div className="w-full max-w-md">
+          <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
             
             {/* Player Bar - with difficulty shown between YOU and AI */}
             <PlayerBar 
@@ -618,12 +574,6 @@ const GameScreen = ({
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
-                // v7.7: Pass drag preview info for highlighting during drag
-                isDragging={isDragging}
-                dragPreviewCell={dragPreviewCell}
-                draggedPiece={draggedPiece}
-                dragRotation={rotation}
-                dragFlipped={flipped}
               />
             </div>
 
@@ -673,7 +623,7 @@ const GameScreen = ({
           </div>
 
           {/* Piece Tray with drag handlers */}
-          <div ref={trayRef}>
+          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
@@ -690,13 +640,11 @@ const GameScreen = ({
             />
           </div>
           
-          {/* Bottom spacing for small screens */}
-          <div className="h-8 sm:h-4" />
+          {needsScroll && <div className="h-8" />}
         </div>
       </div>
 
       {/* Drag Overlay - floating piece following cursor/finger */}
-      {/* v7.7: No board preview during drag, only shows floating piece */}
       <DragOverlay
         isDragging={isDragging}
         piece={draggedPiece}
@@ -705,22 +653,7 @@ const GameScreen = ({
         rotation={rotation}
         flipped={flipped}
         isValid={isValidDrop}
-        hasValidCell={hasValidCell}
       />
-
-      {/* AI Drag Animation - shows piece flying from tray to board during AI moves */}
-      {aiAnimatingMove?.phase === 'dragging' && (
-        <AIDragAnimation
-          piece={aiAnimatingMove.piece}
-          targetRow={aiAnimatingMove.row}
-          targetCol={aiAnimatingMove.col}
-          rotation={aiAnimatingMove.rotation}
-          flipped={aiAnimatingMove.flipped}
-          boardRef={boardRef}
-          trayRef={trayRef}
-          duration={800}
-        />
-      )}
 
       {/* Game Over Modal */}
       {showGameOverModal && (
@@ -734,8 +667,6 @@ const GameScreen = ({
           onNewGame={onReset}
           onMenu={onMenu}
           onDifficultySelect={onDifficultySelect}
-          difficulty={aiDifficulty}
-          puzzleDifficulty={puzzleDifficulty}
         />
       )}
 
@@ -812,11 +743,6 @@ const GameScreen = ({
         @keyframes error-pulse {
           0%, 100% { box-shadow: 0 0 15px rgba(239,68,68,0.4); }
           50% { box-shadow: 0 0 25px rgba(239,68,68,0.6); }
-        }
-        
-        /* v7.8: Allow scroll pass-through on interactive elements */
-        button, [role="button"], input, textarea, select, a {
-          touch-action: manipulation;
         }
       `}</style>
     </div>

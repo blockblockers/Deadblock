@@ -709,10 +709,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // DRAG AND DROP HANDLERS
   // -------------------------------------------------------------------------
   
-  // v7.9 FIX: Allow positions outside the grid for overflow placement
-  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
-  const MIN_POSITION = -OVERFLOW_AMOUNT;
-  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
+  // v7.11: Instant drag - no threshold needed for touch, starts immediately
   
   // Calculate which board cell the drag position is over
   const calculateBoardCell = useCallback((clientX, clientY) => {
@@ -725,14 +722,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
+    if (relX < 0 || relX > width || relY < 0 || relY > height) {
+      return null;
+    }
+    
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    // Allow positions outside the grid bounds for overflow placement
-    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
-      return { row, col };
-    }
-    return null;
+    return { row, col };
   }, []);
 
   // Update drag position and check validity
@@ -774,16 +771,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     hasDragStartedRef.current = false;
   }, [isValidDrop, pendingMove]);
 
-  // Create drag handlers for piece tray
+  // v7.11: Create drag handlers for piece tray - INSTANT DRAG on touch
   const createDragHandlers = useCallback((piece) => {
-    const getClientPos = (e) => {
-      if (e.touches && e.touches[0]) {
-        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-      }
-      return { clientX: e.clientX, clientY: e.clientY };
-    };
-
-    // v7.9: Touch handlers - start drag immediately on touchstart
+    // Touch handlers - start drag IMMEDIATELY on touchstart
     const handleTouchStart = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
@@ -792,7 +782,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       e.preventDefault();
       e.stopPropagation();
       
-      const { clientX, clientY } = getClientPos(e);
+      const touch = e.touches[0];
+      const { clientX, clientY } = touch;
       
       // Update board bounds
       if (boardRef.current) {
@@ -813,24 +804,21 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
 
     const handleTouchMove = (e) => {
       if (!hasDragStartedRef.current) return;
-      if (gameState !== GAME_STATES.PLAYING) return;
+      e.preventDefault();
       
-      if (e.cancelable) {
-        e.preventDefault();
-      }
-      
-      const { clientX, clientY } = getClientPos(e);
-      updateDrag(clientX, clientY);
+      const touch = e.touches[0];
+      updateDrag(touch.clientX, touch.clientY);
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e) => {
       if (hasDragStartedRef.current) {
+        e.preventDefault();
         endDrag();
       }
       hasDragStartedRef.current = false;
     };
 
-    // Desktop mouse handler - start drag immediately on mousedown
+    // Desktop mouse handler - also immediate
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
       if (gameState !== GAME_STATES.PLAYING) return;
@@ -844,7 +832,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
       
-      // Start drag immediately for desktop
+      // Start drag immediately
       hasDragStartedRef.current = true;
       setIsDragging(true);
       setDraggedPiece(piece);
@@ -862,7 +850,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameState, usedPieces, rotation, flipped, updateDrag, endDrag]);
+  }, [gameState, usedPieces, updateDrag, endDrag]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -1161,9 +1149,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     }
     
     const [dr, dc] = DIRECTION_DELTAS[direction];
-    // Allow positions outside the grid bounds for overflow placement (within reasonable limits)
-    const newRow = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.row + dr));
-    const newCol = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.col + dc));
+    const newRow = pendingMove.row + dr;
+    const newCol = pendingMove.col + dc;
     
     console.log('[SpeedPuzzle] Moving piece:', { from: { row: pendingMove.row, col: pendingMove.col }, to: { row: newRow, col: newCol } });
     
@@ -1328,20 +1315,18 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // -------------------------------------------------------------------------
   // RENDER
   // -------------------------------------------------------------------------
-  // v7.8: Always enable scrolling for small screens
-  const scrollStyles = {
-    minHeight: '100vh',
-    minHeight: '100dvh', // Dynamic viewport height for mobile
+  const scrollStyles = needsScroll ? {
     overflowY: 'auto',
     overflowX: 'hidden',
     WebkitOverflowScrolling: 'touch',
-    touchAction: isDragging ? 'none' : 'pan-y pinch-zoom',
+    touchAction: 'pan-y',
+    scrollBehavior: 'smooth',
     overscrollBehavior: 'contain',
-  };
+  } : {};
 
   return (
     <div 
-      className="bg-slate-950"
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
       style={scrollStyles}
     >
       {/* Grid background */}
@@ -1355,7 +1340,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       <div className={`fixed bottom-20 right-10 w-72 h-72 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
       
       {/* Content */}
-      <div className="relative min-h-screen flex flex-col items-center px-2 py-2 pb-8">
+      <div className={`relative ${needsScroll ? 'pb-safe min-h-full' : 'h-full'} flex flex-col items-center px-2 py-2`}>
         {/* Header */}
         <div className="w-full max-w-md mb-2 flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -1562,11 +1547,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         }
         .animate-timer-pulse {
           animation: timer-pulse 0.5s ease-in-out infinite;
-        }
-        
-        /* v7.8: Allow scroll pass-through on interactive elements */
-        button, [role="button"], input, textarea, select, a {
-          touch-action: manipulation;
         }
       `}</style>
     </div>
