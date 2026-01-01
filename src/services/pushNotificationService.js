@@ -13,7 +13,7 @@ import { supabase } from '../utils/supabase';
 // Generate with: npx web-push generate-vapid-keys
 // Store the private key securely (in Supabase secrets/environment variables)
 // Replace this with your actual public key
-const VAPID_PUBLIC_KEY = BEz7oIWn2ESc7ahvq894zbJNKV9dDYRIRNuAvCpuvTMh4NOAFT-U5UeU4H2Y93JK3NN_IXG03VibeeO3Z4ZXmmY;
+const VAPID_PUBLIC_KEY = 'BEz7oIWn2ESc7ahvq894zbJNKV9dDYRIRNuAvCpuvTMh4NOAFT-U5UeU4H2Y93JK3NN_IXG03VibeeO3Z4ZXmmY';
 
 class PushNotificationService {
   constructor() {
