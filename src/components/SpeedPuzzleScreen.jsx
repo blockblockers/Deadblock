@@ -711,6 +711,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   
   // v7.11: Instant drag - no threshold needed for touch, starts immediately
   
+  // v7.11: Finger offset to match DragOverlay visual position
+  const FINGER_OFFSET_MOBILE = 50;
+  const FINGER_OFFSET_DESKTOP = 30;
+  
   // Calculate which board cell the drag position is over
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -719,8 +723,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
+    // Check if mobile
+    const isMobile = window.innerWidth < 640;
+    const fingerOffset = isMobile ? FINGER_OFFSET_MOBILE : FINGER_OFFSET_DESKTOP;
+    
+    // Apply same offset as DragOverlay so placement matches visual
+    const adjustedY = clientY - fingerOffset;
+    
     const relX = clientX - left;
-    const relY = clientY - top;
+    const relY = adjustedY - top;
     
     if (relX < 0 || relX > width || relY < 0 || relY > height) {
       return null;

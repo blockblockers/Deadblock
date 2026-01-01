@@ -1,5 +1,5 @@
 // DragOverlay.jsx - Floating piece preview during drag operations
-// v7.7 FIX: Fully transparent background, no board preview, only shows the dragged piece
+// v7.11 FIX: Properly center piece under touch/cursor position
 // This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
 
 import { memo } from 'react';
@@ -9,10 +9,10 @@ import { pieceColors } from '../utils/pieces';
 /**
  * DragOverlay - Renders ONLY the floating piece that follows the drag position
  * 
- * v7.7 FIXES:
- * - Fully transparent background (no box around pieces)
- * - Single floating piece only (no mirror preview on board)
- * - Works with conflict drops (shows cyan glow even if partial overlap)
+ * v7.11 FIXES:
+ * - Properly centers piece under touch point
+ * - Offset prop now correctly applied
+ * - Piece follows finger accurately
  */
 const DragOverlay = memo(({ 
   piece, 
@@ -23,11 +23,9 @@ const DragOverlay = memo(({
   isValid = false,
   isValidDrop,
   isDragging = true,
-  // v7.7: New prop - true if at least one cell can be placed
   hasValidCell = true,
 }) => {
   // Support both prop names for compatibility
-  // v7.7: Use hasValidCell if provided, otherwise fall back to isValidDrop/isValid
   const showAsValid = hasValidCell || isValidDrop || isValid;
   
   // Detect mobile for matching grid size
@@ -56,28 +54,30 @@ const DragOverlay = memo(({
   // Get original piece color
   const colorClass = pieceColors[piece] || 'bg-gradient-to-br from-cyan-400 to-blue-500';
   
-  // Glow colors - cyan when valid (or has at least one valid cell), red only when completely invalid
+  // Glow colors
   const glowColor = showAsValid 
-    ? 'rgba(34, 211, 238, 0.8)' // Cyan for valid/partial
-    : 'rgba(239, 68, 68, 0.8)'; // Red for completely invalid
+    ? 'rgba(34, 211, 238, 0.8)'
+    : 'rgba(239, 68, 68, 0.8)';
   
   const outerGlow = showAsValid
     ? '0 0 25px rgba(34,211,238,0.5), 0 0 50px rgba(34,211,238,0.3)'
     : '0 0 15px rgba(239,68,68,0.4), 0 0 30px rgba(239,68,68,0.2)';
 
+  // v7.11: Center piece under touch point, with slight vertical offset so finger doesn't cover it
+  // The piece center should be slightly above the touch point for visibility
+  const fingerOffset = isMobile ? 50 : 30; // More offset on mobile so thumb doesn't cover piece
+
   return (
     <>
-      {/* Main floating piece - NO background container, just the blocks */}
       <div
         className="fixed pointer-events-none z-[9999]"
         style={{
           left: position.x - pieceWidth / 2,
-          top: position.y - pieceHeight / 2 - 40, // Offset up so finger doesn't cover piece
+          top: position.y - pieceHeight / 2 - fingerOffset,
           transform: 'translate3d(0, 0, 0)',
           willChange: 'left, top',
         }}
       >
-        {/* Piece grid - transparent container, only blocks visible */}
         <div 
           style={{
             display: 'grid',
@@ -102,10 +102,7 @@ const DragOverlay = memo(({
                   boxShadow: `0 0 12px ${glowColor}, inset 0 0 8px rgba(255,255,255,0.2)`,
                 }}
               >
-                {/* Inner gradient shine */}
                 <div className="absolute inset-0 bg-gradient-to-br from-white/35 via-transparent to-black/20" />
-                
-                {/* Subtle border glow */}
                 <div 
                   className="absolute inset-0 rounded-md sm:rounded-lg"
                   style={{
@@ -118,11 +115,6 @@ const DragOverlay = memo(({
           })}
         </div>
       </div>
-      
-      {/* Minimal keyframes for subtle effects */}
-      <style>{`
-        /* No animations needed - keep it clean and responsive */
-      `}</style>
     </>
   );
 });

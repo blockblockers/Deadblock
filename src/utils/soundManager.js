@@ -1,179 +1,165 @@
-// Sound Manager - With seamless audio looping using Web Audio API
-// Uses AudioBufferSourceNode for gapless background music loops
-// UPDATED: Added playPuzzleSolvedSound() and playGameOver() for weekly challenge notifications
+// soundManager.js - Complete audio management for Deadblock
+// v7.11 - Added toggle functions for Settings modal
 
 class SoundManager {
   constructor() {
     this.audioContext = null;
-    this.musicBuffer = null;
+    this.soundEnabled = this.loadSetting('soundEnabled', true);
+    this.musicEnabled = this.loadSetting('musicEnabled', true);
+    this.vibrationEnabled = this.loadSetting('vibrationEnabled', true);
+    this.musicVolume = this.loadSetting('musicVolume', 0.3);
+    this.soundVolume = this.loadSetting('soundVolume', 0.5);
+    
+    // Music
     this.musicSource = null;
+    this.musicBuffer = null;
     this.musicGainNode = null;
+    this.isMusicPlaying = false;
     
-    this.musicEnabled = true;
-    this.sfxEnabled = true;
-    this.vibrationEnabled = true;
-    this.bgMusicVolume = 0.3;
-    this.sfxVolume = 0.5;
-    this.hasInteracted = false;
-    this.musicLoaded = false;
-    this.musicPlaying = false;
+    // Preloaded sounds
+    this.sounds = {};
     
-    this.loadSettings();
+    // Initialize on first user interaction
+    this.initialized = false;
   }
 
-  loadSettings() {
+  loadSetting(key, defaultValue) {
     try {
-      const saved = localStorage.getItem('deadblock-settings');
-      if (saved) {
-        const s = JSON.parse(saved);
-        this.bgMusicVolume = (s.musicVolume ?? 30) / 100;
-        this.sfxVolume = (s.sfxVolume ?? 50) / 100;
-        this.musicEnabled = s.musicEnabled ?? true;
-        this.sfxEnabled = s.sfxEnabled ?? true;
-        this.vibrationEnabled = s.vibrationEnabled ?? true;
-      }
-    } catch (e) {}
-  }
-
-  // Initialize audio context (call on user interaction)
-  initAudioContext() {
-    if (this.audioContext) return this.audioContext;
-    
-    try {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) {
-        this.audioContext = new AC();
-        
-        // Create a gain node for music volume control
-        this.musicGainNode = this.audioContext.createGain();
-        this.musicGainNode.gain.value = this.bgMusicVolume;
-        this.musicGainNode.connect(this.audioContext.destination);
-        
-        console.log('Audio context created');
+      const value = localStorage.getItem(`deadblock_${key}`);
+      if (value !== null) {
+        return JSON.parse(value);
       }
     } catch (e) {
-      console.warn('No AudioContext support:', e);
+      console.warn(`[SoundManager] Failed to load setting ${key}:`, e);
     }
-    
-    return this.audioContext;
+    return defaultValue;
   }
 
-  // Load music file into buffer (only needs to happen once)
-  async loadMusicBuffer() {
-    if (this.musicLoaded || this.musicBuffer) return;
-    if (!this.audioContext) return;
+  saveSetting(key, value) {
+    try {
+      localStorage.setItem(`deadblock_${key}`, JSON.stringify(value));
+    } catch (e) {
+      console.warn(`[SoundManager] Failed to save setting ${key}:`, e);
+    }
+  }
+
+  async init() {
+    if (this.initialized) return;
     
+    try {
+      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Resume if suspended (required for iOS)
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
+      
+      // Create music gain node
+      this.musicGainNode = this.audioContext.createGain();
+      this.musicGainNode.gain.value = this.musicEnabled ? this.musicVolume : 0;
+      this.musicGainNode.connect(this.audioContext.destination);
+      
+      this.initialized = true;
+      console.log('Audio context created');
+      
+      // Load music buffer
+      await this.loadMusicBuffer();
+    } catch (e) {
+      console.warn('[SoundManager] Failed to initialize:', e);
+    }
+  }
+
+  async loadMusicBuffer() {
     try {
       console.log('Loading music buffer...');
-      const response = await fetch('/sounds/background-music.mp3');
-      const arrayBuffer = await response.arrayBuffer();
-      this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      this.musicLoaded = true;
-      console.log('Music buffer loaded successfully');
+      const response = await fetch('/audio/background-music.mp3');
+      if (!response.ok) {
+        // If no music file, generate a simple ambient loop
+        this.musicBuffer = this.generateAmbientLoop();
+        console.log('Generated ambient music');
+      } else {
+        const arrayBuffer = await response.arrayBuffer();
+        this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+        console.log('Music buffer loaded successfully');
+      }
     } catch (e) {
-      console.warn('Could not load music buffer:', e);
+      // Generate simple ambient music if loading fails
+      this.musicBuffer = this.generateAmbientLoop();
+      console.log('Generated ambient music (fallback)');
     }
   }
 
-  // Start seamless looping music
-  startMusic() {
-    if (!this.musicEnabled || !this.musicBuffer || !this.audioContext) return;
-    if (this.musicPlaying) return;
+  generateAmbientLoop() {
+    // Generate a simple ambient drone
+    const sampleRate = this.audioContext.sampleRate;
+    const duration = 8; // 8 second loop
+    const buffer = this.audioContext.createBuffer(2, sampleRate * duration, sampleRate);
     
-    try {
-      // Create a new buffer source (they can only be played once)
-      this.musicSource = this.audioContext.createBufferSource();
-      this.musicSource.buffer = this.musicBuffer;
-      this.musicSource.loop = true;
-      
-      // Set loop points for seamless looping (entire buffer)
-      this.musicSource.loopStart = 0;
-      this.musicSource.loopEnd = this.musicBuffer.duration;
-      
-      // Connect to gain node for volume control
-      this.musicSource.connect(this.musicGainNode);
-      
-      // Start playback
-      this.musicSource.start(0);
-      this.musicPlaying = true;
-      
-      console.log('Music started (seamless loop)');
-    } catch (e) {
-      console.warn('Could not start music:', e);
+    for (let channel = 0; channel < 2; channel++) {
+      const data = buffer.getChannelData(channel);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / sampleRate;
+        // Layered sine waves for ambient feel
+        const freq1 = 55 + (channel * 0.5); // Base frequency
+        const freq2 = 82.5 + (channel * 0.3);
+        const freq3 = 110;
+        
+        data[i] = (
+          Math.sin(2 * Math.PI * freq1 * t) * 0.15 +
+          Math.sin(2 * Math.PI * freq2 * t) * 0.1 +
+          Math.sin(2 * Math.PI * freq3 * t) * 0.05 +
+          // Add subtle modulation
+          Math.sin(2 * Math.PI * freq1 * t * (1 + Math.sin(t * 0.5) * 0.02)) * 0.1
+        ) * (0.8 + Math.sin(t * 0.3) * 0.2); // Volume modulation
+      }
     }
+    
+    return buffer;
   }
 
-  // Stop music
-  stopMusic() {
-    if (this.musicSource && this.musicPlaying) {
-      try {
-        this.musicSource.stop();
-      } catch (e) {}
-      this.musicSource = null;
-      this.musicPlaying = false;
-    }
+  // =========================================================================
+  // TOGGLE FUNCTIONS (for Settings modal)
+  // =========================================================================
+
+  toggleSound() {
+    this.soundEnabled = !this.soundEnabled;
+    this.saveSetting('soundEnabled', this.soundEnabled);
+    console.log('[SoundManager] Sound toggled:', this.soundEnabled);
+    return this.soundEnabled;
   }
 
-  // Call this on EVERY user click/tap
-  onUserInteraction() {
-    // Create audio context on first interaction
-    if (!this.audioContext) {
-      this.initAudioContext();
-    }
-
-    // Resume audio context if suspended (critical for mobile)
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      this.audioContext.resume().then(() => {
-        console.log('Audio context resumed');
-        // Try to start music after resume
-        if (this.hasInteracted && this.musicEnabled && !this.musicPlaying && this.musicBuffer) {
-          this.startMusic();
-        }
-      }).catch(() => {});
-    }
-
-    // Load and start background music on first interaction
-    if (!this.hasInteracted && this.musicEnabled) {
-      this.hasInteracted = true;
-      this.loadMusicBuffer().then(() => {
-        this.startMusic();
-      });
-    }
-  }
-
-  // Legacy method names for compatibility
-  createAndPlayMusic() {
-    this.onUserInteraction();
-  }
-
-  stopBackgroundMusic() {
-    this.stopMusic();
-  }
-
-  pauseBackgroundMusic() {
-    this.stopMusic();
-  }
-
-  resumeBackgroundMusic() {
-    if (this.musicEnabled && this.hasInteracted && this.musicBuffer) {
-      this.startMusic();
-    }
-  }
-
-  setBgMusicVolume(vol) {
-    this.bgMusicVolume = Math.max(0, Math.min(1, vol));
+  toggleMusic() {
+    this.musicEnabled = !this.musicEnabled;
+    this.saveSetting('musicEnabled', this.musicEnabled);
+    
     if (this.musicGainNode) {
-      this.musicGainNode.gain.value = this.bgMusicVolume;
+      this.musicGainNode.gain.value = this.musicEnabled ? this.musicVolume : 0;
     }
+    
+    // Start or stop music based on new state
+    if (this.musicEnabled && !this.isMusicPlaying) {
+      this.startMusic();
+    } else if (!this.musicEnabled && this.isMusicPlaying) {
+      this.stopMusic();
+    }
+    
+    console.log('[SoundManager] Music toggled:', this.musicEnabled);
+    return this.musicEnabled;
   }
 
-  setSfxVolume(vol) {
-    this.sfxVolume = Math.max(0, Math.min(1, vol));
+  toggleVibration() {
+    this.vibrationEnabled = !this.vibrationEnabled;
+    this.saveSetting('vibrationEnabled', this.vibrationEnabled);
+    console.log('[SoundManager] Vibration toggled:', this.vibrationEnabled);
+    return this.vibrationEnabled;
   }
 
-  // Getter methods
+  // =========================================================================
+  // GETTERS (for Settings modal to read current state)
+  // =========================================================================
+
   isSoundEnabled() {
-    return this.sfxEnabled;
+    return this.soundEnabled;
   }
 
   isMusicEnabled() {
@@ -184,290 +170,230 @@ class SoundManager {
     return this.vibrationEnabled;
   }
 
-  setSoundEnabled(enabled) {
-    this.sfxEnabled = enabled;
-    this.saveSettings();
-  }
+  // =========================================================================
+  // MUSIC CONTROLS
+  // =========================================================================
 
-  setMusicEnabled(enabled) {
-    this.musicEnabled = enabled;
-    this.saveSettings();
-    if (!enabled) {
-      this.stopMusic();
-    } else if (this.hasInteracted && this.musicBuffer) {
-      this.startMusic();
-    }
-  }
-
-  setSfxEnabled(enabled) {
-    this.sfxEnabled = enabled;
-    this.saveSettings();
-  }
-
-  setVibrationEnabled(enabled) {
-    this.vibrationEnabled = enabled;
-    this.saveSettings();
-  }
-
-  // Save settings to localStorage
-  saveSettings() {
+  async startMusic() {
+    if (!this.initialized) await this.init();
+    if (!this.musicBuffer || this.isMusicPlaying) return;
+    
     try {
-      const settings = {
-        musicVolume: this.bgMusicVolume * 100,
-        sfxVolume: this.sfxVolume * 100,
-        musicEnabled: this.musicEnabled,
-        sfxEnabled: this.sfxEnabled,
-        vibrationEnabled: this.vibrationEnabled
-      };
-      localStorage.setItem('deadblock-settings', JSON.stringify(settings));
+      this.musicSource = this.audioContext.createBufferSource();
+      this.musicSource.buffer = this.musicBuffer;
+      this.musicSource.loop = true;
+      this.musicSource.connect(this.musicGainNode);
+      this.musicSource.start(0);
+      this.isMusicPlaying = true;
+      console.log('Music started (seamless loop)');
     } catch (e) {
-      console.warn('Could not save settings:', e);
+      console.warn('[SoundManager] Failed to start music:', e);
     }
   }
 
-  // Simple beep using AudioContext
-  playBeep(freq = 440, duration = 0.1) {
-    if (!this.sfxEnabled || !this.audioContext) return;
-    if (this.audioContext.state === 'suspended') return;
-
-    try {
-      const osc = this.audioContext.createOscillator();
-      const gain = this.audioContext.createGain();
-      
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      gain.gain.setValueAtTime(this.sfxVolume * 0.2, this.audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, this.audioContext.currentTime + duration);
-      
-      osc.connect(gain);
-      gain.connect(this.audioContext.destination);
-      osc.start();
-      osc.stop(this.audioContext.currentTime + duration);
-    } catch (e) {}
+  stopMusic() {
+    if (this.musicSource) {
+      try {
+        this.musicSource.stop();
+        this.musicSource.disconnect();
+      } catch (e) {
+        // Ignore errors if already stopped
+      }
+      this.musicSource = null;
+    }
+    this.isMusicPlaying = false;
+    console.log('Music stopped');
   }
 
-  // Play a tone with specific parameters (for melodies)
-  playTone(freq, duration, startTime = 0) {
-    if (!this.sfxEnabled || !this.audioContext) return;
-    if (this.audioContext.state === 'suspended') return;
-
-    try {
-      const osc = this.audioContext.createOscillator();
-      const gain = this.audioContext.createGain();
-      
-      osc.frequency.value = freq;
-      osc.type = 'sine';
-      
-      const actualStartTime = this.audioContext.currentTime + startTime;
-      gain.gain.setValueAtTime(this.sfxVolume * 0.25, actualStartTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, actualStartTime + duration);
-      
-      osc.connect(gain);
-      gain.connect(this.audioContext.destination);
-      osc.start(actualStartTime);
-      osc.stop(actualStartTime + duration);
-    } catch (e) {}
-  }
-
-  vibrate(pattern = 'short') {
-    if (!this.vibrationEnabled || !navigator.vibrate) return;
+  setMusicVolume(volume) {
+    this.musicVolume = Math.max(0, Math.min(1, volume));
+    this.saveSetting('musicVolume', this.musicVolume);
     
-    const patterns = {
-      short: 20,
-      medium: 40,
-      long: 80,
-      soft: 15,
-      confirm: [20, 40, 20],
-      error: [40, 20, 40],
-      win: [80, 40, 80, 40, 160]
-    };
+    if (this.musicGainNode && this.musicEnabled) {
+      this.musicGainNode.gain.value = this.musicVolume;
+    }
+  }
+
+  setSoundVolume(volume) {
+    this.soundVolume = Math.max(0, Math.min(1, volume));
+    this.saveSetting('soundVolume', this.soundVolume);
+  }
+
+  // =========================================================================
+  // SOUND EFFECTS
+  // =========================================================================
+
+  playSound(frequency, duration = 0.1, type = 'sine', volume = 0.3) {
+    if (!this.soundEnabled || !this.initialized || !this.audioContext) return;
     
-    navigator.vibrate(patterns[pattern] || 20);
+    try {
+      const oscillator = this.audioContext.createOscillator();
+      const gainNode = this.audioContext.createGain();
+      
+      oscillator.type = type;
+      oscillator.frequency.value = frequency;
+      
+      gainNode.gain.value = volume * this.soundVolume;
+      gainNode.gain.exponentialRampToValueAtTime(
+        0.001,
+        this.audioContext.currentTime + duration
+      );
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
+      
+      oscillator.start();
+      oscillator.stop(this.audioContext.currentTime + duration);
+    } catch (e) {
+      // Ignore sound errors
+    }
   }
 
-  // === Convenience methods ===
-  
-  playButtonClick() {
-    this.onUserInteraction();
-    this.playBeep(600, 0.08);
-    this.vibrate('short');
-  }
-
+  // Game-specific sounds
   playPieceSelect() {
-    this.onUserInteraction();
-    this.playBeep(880, 0.1);
-    this.vibrate('short');
+    this.playSound(440, 0.08, 'sine', 0.2);
+    this.playSound(660, 0.08, 'sine', 0.15);
   }
 
-  playPieceRotate() {
-    this.playBeep(660, 0.08);
-  }
-
-  playPieceFlip() {
-    this.playBeep(550, 0.08);
-  }
-
-  playPieceMove() {
-    this.playBeep(440, 0.05);
+  playPieceDrop() {
+    this.playSound(330, 0.12, 'sine', 0.25);
+    setTimeout(() => this.playSound(440, 0.1, 'sine', 0.2), 50);
   }
 
   playPiecePlace() {
-    this.playBeep(523, 0.12);
-    this.vibrate('medium');
+    this.playSound(523, 0.1, 'sine', 0.3);
+    setTimeout(() => this.playSound(659, 0.1, 'sine', 0.25), 30);
+    setTimeout(() => this.playSound(784, 0.15, 'sine', 0.2), 60);
   }
 
-  playConfirm() {
-    this.playBeep(700, 0.15);
-    this.vibrate('confirm');
+  playInvalidMove() {
+    this.playSound(200, 0.15, 'sawtooth', 0.2);
+    setTimeout(() => this.playSound(180, 0.15, 'sawtooth', 0.15), 100);
   }
 
-  playCancel() {
-    this.playBeep(330, 0.1);
+  playRotate() {
+    this.playSound(600, 0.05, 'sine', 0.15);
+    setTimeout(() => this.playSound(700, 0.05, 'sine', 0.12), 30);
   }
 
-  playWin() {
-    this.playBeep(880, 0.2);
-    this.vibrate('win');
+  playFlip() {
+    this.playSound(500, 0.05, 'sine', 0.15);
+    setTimeout(() => this.playSound(400, 0.05, 'sine', 0.12), 30);
   }
 
-  playLose() {
-    this.playBeep(220, 0.3);
-    this.vibrate('error');
+  playButtonClick() {
+    this.playSound(800, 0.05, 'sine', 0.15);
   }
 
-  playError() {
-    this.playBeep(220, 0.15);
-    this.vibrate('error');
-  }
-
-  playNotification() {
-    this.playBeep(660, 0.1);
-    this.vibrate('soft');
-  }
-
-  playSuccess() {
-    this.playBeep(770, 0.15);
-    this.vibrate('soft');
-  }
-
-  playInvalid() {
-    this.playBeep(180, 0.2);
-    this.vibrate('error');
-  }
-
-  // =====================================================
-  // NEW: Weekly Challenge Sound Effects
-  // =====================================================
-
-  /**
-   * Play celebratory sound when player wins weekly challenge puzzle
-   * Ascending major arpeggio: C5 → E5 → G5 → C6
-   */
-  playPuzzleSolvedSound() {
-    this.onUserInteraction();
-    
-    // Ascending celebratory tones (C major arpeggio)
-    const notes = [
-      { freq: 523, delay: 0 },      // C5
-      { freq: 659, delay: 0.1 },    // E5
-      { freq: 784, delay: 0.2 },    // G5
-      { freq: 1047, delay: 0.3 }    // C6
-    ];
-    
-    notes.forEach(note => {
-      this.playTone(note.freq, 0.15, note.delay);
-    });
-    
-    this.vibrate('win');
-  }
-
-  /**
-   * Play game over sound when AI wins (player loses weekly challenge)
-   * Descending minor progression: G4 → E4 → C4 → G3
-   */
-  playGameOver() {
-    this.onUserInteraction();
-    
-    // Descending somber tones
-    const notes = [
-      { freq: 392, delay: 0 },      // G4
-      { freq: 330, delay: 0.12 },   // E4
-      { freq: 262, delay: 0.24 },   // C4
-      { freq: 196, delay: 0.36 }    // G3
-    ];
-    
-    notes.forEach(note => {
-      this.playTone(note.freq, 0.2, note.delay);
-    });
-    
-    this.vibrate('error');
-  }
-
-  // Generic playSound method - maps sound names to methods
-  playSound(name) {
-    this.onUserInteraction();
-    switch (name) {
-      case 'win':
-        this.playWin();
-        break;
-      case 'lose':
-        this.playLose();
-        break;
-      case 'error':
-        this.playError();
-        break;
-      case 'notification':
-        this.playNotification();
-        break;
-      case 'success':
-        this.playSuccess();
-        break;
-      case 'invalid':
-        this.playInvalid();
-        break;
-      case 'click':
-        this.playButtonClick();
-        break;
+  playClickSound(type = 'default') {
+    switch (type) {
       case 'select':
-        this.playPieceSelect();
-        break;
-      case 'place':
-        this.playPiecePlace();
+        this.playSound(600, 0.05, 'sine', 0.15);
         break;
       case 'confirm':
-        this.playConfirm();
+        this.playSound(880, 0.08, 'sine', 0.2);
         break;
-      case 'cancel':
-        this.playCancel();
-        break;
-      case 'puzzle-solved':
-        this.playPuzzleSolvedSound();
-        break;
-      case 'game-over':
-        this.playGameOver();
+      case 'back':
+        this.playSound(400, 0.05, 'sine', 0.15);
         break;
       default:
-        this.playBeep(500, 0.1);
+        this.playSound(700, 0.05, 'sine', 0.15);
     }
   }
 
-  playClickSound(type) {
-    this.onUserInteraction();
-    const freqs = {
-      select: 880,
-      rotate: 660,
-      flip: 550,
-      confirm: 700,
-      cancel: 330,
-      error: 220,
-      place: 523,
-      move: 440,
-      success: 770,
-      default: 600
-    };
-    this.playBeep(freqs[type] || freqs.default, 0.08);
+  playWin() {
+    // Victory fanfare
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((freq, i) => {
+      setTimeout(() => this.playSound(freq, 0.2, 'sine', 0.3), i * 100);
+    });
+  }
+
+  playLose() {
+    // Defeat sound
+    this.playSound(300, 0.3, 'sine', 0.2);
+    setTimeout(() => this.playSound(250, 0.3, 'sine', 0.18), 150);
+    setTimeout(() => this.playSound(200, 0.4, 'sine', 0.15), 300);
+  }
+
+  playDraw() {
+    this.playSound(440, 0.2, 'sine', 0.2);
+    setTimeout(() => this.playSound(440, 0.2, 'sine', 0.2), 200);
+  }
+
+  playNotification() {
+    this.playSound(880, 0.1, 'sine', 0.25);
+    setTimeout(() => this.playSound(1100, 0.1, 'sine', 0.2), 80);
+  }
+
+  playAchievement() {
+    // Achievement unlock fanfare
+    const notes = [659, 784, 988, 1319];
+    notes.forEach((freq, i) => {
+      setTimeout(() => this.playSound(freq, 0.15, 'sine', 0.25), i * 80);
+    });
+  }
+
+  playCountdown() {
+    this.playSound(440, 0.1, 'sine', 0.3);
+  }
+
+  playCountdownFinal() {
+    this.playSound(880, 0.2, 'sine', 0.35);
+  }
+
+  // =========================================================================
+  // HAPTIC FEEDBACK
+  // =========================================================================
+
+  vibrate(pattern = 50) {
+    if (!this.vibrationEnabled) return;
+    
+    try {
+      if (navigator.vibrate) {
+        navigator.vibrate(pattern);
+      }
+    } catch (e) {
+      // Ignore vibration errors
+    }
+  }
+
+  vibrateLight() {
+    this.vibrate(30);
+  }
+
+  vibrateMedium() {
+    this.vibrate(50);
+  }
+
+  vibrateHeavy() {
+    this.vibrate([50, 30, 50]);
+  }
+
+  vibrateSuccess() {
+    this.vibrate([30, 50, 30, 50, 100]);
+  }
+
+  vibrateError() {
+    this.vibrate([100, 50, 100]);
   }
 }
 
+// Create singleton instance
 export const soundManager = new SoundManager();
+
+// Auto-initialize on first user interaction
+if (typeof window !== 'undefined') {
+  const initOnInteraction = () => {
+    soundManager.init();
+    document.removeEventListener('click', initOnInteraction);
+    document.removeEventListener('touchstart', initOnInteraction);
+    document.removeEventListener('keydown', initOnInteraction);
+  };
+  
+  document.addEventListener('click', initOnInteraction, { once: true });
+  document.addEventListener('touchstart', initOnInteraction, { once: true });
+  document.addEventListener('keydown', initOnInteraction, { once: true });
+}
+
 export default soundManager;

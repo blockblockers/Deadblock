@@ -219,9 +219,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   const userId = user?.id;
   const hasMovesPlayed = usedPieces.length > 0;
 
-  // Refresh profile after game ends to update ELO display
+  // Refresh profile after game ends to update ELO display (only once)
+  const hasRefreshedAfterGameEnd = useRef(false);
+  
   useEffect(() => {
-    if (showGameOver && refreshProfile) {
+    if (showGameOver && refreshProfile && !hasRefreshedAfterGameEnd.current) {
+      hasRefreshedAfterGameEnd.current = true;
       // Small delay to allow database to update
       const timer = setTimeout(() => {
         console.log('[OnlineGameScreen] Refreshing profile after game end to update ELO');
@@ -230,6 +233,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
       return () => clearTimeout(timer);
     }
   }, [showGameOver, refreshProfile]);
+  
+  // Reset the flag when starting a new game
+  useEffect(() => {
+    if (!showGameOver) {
+      hasRefreshedAfterGameEnd.current = false;
+    }
+  }, [showGameOver]);
 
   // =========================================================================
   // DRAG HANDLERS
@@ -239,6 +249,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   const MIN_POSITION = -OVERFLOW_AMOUNT;
   const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
   
+  // v7.11: Finger offset to match DragOverlay visual position
+  // This ensures what you see is where the piece will land
+  const FINGER_OFFSET_MOBILE = 50;
+  const FINGER_OFFSET_DESKTOP = 30;
+  
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -246,8 +261,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
+    // Check if mobile
+    const isMobile = window.innerWidth < 640;
+    const fingerOffset = isMobile ? FINGER_OFFSET_MOBILE : FINGER_OFFSET_DESKTOP;
+    
+    // Apply same offset as DragOverlay so placement matches visual
+    const adjustedY = clientY - fingerOffset;
+    
     const relX = clientX - left;
-    const relY = clientY - top;
+    const relY = adjustedY - top;
     
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);

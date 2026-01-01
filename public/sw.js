@@ -1,8 +1,9 @@
 // Service Worker for Deadblock Push Notifications
 // Place this file in your public folder (public/sw.js)
 // This runs in the background even when the app is closed
+// v2 - Enhanced debug logging
 
-const CACHE_NAME = 'deadblock-v1';
+const CACHE_NAME = 'deadblock-v2';
 const APP_URL = self.location.origin;
 
 // Install event - cache essential assets
@@ -44,7 +45,9 @@ self.addEventListener('activate', (event) => {
 
 // Push event - received a push notification from server
 self.addEventListener('push', (event) => {
-  console.log('[SW] Push received:', event);
+  console.log('[SW] ========== PUSH EVENT RECEIVED ==========');
+  console.log('[SW] Push event:', event);
+  console.log('[SW] Has data:', !!event.data);
   
   let data = {
     title: 'Deadblock',
@@ -58,12 +61,30 @@ self.addEventListener('push', (event) => {
   // Parse push data if available
   if (event.data) {
     try {
-      const pushData = event.data.json();
+      // Try to get raw text first for debugging
+      const rawText = event.data.text();
+      console.log('[SW] Raw push data text:', rawText);
+      
+      // Now parse as JSON
+      const pushData = JSON.parse(rawText);
+      console.log('[SW] Parsed push data:', JSON.stringify(pushData, null, 2));
       data = { ...data, ...pushData };
+      console.log('[SW] Final notification data:', JSON.stringify(data, null, 2));
     } catch (e) {
-      console.log('[SW] Failed to parse push data:', e);
-      data.body = event.data.text();
+      console.error('[SW] Failed to parse push data as JSON:', e);
+      console.log('[SW] Error name:', e.name);
+      console.log('[SW] Error message:', e.message);
+      
+      // Try to use raw text as body
+      try {
+        data.body = event.data.text();
+        console.log('[SW] Using raw text as body:', data.body);
+      } catch (e2) {
+        console.error('[SW] Failed to get text from push data:', e2);
+      }
     }
+  } else {
+    console.log('[SW] No data in push event - showing default notification');
   }
   
   // Notification options
@@ -102,18 +123,29 @@ self.addEventListener('push', (event) => {
     ];
   }
   
+  console.log('[SW] Showing notification with options:', JSON.stringify(options, null, 2));
+  
   event.waitUntil(
     self.registration.showNotification(data.title, options)
+      .then(() => {
+        console.log('[SW] Notification shown successfully!');
+      })
+      .catch((err) => {
+        console.error('[SW] Failed to show notification:', err);
+      })
   );
 });
 
 // Notification click event - user clicked the notification
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Notification clicked:', event);
+  console.log('[SW] Action:', event.action);
   
   const notification = event.notification;
   const action = event.action;
   const data = notification.data || {};
+  
+  console.log('[SW] Notification data:', data);
   
   notification.close();
   
@@ -124,10 +156,8 @@ self.addEventListener('notificationclick', (event) => {
     urlToOpen = `/game/${data.gameId}`;
   } else if (data.type === 'game_invite') {
     if (action === 'accept' && data.inviteId) {
-      // Will handle accept on the client side
       urlToOpen = `/online?acceptInvite=${data.inviteId}`;
     } else if (action === 'decline') {
-      // Just close, decline handled passively
       return;
     } else {
       urlToOpen = '/online';
@@ -138,13 +168,17 @@ self.addEventListener('notificationclick', (event) => {
     urlToOpen = `/game/${data.gameId}?openChat=true`;
   }
   
+  console.log('[SW] Opening URL:', urlToOpen);
+  
   // Focus existing window or open new one
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      console.log('[SW] Found', windowClients.length, 'window clients');
+      
       // Check if there's already a window open
       for (const client of windowClients) {
         if (client.url.includes(APP_URL) && 'focus' in client) {
-          // Navigate existing window to the URL
+          console.log('[SW] Focusing existing client and posting message');
           client.postMessage({
             type: 'NOTIFICATION_CLICK',
             url: urlToOpen,
@@ -156,6 +190,7 @@ self.addEventListener('notificationclick', (event) => {
       
       // Open new window if none exists
       if (clients.openWindow) {
+        console.log('[SW] Opening new window');
         return clients.openWindow(urlToOpen);
       }
     })
@@ -165,11 +200,6 @@ self.addEventListener('notificationclick', (event) => {
 // Notification close event
 self.addEventListener('notificationclose', (event) => {
   console.log('[SW] Notification closed:', event);
-  
-  // Track dismissals if needed for analytics
-  const data = event.notification.data || {};
-  
-  // Could send to analytics here
 });
 
 // Message event - communication from main app
@@ -183,9 +213,21 @@ self.addEventListener('message', (event) => {
   if (event.data.type === 'GET_VERSION') {
     event.ports[0].postMessage({ version: CACHE_NAME });
   }
+  
+  // Test push handling
+  if (event.data.type === 'TEST_PUSH') {
+    console.log('[SW] Test push requested');
+    self.registration.showNotification('Test Push', {
+      body: 'This is a test push notification from service worker',
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: 'test-push',
+      data: { type: 'test' }
+    });
+  }
 });
 
-// Background sync for offline actions (optional enhancement)
+// Background sync for offline actions
 self.addEventListener('sync', (event) => {
   console.log('[SW] Background sync:', event.tag);
   
@@ -194,10 +236,18 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-// Helper function for background sync (placeholder)
+// Helper function for background sync
 async function syncGameMoves() {
-  // Could be used to sync offline moves when connection restored
   console.log('[SW] Syncing game moves...');
 }
 
-console.log('[SW] Service worker loaded');
+// Log any errors
+self.addEventListener('error', (event) => {
+  console.error('[SW] Error:', event.error);
+});
+
+self.addEventListener('unhandledrejection', (event) => {
+  console.error('[SW] Unhandled rejection:', event.reason);
+});
+
+console.log('[SW] Service worker loaded - version:', CACHE_NAME);
