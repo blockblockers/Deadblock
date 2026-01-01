@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Swords, UserPlus, X, Check, Clock } from 'lucide-react';
 import { inviteService } from '../services/inviteService';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../utils/supabase';
 import { soundManager } from '../utils/soundManager';
 import { notificationService } from '../services/notificationService';
 

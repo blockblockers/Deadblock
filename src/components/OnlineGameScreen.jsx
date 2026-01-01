@@ -1181,8 +1181,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     <div 
       className="bg-slate-950"
       style={{ 
-        minHeight: '100vh',
-        minHeight: '100dvh', // Dynamic viewport height for mobile
+        minHeight: '100dvh', // Dynamic viewport height for mobile (fallback handled by CSS)
         overflowY: 'auto',
         overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch',
