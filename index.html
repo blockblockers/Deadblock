@@ -995,7 +995,10 @@
         const dismissCount = parseInt(localStorage.getItem('pwa-dismiss-count') || '0', 10) + 1;
         localStorage.setItem('pwa-dismiss-count', dismissCount.toString());
         
-        // After 2 wa-was-installed', 'true');
+        // After 2 dismisses, stop showing for 10 years (permanent)
+        if (dismissCount >= 2) {
+          pwaLog('Dismissed 2+ times - permanent dismiss');
+          localStorage.setItem('pwa-was-installed', 'true');
           localStorage.setItem('pwa-install-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
         } else {
           pwaLog('Dismissed (' + dismissCount + '/2) - will show again in 7 days');
