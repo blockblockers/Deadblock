@@ -7,7 +7,7 @@
 // - Storing subscriptions in Supabase
 // - Permission requests
 
-import { supabase } from '../lib/supabase';
+import { supabase } from '../utils/supabase';
 
 // VAPID public key - YOU MUST GENERATE YOUR OWN
 // Generate with: npx web-push generate-vapid-keys
