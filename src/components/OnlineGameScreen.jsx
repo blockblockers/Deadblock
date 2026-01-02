@@ -2,7 +2,6 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
-// v7.8: Added HowToPlay tutorial for new users joining via invite
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,13 +22,16 @@ import HeadToHead from './HeadToHead';
 import FloatingPiecesBackground from './FloatingPiecesBackground';
 import TierIcon from './TierIcon';
 import PlacementAnimation, { usePlacementAnimation } from './PlacementAnimation';
-import HowToPlayModal from './HowToPlayModal';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { realtimeManager } from '../services/realtimeManager';
+
+// Drag detection constants
+const DRAG_THRESHOLD = 5; // Reduced from 10 for faster drag response on phones
+const SCROLL_ANGLE_THRESHOLD = 60;
 
 // Orange/Amber theme for online mode
 const theme = {
@@ -140,18 +142,9 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
   );
 };
 
-const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = false, onTutorialClose }) => {
-  const { user, profile, refreshProfile } = useAuth();
+const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
+  const { user, profile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
-  
-  // v7.8: State for showing tutorial modal
-  const [showHowToPlay, setShowHowToPlay] = useState(showTutorial);
-  
-  // v7.8: Handle tutorial close and notify parent
-  const handleTutorialClose = useCallback(() => {
-    setShowHowToPlay(false);
-    onTutorialClose?.();
-  }, [onTutorialClose]);
   
   // Track the current game (can change on rematch)
   const [currentGameId, setCurrentGameId] = useState(gameId);
@@ -199,9 +192,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   
-  // v7.9: Track opponent's last move for highlighting
-  const [lastMoveCells, setLastMoveCells] = useState(null);
-  
   // Refs
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
@@ -219,40 +209,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   const userId = user?.id;
   const hasMovesPlayed = usedPieces.length > 0;
 
-  // Refresh profile after game ends to update ELO display (only once)
-  const hasRefreshedAfterGameEnd = useRef(false);
-  
-  useEffect(() => {
-    if (showGameOver && refreshProfile && !hasRefreshedAfterGameEnd.current) {
-      hasRefreshedAfterGameEnd.current = true;
-      // Small delay to allow database to update
-      const timer = setTimeout(() => {
-        console.log('[OnlineGameScreen] Refreshing profile after game end to update ELO');
-        refreshProfile();
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [showGameOver, refreshProfile]);
-  
-  // Reset the flag when starting a new game
-  useEffect(() => {
-    if (!showGameOver) {
-      hasRefreshedAfterGameEnd.current = false;
-    }
-  }, [showGameOver]);
-
   // =========================================================================
   // DRAG HANDLERS
   // =========================================================================
-  // v7.9 FIX: Allow positions outside the grid for overflow placement
-  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
-  const MIN_POSITION = -OVERFLOW_AMOUNT;
-  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
-  
-  // v7.11: Finger offset to match DragOverlay visual position
-  // This ensures what you see is where the piece will land
-  const FINGER_OFFSET_MOBILE = 50;
-  const FINGER_OFFSET_DESKTOP = 30;
   
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -261,24 +220,21 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
-    // Check if mobile
-    const isMobile = window.innerWidth < 640;
-    const fingerOffset = isMobile ? FINGER_OFFSET_MOBILE : FINGER_OFFSET_DESKTOP;
-    
-    // Apply same offset as DragOverlay so placement matches visual
-    const adjustedY = clientY - fingerOffset;
-    
     const relX = clientX - left;
-    const relY = adjustedY - top;
+    const relY = clientY - top;
     
-    const col = Math.floor(relX / cellWidth);
-    const row = Math.floor(relY / cellHeight);
-    
-    // Allow positions outside the grid bounds for overflow placement
-    if (row >= MIN_POSITION && row <= MAX_POSITION && col >= MIN_POSITION && col <= MAX_POSITION) {
-      return { row, col };
+    if (relX < 0 || relX > width || relY < 0 || relY > height) {
+      return null;
     }
-    return null;
+    
+    return { row: Math.floor(relY / cellHeight), col: Math.floor(relX / cellWidth) };
+  }, []);
+
+  const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
+    const deltaX = Math.abs(currentX - startX);
+    const deltaY = Math.abs(currentY - startY);
+    const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+    return angle > SCROLL_ANGLE_THRESHOLD;
   }, []);
 
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
@@ -306,7 +262,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
   }, [game?.status, usedPieces, isMyTurn]);
 
   // FIXED: Handle drag from pending piece on board
-  // v7.9 FIX: Center piece under touch point when dragging from board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     if (game?.status !== 'active' || !isMyTurn) return;
     
@@ -317,12 +272,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // v7.9 FIX: Center the piece under the touch/click point
-    // Unlike dragging from tray (which uses the piece preview center),
-    // board drag should just center under finger for better UX
+    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
+    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
-    setDragOffset({ x: 0, y: 0 }); // Center under touch point
+    setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
     hasDragStartedRef.current = true;
     
@@ -341,7 +296,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    const cell = calculateBoardCell(clientX, clientY);
+    // Calculate board cell based on piece CENTER position (not finger position)
+    // This makes the ghost appear exactly where the piece would land relative to finger hold
+    const cell = calculateBoardCell(clientX - dragOffset.x, clientY - dragOffset.y);
     
     if (cell) {
       setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
@@ -351,7 +308,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, dragOffset]);
 
   const endDrag = useCallback(() => {
     if (!isDragging) return;
@@ -367,48 +324,73 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     document.body.style.touchAction = '';
   }, [isDragging]);
 
-  // Create drag handlers for PieceTray
-  // v7.9: Improved - starts drag immediately on touchstart (no waiting for movement)
-  // This makes drag feel instant. Scroll still works on the game container itself.
   const createDragHandlers = useCallback((piece) => {
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) {
       return {};
     }
 
-    // Touch handlers - start drag IMMEDIATELY on touchstart
+    let startX = 0, startY = 0, elementRect = null, isDragGesture = false;
+    let touchStartTime = 0;
+
     const handleTouchStart = (e) => {
-      // Prevent default to stop browser from trying to scroll
-      e.preventDefault();
-      e.stopPropagation();
-      
       const touch = e.touches[0];
-      const elementRect = e.currentTarget.getBoundingClientRect();
+      startX = touch.clientX;
+      startY = touch.clientY;
+      elementRect = e.currentTarget.getBoundingClientRect();
+      isDragGesture = false;
+      touchStartTime = Date.now();
+      hasDragStartedRef.current = false;
+      dragStartRef.current = { x: startX, y: startY };
       
-      // Start drag immediately - no waiting for movement threshold
-      startDrag(piece, touch.clientX, touch.clientY, elementRect);
+      // Prevent default to avoid scroll interference during potential drag
+      // e.preventDefault(); // Don't prevent yet - wait for gesture detection
     };
 
     const handleTouchMove = (e) => {
-      if (!hasDragStartedRef.current) return;
-      e.preventDefault();
-      
       const touch = e.touches[0];
-      updateDrag(touch.clientX, touch.clientY);
-    };
-
-    const handleTouchEnd = (e) => {
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const elapsed = Date.now() - touchStartTime;
+      
+      // Quick gesture detection - if moved enough within 150ms, it's likely a drag
+      if (!isDragGesture && distance > DRAG_THRESHOLD) {
+        // Check if this is more horizontal than vertical (drag vs scroll)
+        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
+        
+        // If moving mostly horizontal, or if it's a quick gesture, treat as drag
+        if (isHorizontalish || elapsed < 150) {
+          isDragGesture = true;
+        } else {
+          // Vertical scroll - don't interfere
+          return;
+        }
+      }
+      
+      // Start dragging if we've decided it's a drag gesture
+      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+        e.preventDefault();
+        startDrag(piece, touch.clientX, touch.clientY, elementRect);
+      }
+      
+      // Continue drag updates
       if (hasDragStartedRef.current) {
         e.preventDefault();
-        endDrag();
+        updateDrag(touch.clientX, touch.clientY);
       }
     };
 
-    // Mouse handlers for desktop - also immediate
+    const handleTouchEnd = () => {
+      if (hasDragStartedRef.current) endDrag();
+      isDragGesture = false;
+    };
+
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
-      e.preventDefault();
-      
-      const elementRect = e.currentTarget.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      elementRect = e.currentTarget.getBoundingClientRect();
+      // FIXED: Actually start the drag for desktop/mouse events
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
@@ -418,7 +400,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
     };
-  }, [game?.status, usedPieces, isMyTurn, startDrag, updateDrag, endDrag]);
+  }, [game?.status, usedPieces, isMyTurn, isScrollGesture, startDrag, updateDrag, endDrag]);
 
   // Global mouse handlers
   useEffect(() => {
@@ -518,24 +500,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
             if (!isSender && !showRematchModal && !rematchDeclined) {
               setShowRematchModal(true);
               soundManager.playSound('notification');
-              
-              // Send browser notification if page is not visible
-              if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-                try {
-                  const opponentName = opponent?.display_name || opponent?.username || 'Opponent';
-                  new Notification('Deadblock - Rematch Request', {
-                    body: `${opponentName} wants a rematch!`,
-                    icon: '/pwa-192x192.png',
-                    badge: '/pwa-192x192.png',
-                    tag: 'deadblock-rematch',
-                    renotify: true,
-                    requireInteraction: true,
-                    silent: false
-                  });
-                } catch (err) {
-                  console.log('[OnlineGameScreen] Browser notification failed:', err);
-                }
-              }
             }
             
             // If we're the requester, show waiting state
@@ -632,9 +596,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
           return { row, col };
         });
         
-        // v7.9: Track opponent's last move for persistent highlighting
-        setLastMoveCells(newCells);
-        
         const boardRect = boardRef.current.getBoundingClientRect();
         const cellSize = boardRect.width / BOARD_SIZE;
         
@@ -672,24 +633,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
         turnStartRef.current = Date.now();
         // Play notification sound when it becomes our turn
         soundManager.playSound('notification');
-        
-        // Send browser notification if page is not visible
-        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-          try {
-            const opponentName = opp?.display_name || opp?.username || 'Opponent';
-            new Notification('Deadblock - Your Turn!', {
-              body: `${opponentName} made a move. It's your turn to play!`,
-              icon: '/pwa-192x192.png',
-              badge: '/pwa-192x192.png',
-              tag: 'deadblock-turn',
-              renotify: true,
-              requireInteraction: false,
-              silent: false
-            });
-          } catch (err) {
-            console.log('[OnlineGameScreen] Browser notification failed:', err);
-          }
-        }
       }
 
       // FIXED: Game over detection
@@ -825,24 +768,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
             console.log('[OnlineGameScreen] New chat message from opponent!');
             setHasUnreadChat(true);
             soundManager.playSound('notification');
-            
-            // Send browser notification if page is not visible
-            if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-              try {
-                const senderName = opponent?.display_name || opponent?.username || 'Opponent';
-                new Notification('Deadblock - New Message', {
-                  body: `${senderName}: ${payload.new.message?.substring(0, 50) || 'Sent a message'}${payload.new.message?.length > 50 ? '...' : ''}`,
-                  icon: '/pwa-192x192.png',
-                  badge: '/pwa-192x192.png',
-                  tag: 'deadblock-chat',
-                  renotify: true,
-                  requireInteraction: false,
-                  silent: false
-                });
-              } catch (err) {
-                console.log('[OnlineGameScreen] Browser notification failed:', err);
-              }
-            }
           }
         }
       )
@@ -901,9 +826,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     const deltas = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
     const [dRow, dCol] = deltas[direction];
     
-    // Allow positions outside the grid bounds for overflow placement
-    const newRow = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.row + dRow));
-    const newCol = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.col + dCol));
+    const newRow = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.row + dRow));
+    const newCol = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.col + dCol));
     
     setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     soundManager.playClickSound('neutral');
@@ -932,9 +856,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
     
     moveInProgressRef.current = true;
     console.log('handleConfirm: Starting...', { pendingMove, rotation, flipped });
-
-    // v7.9: Clear opponent's last move highlight when we make our move
-    setLastMoveCells(null);
 
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
@@ -1201,14 +1122,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
 
   return (
     <div 
-      className="bg-slate-950"
+      className="min-h-screen bg-slate-950 overflow-x-hidden"
       style={{ 
-        minHeight: '100dvh', // Dynamic viewport height for mobile (fallback handled by CSS)
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        touchAction: isDragging ? 'none' : 'pan-y pinch-zoom',
-        overscrollBehavior: 'contain',
+        overflowY: needsScroll ? 'auto' : 'hidden',
+        touchAction: isDragging ? 'none' : 'pan-y'
       }}
     >
       {/* Background effects */}
@@ -1235,8 +1152,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
       )}
 
       {/* Main content */}
-      <div className="relative z-10 min-h-screen">
-        <div className="max-w-lg mx-auto p-2 sm:p-4">
+      <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
+        <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
           {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
           <div className="flex items-center justify-between mb-2">
@@ -1294,7 +1211,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
                   currentPlayer={myPlayerNumber}
                   onCellClick={handleCellClick}
                   onPendingPieceDragStart={handleBoardDragStart}
-                  lastMoveCells={lastMoveCells}
                 />
                 {/* Placement Animation Overlay */}
                 {placementAnimation && (
@@ -1715,25 +1631,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame, showTutorial = fa
             : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`
         ) : null}
       />
-      
-      {/* v7.8: How to Play tutorial for new users */}
-      <HowToPlayModal 
-        isOpen={showHowToPlay} 
-        onClose={handleTutorialClose} 
-      />
-      
-      {/* v7.8: Scroll styles for small screens */}
-      <style>{`
-        /* Allow scroll pass-through on interactive elements */
-        button, [role="button"], input, textarea, select, a {
-          touch-action: manipulation;
-        }
-        
-        /* Bottom spacing for safe area */
-        .safe-bottom {
-          padding-bottom: max(16px, env(safe-area-inset-bottom));
-        }
-      `}</style>
     </div>
   );
 };

@@ -198,7 +198,7 @@ const MenuScreen = ({
                   color="bg-gradient-to-br from-amber-500 to-orange-600"
                   glowColor="rgba(251,191,36,0.5)"
                   title="ONLINE MULTIPLAYER"
-                  subtitle={isOfflineMode ? "Sign in for ranked play" : (isAuthenticated ? "Ranked matches vs humans" : "Sign in for ranked play")}
+                  subtitle={isOfflineMode ? "Sign in for ranked play" : (isAuthenticated ? "Ranked matches vs humans" : "Sign in to play")}
                   textColor="text-amber-300"
                   hoverTextColor="group-hover:text-amber-200"
                 />
@@ -277,28 +277,7 @@ const MenuScreen = ({
             </div>
           </div>
           
-          {/* Footer with Privacy & Terms links */}
-          <div className="text-center mt-4">
-            <div className="flex items-center justify-center gap-3 text-xs">
-              <a 
-                href="/privacy.html" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
-              >
-                Privacy Policy
-              </a>
-              <span className="text-slate-700">•</span>
-              <a 
-                href="/terms.html" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
-              >
-                Terms of Service
-              </a>
-            </div>
-          </div>
+          {/* Footer links removed - now in index.html footer */}
         </div>
         
         {/* Bottom padding */}

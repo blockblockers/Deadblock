@@ -19,8 +19,8 @@ import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Drag detection constants
-// v7.11: Instant drag - no threshold needed for touch, starts immediately
-const DRAG_THRESHOLD = 5; // Only used for board position calculation
+const DRAG_THRESHOLD = 10;
+const SCROLL_ANGLE_THRESHOLD = 60;
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -263,10 +263,6 @@ const GameScreen = ({
   // Drag-and-drop handlers
   // ==========================================
   
-  // v7.11: Finger offset to match DragOverlay visual position
-  const FINGER_OFFSET_MOBILE = 50;
-  const FINGER_OFFSET_DESKTOP = 30;
-  
   // Calculate which board cell the drag position is over
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -275,15 +271,8 @@ const GameScreen = ({
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
-    // Check if mobile
-    const isMobile = window.innerWidth < 640;
-    const fingerOffset = isMobile ? FINGER_OFFSET_MOBILE : FINGER_OFFSET_DESKTOP;
-    
-    // Apply same offset as DragOverlay so placement matches visual
-    const adjustedY = clientY - fingerOffset;
-    
     const relX = clientX - left;
-    const relY = adjustedY - top;
+    const relY = clientY - top;
     
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
@@ -292,6 +281,17 @@ const GameScreen = ({
       return { row, col };
     }
     return null;
+  }, []);
+
+  // Check if movement is a scroll gesture (mostly vertical)
+  const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
+    const dx = Math.abs(currentX - startX);
+    const dy = Math.abs(currentY - startY);
+    
+    if (dx + dy < DRAG_THRESHOLD) return null;
+    
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    return angle > SCROLL_ANGLE_THRESHOLD;
   }, []);
 
   // Start drag from piece tray
@@ -356,8 +356,9 @@ const GameScreen = ({
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Calculate which cell we're over
-    const cell = calculateBoardCell(clientX, clientY);
+    // Calculate which cell we're over based on piece CENTER position (not finger position)
+    // This makes the ghost appear exactly where the piece would land relative to finger hold
+    const cell = calculateBoardCell(clientX - dragOffset.x, clientY - dragOffset.y);
     
     if (cell && setPendingMove) {
       // Update pending move for visual feedback
@@ -370,7 +371,7 @@ const GameScreen = ({
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove, dragOffset]);
 
   // End drag
   const endDrag = useCallback(() => {
@@ -392,30 +393,50 @@ const GameScreen = ({
   }, [isDragging]);
 
   // Create drag handlers for PieceTray
-  // v7.11: Create drag handlers for PieceTray - INSTANT DRAG on touch
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece)) return {};
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
 
-    // Touch handlers - start drag IMMEDIATELY on touchstart
+    let startX = 0;
+    let startY = 0;
+    let elementRect = null;
+    let gestureDecided = false;
+
     const handleTouchStart = (e) => {
-      // Prevent default to stop browser from trying to scroll
-      e.preventDefault();
-      e.stopPropagation();
-      
       const touch = e.touches[0];
-      const elementRect = e.currentTarget.getBoundingClientRect();
-      
-      // Start drag immediately - no waiting for movement threshold
-      startDrag(piece, touch.clientX, touch.clientY, elementRect);
+      startX = touch.clientX;
+      startY = touch.clientY;
+      elementRect = e.currentTarget.getBoundingClientRect();
+      gestureDecided = false;
+      dragStartRef.current = { x: startX, y: startY };
     };
 
     const handleTouchMove = (e) => {
-      if (!hasDragStartedRef.current) return;
-      e.preventDefault();
+      if (gestureDecided && !hasDragStartedRef.current) return;
       
       const touch = e.touches[0];
-      updateDrag(touch.clientX, touch.clientY);
+      const currentX = touch.clientX;
+      const currentY = touch.clientY;
+      
+      if (!gestureDecided) {
+        const isScroll = isScrollGesture(startX, startY, currentX, currentY);
+        
+        if (isScroll === null) return;
+        
+        gestureDecided = true;
+        
+        if (isScroll) {
+          return; // It's a scroll
+        } else {
+          e.preventDefault();
+          startDrag(piece, currentX, currentY, elementRect);
+        }
+      }
+      
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        updateDrag(currentX, currentY);
+      }
     };
 
     const handleTouchEnd = (e) => {
@@ -423,14 +444,15 @@ const GameScreen = ({
         e.preventDefault();
         endDrag();
       }
+      gestureDecided = false;
     };
 
-    // Mouse handlers for desktop - also immediate
+    // Mouse handlers for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
-      e.preventDefault();
-      
-      const elementRect = e.currentTarget.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      elementRect = e.currentTarget.getBoundingClientRect();
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
@@ -440,7 +462,7 @@ const GameScreen = ({
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
     };
-  }, [gameOver, usedPieces, gameMode, currentPlayer, startDrag, updateDrag, endDrag]);
+  }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
 
   // Global mouse move/up handlers for desktop drag
   useEffect(() => {

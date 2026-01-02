@@ -1,8 +1,4 @@
 // Online Menu - Hub for online features
-// v7.8: 
-// - Optimized scroll handling with ScrollContainer
-// - Fixed nested scroll containers for better touch responsiveness
-// - Improved submenu scroll behavior
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,7 +9,6 @@ import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
 import { realtimeManager } from '../services/realtimeManager';
-import { rematchService } from '../services/rematchService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import TierIcon from './TierIcon';
@@ -249,9 +244,6 @@ const OnlineMenu = ({
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
   
-  // v7.7: Pending rematch requests state
-  const [pendingRematches, setPendingRematches] = useState([]);
-  
   // Final Board View state
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
 
@@ -303,17 +295,6 @@ const OnlineMenu = ({
     setPendingFriendRequests(data?.length || 0);
   };
 
-  // v7.7: Load pending rematch requests
-  const loadRematches = async () => {
-    if (!profile?.id) return;
-    try {
-      const { data } = await rematchService.getPendingRematchRequests(profile.id);
-      setPendingRematches(data || []);
-    } catch (err) {
-      console.error('Error loading rematches:', err);
-    }
-  };
-
   // Load friend request count on mount
   useEffect(() => {
     loadFriendRequests();
@@ -335,7 +316,6 @@ const OnlineMenu = ({
     const load = async () => {
       await loadGames();
       await loadInvites();
-      await loadRematches();  // v7.7: Load pending rematches
     };
     
     load();
@@ -344,7 +324,6 @@ const OnlineMenu = ({
     const refreshInterval = setInterval(() => {
       loadGames();
       loadInvites();
-      loadRematches();  // v7.7: Refresh rematches
     }, 15000);
     
     // Also refresh when tab becomes visible again
@@ -353,7 +332,6 @@ const OnlineMenu = ({
         console.log('[OnlineMenu] Tab visible, refreshing data...');
         loadGames();
         loadInvites();
-        loadRematches();  // v7.7: Refresh rematches
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -363,7 +341,6 @@ const OnlineMenu = ({
       console.log('[OnlineMenu] Window focused, refreshing data...');
       loadGames();
       loadInvites();
-      loadRematches();  // v7.7: Refresh rematches
     };
     window.addEventListener('focus', handleFocus);
     
@@ -722,62 +699,6 @@ const OnlineMenu = ({
     setProcessingInvite(null);
   };
 
-  // v7.7: Accept a pending rematch request
-  const handleAcceptRematch = async (rematch) => {
-    if (!profile?.id) return;
-    
-    setProcessingInvite(rematch.id);
-    soundManager.playButtonClick();
-    
-    try {
-      const { data, error } = await rematchService.acceptRematchRequest(rematch.id, profile.id);
-      
-      if (error) {
-        alert(error.message || 'Failed to accept rematch');
-        setProcessingInvite(null);
-        return;
-      }
-      
-      if (data?.game) {
-        soundManager.playSound('notification');
-        // Navigate to the new game
-        onResumeGame?.(data.game);
-      }
-    } catch (err) {
-      console.error('handleAcceptRematch error:', err);
-      alert('Failed to accept rematch');
-    }
-    
-    setProcessingInvite(null);
-    await loadRematches();
-  };
-
-  // v7.7: Decline a pending rematch request
-  const handleDeclineRematch = async (rematch) => {
-    if (!profile?.id) return;
-    
-    setProcessingInvite(rematch.id);
-    soundManager.playButtonClick();
-    
-    await rematchService.declineRematchRequest(rematch.id, profile.id);
-    await loadRematches();
-    
-    setProcessingInvite(null);
-  };
-
-  // v7.7: Cancel a rematch request we sent
-  const handleCancelRematch = async (rematch) => {
-    if (!profile?.id) return;
-    
-    setProcessingInvite(rematch.id);
-    soundManager.playButtonClick();
-    
-    await rematchService.cancelRematchRequest(rematch.id, profile.id);
-    await loadRematches();
-    
-    setProcessingInvite(null);
-  };
-
   // Create a shareable invite link
   const handleCreateInviteLink = async () => {
     if (!profile?.id) return;
@@ -914,7 +835,16 @@ const OnlineMenu = ({
   const hasMyTurnGames = activeGames?.some(game => game && gameSyncService.isPlayerTurn(game, profile?.id)) || false;
 
   return (
-    <div className="scroll-page bg-slate-950">
+    <div 
+      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
+      style={{ 
+        WebkitOverflowScrolling: 'touch', 
+        touchAction: 'pan-y',
+        height: '100%',
+        width: '100%',
+        overscrollBehavior: 'contain',
+      }}
+    >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -949,7 +879,11 @@ const OnlineMenu = ({
           minHeight: '100%',
           paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
           paddingTop: 'max(24px, env(safe-area-inset-top))',
-          /* v7.9: Removed touch-action - let it inherit from scroll-page */
+          touchAction: 'pan-y',
+          WebkitOverflowScrolling: 'touch',
+        }}
+        onTouchMove={(e) => {
+          // Allow vertical scrolling by not preventing default
         }}
       >
         <div className="w-full max-w-md">
@@ -1027,8 +961,8 @@ const OnlineMenu = ({
                     </button>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="text-slate-500">{profile?.games_played || 0} games</span>
-                    <span className="text-green-400">{profile?.games_won || 0} wins</span>
+                    <span className="text-slate-500">{(profile?.wins || 0) + (profile?.losses || 0)} games</span>
+                    <span className="text-green-400">{profile?.wins || 0} wins</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1272,18 +1206,6 @@ const OnlineMenu = ({
                 e.currentTarget.style.background = '';
               }}
             >
-              {/* v7.7: Notification badge for pending rematches needing approval */}
-              {(() => {
-                const rematchesNeedingApproval = pendingRematches.filter(r => !r.is_sender).length;
-                if (rematchesNeedingApproval > 0) {
-                  return (
-                    <div className="absolute -top-1 -right-1 z-10 min-w-[20px] h-5 px-1.5 bg-green-500 rounded-full flex items-center justify-center shadow-lg shadow-green-500/50 animate-pulse">
-                      <span className="text-xs font-bold text-white">{rematchesNeedingApproval}</span>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
               <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
               </div>
@@ -1301,87 +1223,6 @@ const OnlineMenu = ({
             {/* Expanded Challenge Options */}
             {showSearch && (
               <div className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30 space-y-3" style={{ boxShadow: '0 0 15px rgba(168,85,247,0.15)' }}>
-                
-                {/* v7.7: Pending Rematches Section - Moved inside Challenge a Player */}
-                {pendingRematches.length > 0 && (
-                  <div className="bg-amber-900/20 rounded-lg p-3 border border-amber-500/30">
-                    <h4 className="text-amber-400 font-bold text-xs mb-2 flex items-center gap-2">
-                      <RefreshCw size={14} />
-                      PENDING REMATCHES ({pendingRematches.length})
-                    </h4>
-                    <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '160px' }}>
-                      {pendingRematches.map(rematch => (
-                        <div
-                          key={rematch.id}
-                          className="flex items-center justify-between p-2.5 bg-slate-800/50 rounded-lg border border-amber-500/20"
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500/30 to-orange-500/30 flex items-center justify-center border border-amber-500/40">
-                              <span className="text-amber-400 font-bold text-xs">
-                                {rematch.opponent_name?.[0]?.toUpperCase() || '?'}
-                              </span>
-                            </div>
-                            <div>
-                              <div className="text-white text-sm font-medium">
-                                {rematch.opponent_name || 'Opponent'}
-                              </div>
-                              <div className="text-xs">
-                                {rematch.is_sender ? (
-                                  <span className="text-amber-400/70 flex items-center gap-1">
-                                    <Clock size={10} />
-                                    Waiting...
-                                  </span>
-                                ) : (
-                                  <span className="text-green-400/70">
-                                    Wants a rematch!
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="flex gap-1.5">
-                            {!rematch.is_sender ? (
-                              <>
-                                <button
-                                  onClick={() => handleAcceptRematch(rematch)}
-                                  disabled={processingInvite === rematch.id}
-                                  className="px-2 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-500 transition-all disabled:opacity-50 flex items-center gap-1"
-                                >
-                                  {processingInvite === rematch.id ? (
-                                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                  ) : (
-                                    <Check size={10} />
-                                  )}
-                                </button>
-                                <button
-                                  onClick={() => handleDeclineRematch(rematch)}
-                                  disabled={processingInvite === rematch.id}
-                                  className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs hover:bg-slate-600 transition-all disabled:opacity-50"
-                                >
-                                  <X size={10} />
-                                </button>
-                              </>
-                            ) : (
-                              <button
-                                onClick={() => handleCancelRematch(rematch)}
-                                disabled={processingInvite === rematch.id}
-                                className="px-2 py-1 bg-slate-700 text-slate-300 rounded text-xs hover:bg-slate-600 transition-all disabled:opacity-50"
-                              >
-                                {processingInvite === rematch.id ? (
-                                  <div className="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                  <X size={10} />
-                                )}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Option 1: Search by Username/Email */}
                 <div className="bg-slate-900/50 rounded-lg p-3 border border-purple-500/20">
                   <div className="flex items-center gap-2 mb-2">
@@ -1409,7 +1250,7 @@ const OnlineMenu = ({
                   
                   {/* Search Results */}
                   {searchResults.length > 0 && (
-                    <div className="scroll-list space-y-2 mt-3 pr-1" style={{ maxHeight: '192px' }}>
+                    <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                       {searchResults.map(user => {
                         const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
                         return (
@@ -1509,7 +1350,7 @@ const OnlineMenu = ({
                     {inviteLinks.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-slate-700/50">
                         <p className="text-slate-400 text-xs mb-2 font-medium">Your active invite links:</p>
-                        <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '160px' }}>
+                        <div className="space-y-2 max-h-40 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                           {inviteLinks.map(invite => (
                             <div
                               key={invite.id}
@@ -1584,7 +1425,10 @@ const OnlineMenu = ({
                   <Mail size={16} />
                   GAME INVITES ({receivedInvites.length})
                 </h3>
-                <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '240px' }}>
+                <div 
+                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
                   {receivedInvites.map(invite => (
                     <div
                       key={invite.id}
@@ -1632,7 +1476,10 @@ const OnlineMenu = ({
                   <Clock size={16} />
                   PENDING INVITES ({sentInvites.length})
                 </h3>
-                <div className="scroll-list space-y-2 pr-1" style={{ maxHeight: '160px' }}>
+                <div 
+                  className="space-y-2 max-h-40 overflow-y-auto pr-1"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
                   {sentInvites.map(invite => {
                     // Get the best display name available
                     const displayName = invite.to_user?.username 
@@ -1752,7 +1599,7 @@ const OnlineMenu = ({
               className="w-full mt-3 py-2 px-4 rounded-xl font-bold text-sm text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
             >
               <ArrowLeft size={16} />
-              MENU
+              GAME MENU
             </button>
           </div>
           )}
@@ -1764,7 +1611,7 @@ const OnlineMenu = ({
               className="w-full mt-4 py-3 px-4 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
             >
               <ArrowLeft size={18} />
-              MENU
+              BACK TO MENU
             </button>
           )}
         </div>
@@ -1821,7 +1668,7 @@ const OnlineMenu = ({
             </div>
             
             {/* Content */}
-            <div className="scroll-modal p-4 space-y-4" style={{ maxHeight: '70vh' }}>
+            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
               {/* What is ELO explanation */}
               <div className="space-y-2">
                 <p className="text-sm text-slate-300">
@@ -1983,7 +1830,7 @@ const OnlineMenu = ({
             </div>
             
             {/* Games List */}
-            <div className="scroll-modal p-4" style={{ maxHeight: '60vh' }}>
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
               {activeGames.length === 0 ? (
                 <div className="text-center py-8">
                   <Swords className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2049,7 +1896,7 @@ const OnlineMenu = ({
             </div>
             
             {/* Games List */}
-            <div className="scroll-modal p-4" style={{ maxHeight: '60vh' }}>
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
               {recentGames.length === 0 ? (
                 <div className="text-center py-8">
                   <History className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2230,17 +2077,9 @@ const OnlineMenu = ({
           boardPieces={selectedGameForFinalView.board_pieces}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
-          winnerId={selectedGameForFinalView.winner_id}
-          player1={selectedGameForFinalView.player1}
-          player2={selectedGameForFinalView.player2}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
           player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          // v7.9 FIX: Prioritize game-time ratings over current profile ratings
-          player1Rating={selectedGameForFinalView.player1_rating_before || selectedGameForFinalView.player1_rating_after || selectedGameForFinalView.player1?.elo_rating || 1200}
-          player2Rating={selectedGameForFinalView.player2_rating_before || selectedGameForFinalView.player2_rating_after || selectedGameForFinalView.player2?.elo_rating || 1200}
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
-          moveHistory={selectedGameForFinalView.move_history || []}
-          gameDate={selectedGameForFinalView.created_at}
         />
       )}
       
@@ -2252,51 +2091,6 @@ const OnlineMenu = ({
         }
         .group:hover .group-hover\\:animate-shine {
           animation: shine 1.5s ease-in-out;
-        }
-        
-        /* v7.9: Scrollable modals and lists */
-        .scroll-modal {
-          overflow-y: auto;
-          overflow-x: hidden;
-          -webkit-overflow-scrolling: touch;
-          overscroll-behavior-y: contain;
-          scrollbar-width: thin;
-          scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
-        }
-        
-        .scroll-modal::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        .scroll-modal::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        
-        .scroll-modal::-webkit-scrollbar-thumb {
-          background: rgba(100, 116, 139, 0.4);
-          border-radius: 3px;
-        }
-        
-        .scroll-list {
-          overflow-y: auto;
-          overflow-x: hidden;
-          -webkit-overflow-scrolling: touch;
-          overscroll-behavior-y: contain;
-          scrollbar-width: thin;
-          scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
-        }
-        
-        .scroll-list::-webkit-scrollbar {
-          width: 4px;
-        }
-        
-        .scroll-list::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        
-        .scroll-list::-webkit-scrollbar-thumb {
-          background: rgba(100, 116, 139, 0.4);
-          border-radius: 2px;
         }
       `}</style>
     </div>

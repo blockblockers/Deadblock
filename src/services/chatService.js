@@ -1,5 +1,7 @@
-// Chat Service - In-game quick chat and emotes
-// OPTIMIZED: Uses centralized RealtimeManager for chat subscriptions
+// Chat Service - In-game quick chat, emotes, and custom messages
+// UPDATED: Added custom text message support
+// Place in src/services/chatService.js
+
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
@@ -12,7 +14,11 @@ export const QUICK_CHAT_MESSAGES = {
   oops: { text: 'Oops!', icon: '😅' },
   thinking: { text: 'Thinking...', icon: '🤔' },
   hurry: { text: 'Your turn!', icon: '⏰' },
-  rematch: { text: 'Rematch?', icon: '🔄' }
+  rematch: { text: 'Rematch?', icon: '🔄' },
+  hello: { text: 'Hello!', icon: '👋' },
+  bye: { text: 'Goodbye!', icon: '👋' },
+  wow: { text: 'Wow!', icon: '😲' },
+  sorry: { text: 'Sorry!', icon: '😔' }
 };
 
 // Emotes
@@ -26,11 +32,13 @@ export const EMOTES = {
   mind_blown: '🤯',
   trophy: '🏆',
   heart: '❤️',
-  skull: '💀'
+  skull: '💀',
+  eyes: '👀',
+  muscle: '💪'
 };
 
 export const chatService = {
-  // Send a quick chat message
+  // Send a quick chat message (predefined)
   async sendQuickChat(gameId, userId, messageKey) {
     if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
 
@@ -74,6 +82,37 @@ export const chatService = {
     return { data, error };
   },
 
+  // Send a custom text message
+  async sendCustomMessage(gameId, userId, messageText) {
+    if (!isSupabaseConfigured()) return { error: { message: 'Not configured' } };
+
+    // Validate and sanitize message
+    if (!messageText || typeof messageText !== 'string') {
+      return { error: { message: 'Invalid message' } };
+    }
+
+    // Trim and limit length
+    const sanitizedMessage = messageText.trim().slice(0, 200);
+    
+    if (sanitizedMessage.length === 0) {
+      return { error: { message: 'Message cannot be empty' } };
+    }
+
+    const { data, error } = await supabase
+      .from('game_chat')
+      .insert({
+        game_id: gameId,
+        user_id: userId,
+        message_type: 'custom',
+        message_key: 'custom', // Not used for custom messages
+        message: sanitizedMessage // Store the actual text
+      })
+      .select()
+      .single();
+
+    return { data, error };
+  },
+
   // Get chat history for a game
   async getChatHistory(gameId, limit = 50) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
@@ -85,6 +124,7 @@ export const chatService = {
         user_id,
         message_type,
         message_key,
+        message,
         created_at
       `)
       .eq('game_id', gameId)
@@ -125,11 +165,13 @@ export const chatService = {
   },
 
   // Get display info for a message
-  getMessageDisplay(messageType, messageKey) {
+  getMessageDisplay(messageType, messageKey, customText = null) {
     if (messageType === 'quick_chat') {
       return QUICK_CHAT_MESSAGES[messageKey] || { text: messageKey, icon: '💬' };
     } else if (messageType === 'emote') {
       return { text: '', icon: EMOTES[messageKey] || '❓' };
+    } else if (messageType === 'custom') {
+      return { text: customText || messageKey, icon: '💬' };
     }
     return { text: messageKey, icon: '💬' };
   }

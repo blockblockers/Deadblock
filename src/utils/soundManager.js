@@ -1,5 +1,5 @@
 // soundManager.js - Complete audio management for Deadblock
-// v7.11 - Added toggle functions for Settings modal
+// v7.11.1 - Fixed toggle functions, removed distorted ambient generator
 
 class SoundManager {
   constructor() {
@@ -16,11 +16,9 @@ class SoundManager {
     this.musicGainNode = null;
     this.isMusicPlaying = false;
     
-    // Preloaded sounds
-    this.sounds = {};
-    
-    // Initialize on first user interaction
+    // Initialization state
     this.initialized = false;
+    this.initPromise = null;
   }
 
   loadSetting(key, defaultValue) {
@@ -44,12 +42,19 @@ class SoundManager {
   }
 
   async init() {
-    if (this.initialized) return;
+    // Return existing promise if already initializing
+    if (this.initPromise) return this.initPromise;
+    if (this.initialized) return Promise.resolve();
     
+    this.initPromise = this._doInit();
+    return this.initPromise;
+  }
+  
+  async _doInit() {
     try {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
       
-      // Resume if suspended (required for iOS)
+      // Resume if suspended (required for iOS/Chrome)
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
       }
@@ -62,10 +67,15 @@ class SoundManager {
       this.initialized = true;
       console.log('Audio context created');
       
-      // Load music buffer
-      await this.loadMusicBuffer();
+      // Try to load music file (don't block on failure)
+      this.loadMusicBuffer().catch(() => {
+        console.log('No background music file found - music disabled');
+      });
+      
+      return true;
     } catch (e) {
       console.warn('[SoundManager] Failed to initialize:', e);
+      return false;
     }
   }
 
@@ -74,47 +84,21 @@ class SoundManager {
       console.log('Loading music buffer...');
       const response = await fetch('/audio/background-music.mp3');
       if (!response.ok) {
-        // If no music file, generate a simple ambient loop
-        this.musicBuffer = this.generateAmbientLoop();
-        console.log('Generated ambient music');
-      } else {
-        const arrayBuffer = await response.arrayBuffer();
-        this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-        console.log('Music buffer loaded successfully');
+        throw new Error('Music file not found');
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      console.log('Music buffer loaded successfully');
+      
+      // Auto-start if music is enabled
+      if (this.musicEnabled && !this.isMusicPlaying) {
+        this.startMusic();
       }
     } catch (e) {
-      // Generate simple ambient music if loading fails
-      this.musicBuffer = this.generateAmbientLoop();
-      console.log('Generated ambient music (fallback)');
+      console.log('Background music not available:', e.message);
+      // Don't generate fallback - just disable music
+      this.musicBuffer = null;
     }
-  }
-
-  generateAmbientLoop() {
-    // Generate a simple ambient drone
-    const sampleRate = this.audioContext.sampleRate;
-    const duration = 8; // 8 second loop
-    const buffer = this.audioContext.createBuffer(2, sampleRate * duration, sampleRate);
-    
-    for (let channel = 0; channel < 2; channel++) {
-      const data = buffer.getChannelData(channel);
-      for (let i = 0; i < data.length; i++) {
-        const t = i / sampleRate;
-        // Layered sine waves for ambient feel
-        const freq1 = 55 + (channel * 0.5); // Base frequency
-        const freq2 = 82.5 + (channel * 0.3);
-        const freq3 = 110;
-        
-        data[i] = (
-          Math.sin(2 * Math.PI * freq1 * t) * 0.15 +
-          Math.sin(2 * Math.PI * freq2 * t) * 0.1 +
-          Math.sin(2 * Math.PI * freq3 * t) * 0.05 +
-          // Add subtle modulation
-          Math.sin(2 * Math.PI * freq1 * t * (1 + Math.sin(t * 0.5) * 0.02)) * 0.1
-        ) * (0.8 + Math.sin(t * 0.3) * 0.2); // Volume modulation
-      }
-    }
-    
-    return buffer;
   }
 
   // =========================================================================
@@ -137,7 +121,7 @@ class SoundManager {
     }
     
     // Start or stop music based on new state
-    if (this.musicEnabled && !this.isMusicPlaying) {
+    if (this.musicEnabled && !this.isMusicPlaying && this.musicBuffer) {
       this.startMusic();
     } else if (!this.musicEnabled && this.isMusicPlaying) {
       this.stopMusic();
@@ -223,8 +207,24 @@ class SoundManager {
   // SOUND EFFECTS
   // =========================================================================
 
-  playSound(frequency, duration = 0.1, type = 'sine', volume = 0.3) {
-    if (!this.soundEnabled || !this.initialized || !this.audioContext) return;
+  async playSound(frequency, duration = 0.1, type = 'sine', volume = 0.3) {
+    if (!this.soundEnabled) return;
+    
+    // Initialize on first sound if needed
+    if (!this.initialized) {
+      await this.init();
+    }
+    
+    if (!this.audioContext) return;
+    
+    // Resume audio context if suspended (user interaction requirement)
+    if (this.audioContext.state === 'suspended') {
+      try {
+        await this.audioContext.resume();
+      } catch (e) {
+        return;
+      }
+    }
     
     try {
       const oscillator = this.audioContext.createOscillator();
@@ -245,14 +245,14 @@ class SoundManager {
       oscillator.start();
       oscillator.stop(this.audioContext.currentTime + duration);
     } catch (e) {
-      // Ignore sound errors
+      // Ignore sound errors silently
     }
   }
 
   // Game-specific sounds
   playPieceSelect() {
     this.playSound(440, 0.08, 'sine', 0.2);
-    this.playSound(660, 0.08, 'sine', 0.15);
+    setTimeout(() => this.playSound(660, 0.08, 'sine', 0.15), 20);
   }
 
   playPieceDrop() {
@@ -302,7 +302,6 @@ class SoundManager {
   }
 
   playWin() {
-    // Victory fanfare
     const notes = [523, 659, 784, 1047];
     notes.forEach((freq, i) => {
       setTimeout(() => this.playSound(freq, 0.2, 'sine', 0.3), i * 100);
@@ -310,7 +309,6 @@ class SoundManager {
   }
 
   playLose() {
-    // Defeat sound
     this.playSound(300, 0.3, 'sine', 0.2);
     setTimeout(() => this.playSound(250, 0.3, 'sine', 0.18), 150);
     setTimeout(() => this.playSound(200, 0.4, 'sine', 0.15), 300);
@@ -327,7 +325,6 @@ class SoundManager {
   }
 
   playAchievement() {
-    // Achievement unlock fanfare
     const notes = [659, 784, 988, 1319];
     notes.forEach((freq, i) => {
       setTimeout(() => this.playSound(freq, 0.15, 'sine', 0.25), i * 80);
@@ -384,8 +381,8 @@ export const soundManager = new SoundManager();
 
 // Auto-initialize on first user interaction
 if (typeof window !== 'undefined') {
-  const initOnInteraction = () => {
-    soundManager.init();
+  const initOnInteraction = async () => {
+    await soundManager.init();
     document.removeEventListener('click', initOnInteraction);
     document.removeEventListener('touchstart', initOnInteraction);
     document.removeEventListener('keydown', initOnInteraction);
