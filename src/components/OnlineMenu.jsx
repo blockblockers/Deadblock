@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, RotateCcw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -9,6 +9,7 @@ import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
 import { realtimeManager } from '../services/realtimeManager';
+import { rematchService } from '../services/rematchService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import TierIcon from './TierIcon';
@@ -154,6 +155,7 @@ const OnlineMenu = ({
   const needsScroll = true;
   const [activeGames, setActiveGames] = useState([]);
   const [recentGames, setRecentGames] = useState([]);
+  const [calculatedStats, setCalculatedStats] = useState({ wins: 0, losses: 0, totalGames: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showActivePrompt, setShowActivePrompt] = useState(true);
@@ -199,7 +201,15 @@ const OnlineMenu = ({
       
       try {
         const result = await refreshProfile();
-        console.log('OnlineMenu: Profile refresh result', { hasProfile: !!result });
+        // DEBUG: Log profile stats specifically
+        console.log('OnlineMenu: Profile refresh result', { 
+          hasProfile: !!result,
+          wins: result?.wins,
+          losses: result?.losses,
+          rating: result?.rating,
+          elo_rating: result?.elo_rating,
+          allKeys: result ? Object.keys(result) : []
+        });
         
         // If profile is still null after refresh and we have a user, retry once
         if (!result && user) {
@@ -243,6 +253,10 @@ const OnlineMenu = ({
   const [creatingLink, setCreatingLink] = useState(false);
   const [showInviteLink, setShowInviteLink] = useState(false);
   const [copiedLinkId, setCopiedLinkId] = useState(null);
+  
+  // Pending rematch requests state
+  const [pendingRematches, setPendingRematches] = useState([]);
+  const [processingRematch, setProcessingRematch] = useState(null);
   
   // Notification state
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
@@ -433,23 +447,26 @@ const OnlineMenu = ({
     try {
       console.log('[OnlineMenu] loadInvites: Fetching for', profile.id);
       
-      const [received, sent, links] = await Promise.all([
+      const [received, sent, links, rematches] = await Promise.all([
         inviteService.getReceivedInvites(profile.id),
         inviteService.getSentInvites(profile.id),
-        inviteService.getInviteLinks(profile.id)
+        inviteService.getInviteLinks(profile.id),
+        rematchService.getPendingRematchRequests(profile.id)
       ]);
       
       console.log('[OnlineMenu] loadInvites results:', {
         received: received.data?.length || 0,
         sent: sent.data?.length || 0,
         links: links.data?.length || 0,
-        linkStatuses: links.data?.map(l => ({ id: l.id, status: l.status }))
+        linkStatuses: links.data?.map(l => ({ id: l.id, status: l.status })),
+        rematches: rematches.data?.length || 0
       });
       
       setReceivedInvites(received.data || []);
       setSentInvites(sent.data || []);
       // inviteService now returns properly formatted data with recipientName and inviteLink
       setInviteLinks(links.data || []);
+      setPendingRematches(rematches.data || []);
     } catch (err) {
       console.error('Error loading invites:', err);
     }
@@ -484,15 +501,27 @@ const OnlineMenu = ({
       });
       setActiveGames(active || []);
 
-      // Get recent completed games - UPDATED: Increased from 5 to 10
-      const { data: recent, error: recentError } = await gameSyncService.getPlayerGames(profile.id, 10);
-      const completedGames = (recent || []).filter(g => g.status === 'completed');
-      console.log('OnlineMenu.loadGames: Recent games', { 
-        total: recent?.length, 
+      // Get ALL completed games for accurate stats (up to 100)
+      const { data: allGames, error: allError } = await gameSyncService.getPlayerGames(profile.id, 100);
+      const completedGames = (allGames || []).filter(g => g.status === 'completed');
+      
+      // Calculate wins/losses from all completed games
+      const wins = completedGames.filter(g => g.winner_id === profile.id).length;
+      const losses = completedGames.filter(g => g.winner_id && g.winner_id !== profile.id).length;
+      
+      console.log('OnlineMenu.loadGames: All completed games', { 
+        total: allGames?.length, 
         completed: completedGames.length,
-        error: recentError?.message
+        wins,
+        losses,
+        error: allError?.message
       });
-      setRecentGames(completedGames);
+      
+      // Store only the 10 most recent for display, but keep stats from all
+      setRecentGames(completedGames.slice(0, 10));
+      
+      // Store calculated stats for display (as a workaround for missing profile columns)
+      setCalculatedStats({ wins, losses, totalGames: completedGames.length });
     } catch (err) {
       console.error('OnlineMenu.loadGames: Error loading games:', err);
     }
@@ -713,6 +742,96 @@ const OnlineMenu = ({
     await loadInvites();
     
     setProcessingInvite(null);
+  };
+
+  // =========================================================================
+  // REMATCH REQUEST HANDLERS
+  // =========================================================================
+  
+  const handleAcceptRematch = async (rematch) => {
+    if (!profile?.id) return;
+    
+    setProcessingRematch(rematch.id);
+    soundManager.playButtonClick();
+    
+    try {
+      console.log('[OnlineMenu] Accepting rematch:', rematch.id);
+      const { data, error } = await rematchService.acceptRematchRequest(rematch.id, profile.id);
+      
+      if (error) {
+        console.error('[OnlineMenu] Accept rematch error:', error);
+        alert(error.message || 'Failed to accept rematch');
+        setProcessingRematch(null);
+        return;
+      }
+      
+      if (data?.game) {
+        console.log('[OnlineMenu] Rematch accepted, navigating to game:', data.game.id);
+        soundManager.playClickSound('confirm');
+        
+        // Notify the requester that rematch was accepted
+        if (notificationService.isEnabled()) {
+          notificationService.notifyRematchAccepted(
+            rematch.opponent_name || 'Opponent',
+            data.game.id
+          );
+        }
+        
+        // Navigate to the new game
+        onStartGame(data.game.id);
+      }
+    } catch (err) {
+      console.error('[OnlineMenu] Accept rematch exception:', err);
+      alert('Failed to accept rematch');
+    }
+    
+    setProcessingRematch(null);
+  };
+
+  const handleDeclineRematch = async (rematch) => {
+    if (!profile?.id) return;
+    
+    setProcessingRematch(rematch.id);
+    soundManager.playButtonClick();
+    
+    try {
+      console.log('[OnlineMenu] Declining rematch:', rematch.id);
+      await rematchService.declineRematchRequest(rematch.id, profile.id);
+      
+      // Notify the requester that rematch was declined
+      if (notificationService.isEnabled() && rematch.is_sender === false) {
+        notificationService.notifyRematchDeclined(rematch.opponent_name || 'Opponent');
+      }
+      
+      await loadInvites();
+    } catch (err) {
+      console.error('[OnlineMenu] Decline rematch error:', err);
+    }
+    
+    setProcessingRematch(null);
+  };
+
+  const handleCancelRematch = async (rematch) => {
+    if (!profile?.id) return;
+    
+    setProcessingRematch(rematch.id);
+    soundManager.playButtonClick();
+    
+    try {
+      console.log('[OnlineMenu] Cancelling rematch:', rematch.id);
+      await rematchService.cancelRematchRequest(rematch.id, profile.id);
+      await loadInvites();
+    } catch (err) {
+      console.error('[OnlineMenu] Cancel rematch error:', err);
+    }
+    
+    setProcessingRematch(null);
+  };
+
+  const handleViewRematchGame = (rematch) => {
+    // Navigate to the original game to view it / handle rematch from there
+    soundManager.playButtonClick();
+    onStartGame(rematch.game_id);
   };
 
   // Create a shareable invite link
@@ -977,9 +1096,27 @@ const OnlineMenu = ({
                     </button>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    {/* Use wins/losses fields from profile */}
-                    <span className="text-slate-500">{(profile?.wins || 0) + (profile?.losses || 0)} games</span>
-                    <span className="text-green-400">{profile?.wins || 0} wins</span>
+                    {/* Use calculated stats from loaded games (more accurate than profile columns) */}
+                    {(() => {
+                      // Prefer profile values if they exist and are non-zero
+                      let wins = profile?.wins || 0;
+                      let losses = profile?.losses || 0;
+                      
+                      // Fall back to calculated stats from loaded games
+                      if (wins === 0 && losses === 0 && calculatedStats.totalGames > 0) {
+                        wins = calculatedStats.wins;
+                        losses = calculatedStats.losses;
+                      }
+                      
+                      const totalGames = wins + losses;
+                      
+                      return (
+                        <>
+                          <span className="text-slate-500">{totalGames} games</span>
+                          <span className="text-green-400">{wins} wins</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1526,6 +1663,83 @@ const OnlineMenu = ({
                         >
                           Cancel
                         </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Pending Rematch Requests */}
+            {pendingRematches.length > 0 && (
+              <div className="bg-purple-900/20 rounded-xl p-4 mb-4 border border-purple-500/30">
+                <h3 className="text-purple-400 font-bold text-sm mb-3 flex items-center gap-2">
+                  <RotateCcw size={16} />
+                  REMATCH REQUESTS ({pendingRematches.length})
+                </h3>
+                <div 
+                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                  {pendingRematches.map(rematch => {
+                    const displayName = rematch.opponent_name || 'Opponent';
+                    const initial = displayName?.[0]?.toUpperCase() || '?';
+                    const isSender = rematch.is_sender;
+                    
+                    return (
+                      <div
+                        key={rematch.id}
+                        className="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-purple-500/20"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                            {initial}
+                          </div>
+                          <div>
+                            <div className="text-white text-sm font-medium">{displayName}</div>
+                            <div className="text-purple-400/70 text-xs">
+                              {isSender ? 'Waiting for response...' : 'wants a rematch!'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {isSender ? (
+                            // Sender can only cancel
+                            <button
+                              onClick={() => handleCancelRematch(rematch)}
+                              disabled={processingRematch === rematch.id}
+                              className="text-xs text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50 px-2 py-1"
+                            >
+                              {processingRematch === rematch.id ? (
+                                <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                'Cancel'
+                              )}
+                            </button>
+                          ) : (
+                            // Receiver can accept or decline
+                            <>
+                              <button
+                                onClick={() => handleAcceptRematch(rematch)}
+                                disabled={processingRematch === rematch.id}
+                                className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all active:scale-95 disabled:opacity-50"
+                              >
+                                {processingRematch === rematch.id ? (
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Check size={16} />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleDeclineRematch(rematch)}
+                                disabled={processingRematch === rematch.id}
+                                className="p-2 bg-slate-700 text-slate-400 rounded-lg hover:bg-slate-600 hover:text-white transition-all active:scale-95 disabled:opacity-50"
+                              >
+                                <X size={16} />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     );
                   })}

@@ -95,10 +95,13 @@ self.addEventListener('push', (event) => {
       { action: 'accept', title: 'Accept', icon: '/icons/check.png' },
       { action: 'decline', title: 'Decline', icon: '/icons/x.png' }
     ];
-  } else if (data.type === 'rematch') {
+  } else if (data.type === 'rematch_request' || data.type === 'rematch') {
     options.actions = [
-      { action: 'accept', title: 'Accept', icon: '/icons/check.png' },
-      { action: 'decline', title: 'Decline', icon: '/icons/x.png' }
+      { action: 'view', title: 'View', icon: '/icons/play.png' }
+    ];
+  } else if (data.type === 'chat_message' || data.type === 'chat') {
+    options.actions = [
+      { action: 'reply', title: 'Reply', icon: '/icons/reply.png' }
     ];
   }
   
@@ -117,59 +120,51 @@ self.addEventListener('notificationclick', (event) => {
   
   notification.close();
   
-  // Support both snake_case (from DB) and camelCase data fields
-  const gameId = data.game_id || data.gameId;
-  const inviteId = data.invite_id || data.inviteId;
-  const rematchId = data.rematch_id || data.rematchId;
-  const notificationType = data.type;
-  
-  console.log('[SW] Notification data:', { notificationType, gameId, inviteId, rematchId, data });
-  
   // Determine URL to open based on action and notification type
   let urlToOpen = data.url || '/';
   
-  if (notificationType === 'your_turn' && gameId) {
-    // Navigate to online menu - the app will handle showing the game
-    urlToOpen = `/?navigateTo=online&gameId=${gameId}`;
-  } else if (notificationType === 'game_invite') {
-    if (action === 'accept' && inviteId) {
-      urlToOpen = `/?navigateTo=online&acceptInvite=${inviteId}`;
+  if (data.type === 'your_turn' && data.gameId) {
+    urlToOpen = `/game/${data.gameId}`;
+  } else if (data.type === 'game_invite') {
+    if (action === 'accept' && data.inviteId) {
+      // Will handle accept on the client side
+      urlToOpen = `/online?acceptInvite=${data.inviteId}`;
     } else if (action === 'decline') {
       // Just close, decline handled passively
       return;
     } else {
-      urlToOpen = '/?navigateTo=online';
+      urlToOpen = '/online';
     }
-  } else if (notificationType === 'rematch_request' && gameId) {
-    // Navigate to online menu with rematch pending
-    urlToOpen = `/?navigateTo=online&rematchGameId=${gameId}`;
-  } else if (notificationType === 'rematch_accepted' && gameId) {
-    // Navigate directly to the new game
-    urlToOpen = `/?navigateTo=online&gameId=${gameId}`;
-  } else if (notificationType === 'chat_message' && gameId) {
-    // Navigate to the game with chat open
-    urlToOpen = `/?navigateTo=online&gameId=${gameId}&openChat=true`;
+  } else if (data.type === 'rematch_request' && data.gameId) {
+    // Navigate to the game to handle rematch
+    urlToOpen = `/game/${data.gameId}`;
+  } else if (data.type === 'rematch_accepted' && data.gameId) {
+    // Navigate to the new game
+    urlToOpen = `/game/${data.gameId}`;
+  } else if (data.type === 'rematch' && data.gameId) {
+    // Legacy support
+    urlToOpen = `/game/${data.gameId}`;
+  } else if (data.type === 'chat_message' && data.gameId) {
+    // Navigate to game with chat open
+    urlToOpen = `/game/${data.gameId}?openChat=true`;
+  } else if (data.type === 'chat' && data.gameId) {
+    // Legacy support
+    urlToOpen = `/game/${data.gameId}?openChat=true`;
   }
   
-  console.log('[SW] Opening URL:', urlToOpen);
+  console.log('[SW] Opening URL:', urlToOpen, 'for type:', data.type);
   
   // Focus existing window or open new one
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       // Check if there's already a window open
       for (const client of windowClients) {
-        if ('focus' in client) {
+        if (client.url.includes(APP_URL) && 'focus' in client) {
           // Navigate existing window to the URL
           client.postMessage({
             type: 'NOTIFICATION_CLICK',
             url: urlToOpen,
-            data: {
-              ...data,
-              gameId,
-              inviteId,
-              rematchId,
-              notificationType
-            }
+            data: data
           });
           return client.focus();
         }

@@ -138,24 +138,43 @@ class NotificationService {
     });
   }
 
-  notifyChatMessage(senderName, message) {
+  notifyChatMessage(senderName, message, gameId) {
     const truncated = message?.length > 50 
       ? message.substring(0, 50) + '...' 
       : message || 'Sent a message';
       
     return this.sendNotification('Deadblock - New Message', {
       body: `${senderName}: ${truncated}`,
-      tag: 'deadblock-chat',
-      renotify: true
+      tag: `deadblock-chat-${gameId}`,
+      renotify: true,
+      data: { url: `/game/${gameId}`, gameId, type: 'chat_message' }
     });
   }
 
-  notifyRematchRequest(opponentName) {
+  notifyRematchRequest(opponentName, gameId, rematchId) {
     return this.sendNotification('Deadblock - Rematch Request', {
       body: `${opponentName} wants a rematch!`,
-      tag: 'deadblock-rematch',
+      tag: `deadblock-rematch-${rematchId}`,
       renotify: true,
-      requireInteraction: true
+      requireInteraction: true,
+      data: { url: `/game/${gameId}`, gameId, rematchId, type: 'rematch_request' }
+    });
+  }
+
+  notifyRematchAccepted(opponentName, newGameId) {
+    return this.sendNotification('Deadblock - Rematch Accepted!', {
+      body: `${opponentName} accepted your rematch. New game starting!`,
+      tag: `deadblock-rematch-accepted-${newGameId}`,
+      renotify: true,
+      data: { url: `/game/${newGameId}`, gameId: newGameId, type: 'rematch_accepted' }
+    });
+  }
+
+  notifyRematchDeclined(opponentName) {
+    return this.sendNotification('Deadblock - Rematch Declined', {
+      body: `${opponentName} declined your rematch request.`,
+      tag: 'deadblock-rematch-declined',
+      renotify: true
     });
   }
 

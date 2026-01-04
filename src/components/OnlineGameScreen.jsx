@@ -7,6 +7,7 @@ import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
+import { notificationService } from '../services/notificationService';
 import { supabase } from '../utils/supabase';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
@@ -182,6 +183,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
+  const [chatToast, setChatToast] = useState(null); // { senderName, message, timestamp }
   const [turnStartedAt, setTurnStartedAt] = useState(null);
   const [connected, setConnected] = useState(false); // Track realtime connection
   
@@ -338,6 +340,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let touchStartTime = 0;
 
     const handleTouchStart = (e) => {
+      // CRITICAL: Prevent browser from handling touch (scroll, etc)
+      e.preventDefault();
+      
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
@@ -507,6 +512,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             if (!isSender && !showRematchModal && !rematchDeclined) {
               setShowRematchModal(true);
               soundManager.playSound('notification');
+              
+              // ADDED: Send push notification for rematch request
+              const requesterName = opponent?.display_name || opponent?.username || 'Opponent';
+              notificationService.notifyRematchRequest(requesterName, gameId, request.id);
             }
             
             // If we're the requester, show waiting state
@@ -548,6 +557,19 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
     };
+  }, []);
+
+  // Check for openChat URL parameter (from notification click)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openChat') === 'true') {
+      console.log('[OnlineGameScreen] Opening chat from URL param');
+      setChatOpen(true);
+      setHasUnreadChat(false);
+      setChatToast(null);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
   }, []);
 
   // Update board bounds
@@ -752,7 +774,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [currentGameId, userId, updateGameState]);
 
   // Subscribe to chat messages for notification when chat is closed
-  // Chat notification subscription - FIXED: Use supabase directly
+  // Chat notification subscription - FIXED: Use supabase directly + PUSH NOTIFICATION
   useEffect(() => {
     if (!currentGameId || !user?.id || !supabase) return;
     
@@ -775,6 +797,29 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             console.log('[OnlineGameScreen] New chat message from opponent!');
             setHasUnreadChat(true);
             soundManager.playSound('notification');
+            
+            // ADDED: Show floating toast banner
+            const opponentName = opponent?.display_name || opponent?.username || 'Opponent';
+            const message = payload.new.message || payload.new.quick_message || 'Sent a message';
+            const toastTimestamp = Date.now();
+            
+            setChatToast({
+              senderName: opponentName,
+              message: message,
+              timestamp: toastTimestamp
+            });
+            
+            // Auto-hide toast after 5 seconds
+            setTimeout(() => {
+              setChatToast(prev => {
+                // Only clear if it's the same toast (hasn't been replaced by a newer one)
+                if (prev?.timestamp === toastTimestamp) return null;
+                return prev;
+              });
+            }, 5000);
+            
+            // ADDED: Send push notification for chat message
+            notificationService.notifyChatMessage(opponentName, message, currentGameId);
           }
         }
       )
@@ -786,7 +831,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       console.log('[OnlineGameScreen] Cleaning up chat subscription');
       chatChannel.unsubscribe();
     };
-  }, [currentGameId, user?.id, chatOpen]);
+  }, [currentGameId, user?.id, chatOpen, opponent]);
 
   // Show error message when placement is invalid
   useEffect(() => {
@@ -1256,7 +1301,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                     <button
                       onClick={() => {
                         setChatOpen(!chatOpen);
-                        if (!chatOpen) setHasUnreadChat(false);
+                        if (!chatOpen) {
+                          setHasUnreadChat(false);
+                          setChatToast(null);
+                        }
                       }}
                       className={`
                         relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
@@ -1299,7 +1347,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 <button
                   onClick={() => {
                     setChatOpen(!chatOpen);
-                    if (!chatOpen) setHasUnreadChat(false);
+                    if (!chatOpen) {
+                      setHasUnreadChat(false);
+                      setChatToast(null);
+                    }
                   }}
                   className={`
                     relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
@@ -1420,7 +1471,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           isOpen={chatOpen}
           onToggle={(open) => {
             setChatOpen(open);
-            if (!open) setHasUnreadChat(false);
+            if (!open) {
+              setHasUnreadChat(false);
+            } else {
+              // Opening chat, clear toast
+              setChatToast(null);
+            }
           }}
           hideButton={true}
           onNewMessage={() => {
@@ -1543,6 +1599,59 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           </div>
         </div>
       )}
+
+      {/* Chat Message Toast Banner - Prominent notification */}
+      {chatToast && !chatOpen && (
+        <div 
+          className="fixed inset-x-0 top-4 z-[70] flex justify-center pointer-events-auto"
+          onClick={() => {
+            setChatOpen(true);
+            setHasUnreadChat(false);
+            setChatToast(null);
+          }}
+        >
+          <div 
+            className="px-5 py-3 rounded-xl shadow-2xl max-w-md mx-4 cursor-pointer
+              bg-gradient-to-r from-red-600 via-orange-500 to-red-600 
+              border-2 border-white/30 text-white
+              backdrop-blur-sm transform hover:scale-105 transition-transform"
+            style={{
+              animation: 'slideDown 0.3s ease-out, chatPulse 1.5s ease-in-out infinite',
+              boxShadow: '0 0 40px rgba(239,68,68,0.8), 0 0 80px rgba(239,68,68,0.4), 0 10px 30px rgba(0,0,0,0.5)'
+            }}
+          >
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <MessageCircle size={28} className="text-white animate-bounce" />
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center text-[10px] font-bold text-red-600">
+                  !
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-sm text-white/90">{chatToast.senderName}</div>
+                <div className="text-white/80 text-sm truncate">{chatToast.message}</div>
+              </div>
+              <div className="text-xs text-white/60 whitespace-nowrap">Tap to reply</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSS Keyframes for animations */}
+      <style>{`
+        @keyframes chatBlink {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.05); }
+        }
+        @keyframes chatPulse {
+          0%, 100% { box-shadow: 0 0 40px rgba(239,68,68,0.8), 0 0 80px rgba(239,68,68,0.4); }
+          50% { box-shadow: 0 0 60px rgba(239,68,68,1), 0 0 100px rgba(239,68,68,0.6); }
+        }
+        @keyframes slideDown {
+          0% { transform: translateY(-100%); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
 
       {/* Rematch Modal - For rematch requests */}
       <RematchModal

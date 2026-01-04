@@ -413,6 +413,9 @@ const GameScreen = ({
     let gestureDecided = false;
 
     const handleTouchStart = (e) => {
+      // CRITICAL: Prevent browser from handling touch (scroll, etc)
+      e.preventDefault();
+      
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;

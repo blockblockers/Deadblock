@@ -795,6 +795,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
       
+      // CRITICAL: Prevent browser from handling touch (scroll, etc)
+      e.preventDefault();
+      
       const { clientX, clientY } = getClientPos(e);
       dragStartRef.current = { x: clientX, y: clientY };
       hasDragStartedRef.current = false;

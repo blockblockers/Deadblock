@@ -583,7 +583,8 @@ function AppContent() {
       
       if (event.data?.type === 'NOTIFICATION_CLICK') {
         const { data } = event.data;
-        const { gameId, notificationType, inviteId, rematchId } = data || {};
+        // FIXED: Service worker sends 'type', not 'notificationType'
+        const { gameId, type: notificationType, inviteId, rematchId } = data || {};
         
         console.log('[App] Processing notification click:', { gameId, notificationType, inviteId, rematchId });
         

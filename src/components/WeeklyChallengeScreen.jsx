@@ -435,6 +435,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Touch start - capture initial position
     const handleTouchStart = (e) => {
       console.log('[WeeklyChallenge] handleTouchStart for:', piece);
+      
+      // CRITICAL: Prevent browser from handling touch (scroll, etc)
+      e.preventDefault();
+      
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;

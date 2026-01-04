@@ -100,7 +100,7 @@ const PieceTray = ({
               key={name}
               onClick={() => !isUsed && !isGeneratingPuzzle && !isDragging && onSelectPiece(name)}
               {...dragHandlers}
-              className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden touch-manipulation ${
+              className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden ${
                 isUsed
                   ? 'bg-slate-800/30 opacity-25 cursor-not-allowed border border-slate-700/30'
                   : isBeingDragged
