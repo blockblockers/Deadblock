@@ -3,7 +3,6 @@ import { useGameState } from './hooks/useGameState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isSupabaseConfigured } from './utils/supabase';
 import { useRealtimeConnection } from './hooks/useRealtimeConnection';
-import { pushNotificationService } from './services/pushNotificationService';
 
 // Core screens (always loaded - used frequently)
 import MenuScreen from './components/MenuScreen';
@@ -289,34 +288,6 @@ function AppContent() {
     resetCurrentPuzzle,
   } = useGameState();
 
-  // Initialize push notifications service
-  useEffect(() => {
-    const initPushNotifications = async () => {
-      try {
-        const supported = await pushNotificationService.init();
-        console.log('[App] Push notifications supported:', supported);
-        
-        // Set up message listener for notification clicks from service worker
-        pushNotificationService.setupMessageListener((message) => {
-          console.log('[App] Message from service worker:', message);
-          if (message.type === 'NOTIFICATION_CLICK' && message.url) {
-            // Handle navigation from notification click
-            if (message.data?.gameId) {
-              setOnlineGameId(message.data.gameId);
-              setGameMode('online-game');
-            } else if (message.url.includes('/online')) {
-              setGameMode('online-menu');
-            }
-          }
-        });
-      } catch (err) {
-        console.error('[App] Push notification init failed:', err);
-      }
-    };
-    
-    initPushNotifications();
-  }, [setGameMode]);
-
   // Check if user was already authenticated (skip entry screen)
   // This handles page refresh, OAuth return, and any other case where user is authenticated
   useEffect(() => {
@@ -580,60 +551,6 @@ function AppContent() {
     setGameMode('online-menu');
   };
 
-
-// Handle service worker notification clicks and URL-based navigation
-useEffect(() => {
-  const handleServiceWorkerMessage = (event) => {
-    console.log('[App] Received service worker message:', event.data);
-    
-    if (event.data?.type === 'NOTIFICATION_CLICK') {
-      const { data } = event.data;
-      const { gameId, notificationType } = data || {};
-      
-      if (!hasPassedEntryAuth) {
-        if (gameId) localStorage.setItem('deadblock_pending_game_id', gameId);
-        localStorage.setItem('deadblock_pending_online_intent', 'true');
-        return;
-      }
-      
-      if ((notificationType === 'your_turn' || 
-           notificationType === 'rematch_request' || 
-           notificationType === 'rematch_accepted' ||
-           notificationType === 'chat_message') && gameId) {
-        setOnlineGameId(gameId);
-        setGameMode('online-game');
-      } else {
-        setGameMode('online-menu');
-      }
-    }
-  };
-  
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
-  }
-  
-  // Check URL params for notification-based navigation
-  const params = new URLSearchParams(window.location.search);
-  const navigateTo = params.get('navigateTo');
-  const urlGameId = params.get('gameId');
-  
-  if (navigateTo === 'online' && hasPassedEntryAuth) {
-    if (urlGameId) {
-      setOnlineGameId(urlGameId);
-      setGameMode('online-game');
-    } else {
-      setGameMode('online-menu');
-    }
-    window.history.replaceState({}, document.title, '/');
-  }
-  
-  return () => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
-    }
-  };
-}, [hasPassedEntryAuth, setGameMode, setOnlineGameId]);
-
   // Handle resume game
   const handleResumeGame = (game) => {
     console.log('handleResumeGame called:', { gameId: game?.id, game });
@@ -658,6 +575,80 @@ useEffect(() => {
     setReplayGameId(gameId);
     setGameMode('replay');
   };
+
+  // Handle service worker notification clicks and URL-based navigation
+  useEffect(() => {
+    const handleServiceWorkerMessage = (event) => {
+      console.log('[App] Received service worker message:', event.data);
+      
+      if (event.data?.type === 'NOTIFICATION_CLICK') {
+        const { data } = event.data;
+        const { gameId, notificationType, inviteId, rematchId } = data || {};
+        
+        console.log('[App] Processing notification click:', { gameId, notificationType, inviteId, rematchId });
+        
+        // Ensure we're authenticated and past entry screen
+        if (!hasPassedEntryAuth) {
+          console.log('[App] Not past entry auth, storing for later navigation');
+          if (gameId) {
+            localStorage.setItem('deadblock_pending_game_id', gameId);
+          }
+          localStorage.setItem('deadblock_pending_online_intent', 'true');
+          return;
+        }
+        
+        // Navigate based on notification type
+        if (notificationType === 'your_turn' && gameId) {
+          console.log('[App] Navigating to game:', gameId);
+          setOnlineGameId(gameId);
+          setGameMode('online-game');
+        } else if (notificationType === 'game_invite') {
+          console.log('[App] Navigating to online menu for invite');
+          setGameMode('online-menu');
+        } else if ((notificationType === 'rematch_request' || notificationType === 'rematch_accepted') && gameId) {
+          console.log('[App] Navigating to game from rematch:', gameId);
+          setOnlineGameId(gameId);
+          setGameMode('online-game');
+        } else if (notificationType === 'chat_message' && gameId) {
+          console.log('[App] Navigating to game for chat:', gameId);
+          setOnlineGameId(gameId);
+          setGameMode('online-game');
+        } else {
+          console.log('[App] Default navigation to online menu');
+          setGameMode('online-menu');
+        }
+      }
+    };
+    
+    // Listen for messages from service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+    
+    // Also check URL params on load (for when app opens from notification click)
+    const params = new URLSearchParams(window.location.search);
+    const navigateTo = params.get('navigateTo');
+    const urlGameId = params.get('gameId');
+    const rematchGameId = params.get('rematchGameId');
+    
+    if (navigateTo === 'online' && hasPassedEntryAuth) {
+      console.log('[App] URL param navigation to online, gameId:', urlGameId);
+      if (urlGameId) {
+        setOnlineGameId(urlGameId);
+        setGameMode('online-game');
+      } else {
+        setGameMode('online-menu');
+      }
+      // Clean URL
+      window.history.replaceState({}, document.title, '/');
+    }
+    
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, [hasPassedEntryAuth, setGameMode, setOnlineGameId]);
 
   // Fallback timeout for stuck loading state
   const [loadingStuck, setLoadingStuck] = useState(false);

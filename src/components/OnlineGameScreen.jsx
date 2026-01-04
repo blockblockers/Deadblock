@@ -213,7 +213,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // DRAG HANDLERS
   // =========================================================================
   
-  // Allow anchor positions outside the board for pieces that extend beyond their anchor
+  // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     

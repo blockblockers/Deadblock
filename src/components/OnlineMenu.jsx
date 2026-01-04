@@ -977,18 +977,9 @@ const OnlineMenu = ({
                     </button>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    {/* Calculate stats from profile wins/losses fields */}
-                    {(() => {
-                      const wins = profile?.wins || 0;
-                      const losses = profile?.losses || 0;
-                      const totalGames = wins + losses;
-                      return (
-                        <>
-                          <span className="text-slate-500">{totalGames} games</span>
-                          <span className="text-green-400">{wins} wins</span>
-                        </>
-                      );
-                    })()}
+                    {/* Use wins/losses fields from profile */}
+                    <span className="text-slate-500">{(profile?.wins || 0) + (profile?.losses || 0)} games</span>
+                    <span className="text-green-400">{profile?.wins || 0} wins</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

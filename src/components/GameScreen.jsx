@@ -286,7 +286,6 @@ const GameScreen = ({
     const row = Math.floor(relY / cellHeight);
     
     // Allow anchor position up to 4 cells outside board for piece extension
-    // (pentominoes can extend up to 4 cells from anchor)
     const EXTENSION_MARGIN = 4;
     if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
         col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
