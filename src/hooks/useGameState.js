@@ -96,12 +96,6 @@ export const useGameState = () => {
   }, [gameOver, gameMode, currentPlayer, selectedPiece, pendingMove]);
 
   // Move pending piece with D-pad
-  // Allow positions outside the grid so pieces can extend beyond boundaries
-  // This enables rotating pieces at edges without forcing them back onto the grid
-  const OVERFLOW_AMOUNT = 4; // Max pentomino extent from origin
-  const MIN_POSITION = -OVERFLOW_AMOUNT;
-  const MAX_POSITION = BOARD_SIZE - 1 + OVERFLOW_AMOUNT;
-  
   const movePendingPiece = useCallback((direction) => {
     if (!pendingMove) return;
     
@@ -113,9 +107,8 @@ export const useGameState = () => {
     };
     
     const [dRow, dCol] = deltas[direction] || [0, 0];
-    // Allow positions outside the grid bounds for overflow placement
-    const newRow = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.row + dRow));
-    const newCol = Math.max(MIN_POSITION, Math.min(MAX_POSITION, pendingMove.col + dCol));
+    const newRow = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.row + dRow));
+    const newCol = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.col + dCol));
     
     setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     soundManager.playClickSound('move');
@@ -123,14 +116,23 @@ export const useGameState = () => {
 
   // Confirm the pending move
   const confirmMove = useCallback(() => {
-    if (!pendingMove) return;
+    console.log('[useGameState] confirmMove called:', { pendingMove, rotation, flipped, board: !!board });
+    
+    if (!pendingMove) {
+      console.log('[useGameState] No pending move, returning');
+      return;
+    }
     
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    console.log('[useGameState] Piece coords:', { piece: pendingMove.piece, coords, row: pendingMove.row, col: pendingMove.col });
     
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
+      console.log('[useGameState] Invalid placement, playing invalid sound');
       soundManager.playInvalid();
       return;
     }
+    
+    console.log('[useGameState] Valid placement, animating...');
     
     // Animate player piece placement
     setPlayerAnimatingMove({
@@ -145,6 +147,8 @@ export const useGameState = () => {
     
     // Commit move after brief animation
     setTimeout(() => {
+      console.log('[useGameState] Committing move...');
+      
       // Place the piece
       const { newBoard, newBoardPieces } = placePiece(
         board,
@@ -176,31 +180,18 @@ export const useGameState = () => {
       setRotation(0);
       setFlipped(false);
       setPendingMove(null);
+      setPlayerAnimatingMove(null);
+      
+      console.log('[useGameState] Move committed, checking for game over...');
       
       // Check for game over
       const newUsedPieces = [...usedPieces, pendingMove.piece];
       if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
-        // v7.8: Player wins - keep animation showing for longer with winning flag
-        setPlayerAnimatingMove({
-          piece: pendingMove.piece,
-          row: pendingMove.row,
-          col: pendingMove.col,
-          rotation,
-          flipped,
-          isWinning: true, // Mark as winning move for special animation
-        });
-        
-        // Play win sound
+        console.log('[useGameState] Game over! Winner:', currentPlayer);
+        setGameOver(true);
+        setWinner(currentPlayer);
         soundManager.playWin();
-        
-        // Wait for winning animation before setting game over
-        setTimeout(() => {
-          setPlayerAnimatingMove(null);
-          setGameOver(true);
-          setWinner(currentPlayer);
-        }, 1200); // Longer delay for winning animation
       } else {
-        setPlayerAnimatingMove(null);
         setCurrentPlayer(currentPlayer === 1 ? 2 : 1);
       }
     }, 200);
@@ -263,30 +254,15 @@ export const useGameState = () => {
       setBoard(newBoard);
       setBoardPieces(newBoardPieces);
       setUsedPieces(prev => [...prev, move.pieceType]);
+      setAiAnimatingMove(null);
       
       // Check for game over
       const newUsedPieces = [...usedPieces, move.pieceType];
       if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
-        // v7.8: AI wins - keep animation showing for longer, then trigger game over
-        // Keep the winning piece highlighted
-        setAiAnimatingMove({
-          piece: move.pieceType,
-          row: move.row,
-          col: move.col,
-          rotation: move.rot,
-          flipped: move.flip,
-          isWinning: true, // Mark as winning move for special animation
-        });
-        
-        // Wait for winning animation to play before showing game over
-        await new Promise(resolve => setTimeout(resolve, 1200));
-        
-        setAiAnimatingMove(null);
         setGameOver(true);
         setWinner(2);
         soundManager.playLose();
       } else {
-        setAiAnimatingMove(null);
         setCurrentPlayer(1);
       }
     } catch (err) {

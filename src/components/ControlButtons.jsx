@@ -87,7 +87,7 @@ const ControlButtons = ({
       {onMenu && (
         <GlowOrbButton onClick={handleMenu} color="rose" title="Back to menu">
           <Home size={14} />
-          <span className="hidden sm:inline">MENU</span>
+          <span className="hidden sm:inline">HOME</span>
         </GlowOrbButton>
       )}
 
@@ -143,7 +143,11 @@ const ControlButtons = ({
             <X size={14} />CANCEL
           </GlowOrbButton>
           <GlowOrbButton
-            onClick={onConfirm}
+            onClick={() => {
+              console.log('[ControlButtons] Confirm button clicked');
+              soundManager.playButtonClick();
+              onConfirm?.();
+            }}
             color="green"
             className="flex-1"
           >

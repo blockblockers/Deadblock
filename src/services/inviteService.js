@@ -71,7 +71,7 @@ const dbSelect = async (table, options = {}) => {
 
 const dbInsert = async (table, data, options = {}) => {
   const headers = getAuthHeaders();
-  if (!headers) return { data: null, error: 'Not authenticated' };
+  if (!headers) return { data: null, error: { message: 'Not authenticated' } };
   
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
@@ -81,14 +81,27 @@ const dbInsert = async (table, data, options = {}) => {
         : headers,
       body: JSON.stringify(data)
     });
-    if (!response.ok) return { data: null, error: 'Insert failed' };
+    if (!response.ok) {
+      // Capture actual error message from response
+      const errorText = await response.text();
+      console.error('[inviteService] dbInsert failed:', response.status, errorText);
+      let errorMessage = 'Insert failed';
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.message || errorJson.error || errorText;
+      } catch {
+        errorMessage = errorText || `HTTP ${response.status}`;
+      }
+      return { data: null, error: { message: errorMessage } };
+    }
     if (options.returning) {
       const result = await response.json();
       return { data: options.single ? result[0] : result, error: null };
     }
     return { data: true, error: null };
   } catch (err) {
-    return { data: null, error: err.message };
+    console.error('[inviteService] dbInsert exception:', err);
+    return { data: null, error: { message: err.message } };
   }
 };
 

@@ -223,11 +223,20 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
-    if (relX < 0 || relX > width || relY < 0 || relY > height) {
-      return null;
+    // Calculate cell coordinates (can be negative or beyond BOARD_SIZE)
+    // This allows pieces to extend outside the grid on all sides
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
+    
+    // Allow some margin outside the board for piece extension
+    // Pieces can extend up to 4 cells outside (largest pentomino dimension)
+    const EXTENSION_MARGIN = 4;
+    if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+        col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+      return { row, col };
     }
     
-    return { row: Math.floor(relY / cellHeight), col: Math.floor(relX / cellWidth) };
+    return null;
   }, []);
 
   const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {

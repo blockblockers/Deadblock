@@ -1,5 +1,5 @@
 // soundManager.js - Complete audio management for Deadblock
-// v7.11.1 - Fixed toggle functions, removed distorted ambient generator
+// v7.11.2 - Better background music support with HTML5 Audio fallback
 
 class SoundManager {
   constructor() {
@@ -10,15 +10,17 @@ class SoundManager {
     this.musicVolume = this.loadSetting('musicVolume', 0.3);
     this.soundVolume = this.loadSetting('soundVolume', 0.5);
     
-    // Music
-    this.musicSource = null;
-    this.musicBuffer = null;
-    this.musicGainNode = null;
+    // Music - HTML5 Audio for better compatibility
+    this.musicAudio = null;
     this.isMusicPlaying = false;
+    
+    // Web Audio API for sound effects
+    this.musicGainNode = null;
     
     // Initialization state
     this.initialized = false;
     this.initPromise = null;
+    this.musicInitialized = false;
   }
 
   loadSetting(key, defaultValue) {
@@ -59,18 +61,16 @@ class SoundManager {
         await this.audioContext.resume();
       }
       
-      // Create music gain node
+      // Create music gain node for Web Audio
       this.musicGainNode = this.audioContext.createGain();
       this.musicGainNode.gain.value = this.musicEnabled ? this.musicVolume : 0;
       this.musicGainNode.connect(this.audioContext.destination);
       
       this.initialized = true;
-      console.log('Audio context created');
+      console.log('[SoundManager] Audio context created');
       
-      // Try to load music file (don't block on failure)
-      this.loadMusicBuffer().catch(() => {
-        console.log('No background music file found - music disabled');
-      });
+      // Initialize music separately (don't block)
+      this.initMusic();
       
       return true;
     } catch (e) {
@@ -79,26 +79,57 @@ class SoundManager {
     }
   }
 
-  async loadMusicBuffer() {
-    try {
-      console.log('Loading music buffer...');
-      const response = await fetch('/audio/background-music.mp3');
-      if (!response.ok) {
-        throw new Error('Music file not found');
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      console.log('Music buffer loaded successfully');
+  // Initialize background music using HTML5 Audio (more reliable for looping music)
+  initMusic() {
+    if (this.musicInitialized) return;
+    
+    // Try multiple paths for the music file
+    const musicPaths = [
+      '/audio/background-music.mp3',
+      '/sounds/background-music.mp3',
+      '/music/background.mp3',
+      '/audio/music.mp3'
+    ];
+    
+    // Try each path
+    this.tryLoadMusic(musicPaths, 0);
+  }
+  
+  tryLoadMusic(paths, index) {
+    if (index >= paths.length) {
+      console.log('[SoundManager] No background music file found at any path');
+      return;
+    }
+    
+    const path = paths[index];
+    console.log(`[SoundManager] Trying to load music from: ${path}`);
+    
+    const audio = new Audio();
+    audio.src = path;
+    audio.loop = true;
+    audio.volume = this.musicEnabled ? this.musicVolume : 0;
+    audio.preload = 'auto';
+    
+    // On successful load
+    audio.addEventListener('canplaythrough', () => {
+      console.log(`[SoundManager] Music loaded successfully from: ${path}`);
+      this.musicAudio = audio;
+      this.musicInitialized = true;
       
       // Auto-start if music is enabled
-      if (this.musicEnabled && !this.isMusicPlaying) {
+      if (this.musicEnabled) {
         this.startMusic();
       }
-    } catch (e) {
-      console.log('Background music not available:', e.message);
-      // Don't generate fallback - just disable music
-      this.musicBuffer = null;
-    }
+    }, { once: true });
+    
+    // On error, try next path
+    audio.addEventListener('error', (e) => {
+      console.log(`[SoundManager] Failed to load music from ${path}:`, e.message || 'Not found');
+      this.tryLoadMusic(paths, index + 1);
+    }, { once: true });
+    
+    // Start loading
+    audio.load();
   }
 
   // =========================================================================
@@ -116,12 +147,13 @@ class SoundManager {
     this.musicEnabled = !this.musicEnabled;
     this.saveSetting('musicEnabled', this.musicEnabled);
     
-    if (this.musicGainNode) {
-      this.musicGainNode.gain.value = this.musicEnabled ? this.musicVolume : 0;
+    // Update HTML5 Audio volume
+    if (this.musicAudio) {
+      this.musicAudio.volume = this.musicEnabled ? this.musicVolume : 0;
     }
     
     // Start or stop music based on new state
-    if (this.musicEnabled && !this.isMusicPlaying && this.musicBuffer) {
+    if (this.musicEnabled && !this.isMusicPlaying && this.musicAudio) {
       this.startMusic();
     } else if (!this.musicEnabled && this.isMusicPlaying) {
       this.stopMusic();
@@ -155,46 +187,57 @@ class SoundManager {
   }
 
   // =========================================================================
-  // MUSIC CONTROLS
+  // MUSIC CONTROLS (using HTML5 Audio for better compatibility)
   // =========================================================================
 
   async startMusic() {
-    if (!this.initialized) await this.init();
-    if (!this.musicBuffer || this.isMusicPlaying) return;
+    if (!this.musicAudio || this.isMusicPlaying) return;
     
     try {
-      this.musicSource = this.audioContext.createBufferSource();
-      this.musicSource.buffer = this.musicBuffer;
-      this.musicSource.loop = true;
-      this.musicSource.connect(this.musicGainNode);
-      this.musicSource.start(0);
+      this.musicAudio.volume = this.musicEnabled ? this.musicVolume : 0;
+      await this.musicAudio.play();
       this.isMusicPlaying = true;
-      console.log('Music started (seamless loop)');
+      console.log('[SoundManager] Music started');
     } catch (e) {
-      console.warn('[SoundManager] Failed to start music:', e);
+      // AutoPlay was prevented - will need user interaction
+      console.log('[SoundManager] Music autoplay prevented, waiting for user interaction');
+      
+      // Add one-time event listener to start music on user interaction
+      const startOnInteraction = async () => {
+        try {
+          await this.musicAudio.play();
+          this.isMusicPlaying = true;
+          console.log('[SoundManager] Music started after user interaction');
+        } catch (err) {
+          console.warn('[SoundManager] Still could not start music:', err);
+        }
+        // Remove listeners after first interaction
+        document.removeEventListener('click', startOnInteraction);
+        document.removeEventListener('touchstart', startOnInteraction);
+        document.removeEventListener('keydown', startOnInteraction);
+      };
+      
+      document.addEventListener('click', startOnInteraction, { once: true });
+      document.addEventListener('touchstart', startOnInteraction, { once: true });
+      document.addEventListener('keydown', startOnInteraction, { once: true });
     }
   }
 
   stopMusic() {
-    if (this.musicSource) {
-      try {
-        this.musicSource.stop();
-        this.musicSource.disconnect();
-      } catch (e) {
-        // Ignore errors if already stopped
-      }
-      this.musicSource = null;
+    if (this.musicAudio) {
+      this.musicAudio.pause();
+      this.musicAudio.currentTime = 0;
     }
     this.isMusicPlaying = false;
-    console.log('Music stopped');
+    console.log('[SoundManager] Music stopped');
   }
 
   setMusicVolume(volume) {
     this.musicVolume = Math.max(0, Math.min(1, volume));
     this.saveSetting('musicVolume', this.musicVolume);
     
-    if (this.musicGainNode && this.musicEnabled) {
-      this.musicGainNode.gain.value = this.musicVolume;
+    if (this.musicAudio && this.musicEnabled) {
+      this.musicAudio.volume = this.musicVolume;
     }
   }
 

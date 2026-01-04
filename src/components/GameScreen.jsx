@@ -227,7 +227,15 @@ const GameScreen = ({
   // Calculate if confirm should be enabled
   const canConfirm = pendingMove && (() => {
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+    const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+    console.log('[GameScreen] canConfirm check:', { 
+      piece: pendingMove.piece, 
+      row: pendingMove.row, 
+      col: pendingMove.col, 
+      isValid,
+      coords
+    });
+    return isValid;
   })();
 
   // Show error when placement is invalid
@@ -235,6 +243,7 @@ const GameScreen = ({
     if (pendingMove) {
       const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
       const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+      console.log('[GameScreen] Placement validation:', { piece: pendingMove.piece, isValid });
       if (!isValid) {
         setErrorMessage('Invalid placement!');
       } else {
@@ -277,7 +286,11 @@ const GameScreen = ({
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE) {
+    // Allow pieces to extend outside the grid on all sides
+    // Extension margin allows anchor point up to 4 cells outside (largest pentomino dimension)
+    const EXTENSION_MARGIN = 4;
+    if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+        col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
       return { row, col };
     }
     return null;

@@ -724,14 +724,18 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
-    if (relX < 0 || relX > width || relY < 0 || relY > height) {
-      return null;
-    }
-    
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    return { row, col };
+    // Allow pieces to extend outside the grid on all sides
+    // Extension margin allows anchor point up to 4 cells outside (largest pentomino dimension)
+    const EXTENSION_MARGIN = 4;
+    if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+        col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+      return { row, col };
+    }
+    
+    return null;
   }, []);
 
   // Update drag position and check validity

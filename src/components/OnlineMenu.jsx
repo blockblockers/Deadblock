@@ -961,8 +961,33 @@ const OnlineMenu = ({
                     </button>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    <span className="text-slate-500">{(profile?.wins || 0) + (profile?.losses || 0)} games</span>
-                    <span className="text-green-400">{profile?.wins || 0} wins</span>
+                    {/* Calculate stats: prefer profile.wins/losses, fallback to recentGames calculation */}
+                    {(() => {
+                      // Use profile fields if they exist and are valid
+                      const profileWins = profile?.wins;
+                      const profileLosses = profile?.losses;
+                      
+                      if (typeof profileWins === 'number' || typeof profileLosses === 'number') {
+                        const wins = profileWins || 0;
+                        const losses = profileLosses || 0;
+                        return (
+                          <>
+                            <span className="text-slate-500">{wins + losses} games</span>
+                            <span className="text-green-400">{wins} wins</span>
+                          </>
+                        );
+                      }
+                      
+                      // Fallback: calculate from recentGames
+                      const completedCount = recentGames?.length || 0;
+                      const winsCount = recentGames?.filter(g => g?.winner_id === profile?.id).length || 0;
+                      return (
+                        <>
+                          <span className="text-slate-500">{completedCount} recent</span>
+                          <span className="text-green-400">{winsCount} wins</span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

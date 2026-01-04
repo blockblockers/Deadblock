@@ -212,18 +212,24 @@ const QuickChat = ({
     setCooldown(true);
     setTimeout(() => setCooldown(false), 2000);
 
+    // Clear input immediately for better UX
+    setCustomText('');
+
     // Send the message
     const { error } = await chatService.sendCustomMessage(gameId, userId, messageText);
     
     if (error) {
       console.error('[QuickChat] Failed to send custom message:', error);
+      // Show error feedback
+      setSentMessage({ icon: '❌', text: 'Failed to send' });
+      if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
+      sentTimeoutRef.current = setTimeout(() => {
+        setSentMessage(null);
+      }, 2000);
       return;
     }
 
     soundManager.playClickSound?.('soft');
-    
-    // Clear input
-    setCustomText('');
     
     // Show "sent" feedback
     setSentMessage({ icon: '💬', text: messageText.slice(0, 30) + (messageText.length > 30 ? '...' : '') });

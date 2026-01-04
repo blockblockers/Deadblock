@@ -580,6 +580,60 @@ function AppContent() {
     setGameMode('online-menu');
   };
 
+
+// Handle service worker notification clicks and URL-based navigation
+useEffect(() => {
+  const handleServiceWorkerMessage = (event) => {
+    console.log('[App] Received service worker message:', event.data);
+    
+    if (event.data?.type === 'NOTIFICATION_CLICK') {
+      const { data } = event.data;
+      const { gameId, notificationType } = data || {};
+      
+      if (!hasPassedEntryAuth) {
+        if (gameId) localStorage.setItem('deadblock_pending_game_id', gameId);
+        localStorage.setItem('deadblock_pending_online_intent', 'true');
+        return;
+      }
+      
+      if ((notificationType === 'your_turn' || 
+           notificationType === 'rematch_request' || 
+           notificationType === 'rematch_accepted' ||
+           notificationType === 'chat_message') && gameId) {
+        setOnlineGameId(gameId);
+        setGameMode('online-game');
+      } else {
+        setGameMode('online-menu');
+      }
+    }
+  };
+  
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+  }
+  
+  // Check URL params for notification-based navigation
+  const params = new URLSearchParams(window.location.search);
+  const navigateTo = params.get('navigateTo');
+  const urlGameId = params.get('gameId');
+  
+  if (navigateTo === 'online' && hasPassedEntryAuth) {
+    if (urlGameId) {
+      setOnlineGameId(urlGameId);
+      setGameMode('online-game');
+    } else {
+      setGameMode('online-menu');
+    }
+    window.history.replaceState({}, document.title, '/');
+  }
+  
+  return () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+    }
+  };
+}, [hasPassedEntryAuth, setGameMode, setOnlineGameId]);
+
   // Handle resume game
   const handleResumeGame = (game) => {
     console.log('handleResumeGame called:', { gameId: game?.id, game });
