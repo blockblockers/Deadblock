@@ -367,8 +367,11 @@ const GameScreen = ({
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Calculate which cell we're over
-    const cell = calculateBoardCell(clientX, clientY);
+    // Calculate which cell we're over - subtract drag offset to match floating piece position
+    // The offset is (touchPos - pieceCenter), subtracting aligns piece center with visual
+    const adjustedX = clientX - dragOffset.x;
+    const adjustedY = clientY - dragOffset.y;
+    const cell = calculateBoardCell(adjustedX, adjustedY);
     
     if (cell && setPendingMove) {
       // Update pending move for visual feedback
@@ -381,7 +384,7 @@ const GameScreen = ({
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [isDragging, draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // End drag
   const endDrag = useCallback(() => {
@@ -402,7 +405,7 @@ const GameScreen = ({
     document.body.style.touchAction = '';
   }, [isDragging]);
 
-  // Create drag handlers for PieceTray
+  // Create drag handlers for PieceTray - UPDATED to match OnlineGameScreen
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece)) return {};
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
@@ -410,7 +413,8 @@ const GameScreen = ({
     let startX = 0;
     let startY = 0;
     let elementRect = null;
-    let gestureDecided = false;
+    let isDragGesture = false;
+    let touchStartTime = 0;
 
     const handleTouchStart = (e) => {
       // CRITICAL: Prevent browser from handling touch (scroll, etc)
@@ -420,44 +424,49 @@ const GameScreen = ({
       startX = touch.clientX;
       startY = touch.clientY;
       elementRect = e.currentTarget.getBoundingClientRect();
-      gestureDecided = false;
+      isDragGesture = false;
+      touchStartTime = Date.now();
+      hasDragStartedRef.current = false;
       dragStartRef.current = { x: startX, y: startY };
     };
 
     const handleTouchMove = (e) => {
-      if (gestureDecided && !hasDragStartedRef.current) return;
-      
       const touch = e.touches[0];
-      const currentX = touch.clientX;
-      const currentY = touch.clientY;
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const elapsed = Date.now() - touchStartTime;
       
-      if (!gestureDecided) {
-        const isScroll = isScrollGesture(startX, startY, currentX, currentY);
+      // Quick gesture detection - if moved enough within 150ms, it's likely a drag
+      if (!isDragGesture && distance > DRAG_THRESHOLD) {
+        // Check if this is more horizontal than vertical (drag vs scroll)
+        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
         
-        if (isScroll === null) return;
-        
-        gestureDecided = true;
-        
-        if (isScroll) {
-          return; // It's a scroll
+        // If moving mostly horizontal, or if it's a quick gesture, treat as drag
+        if (isHorizontalish || elapsed < 150) {
+          isDragGesture = true;
         } else {
-          e.preventDefault();
-          startDrag(piece, currentX, currentY, elementRect);
+          // Vertical scroll - don't interfere
+          return;
         }
       }
       
+      // Start dragging if we've decided it's a drag gesture
+      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+        e.preventDefault();
+        startDrag(piece, touch.clientX, touch.clientY, elementRect);
+      }
+      
+      // Continue drag updates
       if (hasDragStartedRef.current) {
         e.preventDefault();
-        updateDrag(currentX, currentY);
+        updateDrag(touch.clientX, touch.clientY);
       }
     };
 
-    const handleTouchEnd = (e) => {
-      if (hasDragStartedRef.current) {
-        e.preventDefault();
-        endDrag();
-      }
-      gestureDecided = false;
+    const handleTouchEnd = () => {
+      if (hasDragStartedRef.current) endDrag();
+      isDragGesture = false;
     };
 
     // Mouse handlers for desktop
@@ -477,7 +486,7 @@ const GameScreen = ({
       // CRITICAL: Prevent browser from handling touch events on piece items
       style: { touchAction: 'none' },
     };
-  }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
+  }, [gameOver, usedPieces, gameMode, currentPlayer, startDrag, updateDrag, endDrag]);
 
   // Global mouse move/up handlers for desktop drag
   useEffect(() => {

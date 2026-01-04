@@ -339,7 +339,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
-    const cell = calculateBoardCell(clientX, clientY);
+    // Subtract drag offset to match floating piece position
+    const adjustedX = clientX - dragOffset.x;
+    const adjustedY = clientY - dragOffset.y;
+    const cell = calculateBoardCell(adjustedX, adjustedY);
+    
     if (cell && draggedPiece) {
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -356,7 +360,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // Keep current piece in ref to avoid stale closures
   const draggedPieceRef = useRef(null);
@@ -370,9 +374,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const currentPiece = draggedPieceRef.current;
     console.log('[WeeklyChallenge] endDrag called:', { isDragging, draggedPiece: currentPiece });
     
-    // Recompute validity based on current drag position
+    // Recompute validity based on current drag position with offset
     if (currentPiece && dragPosition && boardBoundsRef.current) {
-      const cell = calculateBoardCell(dragPosition.x, dragPosition.y);
+      // Subtract drag offset to match floating piece position
+      const adjustedX = dragPosition.x - dragOffset.x;
+      const adjustedY = dragPosition.y - dragOffset.y;
+      const cell = calculateBoardCell(adjustedX, adjustedY);
       if (cell) {
         const coords = getPieceCoords(currentPiece, rotation, flipped);
         const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -410,6 +417,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
+    setDragOffset({ x: 0, y: 0 });
     hasDragStartedRef.current = false;
     
     document.body.style.overflow = '';

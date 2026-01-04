@@ -305,7 +305,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    const cell = calculateBoardCell(clientX, clientY);
+    // Subtract drag offset to match floating piece position
+    const adjustedX = clientX - dragOffset.x;
+    const adjustedY = clientY - dragOffset.y;
+    const cell = calculateBoardCell(adjustedX, adjustedY);
     
     if (cell) {
       setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
@@ -315,7 +318,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [isDragging, draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell]);
 
   const endDrag = useCallback(() => {
     if (!isDragging) return;
@@ -559,8 +562,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     };
   }, []);
 
-  // Check for openChat URL parameter (from notification click)
+  // Check for openChat URL parameter or sessionStorage (from notification click)
   useEffect(() => {
+    // Check URL param first
     const params = new URLSearchParams(window.location.search);
     if (params.get('openChat') === 'true') {
       console.log('[OnlineGameScreen] Opening chat from URL param');
@@ -569,6 +573,17 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       setChatToast(null);
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+    
+    // Check sessionStorage (set by App.jsx from notification navigation)
+    const sessionOpenChat = sessionStorage.getItem('deadblock_open_chat');
+    if (sessionOpenChat === 'true') {
+      console.log('[OnlineGameScreen] Opening chat from sessionStorage');
+      setChatOpen(true);
+      setHasUnreadChat(false);
+      setChatToast(null);
+      sessionStorage.removeItem('deadblock_open_chat');
     }
   }, []);
 

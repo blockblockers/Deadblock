@@ -92,8 +92,12 @@ class NotificationService {
       return null;
     }
 
-    if (!document.hidden) {
-      // Don't send notification if page is visible
+    // Note: We now send notifications even when page is visible for chat messages
+    // The toast banner handles in-app visibility
+    const isPageHidden = document.hidden;
+    
+    if (!isPageHidden && options.data?.type !== 'chat_message') {
+      // Skip non-chat notifications if page is visible
       console.log('[NotificationService] Page is visible, skipping notification');
       return null;
     }
@@ -110,16 +114,32 @@ class NotificationService {
       // Auto-close after 10 seconds
       setTimeout(() => notification.close(), 10000);
 
-      // Handle click - focus the app
+      // Handle click - navigate to the appropriate screen
       notification.onclick = (event) => {
         event.preventDefault();
         window.focus();
         notification.close();
         
-        // If there's a URL in the data, navigate to it
-        if (options.data?.url) {
-          window.location.href = options.data.url;
+        const data = options.data || {};
+        
+        // Build the navigation URL based on notification type
+        let navigateUrl = '/';
+        
+        if (data.type === 'chat_message' && data.gameId) {
+          // Navigate to game with chat open
+          navigateUrl = `/?navigateTo=online&gameId=${data.gameId}&openChat=true`;
+        } else if ((data.type === 'rematch_request' || data.type === 'rematch_accepted') && data.gameId) {
+          navigateUrl = `/?navigateTo=online&gameId=${data.gameId}`;
+        } else if (data.type === 'your_turn' && data.gameId) {
+          navigateUrl = `/?navigateTo=online&gameId=${data.gameId}`;
+        } else if (data.type === 'game_invite') {
+          navigateUrl = `/?navigateTo=online`;
+        } else if (data.gameId) {
+          navigateUrl = `/?navigateTo=online&gameId=${data.gameId}`;
         }
+        
+        console.log('[NotificationService] Click navigating to:', navigateUrl, 'type:', data.type);
+        window.location.href = navigateUrl;
       };
 
       return notification;

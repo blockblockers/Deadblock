@@ -99,6 +99,10 @@ export const useGameState = () => {
   const movePendingPiece = useCallback((direction) => {
     if (!pendingMove) return;
     
+    // EXTENSION_MARGIN allows pieces to extend outside the board
+    // This is needed for pieces like 'I' that have cells extending from anchor
+    const EXTENSION_MARGIN = 4;
+    
     const deltas = {
       up: [-1, 0],
       down: [1, 0],
@@ -107,8 +111,9 @@ export const useGameState = () => {
     };
     
     const [dRow, dCol] = deltas[direction] || [0, 0];
-    const newRow = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.row + dRow));
-    const newCol = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.col + dCol));
+    // Allow movement from -EXTENSION_MARGIN to BOARD_SIZE + EXTENSION_MARGIN - 1
+    const newRow = Math.max(-EXTENSION_MARGIN, Math.min(BOARD_SIZE + EXTENSION_MARGIN - 1, pendingMove.row + dRow));
+    const newCol = Math.max(-EXTENSION_MARGIN, Math.min(BOARD_SIZE + EXTENSION_MARGIN - 1, pendingMove.col + dCol));
     
     setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     soundManager.playClickSound('move');

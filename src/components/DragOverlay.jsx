@@ -65,15 +65,22 @@ const DragOverlay = memo(({
 
   // v7.11: Center piece under touch point, with slight vertical offset so finger doesn't cover it
   // The piece center should be slightly above the touch point for visibility
+  // v7.12 FIX: Incorporate offset prop for proper grid alignment
+  // The offset is calculated as (touchPos - pieceCenter), so we SUBTRACT it to align the grabbed point under finger
   const fingerOffset = isMobile ? 50 : 30; // More offset on mobile so thumb doesn't cover piece
+
+  // Subtract offset to keep the grabbed point under the finger
+  // If user grabbed right of center (offset.x > 0), piece center shifts left
+  const adjustedX = position.x - (offset?.x || 0);
+  const adjustedY = position.y - (offset?.y || 0);
 
   return (
     <>
       <div
         className="fixed pointer-events-none z-[9999]"
         style={{
-          left: position.x - pieceWidth / 2,
-          top: position.y - pieceHeight / 2 - fingerOffset,
+          left: adjustedX - pieceWidth / 2,
+          top: adjustedY - pieceHeight / 2 - fingerOffset,
           transform: 'translate3d(0, 0, 0)',
           willChange: 'left, top',
         }}

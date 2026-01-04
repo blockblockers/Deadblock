@@ -742,7 +742,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
-    const cell = calculateBoardCell(clientX, clientY);
+    // Subtract drag offset to match floating piece position
+    const adjustedX = clientX - dragOffset.x;
+    const adjustedY = clientY - dragOffset.y;
+    const cell = calculateBoardCell(adjustedX, adjustedY);
+    
     if (cell && draggedPiece) {
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -759,7 +763,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell]);
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
@@ -790,7 +794,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       return { clientX: e.clientX, clientY: e.clientY };
     };
 
-    // Touch handlers - require drag threshold before starting
+    // Touch handlers - UPDATED to match OnlineGameScreen pattern
+    let startX = 0, startY = 0, elementRect = null;
+    let isDragGesture = false;
+    let touchStartTime = 0;
+    
     const handleTouchStart = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
@@ -798,9 +806,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       // CRITICAL: Prevent browser from handling touch (scroll, etc)
       e.preventDefault();
       
-      const { clientX, clientY } = getClientPos(e);
-      dragStartRef.current = { x: clientX, y: clientY };
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      elementRect = e.currentTarget.getBoundingClientRect();
+      isDragGesture = false;
+      touchStartTime = Date.now();
       hasDragStartedRef.current = false;
+      dragStartRef.current = { x: startX, y: startY };
       
       // Update board bounds
       if (boardRef.current) {
@@ -811,43 +824,57 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const handleTouchMove = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       
-      const { clientX, clientY } = getClientPos(e);
-      const deltaX = clientX - dragStartRef.current.x;
-      const deltaY = clientY - dragStartRef.current.y;
+      const touch = e.touches[0];
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      const elapsed = Date.now() - touchStartTime;
       
-      // Check if this is a vertical scroll gesture
-      if (!hasDragStartedRef.current && distance > 5) {
-        const angle = Math.abs(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
-        const isVertical = angle > SCROLL_ANGLE_THRESHOLD && angle < (180 - SCROLL_ANGLE_THRESHOLD);
+      // Quick gesture detection - if moved enough within 150ms, it's likely a drag
+      if (!isDragGesture && distance > DRAG_THRESHOLD) {
+        // Check if this is more horizontal than vertical (drag vs scroll)
+        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
         
-        if (isVertical) {
-          return; // Let it scroll
+        // If moving mostly horizontal, or if it's a quick gesture, treat as drag
+        if (isHorizontalish || elapsed < 150) {
+          isDragGesture = true;
+        } else {
+          // Vertical scroll - don't interfere
+          return;
         }
       }
       
-      if (distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+      // Start dragging if we've decided it's a drag gesture
+      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+        // Calculate offset from piece center
+        const offsetX = elementRect ? touch.clientX - (elementRect.left + elementRect.width / 2) : 0;
+        const offsetY = elementRect ? touch.clientY - (elementRect.top + elementRect.height / 2) : 0;
+        
         hasDragStartedRef.current = true;
         setIsDragging(true);
         setDraggedPiece(piece);
         setSelectedPiece(piece);
         setPendingMove(null);
-        setDragOffset({ x: 0, y: 0 });
+        setDragPosition({ x: touch.clientX, y: touch.clientY });
+        setDragOffset({ x: offsetX, y: offsetY });
         
         // CRITICAL: Block scroll while dragging
         document.body.style.overflow = 'hidden';
         document.body.style.touchAction = 'none';
+        
+        soundManager.playPieceSelect();
         
         if (e.cancelable) {
           e.preventDefault();
         }
       }
       
+      // Continue drag updates
       if (hasDragStartedRef.current) {
         if (e.cancelable) {
           e.preventDefault();
         }
-        updateDrag(clientX, clientY);
+        updateDrag(touch.clientX, touch.clientY);
       }
     };
 
@@ -856,6 +883,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         endDrag();
       }
       hasDragStartedRef.current = false;
+      isDragGesture = false;
     };
 
     // FIXED: Desktop mouse handler - start drag immediately on mousedown
@@ -865,6 +893,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       if (usedPieces.includes(piece)) return;
       
       const { clientX, clientY } = e;
+      const rect = e.currentTarget.getBoundingClientRect();
+      
+      // Calculate offset from piece center
+      const offsetX = clientX - (rect.left + rect.width / 2);
+      const offsetY = clientY - (rect.top + rect.height / 2);
       
       // Update board bounds
       if (boardRef.current) {
@@ -878,7 +911,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       setSelectedPiece(piece);
       setPendingMove(null);
       setDragPosition({ x: clientX, y: clientY });
-      setDragOffset({ x: 0, y: 0 });
+      setDragOffset({ x: offsetX, y: offsetY });
       
       // CRITICAL: Block scroll while dragging
       document.body.style.overflow = 'hidden';

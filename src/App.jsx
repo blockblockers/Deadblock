@@ -631,12 +631,18 @@ function AppContent() {
     const navigateTo = params.get('navigateTo');
     const urlGameId = params.get('gameId');
     const rematchGameId = params.get('rematchGameId');
+    const openChat = params.get('openChat');
     
     if (navigateTo === 'online' && hasPassedEntryAuth) {
-      console.log('[App] URL param navigation to online, gameId:', urlGameId);
+      console.log('[App] URL param navigation to online, gameId:', urlGameId, 'openChat:', openChat);
       if (urlGameId) {
         setOnlineGameId(urlGameId);
         setGameMode('online-game');
+        
+        // Store openChat flag for OnlineGameScreen to pick up
+        if (openChat === 'true') {
+          sessionStorage.setItem('deadblock_open_chat', 'true');
+        }
       } else {
         setGameMode('online-menu');
       }
