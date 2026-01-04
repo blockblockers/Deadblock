@@ -507,6 +507,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
+      // CRITICAL: Prevent browser from handling touch events on piece items
+      style: { touchAction: 'none' },
     };
   }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
 

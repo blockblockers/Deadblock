@@ -404,6 +404,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
+      // CRITICAL: Prevent browser from handling touch events on piece items
+      style: { touchAction: 'none' },
     };
   }, [game?.status, usedPieces, isMyTurn, isScrollGesture, startDrag, updateDrag, endDrag]);
 

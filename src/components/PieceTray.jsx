@@ -116,6 +116,8 @@ const PieceTray = ({
                 userSelect: 'none',
                 // Prevent context menu on long press
                 WebkitTouchCallout: 'none',
+                // CRITICAL: Prevent browser from intercepting touch for scroll
+                touchAction: 'none',
               }}
             >
               {/* Selection glow effect */}

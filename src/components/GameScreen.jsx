@@ -471,6 +471,8 @@ const GameScreen = ({
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
+      // CRITICAL: Prevent browser from handling touch events on piece items
+      style: { touchAction: 'none' },
     };
   }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
 

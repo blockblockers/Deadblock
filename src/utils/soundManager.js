@@ -240,8 +240,11 @@ class SoundManager {
 
   // Game sounds
   playButtonClick() { this.playSound(800, 0.05, 'sine', 0.15); }
+  playClickSound(type) { this.playSound(800, 0.05, 'sine', 0.15); } // Alias for playButtonClick
   playPieceSelect() { this.playChord([523, 659], 0.1, 'sine', 0.2); }
   playPiecePlace() { this.playChord([392, 523, 659], 0.15, 'sine', 0.25); }
+  playPieceRotate() { this.playSound(600, 0.05, 'sine', 0.1); }
+  playPieceFlip() { this.playSound(700, 0.05, 'sine', 0.1); }
   
   playConfirm() {
     setTimeout(() => this.playSound(523, 0.1, 'sine', 0.2), 0);
@@ -261,6 +264,20 @@ class SoundManager {
     setTimeout(() => this.playChord([392, 494, 587], 0.2, 'sine', 0.25), 0);
     setTimeout(() => this.playChord([349, 440, 523], 0.2, 'sine', 0.25), 200);
     setTimeout(() => this.playChord([294, 370, 440], 0.4, 'sine', 0.2), 400);
+  }
+  
+  playGameOver() {
+    // Alias - plays win or lose based on context, but default to a neutral sound
+    setTimeout(() => this.playChord([440, 554, 659], 0.2, 'sine', 0.25), 0);
+    setTimeout(() => this.playChord([392, 494, 587], 0.3, 'sine', 0.2), 250);
+  }
+  
+  playPuzzleSolvedSound() {
+    // Celebratory sound for puzzle completion
+    setTimeout(() => this.playChord([523, 659, 784], 0.15, 'sine', 0.3), 0);
+    setTimeout(() => this.playChord([587, 740, 880], 0.15, 'sine', 0.3), 150);
+    setTimeout(() => this.playChord([659, 784, 988], 0.2, 'sine', 0.35), 300);
+    setTimeout(() => this.playChord([784, 988, 1175], 0.3, 'sine', 0.4), 450);
   }
   
   playRotate() { this.playSound(600, 0.05, 'sine', 0.1); }
