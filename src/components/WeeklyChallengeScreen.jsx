@@ -236,6 +236,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const dragStartRef = useRef({ x: 0, y: 0 });
   const hasDragStartedRef = useRef(false);
   
+  // CRITICAL: Cleanup body scroll on unmount to prevent scroll issues
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, []);
+  
   // Game state from hook
   const {
     board,
@@ -303,6 +311,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove]);
   
   // Calculate which board cell the drag position is over
+  // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -316,8 +325,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    // Allow pieces to extend outside the grid on all sides
-    // Extension margin allows anchor point up to 4 cells outside (largest pentomino dimension)
+    // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
     if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
         col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
@@ -331,8 +339,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
-    // Calculate which cell we're over based on piece CENTER position (accounting for offset)
-    const cell = calculateBoardCell(clientX - dragOffset.x, clientY - dragOffset.y);
+    const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPiece) {
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -349,7 +356,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove, dragOffset]);
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // Keep current piece in ref to avoid stale closures
   const draggedPieceRef = useRef(null);
@@ -363,9 +370,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const currentPiece = draggedPieceRef.current;
     console.log('[WeeklyChallenge] endDrag called:', { isDragging, draggedPiece: currentPiece });
     
-    // Recompute validity based on current drag position (accounting for offset)
+    // Recompute validity based on current drag position
     if (currentPiece && dragPosition && boardBoundsRef.current) {
-      const cell = calculateBoardCell(dragPosition.x - dragOffset.x, dragPosition.y - dragOffset.y);
+      const cell = calculateBoardCell(dragPosition.x, dragPosition.y);
       if (cell) {
         const coords = getPieceCoords(currentPiece, rotation, flipped);
         const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -407,7 +414,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove, dragOffset]);
+  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove]);
 
   // Create drag handlers for piece tray - FIXED WITH LOGGING
   const createDragHandlers = useCallback((piece) => {

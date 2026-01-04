@@ -213,6 +213,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // DRAG HANDLERS
   // =========================================================================
   
+  // Allow anchor positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -223,13 +224,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
-    // Calculate cell coordinates (can be negative or beyond BOARD_SIZE)
-    // This allows pieces to extend outside the grid on all sides
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    // Allow some margin outside the board for piece extension
-    // Pieces can extend up to 4 cells outside (largest pentomino dimension)
+    // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
     if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
         col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
@@ -305,9 +303,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Calculate board cell based on piece CENTER position (not finger position)
-    // This makes the ghost appear exactly where the piece would land relative to finger hold
-    const cell = calculateBoardCell(clientX - dragOffset.x, clientY - dragOffset.y);
+    const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
       setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
@@ -317,7 +313,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, dragOffset]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   const endDrag = useCallback(() => {
     if (!isDragging) return;

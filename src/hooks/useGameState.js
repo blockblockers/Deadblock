@@ -116,23 +116,28 @@ export const useGameState = () => {
 
   // Confirm the pending move
   const confirmMove = useCallback(() => {
-    console.log('[useGameState] confirmMove called:', { pendingMove, rotation, flipped, board: !!board });
+    console.log('[useGameState] confirmMove called:', { 
+      hasPendingMove: !!pendingMove, 
+      pendingMove,
+      rotation, 
+      flipped 
+    });
     
     if (!pendingMove) {
-      console.log('[useGameState] No pending move, returning');
+      console.log('[useGameState] No pending move - returning early');
       return;
     }
     
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    console.log('[useGameState] Piece coords:', { piece: pendingMove.piece, coords, row: pendingMove.row, col: pendingMove.col });
+    console.log('[useGameState] Piece coords:', coords);
     
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
-      console.log('[useGameState] Invalid placement, playing invalid sound');
+      console.log('[useGameState] Invalid placement - playing invalid sound');
       soundManager.playInvalid();
       return;
     }
     
-    console.log('[useGameState] Valid placement, animating...');
+    console.log('[useGameState] Valid placement - animating...');
     
     // Animate player piece placement
     setPlayerAnimatingMove({
@@ -147,8 +152,6 @@ export const useGameState = () => {
     
     // Commit move after brief animation
     setTimeout(() => {
-      console.log('[useGameState] Committing move...');
-      
       // Place the piece
       const { newBoard, newBoardPieces } = placePiece(
         board,
@@ -182,12 +185,9 @@ export const useGameState = () => {
       setPendingMove(null);
       setPlayerAnimatingMove(null);
       
-      console.log('[useGameState] Move committed, checking for game over...');
-      
       // Check for game over
       const newUsedPieces = [...usedPieces, pendingMove.piece];
       if (!canAnyPieceBePlaced(newBoard, newUsedPieces)) {
-        console.log('[useGameState] Game over! Winner:', currentPlayer);
         setGameOver(true);
         setWinner(currentPlayer);
         soundManager.playWin();

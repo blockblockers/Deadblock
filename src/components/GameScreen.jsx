@@ -228,22 +228,20 @@ const GameScreen = ({
   const canConfirm = pendingMove && (() => {
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
-    console.log('[GameScreen] canConfirm check:', { 
-      piece: pendingMove.piece, 
-      row: pendingMove.row, 
-      col: pendingMove.col, 
-      isValid,
-      coords
-    });
+    console.log('[GameScreen] canConfirm:', { piece: pendingMove.piece, row: pendingMove.row, col: pendingMove.col, isValid });
     return isValid;
   })();
+
+  // Debug: Log confirm state changes
+  useEffect(() => {
+    console.log('[GameScreen] Confirm state:', { pendingMove: !!pendingMove, canConfirm, gameMode, currentPlayer });
+  }, [pendingMove, canConfirm, gameMode, currentPlayer]);
 
   // Show error when placement is invalid
   useEffect(() => {
     if (pendingMove) {
       const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
       const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
-      console.log('[GameScreen] Placement validation:', { piece: pendingMove.piece, isValid });
       if (!isValid) {
         setErrorMessage('Invalid placement!');
       } else {
@@ -273,6 +271,7 @@ const GameScreen = ({
   // ==========================================
   
   // Calculate which board cell the drag position is over
+  // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -286,8 +285,8 @@ const GameScreen = ({
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    // Allow pieces to extend outside the grid on all sides
-    // Extension margin allows anchor point up to 4 cells outside (largest pentomino dimension)
+    // Allow anchor position up to 4 cells outside board for piece extension
+    // (pentominoes can extend up to 4 cells from anchor)
     const EXTENSION_MARGIN = 4;
     if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
         col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
@@ -369,9 +368,8 @@ const GameScreen = ({
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Calculate which cell we're over based on piece CENTER position (not finger position)
-    // This makes the ghost appear exactly where the piece would land relative to finger hold
-    const cell = calculateBoardCell(clientX - dragOffset.x, clientY - dragOffset.y);
+    // Calculate which cell we're over
+    const cell = calculateBoardCell(clientX, clientY);
     
     if (cell && setPendingMove) {
       // Update pending move for visual feedback
@@ -384,7 +382,7 @@ const GameScreen = ({
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove, dragOffset]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // End drag
   const endDrag = useCallback(() => {

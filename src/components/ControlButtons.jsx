@@ -144,9 +144,12 @@ const ControlButtons = ({
           </GlowOrbButton>
           <GlowOrbButton
             onClick={() => {
-              console.log('[ControlButtons] Confirm button clicked');
-              soundManager.playButtonClick();
-              onConfirm?.();
+              console.log('[ControlButtons] CONFIRM clicked! onConfirm:', typeof onConfirm);
+              if (onConfirm) {
+                onConfirm();
+              } else {
+                console.error('[ControlButtons] onConfirm is not defined!');
+              }
             }}
             color="green"
             className="flex-1"

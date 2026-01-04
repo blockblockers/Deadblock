@@ -419,7 +419,7 @@ class GameSyncService {
       if (opponentIds.length > 0) {
         const uniqueIds = [...new Set(opponentIds)];
         const profilesResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating,elo_rating`,
+          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating`,
           { headers }
         );
 
@@ -482,7 +482,7 @@ class GameSyncService {
       if (allPlayerIds.size > 0) {
         const uniqueIds = [...allPlayerIds];
         const profilesResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating,elo_rating`,
+          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating`,
           { headers }
         );
 

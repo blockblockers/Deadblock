@@ -714,6 +714,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const SCROLL_ANGLE_THRESHOLD = 60;
   
   // Calculate which board cell the drag position is over
+  // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -727,8 +728,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
     
-    // Allow pieces to extend outside the grid on all sides
-    // Extension margin allows anchor point up to 4 cells outside (largest pentomino dimension)
+    // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
     if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
         col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
@@ -742,8 +742,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
-    // Calculate which cell we're over based on piece CENTER position (accounting for offset)
-    const cell = calculateBoardCell(clientX - dragOffset.x, clientY - dragOffset.y);
+    const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPiece) {
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -760,7 +759,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, dragOffset]);
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
@@ -966,6 +965,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       // Clear all pending timeouts
       pendingTimeoutsRef.current.forEach(id => clearTimeout(id));
       pendingTimeoutsRef.current.clear();
+      // CRITICAL: Reset body scroll to prevent scroll issues in other screens
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
     };
   }, [clearTimer]);
 
