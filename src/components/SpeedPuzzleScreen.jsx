@@ -794,26 +794,17 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       return { clientX: e.clientX, clientY: e.clientY };
     };
 
-    // Touch handlers - UPDATED to match OnlineGameScreen pattern
-    let startX = 0, startY = 0, elementRect = null;
-    let isDragGesture = false;
-    let touchStartTime = 0;
-    
+    let elementRect = null;
+
+    // Touch handlers - require drag threshold before starting
     const handleTouchStart = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
       
-      // CRITICAL: Prevent browser from handling touch (scroll, etc)
-      e.preventDefault();
-      
-      const touch = e.touches[0];
-      startX = touch.clientX;
-      startY = touch.clientY;
+      const { clientX, clientY } = getClientPos(e);
       elementRect = e.currentTarget.getBoundingClientRect();
-      isDragGesture = false;
-      touchStartTime = Date.now();
+      dragStartRef.current = { x: clientX, y: clientY };
       hasDragStartedRef.current = false;
-      dragStartRef.current = { x: startX, y: startY };
       
       // Update board bounds
       if (boardRef.current) {
@@ -824,38 +815,32 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const handleTouchMove = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       
-      const touch = e.touches[0];
-      const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
+      const { clientX, clientY } = getClientPos(e);
+      const deltaX = clientX - dragStartRef.current.x;
+      const deltaY = clientY - dragStartRef.current.y;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      const elapsed = Date.now() - touchStartTime;
       
-      // Quick gesture detection - if moved enough within 150ms, it's likely a drag
-      if (!isDragGesture && distance > DRAG_THRESHOLD) {
-        // Check if this is more horizontal than vertical (drag vs scroll)
-        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
+      // Check if this is a vertical scroll gesture
+      if (!hasDragStartedRef.current && distance > 5) {
+        const angle = Math.abs(Math.atan2(deltaY, deltaX) * 180 / Math.PI);
+        const isVertical = angle > SCROLL_ANGLE_THRESHOLD && angle < (180 - SCROLL_ANGLE_THRESHOLD);
         
-        // If moving mostly horizontal, or if it's a quick gesture, treat as drag
-        if (isHorizontalish || elapsed < 150) {
-          isDragGesture = true;
-        } else {
-          // Vertical scroll - don't interfere
-          return;
+        if (isVertical) {
+          return; // Let it scroll
         }
       }
       
-      // Start dragging if we've decided it's a drag gesture
-      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+      if (distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
         // Calculate offset from piece center
-        const offsetX = elementRect ? touch.clientX - (elementRect.left + elementRect.width / 2) : 0;
-        const offsetY = elementRect ? touch.clientY - (elementRect.top + elementRect.height / 2) : 0;
+        const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+        const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
         
         hasDragStartedRef.current = true;
         setIsDragging(true);
         setDraggedPiece(piece);
         setSelectedPiece(piece);
         setPendingMove(null);
-        setDragPosition({ x: touch.clientX, y: touch.clientY });
+        setDragPosition({ x: clientX, y: clientY });
         setDragOffset({ x: offsetX, y: offsetY });
         
         // CRITICAL: Block scroll while dragging
@@ -869,12 +854,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         }
       }
       
-      // Continue drag updates
       if (hasDragStartedRef.current) {
         if (e.cancelable) {
           e.preventDefault();
         }
-        updateDrag(touch.clientX, touch.clientY);
+        updateDrag(clientX, clientY);
       }
     };
 
@@ -883,7 +867,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         endDrag();
       }
       hasDragStartedRef.current = false;
-      isDragGesture = false;
     };
 
     // FIXED: Desktop mouse handler - start drag immediately on mousedown

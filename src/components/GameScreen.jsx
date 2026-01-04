@@ -405,7 +405,7 @@ const GameScreen = ({
     document.body.style.touchAction = '';
   }, [isDragging]);
 
-  // Create drag handlers for PieceTray - UPDATED to match OnlineGameScreen
+  // Create drag handlers for PieceTray
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece)) return {};
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
@@ -413,60 +413,52 @@ const GameScreen = ({
     let startX = 0;
     let startY = 0;
     let elementRect = null;
-    let isDragGesture = false;
-    let touchStartTime = 0;
+    let gestureDecided = false;
 
     const handleTouchStart = (e) => {
-      // CRITICAL: Prevent browser from handling touch (scroll, etc)
-      e.preventDefault();
-      
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
       elementRect = e.currentTarget.getBoundingClientRect();
-      isDragGesture = false;
-      touchStartTime = Date.now();
+      gestureDecided = false;
       hasDragStartedRef.current = false;
       dragStartRef.current = { x: startX, y: startY };
     };
 
     const handleTouchMove = (e) => {
-      const touch = e.touches[0];
-      const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      const elapsed = Date.now() - touchStartTime;
+      if (gestureDecided && !hasDragStartedRef.current) return;
       
-      // Quick gesture detection - if moved enough within 150ms, it's likely a drag
-      if (!isDragGesture && distance > DRAG_THRESHOLD) {
-        // Check if this is more horizontal than vertical (drag vs scroll)
-        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
+      const touch = e.touches[0];
+      const currentX = touch.clientX;
+      const currentY = touch.clientY;
+      
+      if (!gestureDecided) {
+        const isScroll = isScrollGesture(startX, startY, currentX, currentY);
         
-        // If moving mostly horizontal, or if it's a quick gesture, treat as drag
-        if (isHorizontalish || elapsed < 150) {
-          isDragGesture = true;
+        if (isScroll === null) return;
+        
+        gestureDecided = true;
+        
+        if (isScroll) {
+          return; // It's a scroll
         } else {
-          // Vertical scroll - don't interfere
-          return;
+          e.preventDefault();
+          startDrag(piece, currentX, currentY, elementRect);
         }
       }
       
-      // Start dragging if we've decided it's a drag gesture
-      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
-        e.preventDefault();
-        startDrag(piece, touch.clientX, touch.clientY, elementRect);
-      }
-      
-      // Continue drag updates
       if (hasDragStartedRef.current) {
         e.preventDefault();
-        updateDrag(touch.clientX, touch.clientY);
+        updateDrag(currentX, currentY);
       }
     };
 
-    const handleTouchEnd = () => {
-      if (hasDragStartedRef.current) endDrag();
-      isDragGesture = false;
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        endDrag();
+      }
+      gestureDecided = false;
     };
 
     // Mouse handlers for desktop
@@ -486,7 +478,7 @@ const GameScreen = ({
       // CRITICAL: Prevent browser from handling touch events on piece items
       style: { touchAction: 'none' },
     };
-  }, [gameOver, usedPieces, gameMode, currentPlayer, startDrag, updateDrag, endDrag]);
+  }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
 
   // Global mouse move/up handlers for desktop drag
   useEffect(() => {

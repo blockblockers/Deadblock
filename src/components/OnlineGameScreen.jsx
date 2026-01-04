@@ -343,9 +343,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let touchStartTime = 0;
 
     const handleTouchStart = (e) => {
-      // CRITICAL: Prevent browser from handling touch (scroll, etc)
-      e.preventDefault();
-      
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
@@ -355,8 +352,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       hasDragStartedRef.current = false;
       dragStartRef.current = { x: startX, y: startY };
       
-      // Prevent default to avoid scroll interference during potential drag
-      // e.preventDefault(); // Don't prevent yet - wait for gesture detection
+      // Note: We don't prevent default here - wait for gesture detection in touchMove
+      // The touchAction: 'none' style on the element handles scroll prevention
     };
 
     const handleTouchMove = (e) => {
