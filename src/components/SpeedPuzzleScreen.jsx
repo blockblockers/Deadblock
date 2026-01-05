@@ -865,11 +865,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     document.body.style.touchAction = '';
   }, [isValidDrop, pendingMove, detachGlobalTouchHandlers]);
 
-  // Keep refs updated with latest functions
-  useEffect(() => {
-    updateDragRef.current = updateDrag;
-    endDragRef.current = endDrag;
-  }, [updateDrag, endDrag]);
+  // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
+  // This ensures refs are always current when touch handlers fire
+  updateDragRef.current = updateDrag;
+  endDragRef.current = endDrag;
 
   // Create drag handlers for piece tray
   // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately

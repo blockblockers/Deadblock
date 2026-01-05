@@ -364,11 +364,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     document.body.style.touchAction = '';
   }, [isDragging, detachGlobalTouchHandlers]);
 
-  // Keep refs updated with latest functions
-  useEffect(() => {
-    updateDragRef.current = updateDrag;
-    endDragRef.current = endDrag;
-  }, [updateDrag, endDrag]);
+  // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
+  // This ensures refs are always current when touch handlers fire
+  updateDragRef.current = updateDrag;
+  endDragRef.current = endDrag;
 
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     // Guard against duplicate calls

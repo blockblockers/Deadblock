@@ -458,11 +458,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     document.body.style.touchAction = '';
   }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove, detachGlobalTouchHandlers]);
 
-  // Keep refs updated with latest functions
-  useEffect(() => {
-    updateDragRef.current = updateDrag;
-    endDragRef.current = endDrag;
-  }, [updateDrag, endDrag]);
+  // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
+  // This ensures refs are always current when touch handlers fire
+  updateDragRef.current = updateDrag;
+  endDragRef.current = endDrag;
 
   // Helper function to start drag
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
