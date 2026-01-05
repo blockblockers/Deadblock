@@ -368,9 +368,10 @@ const GameScreen = ({
   // Detach global touch handlers
   const detachGlobalTouchHandlers = useCallback(() => {
     const { move, end, cancel } = globalTouchHandlersRef.current;
-    if (move) window.removeEventListener('touchmove', move);
-    if (end) window.removeEventListener('touchend', end);
-    if (cancel) window.removeEventListener('touchcancel', cancel);
+    // v7.22: Must use same capture option as when adding
+    if (move) window.removeEventListener('touchmove', move, { capture: true });
+    if (end) window.removeEventListener('touchend', end, { capture: true });
+    if (cancel) window.removeEventListener('touchcancel', cancel, { capture: true });
     globalTouchHandlersRef.current = { move: null, end: null, cancel: null };
   }, []);
 
@@ -379,10 +380,7 @@ const GameScreen = ({
     // Detach any existing handlers first
     detachGlobalTouchHandlers();
     
-    console.log('[DRAG] attachGlobalTouchHandlers called, isDraggingRef:', isDraggingRef.current, 'draggedPieceRef:', draggedPieceRef.current);
-    
     const handleTouchMove = (e) => {
-      console.log('[DRAG] touchmove fired, isDraggingRef:', isDraggingRef.current);
       if (e.touches && e.touches[0]) {
         // Use ref to get latest updateDrag function
         updateDragRef.current?.(e.touches[0].clientX, e.touches[0].clientY);
@@ -393,36 +391,28 @@ const GameScreen = ({
     };
 
     const handleTouchEnd = () => {
-      console.log('[DRAG] touchend fired');
       // Use ref to get latest endDrag function
       endDragRef.current?.();
     };
     
     const handleTouchCancel = () => {
-      console.log('[DRAG] touchcancel fired');
       // Treat cancel same as end
       endDragRef.current?.();
     };
 
     globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd, cancel: handleTouchCancel };
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd);
-    window.addEventListener('touchcancel', handleTouchCancel);
-    
-    console.log('[DRAG] handlers attached');
+    // v7.22: Use capture: true to catch events before any other handlers
+    window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+    window.addEventListener('touchend', handleTouchEnd, { capture: true });
+    window.addEventListener('touchcancel', handleTouchCancel, { capture: true });
   }, [detachGlobalTouchHandlers]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
-    console.log('[DRAG] updateDrag called', { isDraggingRef: isDraggingRef.current, draggedPieceRef: draggedPieceRef.current });
-    
     // CRITICAL: Use refs for guards - state closures are stale during first touch
     if (!isDraggingRef.current || !draggedPieceRef.current) {
-      console.log('[DRAG] updateDrag - BLOCKED by refs');
       return;
     }
-    
-    console.log('[DRAG] updateDrag - proceeding');
     
     setDragPosition({ x: clientX, y: clientY });
     
@@ -520,49 +510,34 @@ const GameScreen = ({
 
   // Handle starting drag from a pending piece on the board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
-    console.log('[DRAG] handleBoardDragStart called', { piece, hasDragStarted: hasDragStartedRef.current, gameOver, gameMode, currentPlayer });
-    
     // Guard against duplicate calls
-    if (hasDragStartedRef.current) {
-      console.log('[DRAG] handleBoardDragStart - BLOCKED by hasDragStartedRef');
-      return;
-    }
-    if (gameOver) {
-      console.log('[DRAG] handleBoardDragStart - BLOCKED by gameOver');
-      return;
-    }
-    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) {
-      console.log('[DRAG] handleBoardDragStart - BLOCKED by currentPlayer');
-      return;
-    }
+    if (hasDragStartedRef.current) return;
+    if (gameOver) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    console.log('[DRAG] handleBoardDragStart - proceeding with drag');
-    
-    // Set refs FIRST (synchronous) - these are checked by handlers
+    // v7.22: Set ALL refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
     isDraggingRef.current = true;
     draggedPieceRef.current = piece;
     
-    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    // v7.22: CRITICAL - Attach global touch handlers IMMEDIATELY
+    // Must be done before ANY other work to catch the first touchmove
     attachGlobalTouchHandlers();
     
-    // CRITICAL: Update board bounds FIRST before using them
+    // Update board bounds
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
     // For board drag, calculate which cell was touched
-    // The elementRect is a single cell, so we need to figure out its position in the piece
     if (pendingMove && elementRect && boardBoundsRef.current) {
       const { left, top, width, height } = boardBoundsRef.current;
       const cellWidth = width / BOARD_SIZE;
       const cellHeight = height / BOARD_SIZE;
       
-      // Figure out which board cell was clicked
       const clickedRow = Math.round((elementRect.top + elementRect.height / 2 - top) / cellHeight);
       const clickedCol = Math.round((elementRect.left + elementRect.width / 2 - left) / cellWidth);
       
-      // The offset is the difference from the piece anchor
       pieceCellOffsetRef.current = {
         row: clickedRow - pendingMove.row,
         col: clickedCol - pendingMove.col
@@ -571,28 +546,23 @@ const GameScreen = ({
       pieceCellOffsetRef.current = { row: 0, col: 0 };
     }
     
-    // Clear the pending move first (piece is being "picked up")
-    if (setPendingMove) {
-      setPendingMove(null);
-    }
-    
-    // Start the drag - handle null elementRect gracefully
+    // Calculate offset
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
-    // Update state (async, triggers re-render)
+    // Update React state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
     
-    // Play sound for picking up from board (piece already selected)
+    // Play sound for picking up from board
     soundManager.playPieceSelect();
     
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameMode, currentPlayer, setPendingMove, pendingMove, attachGlobalTouchHandlers]);
+  }, [gameOver, gameMode, currentPlayer, pendingMove, attachGlobalTouchHandlers]);
 
   // Create drag handlers for PieceTray
   // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately

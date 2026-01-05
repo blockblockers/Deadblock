@@ -357,10 +357,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
   // Detach global touch handlers
   const detachGlobalTouchHandlers = useCallback(() => {
-    const { move, end } = globalTouchHandlersRef.current;
-    if (move) window.removeEventListener('touchmove', move);
-    if (end) window.removeEventListener('touchend', end);
-    globalTouchHandlersRef.current = { move: null, end: null };
+    const { move, end, cancel } = globalTouchHandlersRef.current;
+    // v7.22: Must use same capture option as when adding
+    if (move) window.removeEventListener('touchmove', move, { capture: true });
+    if (end) window.removeEventListener('touchend', end, { capture: true });
+    if (cancel) window.removeEventListener('touchcancel', cancel, { capture: true });
+    globalTouchHandlersRef.current = { move: null, end: null, cancel: null };
   }, []);
 
   // Attach global touch handlers SYNCHRONOUSLY (must be called during touch event)
@@ -380,10 +382,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const handleTouchEnd = () => {
       endDragRef.current?.();
     };
+    
+    const handleTouchCancel = () => {
+      endDragRef.current?.();
+    };
 
-    globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd };
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd);
+    globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd, cancel: handleTouchCancel };
+    // v7.22: Use capture: true to catch events before any other handlers
+    window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+    window.addEventListener('touchend', handleTouchEnd, { capture: true });
+    window.addEventListener('touchcancel', handleTouchCancel, { capture: true });
   }, [detachGlobalTouchHandlers]);
 
   // Update drag position and check validity
@@ -567,15 +575,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     if (gameOver || !gameStarted) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
     
-    // Set refs FIRST (synchronous) - these are checked by handlers
+    // v7.22: Set ALL refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
     isDraggingRef.current = true;
     draggedPieceRef.current = piece;
     
-    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    // v7.22: CRITICAL - Attach global touch handlers IMMEDIATELY
     attachGlobalTouchHandlers();
     
-    // CRITICAL: Update board bounds FIRST before using them
+    // Update board bounds
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
@@ -597,15 +605,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       pieceCellOffsetRef.current = { row: 0, col: 0 };
     }
     
-    // Clear pending move
-    if (setPendingMove) {
-      setPendingMove(null);
-    }
+    // v7.22: DON'T clear pending move - keep it in DOM to prevent touch cancel
     
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
-    // Update state (async, triggers re-render)
+    // Update React state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
@@ -616,7 +621,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameStarted, pendingMove, setPendingMove, selectPiece, attachGlobalTouchHandlers]);
+  }, [gameOver, gameStarted, pendingMove, selectPiece, attachGlobalTouchHandlers]);
 
   // Global mouse handlers for desktop drag (touch is handled synchronously)
   useEffect(() => {

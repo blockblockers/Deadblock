@@ -795,10 +795,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
 
   // Detach global touch handlers
   const detachGlobalTouchHandlers = useCallback(() => {
-    const { move, end } = globalTouchHandlersRef.current;
-    if (move) window.removeEventListener('touchmove', move);
-    if (end) window.removeEventListener('touchend', end);
-    globalTouchHandlersRef.current = { move: null, end: null };
+    const { move, end, cancel } = globalTouchHandlersRef.current;
+    // v7.22: Must use same capture option as when adding
+    if (move) window.removeEventListener('touchmove', move, { capture: true });
+    if (end) window.removeEventListener('touchend', end, { capture: true });
+    if (cancel) window.removeEventListener('touchcancel', cancel, { capture: true });
+    globalTouchHandlersRef.current = { move: null, end: null, cancel: null };
   }, []);
 
   // Attach global touch handlers SYNCHRONOUSLY (must be called during touch event)
@@ -818,10 +820,16 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const handleTouchEnd = () => {
       endDragRef.current?.();
     };
+    
+    const handleTouchCancel = () => {
+      endDragRef.current?.();
+    };
 
-    globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd };
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-    window.addEventListener('touchend', handleTouchEnd);
+    globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd, cancel: handleTouchCancel };
+    // v7.22: Use capture: true to catch events before any other handlers
+    window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
+    window.addEventListener('touchend', handleTouchEnd, { capture: true });
+    window.addEventListener('touchcancel', handleTouchCancel, { capture: true });
   }, [detachGlobalTouchHandlers]);
 
   // Update drag position and check validity
@@ -998,12 +1006,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     if (gameState !== GAME_STATES.PLAYING) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
     
-    // Set refs FIRST (synchronous) - these are checked by handlers
+    // v7.22: Set ALL refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
     isDraggingRef.current = true;
     draggedPieceRef.current = piece;
     
-    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    // v7.22: CRITICAL - Attach global touch handlers IMMEDIATELY
     attachGlobalTouchHandlers();
     
     // Update board bounds
@@ -1028,10 +1036,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       pieceCellOffsetRef.current = { row: 0, col: 0 };
     }
     
-    // Clear pending move - piece is being picked up
-    setPendingMove(null);
+    // v7.22: DON'T clear pending move - keep it in DOM to prevent touch cancel
     
-    // Update state (async)
+    // Update React state (async)
     setIsDragging(true);
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });

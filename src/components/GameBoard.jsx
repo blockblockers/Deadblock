@@ -241,10 +241,7 @@ const GameBoard = forwardRef(({
             // v7.8: Handle touch start for re-dragging pending pieces
             // v7.17: Fixed - use touch-action: none instead of preventDefault
             const handlePendingTouchStart = (e) => {
-              console.log('[GAMEBOARD] handlePendingTouchStart called', { isPending, hasCallback: !!onPendingPieceDragStart, hasPendingMove: !!pendingMove });
-              
               if (!isPending || !onPendingPieceDragStart || !pendingMove) {
-                console.log('[GAMEBOARD] handlePendingTouchStart - BLOCKED');
                 return;
               }
               
@@ -254,14 +251,10 @@ const GameBoard = forwardRef(({
               
               // Get touch position
               const touch = e.touches?.[0];
-              if (!touch) {
-                console.log('[GAMEBOARD] handlePendingTouchStart - no touch');
-                return;
-              }
+              if (!touch) return;
               
               const rect = e.currentTarget?.getBoundingClientRect() || null;
               
-              console.log('[GAMEBOARD] calling onPendingPieceDragStart');
               // Start drag of the pending piece
               onPendingPieceDragStart(pendingMove.piece, touch.clientX, touch.clientY, rect);
             };
@@ -297,7 +290,9 @@ const GameBoard = forwardRef(({
                 style={isPending ? {
                   animationDelay: `${pendingIndex * 0.15}s`,
                   touchAction: 'none', // v7.9: Prevent browser touch handling on draggable cells
-                  userSelect: 'none'
+                  userSelect: 'none',
+                  // v7.22: Hide pending cells during drag (DragOverlay shows the piece)
+                  opacity: isDragging ? 0 : 1,
                 } : undefined}
               >
                 {/* Base shine layer for occupied cells - subtle highlight */}
