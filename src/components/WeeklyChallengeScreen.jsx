@@ -274,6 +274,44 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   const DRAG_THRESHOLD = 8;
   const SCROLL_ANGLE_THRESHOLD = 60;
+  
+  // Track which cell of the piece is under the finger
+  const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
+  
+  // Calculate which cell of the piece was touched
+  const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
+    if (!elementRect || !piece) return { row: 0, col: 0 };
+    
+    const coords = getPieceCoords(piece, currentRotation, currentFlipped);
+    if (!coords || coords.length === 0) return { row: 0, col: 0 };
+    
+    const minX = Math.min(...coords.map(([x]) => x));
+    const maxX = Math.max(...coords.map(([x]) => x));
+    const minY = Math.min(...coords.map(([, y]) => y));
+    const maxY = Math.max(...coords.map(([, y]) => y));
+    
+    const pieceCols = maxX - minX + 1;
+    const pieceRows = maxY - minY + 1;
+    
+    const relX = (touchX - elementRect.left) / elementRect.width;
+    const relY = (touchY - elementRect.top) / elementRect.height;
+    
+    const cellCol = Math.floor(relX * pieceCols) + minX;
+    const cellRow = Math.floor(relY * pieceRows) + minY;
+    
+    let closestCell = { row: 0, col: 0 };
+    let minDist = Infinity;
+    
+    for (const [x, y] of coords) {
+      const dist = Math.abs(x - cellCol) + Math.abs(y - cellRow);
+      if (dist < minDist) {
+        minDist = dist;
+        closestCell = { row: y, col: x };
+      }
+    }
+    
+    return closestCell;
+  }, []);
 
   // Helper function to start drag
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
@@ -283,6 +321,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     // Set ref FIRST to prevent duplicate calls
     hasDragStartedRef.current = true;
+    
+    // Calculate which cell of the piece is under the finger
+    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
+    pieceCellOffsetRef.current = touchedCell;
     
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
@@ -302,7 +344,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove]);
+  }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell]);
   
   // Calculate which board cell the drag position is over
   // Allow positions outside the board for pieces that extend beyond their anchor
@@ -316,8 +358,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const relX = clientX - left;
     const relY = clientY - top;
     
-    const col = Math.floor(relX / cellWidth);
-    const row = Math.floor(relY / cellHeight);
+    // Raw cell under finger
+    const fingerCol = Math.floor(relX / cellWidth);
+    const fingerRow = Math.floor(relY / cellHeight);
+    
+    // Adjust by which cell of the piece is under the finger
+    const col = fingerCol - pieceCellOffsetRef.current.col;
+    const row = fingerRow - pieceCellOffsetRef.current.row;
     
     // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
@@ -397,6 +444,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setDraggedPiece(null);
     setIsValidDrop(false);
     hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
@@ -453,15 +501,54 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
     if (gameOver || !gameStarted) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
     
+    // Set ref first
+    hasDragStartedRef.current = true;
+    
+    // For board drag, calculate which cell was touched
+    if (elementRect && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const clickedRow = Math.round((elementRect.top + elementRect.height / 2 - top) / cellHeight);
+      const clickedCol = Math.round((elementRect.left + elementRect.width / 2 - left) / cellWidth);
+      
+      pieceCellOffsetRef.current = {
+        row: clickedRow - pendingMove.row,
+        col: clickedCol - pendingMove.col
+      };
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+    }
+    
+    // Clear pending move
     if (setPendingMove) {
       setPendingMove(null);
     }
     
-    startDrag(piece, clientX, clientY, elementRect);
-  }, [gameOver, gameStarted, pendingMove, setPendingMove, startDrag]);
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+    
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    
+    // Select piece - plays sound
+    selectPiece(piece);
+    
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameOver, gameStarted, pendingMove, setPendingMove, selectPiece]);
 
   // Global move/end handlers for drag
   useEffect(() => {

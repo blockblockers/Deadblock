@@ -215,6 +215,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // DRAG HANDLERS
   // =========================================================================
   
+  // Track which cell of the piece is under the finger
+  const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
+  
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -225,11 +228,56 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
-    if (relX < 0 || relX > width || relY < 0 || relY > height) {
-      return null;
+    // Raw cell under finger
+    const fingerCol = Math.floor(relX / cellWidth);
+    const fingerRow = Math.floor(relY / cellHeight);
+    
+    // Adjust by which cell of the piece is under the finger
+    const col = fingerCol - pieceCellOffsetRef.current.col;
+    const row = fingerRow - pieceCellOffsetRef.current.row;
+    
+    // Allow some margin for pieces that extend beyond anchor
+    const EXTENSION_MARGIN = 4;
+    if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+        col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+      return { row, col };
+    }
+    return null;
+  }, []);
+
+  // Calculate which cell of the piece was touched
+  const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
+    if (!elementRect || !piece) return { row: 0, col: 0 };
+    
+    const coords = getPieceCoords(piece, currentRotation, currentFlipped);
+    if (!coords || coords.length === 0) return { row: 0, col: 0 };
+    
+    const minX = Math.min(...coords.map(([x]) => x));
+    const maxX = Math.max(...coords.map(([x]) => x));
+    const minY = Math.min(...coords.map(([, y]) => y));
+    const maxY = Math.max(...coords.map(([, y]) => y));
+    
+    const pieceCols = maxX - minX + 1;
+    const pieceRows = maxY - minY + 1;
+    
+    const relX = (touchX - elementRect.left) / elementRect.width;
+    const relY = (touchY - elementRect.top) / elementRect.height;
+    
+    const cellCol = Math.floor(relX * pieceCols) + minX;
+    const cellRow = Math.floor(relY * pieceRows) + minY;
+    
+    let closestCell = { row: 0, col: 0 };
+    let minDist = Infinity;
+    
+    for (const [x, y] of coords) {
+      const dist = Math.abs(x - cellCol) + Math.abs(y - cellRow);
+      if (dist < minDist) {
+        minDist = dist;
+        closestCell = { row: y, col: x };
+      }
     }
     
-    return { row: Math.floor(relY / cellHeight), col: Math.floor(relX / cellWidth) };
+    return closestCell;
   }, []);
 
   const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
@@ -246,6 +294,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     // Set ref first to prevent duplicate calls
     hasDragStartedRef.current = true;
+    
+    // Calculate which cell of the piece is under the finger
+    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
+    pieceCellOffsetRef.current = touchedCell;
     
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
@@ -266,7 +318,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [game?.status, usedPieces, isMyTurn]);
+  }, [game?.status, usedPieces, isMyTurn, rotation, flipped, calculateTouchedPieceCell]);
 
   // FIXED: Handle drag from pending piece on board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -276,6 +328,23 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     // Set ref first to prevent duplicate calls
     hasDragStartedRef.current = true;
+    
+    // For board drag, calculate which cell was touched
+    if (pendingMove && elementRect && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const clickedRow = Math.round((elementRect.top + elementRect.height / 2 - top) / cellHeight);
+      const clickedCol = Math.round((elementRect.left + elementRect.width / 2 - left) / cellWidth);
+      
+      pieceCellOffsetRef.current = {
+        row: clickedRow - pendingMove.row,
+        col: clickedCol - pendingMove.col
+      };
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+    }
     
     // Clear pending move - piece is being "picked up"
     setPendingMove(null);
@@ -297,7 +366,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [game?.status, isMyTurn]);
+  }, [game?.status, isMyTurn, pendingMove]);
 
   const updateDrag = useCallback((clientX, clientY) => {
     if (!isDragging || !draggedPiece) return;
@@ -329,6 +398,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
     hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';

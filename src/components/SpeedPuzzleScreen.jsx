@@ -713,6 +713,44 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const DRAG_THRESHOLD = 10;
   const SCROLL_ANGLE_THRESHOLD = 60;
   
+  // Track which cell of the piece is under the finger
+  const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
+  
+  // Calculate which cell of the piece was touched
+  const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
+    if (!elementRect || !piece) return { row: 0, col: 0 };
+    
+    const coords = getPieceCoords(piece, currentRotation, currentFlipped);
+    if (!coords || coords.length === 0) return { row: 0, col: 0 };
+    
+    const minX = Math.min(...coords.map(([x]) => x));
+    const maxX = Math.max(...coords.map(([x]) => x));
+    const minY = Math.min(...coords.map(([, y]) => y));
+    const maxY = Math.max(...coords.map(([, y]) => y));
+    
+    const pieceCols = maxX - minX + 1;
+    const pieceRows = maxY - minY + 1;
+    
+    const relX = (touchX - elementRect.left) / elementRect.width;
+    const relY = (touchY - elementRect.top) / elementRect.height;
+    
+    const cellCol = Math.floor(relX * pieceCols) + minX;
+    const cellRow = Math.floor(relY * pieceRows) + minY;
+    
+    let closestCell = { row: 0, col: 0 };
+    let minDist = Infinity;
+    
+    for (const [x, y] of coords) {
+      const dist = Math.abs(x - cellCol) + Math.abs(y - cellRow);
+      if (dist < minDist) {
+        minDist = dist;
+        closestCell = { row: y, col: x };
+      }
+    }
+    
+    return closestCell;
+  }, []);
+  
   // Calculate which board cell the drag position is over
   // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
@@ -725,8 +763,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
-    const col = Math.floor(relX / cellWidth);
-    const row = Math.floor(relY / cellHeight);
+    // Raw cell under finger
+    const fingerCol = Math.floor(relX / cellWidth);
+    const fingerRow = Math.floor(relY / cellHeight);
+    
+    // Adjust by which cell of the piece is under the finger
+    const col = fingerCol - pieceCellOffsetRef.current.col;
+    const row = fingerRow - pieceCellOffsetRef.current.row;
     
     // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
@@ -775,6 +818,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setDraggedPiece(null);
     setIsValidDrop(false);
     hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
   }, [isValidDrop, pendingMove]);
 
   // Create drag handlers for piece tray
@@ -798,6 +845,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       
       // Capture element rect
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
+      
+      // Calculate which cell of the piece is under the finger
+      const touchedCell = calculateTouchedPieceCell(piece, touch.clientX, touch.clientY, elementRect, rotation, flipped);
+      pieceCellOffsetRef.current = touchedCell;
       
       // Calculate offset from piece center
       const offsetX = elementRect ? touch.clientX - (elementRect.left + elementRect.width / 2) : 0;
@@ -838,6 +889,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       const { clientX, clientY } = e;
       const rect = e.currentTarget?.getBoundingClientRect() || null;
       
+      // Calculate which cell of the piece is under the finger
+      const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, rect, rotation, flipped);
+      pieceCellOffsetRef.current = touchedCell;
+      
       const offsetX = rect ? clientX - (rect.left + rect.width / 2) : 0;
       const offsetY = rect ? clientY - (rect.top + rect.height / 2) : 0;
       
@@ -864,23 +919,52 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameState, usedPieces, updateDrag, endDrag]);
+  }, [gameState, usedPieces, rotation, flipped, calculateTouchedPieceCell, updateDrag, endDrag]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
     if (gameState !== GAME_STATES.PLAYING) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    // Set ref first
+    hasDragStartedRef.current = true;
     
     // Update board bounds
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
+    // For board drag, calculate which cell was touched
+    if (elementRect && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const clickedRow = Math.round((elementRect.top + elementRect.height / 2 - top) / cellHeight);
+      const clickedCol = Math.round((elementRect.left + elementRect.width / 2 - left) / cellWidth);
+      
+      pieceCellOffsetRef.current = {
+        row: clickedRow - pendingMove.row,
+        col: clickedCol - pendingMove.col
+      };
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+    }
+    
+    // Clear pending move - piece is being picked up
+    setPendingMove(null);
+    
     setIsDragging(true);
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: 0, y: 0 });
-    hasDragStartedRef.current = true;
+    
+    soundManager.playPieceSelect();
+    
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
   }, [gameState, pendingMove]);
 
   // Global move/end handlers for drag

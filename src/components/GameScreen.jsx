@@ -270,6 +270,9 @@ const GameScreen = ({
   // Drag-and-drop handlers
   // ==========================================
   
+  // Track which cell of the piece is under the finger
+  const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
+  
   // Calculate which board cell the drag position is over
   // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
@@ -282,8 +285,13 @@ const GameScreen = ({
     const relX = clientX - left;
     const relY = clientY - top;
     
-    const col = Math.floor(relX / cellWidth);
-    const row = Math.floor(relY / cellHeight);
+    // Raw cell under finger
+    const fingerCol = Math.floor(relX / cellWidth);
+    const fingerRow = Math.floor(relY / cellHeight);
+    
+    // Adjust by which cell of the piece is under the finger
+    const col = fingerCol - pieceCellOffsetRef.current.col;
+    const row = fingerRow - pieceCellOffsetRef.current.row;
     
     // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
@@ -292,6 +300,46 @@ const GameScreen = ({
       return { row, col };
     }
     return null;
+  }, []);
+
+  // Calculate which cell of the piece was touched based on touch position and piece coords
+  const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
+    if (!elementRect || !piece) return { row: 0, col: 0 };
+    
+    // Get piece coordinates with current rotation/flip
+    const coords = getPieceCoords(piece, currentRotation, currentFlipped);
+    if (!coords || coords.length === 0) return { row: 0, col: 0 };
+    
+    // Calculate piece bounds
+    const minX = Math.min(...coords.map(([x]) => x));
+    const maxX = Math.max(...coords.map(([x]) => x));
+    const minY = Math.min(...coords.map(([, y]) => y));
+    const maxY = Math.max(...coords.map(([, y]) => y));
+    
+    const pieceCols = maxX - minX + 1;
+    const pieceRows = maxY - minY + 1;
+    
+    // Calculate where in the element the touch occurred (0-1)
+    const relX = (touchX - elementRect.left) / elementRect.width;
+    const relY = (touchY - elementRect.top) / elementRect.height;
+    
+    // Map to piece cell coordinates
+    const cellCol = Math.floor(relX * pieceCols) + minX;
+    const cellRow = Math.floor(relY * pieceRows) + minY;
+    
+    // Clamp to valid piece cells and find closest actual cell
+    let closestCell = { row: 0, col: 0 };
+    let minDist = Infinity;
+    
+    for (const [x, y] of coords) {
+      const dist = Math.abs(x - cellCol) + Math.abs(y - cellRow);
+      if (dist < minDist) {
+        minDist = dist;
+        closestCell = { row: y, col: x };
+      }
+    }
+    
+    return closestCell;
   }, []);
 
   // Check if movement is a scroll gesture (mostly vertical)
@@ -315,6 +363,10 @@ const GameScreen = ({
     // Set ref FIRST to prevent duplicate calls
     hasDragStartedRef.current = true;
     
+    // Calculate which cell of the piece is under the finger
+    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
+    pieceCellOffsetRef.current = touchedCell;
+    
     // Calculate offset - if no elementRect, default to 0 (center piece on touch)
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
@@ -324,13 +376,13 @@ const GameScreen = ({
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
     
-    // Select the piece - this plays the sound via useGameState, don't play again
+    // Select the piece - this plays the sound via useGameState
     onSelectPiece?.(piece);
     
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
+  }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece, rotation, flipped, calculateTouchedPieceCell]);
 
   // Handle starting drag from a pending piece on the board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -341,6 +393,26 @@ const GameScreen = ({
     
     // Set ref FIRST to prevent duplicate calls
     hasDragStartedRef.current = true;
+    
+    // For board drag, calculate which cell was touched
+    // The elementRect is a single cell, so we need to figure out its position in the piece
+    if (pendingMove && elementRect && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      // Figure out which board cell was clicked
+      const clickedRow = Math.round((elementRect.top + elementRect.height / 2 - top) / cellHeight);
+      const clickedCol = Math.round((elementRect.left + elementRect.width / 2 - left) / cellWidth);
+      
+      // The offset is the difference from the piece anchor
+      pieceCellOffsetRef.current = {
+        row: clickedRow - pendingMove.row,
+        col: clickedCol - pendingMove.col
+      };
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+    }
     
     // Clear the pending move first (piece is being "picked up")
     if (setPendingMove) {
@@ -362,7 +434,7 @@ const GameScreen = ({
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameMode, currentPlayer, setPendingMove]);
+  }, [gameOver, gameMode, currentPlayer, setPendingMove, pendingMove]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
@@ -404,6 +476,7 @@ const GameScreen = ({
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
     hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
     
     // Re-enable scroll
     document.body.style.overflow = '';
