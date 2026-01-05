@@ -246,8 +246,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    // Handle null elementRect gracefully
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
@@ -274,8 +275,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    // Handle null elementRect gracefully
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
@@ -334,21 +336,28 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     const handleTouchStart = (e) => {
       console.log('[OnlineGameScreen] handleTouchStart for piece:', piece);
-      const touch = e.touches[0];
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
       startX = touch.clientX;
       startY = touch.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
+      // Capture element rect immediately - currentTarget may be null later
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       isDragGesture = false;
       touchStartTime = Date.now();
       hasDragStartedRef.current = false;
       dragStartRef.current = { x: startX, y: startY };
       
-      // Prevent default to avoid scroll interference during potential drag
-      // e.preventDefault(); // Don't prevent yet - wait for gesture detection
+      // Update board bounds for drop detection
+      if (boardBoundsRef && boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
     };
 
     const handleTouchMove = (e) => {
-      const touch = e.touches[0];
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
       const deltaX = touch.clientX - startX;
       const deltaY = touch.clientY - startY;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -374,13 +383,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       // Start dragging if we've decided it's a drag gesture
       if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
         console.log('[OnlineGameScreen] Starting drag for piece:', piece);
-        e.preventDefault();
+        // Note: Don't call e.preventDefault() here - it fails on passive listeners
+        // The touch-action: none CSS and global handlers will take care of it
         startDrag(piece, touch.clientX, touch.clientY, elementRect);
       }
       
       // Continue drag updates
       if (hasDragStartedRef.current) {
-        e.preventDefault();
+        // Global touch handler will call preventDefault
         updateDrag(touch.clientX, touch.clientY);
       }
     };
@@ -396,7 +406,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       console.log('[OnlineGameScreen] handleMouseDown for piece:', piece);
       startX = e.clientX;
       startY = e.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       // FIXED: Actually start the drag for desktop/mouse events
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
@@ -406,6 +416,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
+      // CRITICAL: This CSS prevents default touch behavior without needing preventDefault
+      style: { touchAction: 'none' },
     };
   }, [game?.status, usedPieces, isMyTurn, isScrollGesture, startDrag, updateDrag, endDrag]);
 

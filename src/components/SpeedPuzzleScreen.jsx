@@ -783,15 +783,24 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       if (e.touches && e.touches[0]) {
         return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
       }
-      return { clientX: e.clientX, clientY: e.clientY };
+      if (e.clientX !== undefined) {
+        return { clientX: e.clientX, clientY: e.clientY };
+      }
+      return null;
     };
+
+    let elementRect = null;
 
     // Touch handlers - require drag threshold before starting
     const handleTouchStart = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
       
-      const { clientX, clientY } = getClientPos(e);
+      const pos = getClientPos(e);
+      if (!pos) return;
+      
+      const { clientX, clientY } = pos;
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       dragStartRef.current = { x: clientX, y: clientY };
       hasDragStartedRef.current = false;
       
@@ -804,7 +813,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const handleTouchMove = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       
-      const { clientX, clientY } = getClientPos(e);
+      const pos = getClientPos(e);
+      if (!pos) return;
+      
+      const { clientX, clientY } = pos;
       const deltaX = clientX - dragStartRef.current.x;
       const deltaY = clientY - dragStartRef.current.y;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -825,17 +837,24 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         setDraggedPiece(piece);
         setSelectedPiece(piece);
         setPendingMove(null);
-        setDragOffset({ x: 0, y: 0 });
+        setDragPosition({ x: clientX, y: clientY });
+        // Calculate offset from piece center if we have elementRect
+        const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+        const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+        setDragOffset({ x: offsetX, y: offsetY });
         
-        if (e.cancelable) {
-          e.preventDefault();
-        }
+        // CRITICAL: Block scroll while dragging
+        document.body.style.overflow = 'hidden';
+        document.body.style.touchAction = 'none';
+        
+        soundManager.playPieceSelect();
+        
+        // Note: Don't call e.preventDefault() - passive listeners don't allow it
+        // The touch-action: none CSS handles preventing scroll
       }
       
       if (hasDragStartedRef.current) {
-        if (e.cancelable) {
-          e.preventDefault();
-        }
+        // Global touch handler will call preventDefault
         updateDrag(clientX, clientY);
       }
     };
@@ -854,6 +873,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       if (usedPieces.includes(piece)) return;
       
       const { clientX, clientY } = e;
+      const rect = e.currentTarget?.getBoundingClientRect() || null;
+      
+      // Calculate offset from piece center
+      const offsetX = rect ? clientX - (rect.left + rect.width / 2) : 0;
+      const offsetY = rect ? clientY - (rect.top + rect.height / 2) : 0;
       
       // Update board bounds
       if (boardRef.current) {
@@ -867,7 +891,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       setSelectedPiece(piece);
       setPendingMove(null);
       setDragPosition({ x: clientX, y: clientY });
-      setDragOffset({ x: 0, y: 0 });
+      setDragOffset({ x: offsetX, y: offsetY });
+      
+      // CRITICAL: Block scroll while dragging
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
       
       soundManager.playPieceSelect();
     };
@@ -877,6 +905,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
+      // CRITICAL: This CSS prevents default touch behavior
+      style: { touchAction: 'none' },
     };
   }, [gameState, usedPieces, rotation, flipped, updateDrag, endDrag]);
 

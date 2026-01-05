@@ -435,10 +435,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Touch start - capture initial position
     const handleTouchStart = (e) => {
       console.log('[WeeklyChallenge] handleTouchStart for:', piece);
-      const touch = e.touches[0];
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
       startX = touch.clientX;
       startY = touch.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
+      // Capture element rect immediately - currentTarget may be null later
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       isDragGesture = false;
       touchStartTime = Date.now();
       hasDragStartedRef.current = false;
@@ -451,7 +454,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
     // Touch move - detect gesture type and start drag if appropriate
     const handleTouchMove = (e) => {
-      const touch = e.touches[0];
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
       const deltaX = touch.clientX - startX;
       const deltaY = touch.clientY - startY;
       const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -472,13 +477,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       
       // Start drag if gesture detected and threshold met
       if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
-        e.preventDefault();
+        // Note: Don't call e.preventDefault() - passive listeners don't allow it
+        // The touch-action: none CSS handles preventing scroll
         startDrag(piece, touch.clientX, touch.clientY, elementRect);
       }
       
       // Continue updating drag position
       if (hasDragStartedRef.current) {
-        e.preventDefault();
+        // Global touch handler will call preventDefault
         updateDrag(touch.clientX, touch.clientY);
       }
     };
@@ -497,7 +503,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       if (e.button !== 0) return;
       console.log('[WeeklyChallenge] handleMouseDown for:', piece);
       
-      const rect = e.currentTarget.getBoundingClientRect();
+      const rect = e.currentTarget?.getBoundingClientRect() || null;
       startDrag(piece, e.clientX, e.clientY, rect);
     };
 
@@ -507,6 +513,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
+      // CRITICAL: This CSS prevents default touch behavior
+      style: { touchAction: 'none' },
     };
   }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
 

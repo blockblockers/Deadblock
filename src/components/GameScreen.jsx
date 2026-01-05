@@ -310,8 +310,9 @@ const GameScreen = ({
     if (gameOver || usedPieces.includes(piece)) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    // Calculate offset - if no elementRect, default to 0 (center piece on touch)
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
@@ -338,9 +339,9 @@ const GameScreen = ({
       setPendingMove(null);
     }
     
-    // Start the drag
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    // Start the drag - handle null elementRect gracefully
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
@@ -415,18 +416,28 @@ const GameScreen = ({
     const handleTouchStart = (e) => {
       console.log('[GameScreen] handleTouchStart for piece:', piece);
       const touch = e.touches[0];
+      if (!touch) return;
+      
       startX = touch.clientX;
       startY = touch.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
+      // Capture element rect immediately - currentTarget may be null later
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       gestureDecided = false;
       hasDragStartedRef.current = false;
       dragStartRef.current = { x: startX, y: startY };
+      
+      // Update board bounds for drop detection
+      if (boardBoundsRef && boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
     };
 
     const handleTouchMove = (e) => {
       if (gestureDecided && !hasDragStartedRef.current) return;
       
-      const touch = e.touches[0];
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
       const currentX = touch.clientX;
       const currentY = touch.clientY;
       
@@ -443,13 +454,14 @@ const GameScreen = ({
           return; // It's a scroll
         } else {
           console.log('[GameScreen] Starting drag for piece:', piece);
-          e.preventDefault();
+          // Note: Don't call e.preventDefault() here - it fails on passive listeners
+          // The touch-action: none CSS and global handlers will take care of it
           startDrag(piece, currentX, currentY, elementRect);
         }
       }
       
       if (hasDragStartedRef.current) {
-        e.preventDefault();
+        // Global touch handler will call preventDefault
         updateDrag(currentX, currentY);
       }
     };
@@ -457,7 +469,6 @@ const GameScreen = ({
     const handleTouchEnd = (e) => {
       console.log('[GameScreen] handleTouchEnd - hasDragStarted:', hasDragStartedRef.current);
       if (hasDragStartedRef.current) {
-        e.preventDefault();
         endDrag();
       }
       gestureDecided = false;
@@ -469,7 +480,7 @@ const GameScreen = ({
       console.log('[GameScreen] handleMouseDown for piece:', piece);
       startX = e.clientX;
       startY = e.clientY;
-      elementRect = e.currentTarget.getBoundingClientRect();
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
@@ -478,6 +489,8 @@ const GameScreen = ({
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
+      // CRITICAL: This CSS prevents default touch behavior without needing preventDefault
+      style: { touchAction: 'none' },
     };
   }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
 
