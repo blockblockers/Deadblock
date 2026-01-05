@@ -241,7 +241,12 @@ const GameBoard = forwardRef(({
             // v7.8: Handle touch start for re-dragging pending pieces
             // v7.17: Fixed - use touch-action: none instead of preventDefault
             const handlePendingTouchStart = (e) => {
-              if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
+              console.log('[GAMEBOARD] handlePendingTouchStart called', { isPending, hasCallback: !!onPendingPieceDragStart, hasPendingMove: !!pendingMove });
+              
+              if (!isPending || !onPendingPieceDragStart || !pendingMove) {
+                console.log('[GAMEBOARD] handlePendingTouchStart - BLOCKED');
+                return;
+              }
               
               // Don't call preventDefault - it fails on passive listeners
               // touch-action: none on the element handles scroll prevention
@@ -249,10 +254,14 @@ const GameBoard = forwardRef(({
               
               // Get touch position
               const touch = e.touches?.[0];
-              if (!touch) return;
+              if (!touch) {
+                console.log('[GAMEBOARD] handlePendingTouchStart - no touch');
+                return;
+              }
               
               const rect = e.currentTarget?.getBoundingClientRect() || null;
               
+              console.log('[GAMEBOARD] calling onPendingPieceDragStart');
               // Start drag of the pending piece
               onPendingPieceDragStart(pendingMove.piece, touch.clientX, touch.clientY, rect);
             };
