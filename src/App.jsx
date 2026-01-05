@@ -633,21 +633,38 @@ function AppContent() {
     const rematchGameId = params.get('rematchGameId');
     const openChat = params.get('openChat');
     
-    if (navigateTo === 'online' && hasPassedEntryAuth) {
-      console.log('[App] URL param navigation to online, gameId:', urlGameId, 'openChat:', openChat);
+    // Store navigation params in sessionStorage so they survive auth loading
+    // This ensures we can navigate even if hasPassedEntryAuth isn't true yet
+    if (navigateTo === 'online') {
       if (urlGameId) {
-        setOnlineGameId(urlGameId);
-        setGameMode('online-game');
-        
-        // Store openChat flag for OnlineGameScreen to pick up
-        if (openChat === 'true') {
-          sessionStorage.setItem('deadblock_open_chat', 'true');
-        }
-      } else {
-        setGameMode('online-menu');
+        sessionStorage.setItem('deadblock_pending_game_id', urlGameId);
       }
-      // Clean URL
+      if (openChat === 'true') {
+        sessionStorage.setItem('deadblock_open_chat', 'true');
+      }
+      sessionStorage.setItem('deadblock_pending_nav', 'online');
+      
+      // Clean URL immediately
       window.history.replaceState({}, document.title, '/');
+    }
+    
+    // Process navigation if we're ready (hasPassedEntryAuth is true)
+    if (hasPassedEntryAuth) {
+      const pendingNav = sessionStorage.getItem('deadblock_pending_nav');
+      const pendingGameId = sessionStorage.getItem('deadblock_pending_game_id');
+      
+      if (pendingNav === 'online') {
+        console.log('[App] Processing pending navigation, gameId:', pendingGameId);
+        sessionStorage.removeItem('deadblock_pending_nav');
+        sessionStorage.removeItem('deadblock_pending_game_id');
+        
+        if (pendingGameId) {
+          setOnlineGameId(pendingGameId);
+          setGameMode('online-game');
+        } else {
+          setGameMode('online-menu');
+        }
+      }
     }
     
     return () => {

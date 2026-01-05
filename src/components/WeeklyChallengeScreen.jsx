@@ -339,11 +339,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
-    // Subtract drag offset to match floating piece position
-    const adjustedX = clientX - dragOffset.x;
-    const adjustedY = clientY - dragOffset.y;
-    const cell = calculateBoardCell(adjustedX, adjustedY);
-    
+    const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPiece) {
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -360,7 +356,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // Keep current piece in ref to avoid stale closures
   const draggedPieceRef = useRef(null);
@@ -374,12 +370,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const currentPiece = draggedPieceRef.current;
     console.log('[WeeklyChallenge] endDrag called:', { isDragging, draggedPiece: currentPiece });
     
-    // Recompute validity based on current drag position with offset
+    // Recompute validity based on current drag position
     if (currentPiece && dragPosition && boardBoundsRef.current) {
-      // Subtract drag offset to match floating piece position
-      const adjustedX = dragPosition.x - dragOffset.x;
-      const adjustedY = dragPosition.y - dragOffset.y;
-      const cell = calculateBoardCell(adjustedX, adjustedY);
+      const cell = calculateBoardCell(dragPosition.x, dragPosition.y);
       if (cell) {
         const coords = getPieceCoords(currentPiece, rotation, flipped);
         const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -417,7 +410,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
-    setDragOffset({ x: 0, y: 0 });
     hasDragStartedRef.current = false;
     
     document.body.style.overflow = '';
@@ -443,7 +435,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Touch start - capture initial position
     const handleTouchStart = (e) => {
       console.log('[WeeklyChallenge] handleTouchStart for:', piece);
-      
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
@@ -516,8 +507,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
-      // CRITICAL: Prevent browser from handling touch events on piece items
-      style: { touchAction: 'none' },
     };
   }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
 

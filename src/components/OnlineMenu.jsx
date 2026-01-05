@@ -45,15 +45,15 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || 'Unknown';
+      return game.player2?.display_name || game.player2?.username || 'Unknown';
     }
-    return game.player1?.username || 'Unknown';
+    return game.player1?.display_name || game.player1?.username || 'Unknown';
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
-  const displayName = profile?.username;
+  const displayName = profile?.display_name || profile?.username;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -331,6 +331,9 @@ const OnlineMenu = ({
   }, [sessionReady, profile?.id]);
 
   // Load games and invites
+  // Also add a mount counter to force refresh on each navigation to this screen
+  const mountCountRef = useRef(0);
+  
   useEffect(() => {
     // Wait for session to be verified AND profile to exist
     if (!sessionReady || !profile?.id) {
@@ -338,7 +341,11 @@ const OnlineMenu = ({
       return;
     }
     
-    console.log('OnlineMenu: Session ready, loading data for', profile.id);
+    // Increment mount counter - this helps force fresh data on each navigation
+    mountCountRef.current += 1;
+    const currentMount = mountCountRef.current;
+    
+    console.log('OnlineMenu: Session ready, loading data for', profile.id, 'mount:', currentMount);
     
     // Set loading only on initial load
     setLoading(true);
@@ -380,6 +387,26 @@ const OnlineMenu = ({
       window.removeEventListener('focus', handleFocus);
     };
   }, [sessionReady, profile?.id]);
+  
+  // ADDED: Force refresh when returning to menu (e.g., after rematch game creation)
+  // This catches games that were created while we were on another screen
+  useEffect(() => {
+    // Skip on first render (handled by the main useEffect above)
+    if (!sessionReady || !profile?.id) return;
+    
+    // This effect runs on every render, but we only want to refresh on "return"
+    // The main useEffect handles initial load, so we check if enough time has passed
+    const lastRefresh = sessionStorage.getItem('deadblock_last_games_refresh');
+    const now = Date.now();
+    
+    // If more than 3 seconds since last refresh, do a quick refresh
+    // This catches cases where the user navigated away and back
+    if (!lastRefresh || (now - parseInt(lastRefresh, 10)) > 3000) {
+      console.log('[OnlineMenu] Refreshing games on return navigation');
+      loadGames();
+      sessionStorage.setItem('deadblock_last_games_refresh', now.toString());
+    }
+  });
   
   // Subscribe to invite updates
   useEffect(() => {
@@ -928,9 +955,9 @@ const OnlineMenu = ({
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || 'Unknown';
+      return game.player2?.display_name || game.player2?.username || 'Unknown';
     }
-    return game.player1?.username || 'Unknown';
+    return game.player1?.display_name || game.player1?.username || 'Unknown';
   };
 
   // Get opponent ID from game
@@ -944,17 +971,17 @@ const OnlineMenu = ({
 
   // Get opponent data from game
   const getOpponentData = (game) => {
-  if (!game || !profile?.id) return { id: null, username: 'Unknown' };
+  if (!game || !profile?.id) return { id: null, displayName: 'Unknown' };
   if (game.player1_id === profile.id) {
     return { 
       id: game.player2_id,
-      username: game.player2?.username || 'Unknown',
+      displayName: game.player2?.display_name || game.player2?.username || 'Unknown',
       data: game.player2
     };
   }
   return { 
     id: game.player1_id,
-    username: game.player1?.username || 'Unknown',
+    displayName: game.player1?.display_name || game.player1?.username || 'Unknown',
     data: game.player1
   };
 };
@@ -1082,11 +1109,11 @@ const OnlineMenu = ({
               {/* Top row: Avatar and actions */}
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {(profile?.username)?.[0]?.toUpperCase() || '?'}
+                  {(profile?.display_name || profile?.username)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.username || 'Player'}</h2>
+                    <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
                       className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
@@ -2308,8 +2335,8 @@ const OnlineMenu = ({
           boardPieces={selectedGameForFinalView.board_pieces}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
-          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
-          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          player1Name={selectedGameForFinalView.player1?.display_name || selectedGameForFinalView.player1?.username || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.display_name || selectedGameForFinalView.player2?.username || 'Player 2'}
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
         />
       )}

@@ -742,11 +742,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
     
-    // Subtract drag offset to match floating piece position
-    const adjustedX = clientX - dragOffset.x;
-    const adjustedY = clientY - dragOffset.y;
-    const cell = calculateBoardCell(adjustedX, adjustedY);
-    
+    const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPiece) {
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
@@ -763,7 +759,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell]);
+  }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
@@ -779,10 +775,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setDraggedPiece(null);
     setIsValidDrop(false);
     hasDragStartedRef.current = false;
-    
-    // CRITICAL: Restore scroll after drag ends
-    document.body.style.overflow = '';
-    document.body.style.touchAction = '';
   }, [isValidDrop, pendingMove]);
 
   // Create drag handlers for piece tray
@@ -794,15 +786,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       return { clientX: e.clientX, clientY: e.clientY };
     };
 
-    let elementRect = null;
-
     // Touch handlers - require drag threshold before starting
     const handleTouchStart = (e) => {
       if (gameState !== GAME_STATES.PLAYING) return;
       if (usedPieces.includes(piece)) return;
       
       const { clientX, clientY } = getClientPos(e);
-      elementRect = e.currentTarget.getBoundingClientRect();
       dragStartRef.current = { x: clientX, y: clientY };
       hasDragStartedRef.current = false;
       
@@ -831,23 +820,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       }
       
       if (distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
-        // Calculate offset from piece center
-        const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
-        const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
-        
         hasDragStartedRef.current = true;
         setIsDragging(true);
         setDraggedPiece(piece);
         setSelectedPiece(piece);
         setPendingMove(null);
-        setDragPosition({ x: clientX, y: clientY });
-        setDragOffset({ x: offsetX, y: offsetY });
-        
-        // CRITICAL: Block scroll while dragging
-        document.body.style.overflow = 'hidden';
-        document.body.style.touchAction = 'none';
-        
-        soundManager.playPieceSelect();
+        setDragOffset({ x: 0, y: 0 });
         
         if (e.cancelable) {
           e.preventDefault();
@@ -876,11 +854,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       if (usedPieces.includes(piece)) return;
       
       const { clientX, clientY } = e;
-      const rect = e.currentTarget.getBoundingClientRect();
-      
-      // Calculate offset from piece center
-      const offsetX = clientX - (rect.left + rect.width / 2);
-      const offsetY = clientY - (rect.top + rect.height / 2);
       
       // Update board bounds
       if (boardRef.current) {
@@ -894,11 +867,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       setSelectedPiece(piece);
       setPendingMove(null);
       setDragPosition({ x: clientX, y: clientY });
-      setDragOffset({ x: offsetX, y: offsetY });
-      
-      // CRITICAL: Block scroll while dragging
-      document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
+      setDragOffset({ x: 0, y: 0 });
       
       soundManager.playPieceSelect();
     };
@@ -908,8 +877,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
-      // CRITICAL: Prevent browser from handling touch events on piece items
-      style: { touchAction: 'none' },
     };
   }, [gameState, usedPieces, rotation, flipped, updateDrag, endDrag]);
 
@@ -928,10 +895,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: 0, y: 0 });
     hasDragStartedRef.current = true;
-    
-    // CRITICAL: Block scroll while dragging
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
   }, [gameState, pendingMove]);
 
   // Global move/end handlers for drag

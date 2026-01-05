@@ -367,11 +367,8 @@ const GameScreen = ({
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Calculate which cell we're over - subtract drag offset to match floating piece position
-    // The offset is (touchPos - pieceCenter), subtracting aligns piece center with visual
-    const adjustedX = clientX - dragOffset.x;
-    const adjustedY = clientY - dragOffset.y;
-    const cell = calculateBoardCell(adjustedX, adjustedY);
+    // Calculate which cell we're over
+    const cell = calculateBoardCell(clientX, clientY);
     
     if (cell && setPendingMove) {
       // Update pending move for visual feedback
@@ -384,7 +381,7 @@ const GameScreen = ({
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // End drag
   const endDrag = useCallback(() => {
@@ -416,6 +413,7 @@ const GameScreen = ({
     let gestureDecided = false;
 
     const handleTouchStart = (e) => {
+      console.log('[GameScreen] handleTouchStart for piece:', piece);
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
@@ -434,14 +432,17 @@ const GameScreen = ({
       
       if (!gestureDecided) {
         const isScroll = isScrollGesture(startX, startY, currentX, currentY);
+        console.log('[GameScreen] handleTouchMove - isScroll:', isScroll, 'gestureDecided:', gestureDecided);
         
         if (isScroll === null) return;
         
         gestureDecided = true;
         
         if (isScroll) {
+          console.log('[GameScreen] Detected scroll, not starting drag');
           return; // It's a scroll
         } else {
+          console.log('[GameScreen] Starting drag for piece:', piece);
           e.preventDefault();
           startDrag(piece, currentX, currentY, elementRect);
         }
@@ -454,6 +455,7 @@ const GameScreen = ({
     };
 
     const handleTouchEnd = (e) => {
+      console.log('[GameScreen] handleTouchEnd - hasDragStarted:', hasDragStartedRef.current);
       if (hasDragStartedRef.current) {
         e.preventDefault();
         endDrag();
@@ -464,6 +466,7 @@ const GameScreen = ({
     // Mouse handlers for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
+      console.log('[GameScreen] handleMouseDown for piece:', piece);
       startX = e.clientX;
       startY = e.clientY;
       elementRect = e.currentTarget.getBoundingClientRect();
@@ -475,8 +478,6 @@ const GameScreen = ({
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
-      // CRITICAL: Prevent browser from handling touch events on piece items
-      style: { touchAction: 'none' },
     };
   }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
 

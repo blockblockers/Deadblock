@@ -84,8 +84,8 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
   const oppRating = opponent?.rating || 1000;
   const myTier = ratingService.getRatingTier(myRating);
   const oppTier = ratingService.getRatingTier(oppRating);
-  const myUsername = profile?.username || profile?.display_name || 'You';
-  const oppUsername = opponent?.username || opponent?.display_name || 'Opponent';
+  const myUsername = profile?.display_name || profile?.username || 'You';
+  const oppUsername = opponent?.display_name || opponent?.username || 'Opponent';
   
   return (
     <div className="mb-3">
@@ -215,7 +215,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // DRAG HANDLERS
   // =========================================================================
   
-  // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -226,17 +225,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const relX = clientX - left;
     const relY = clientY - top;
     
-    const col = Math.floor(relX / cellWidth);
-    const row = Math.floor(relY / cellHeight);
-    
-    // Allow anchor position up to 4 cells outside board for piece extension
-    const EXTENSION_MARGIN = 4;
-    if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
-        col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
-      return { row, col };
+    if (relX < 0 || relX > width || relY < 0 || relY > height) {
+      return null;
     }
     
-    return null;
+    return { row: Math.floor(relY / cellHeight), col: Math.floor(relX / cellWidth) };
   }, []);
 
   const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
@@ -305,10 +298,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Subtract drag offset to match floating piece position
-    const adjustedX = clientX - dragOffset.x;
-    const adjustedY = clientY - dragOffset.y;
-    const cell = calculateBoardCell(adjustedX, adjustedY);
+    const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
       setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
@@ -318,7 +308,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, dragOffset, rotation, flipped, board, calculateBoardCell]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   const endDrag = useCallback(() => {
     if (!isDragging) return;
@@ -343,6 +333,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let touchStartTime = 0;
 
     const handleTouchStart = (e) => {
+      console.log('[OnlineGameScreen] handleTouchStart for piece:', piece);
       const touch = e.touches[0];
       startX = touch.clientX;
       startY = touch.clientY;
@@ -352,8 +343,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       hasDragStartedRef.current = false;
       dragStartRef.current = { x: startX, y: startY };
       
-      // Note: We don't prevent default here - wait for gesture detection in touchMove
-      // The touchAction: 'none' style on the element handles scroll prevention
+      // Prevent default to avoid scroll interference during potential drag
+      // e.preventDefault(); // Don't prevent yet - wait for gesture detection
     };
 
     const handleTouchMove = (e) => {
@@ -367,18 +358,22 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       if (!isDragGesture && distance > DRAG_THRESHOLD) {
         // Check if this is more horizontal than vertical (drag vs scroll)
         const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
+        console.log('[OnlineGameScreen] Gesture detection - distance:', distance, 'isHorizontalish:', isHorizontalish, 'elapsed:', elapsed);
         
         // If moving mostly horizontal, or if it's a quick gesture, treat as drag
         if (isHorizontalish || elapsed < 150) {
           isDragGesture = true;
+          console.log('[OnlineGameScreen] Recognized as drag gesture');
         } else {
           // Vertical scroll - don't interfere
+          console.log('[OnlineGameScreen] Detected vertical scroll, ignoring');
           return;
         }
       }
       
       // Start dragging if we've decided it's a drag gesture
       if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
+        console.log('[OnlineGameScreen] Starting drag for piece:', piece);
         e.preventDefault();
         startDrag(piece, touch.clientX, touch.clientY, elementRect);
       }
@@ -391,12 +386,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     };
 
     const handleTouchEnd = () => {
+      console.log('[OnlineGameScreen] handleTouchEnd - hasDragStarted:', hasDragStartedRef.current);
       if (hasDragStartedRef.current) endDrag();
       isDragGesture = false;
     };
 
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
+      console.log('[OnlineGameScreen] handleMouseDown for piece:', piece);
       startX = e.clientX;
       startY = e.clientY;
       elementRect = e.currentTarget.getBoundingClientRect();
@@ -409,8 +406,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
-      // CRITICAL: Prevent browser from handling touch events on piece items
-      style: { touchAction: 'none' },
     };
   }, [game?.status, usedPieces, isMyTurn, isScrollGesture, startDrag, updateDrag, endDrag]);
 
@@ -512,10 +507,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             if (!isSender && !showRematchModal && !rematchDeclined) {
               setShowRematchModal(true);
               soundManager.playSound('notification');
-              
-              // ADDED: Send push notification for rematch request
-              const requesterName = opponent?.display_name || opponent?.username || 'Opponent';
-              notificationService.notifyRematchRequest(requesterName, gameId, request.id);
             }
             
             // If we're the requester, show waiting state
@@ -557,31 +548,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
     };
-  }, []);
-
-  // Check for openChat URL parameter or sessionStorage (from notification click)
-  useEffect(() => {
-    // Check URL param first
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('openChat') === 'true') {
-      console.log('[OnlineGameScreen] Opening chat from URL param');
-      setChatOpen(true);
-      setHasUnreadChat(false);
-      setChatToast(null);
-      // Clean URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return;
-    }
-    
-    // Check sessionStorage (set by App.jsx from notification navigation)
-    const sessionOpenChat = sessionStorage.getItem('deadblock_open_chat');
-    if (sessionOpenChat === 'true') {
-      console.log('[OnlineGameScreen] Opening chat from sessionStorage');
-      setChatOpen(true);
-      setHasUnreadChat(false);
-      setChatToast(null);
-      sessionStorage.removeItem('deadblock_open_chat');
-    }
   }, []);
 
   // Update board bounds
@@ -786,7 +752,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [currentGameId, userId, updateGameState]);
 
   // Subscribe to chat messages for notification when chat is closed
-  // Chat notification subscription - FIXED: Use supabase directly + PUSH NOTIFICATION
+  // Chat notification subscription - FIXED: Use supabase directly
   useEffect(() => {
     if (!currentGameId || !user?.id || !supabase) return;
     
@@ -810,7 +776,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             setHasUnreadChat(true);
             soundManager.playSound('notification');
             
-            // ADDED: Show floating toast banner
+            // Show floating toast banner
             const opponentName = opponent?.display_name || opponent?.username || 'Opponent';
             const message = payload.new.message || payload.new.quick_message || 'Sent a message';
             const toastTimestamp = Date.now();
@@ -824,13 +790,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             // Auto-hide toast after 5 seconds
             setTimeout(() => {
               setChatToast(prev => {
-                // Only clear if it's the same toast (hasn't been replaced by a newer one)
                 if (prev?.timestamp === toastTimestamp) return null;
                 return prev;
               });
             }, 5000);
             
-            // ADDED: Send push notification for chat message
+            // Send push notification for chat message
             notificationService.notifyChatMessage(opponentName, message, currentGameId);
           }
         }
@@ -844,6 +809,28 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       chatChannel.unsubscribe();
     };
   }, [currentGameId, user?.id, chatOpen, opponent]);
+
+  // Check for openChat flag from notification navigation
+  useEffect(() => {
+    // Check URL param first
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('openChat') === 'true') {
+      setChatOpen(true);
+      setHasUnreadChat(false);
+      setChatToast(null);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    // Check sessionStorage (set by App.jsx from notification navigation)
+    const sessionOpenChat = sessionStorage.getItem('deadblock_open_chat');
+    if (sessionOpenChat === 'true') {
+      setChatOpen(true);
+      setHasUnreadChat(false);
+      setChatToast(null);
+      sessionStorage.removeItem('deadblock_open_chat');
+    }
+  }, [currentGameId]);
 
   // Show error message when placement is invalid
   useEffect(() => {
@@ -1313,10 +1300,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                     <button
                       onClick={() => {
                         setChatOpen(!chatOpen);
-                        if (!chatOpen) {
-                          setHasUnreadChat(false);
-                          setChatToast(null);
-                        }
+                        if (!chatOpen) setHasUnreadChat(false);
                       }}
                       className={`
                         relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
@@ -1359,10 +1343,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 <button
                   onClick={() => {
                     setChatOpen(!chatOpen);
-                    if (!chatOpen) {
-                      setHasUnreadChat(false);
-                      setChatToast(null);
-                    }
+                    if (!chatOpen) setHasUnreadChat(false);
                   }}
                   className={`
                     relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
@@ -1474,21 +1455,41 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         </div>
       </div>
 
+      {/* Floating Chat Toast Banner */}
+      {chatToast && !chatOpen && (
+        <div 
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-[70] animate-in slide-in-from-top-4 fade-in duration-300"
+          onClick={() => {
+            setChatOpen(true);
+            setHasUnreadChat(false);
+            setChatToast(null);
+          }}
+        >
+          <div className="bg-gradient-to-r from-cyan-600/95 to-blue-600/95 backdrop-blur-sm rounded-xl px-4 py-3 shadow-2xl border border-cyan-400/30 cursor-pointer hover:scale-[1.02] transition-transform max-w-[90vw] sm:max-w-sm">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 rounded-full p-2">
+                <MessageCircle size={18} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-cyan-100 text-xs font-medium">{chatToast.senderName}</p>
+                <p className="text-white text-sm truncate">{chatToast.message}</p>
+              </div>
+              <div className="text-cyan-200/60 text-xs">tap to open</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quick Chat Panel - FIXED: Use external control to hide duplicate button */}
       {chatOpen && game && (
         <QuickChat
           gameId={currentGameId}
           userId={user?.id}
-          opponentName={opponent?.username || opponent?.display_name}
+          opponentName={opponent?.display_name || opponent?.username}
           isOpen={chatOpen}
           onToggle={(open) => {
             setChatOpen(open);
-            if (!open) {
-              setHasUnreadChat(false);
-            } else {
-              // Opening chat, clear toast
-              setChatToast(null);
-            }
+            if (!open) setHasUnreadChat(false);
           }}
           hideButton={true}
           onNewMessage={() => {
@@ -1612,59 +1613,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         </div>
       )}
 
-      {/* Chat Message Toast Banner - Prominent notification */}
-      {chatToast && !chatOpen && (
-        <div 
-          className="fixed inset-x-0 top-4 z-[70] flex justify-center pointer-events-auto"
-          onClick={() => {
-            setChatOpen(true);
-            setHasUnreadChat(false);
-            setChatToast(null);
-          }}
-        >
-          <div 
-            className="px-5 py-3 rounded-xl shadow-2xl max-w-md mx-4 cursor-pointer
-              bg-gradient-to-r from-red-600 via-orange-500 to-red-600 
-              border-2 border-white/30 text-white
-              backdrop-blur-sm transform hover:scale-105 transition-transform"
-            style={{
-              animation: 'slideDown 0.3s ease-out, chatPulse 1.5s ease-in-out infinite',
-              boxShadow: '0 0 40px rgba(239,68,68,0.8), 0 0 80px rgba(239,68,68,0.4), 0 10px 30px rgba(0,0,0,0.5)'
-            }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <MessageCircle size={28} className="text-white animate-bounce" />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center text-[10px] font-bold text-red-600">
-                  !
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-sm text-white/90">{chatToast.senderName}</div>
-                <div className="text-white/80 text-sm truncate">{chatToast.message}</div>
-              </div>
-              <div className="text-xs text-white/60 whitespace-nowrap">Tap to reply</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* CSS Keyframes for animations */}
-      <style>{`
-        @keyframes chatBlink {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.7; transform: scale(1.05); }
-        }
-        @keyframes chatPulse {
-          0%, 100% { box-shadow: 0 0 40px rgba(239,68,68,0.8), 0 0 80px rgba(239,68,68,0.4); }
-          50% { box-shadow: 0 0 60px rgba(239,68,68,1), 0 0 100px rgba(239,68,68,0.6); }
-        }
-        @keyframes slideDown {
-          0% { transform: translateY(-100%); opacity: 0; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-      `}</style>
-
       {/* Rematch Modal - For rematch requests */}
       <RematchModal
         isOpen={showRematchModal}
@@ -1673,6 +1621,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           // If we're the requester and closing, cancel the request
           if (isRematchRequester && rematchRequest?.id && !rematchAccepted) {
             rematchService.cancelRematchRequest(rematchRequest.id, user.id);
+          }
+        }}
+        onBackToMenu={() => {
+          // Navigate back to menu without canceling rematch request
+          setShowRematchModal(false);
+          setShowGameOver(false);
+          if (typeof onLeave === 'function') {
+            onLeave();
           }
         }}
         onAccept={async () => {

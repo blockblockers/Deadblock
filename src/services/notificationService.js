@@ -39,15 +39,54 @@ class NotificationService {
     return this.permission === 'denied';
   }
 
+  // Check if we're on a mobile device (where push notifications are most useful)
+  isMobileDevice() {
+    if (typeof window === 'undefined') return false;
+    
+    // Check user agent for mobile devices
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    // Additional checks for touch-based devices
+    const hasTouchScreen = (
+      ('ontouchstart' in window) ||
+      (navigator.maxTouchPoints > 0) ||
+      (navigator.msMaxTouchPoints > 0)
+    );
+    
+    // Only consider it mobile if the UA says mobile OR it's a touch device with small screen
+    // This prevents desktop browsers with small windows from being detected as mobile
+    return isMobileUA || (hasTouchScreen && window.innerWidth <= 768);
+  }
+
+  // Check if we're on a platform that supports useful push notifications
+  // Desktop browsers support notifications but they're less useful since the browser is usually open
+  isDesktopBrowser() {
+    if (typeof window === 'undefined') return false;
+    return !this.isMobileDevice();
+  }
+
+  // Check if push notifications are supported and useful on this platform
+  isPushSupported() {
+    // Check for Notification API
+    if (!('Notification' in window)) return false;
+    
+    // Check for service worker (required for background notifications on mobile PWA)
+    if (!('serviceWorker' in navigator)) return false;
+    
+    return true;
+  }
+
   shouldPrompt() {
     // Show prompt if:
     // 1. Notifications are supported
     // 2. Permission hasn't been granted or denied
     // 3. User hasn't dismissed the prompt before
+    // 4. We're on a mobile device (most useful for push notifications)
     return (
-      'Notification' in window &&
+      this.isPushSupported() &&
       this.permission === 'default' &&
-      !this.promptDismissed
+      !this.promptDismissed &&
+      this.isMobileDevice()
     );
   }
 
