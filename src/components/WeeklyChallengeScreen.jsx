@@ -275,39 +275,33 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const DRAG_THRESHOLD = 8;
   const SCROLL_ANGLE_THRESHOLD = 60;
 
-  // Helper function to start drag (consistent with OnlineGameScreen)
+  // Helper function to start drag
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
-    console.log('[WeeklyChallenge] startDrag called:', { piece, gameStarted, gameOver, usedPieces: usedPieces.includes(piece) });
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
+    if (gameOver || usedPieces.includes(piece) || !gameStarted) return;
     
-    if (gameOver || usedPieces.includes(piece) || !gameStarted) {
-      console.log('[WeeklyChallenge] startDrag blocked');
-      return;
-    }
+    // Set ref FIRST to prevent duplicate calls
+    hasDragStartedRef.current = true;
     
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-      console.log('[WeeklyChallenge] Board bounds updated:', boardBoundsRef.current);
     }
     
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
-    // Set state in correct order
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
-    hasDragStartedRef.current = true;
     
+    // Select piece - this plays sound, don't play again
     selectPiece(piece);
     if (setPendingMove) setPendingMove(null);
     
-    soundManager.playPieceSelect();
-    
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-    
-    console.log('[WeeklyChallenge] Drag started successfully for:', piece);
   }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove]);
   
   // Calculate which board cell the drag position is over
@@ -368,7 +362,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
     const currentPiece = draggedPieceRef.current;
-    console.log('[WeeklyChallenge] endDrag called:', { isDragging, draggedPiece: currentPiece });
     
     // Recompute validity based on current drag position
     if (currentPiece && dragPosition && boardBoundsRef.current) {
@@ -377,10 +370,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         const coords = getPieceCoords(currentPiece, rotation, flipped);
         const valid = canPlacePiece(board, cell.row, cell.col, coords);
         
-        console.log('[WeeklyChallenge] endDrag computed:', { cell, valid, piece: currentPiece });
-        
         if (valid) {
-          // Select piece first, then set pending move
+          // Select piece - this plays sound via useGameState
           selectPiece(currentPiece);
           
           // Set pending move after piece is selected
@@ -391,19 +382,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
               col: cell.col,
               coords
             });
-            console.log('[WeeklyChallenge] Valid drop, pending move set for:', currentPiece);
           }, 10);
-          
-          soundManager.playPieceSelect();
         } else {
           // Invalid drop - clear
           setPendingMove(null);
-          console.log('[WeeklyChallenge] Invalid drop position');
         }
       } else {
         // Outside board - clear
         setPendingMove(null);
-        console.log('[WeeklyChallenge] Drop outside board');
       }
     }
     
@@ -416,111 +402,57 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     document.body.style.touchAction = '';
   }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove]);
 
-  // Create drag handlers for piece tray - FIXED WITH LOGGING
+  // Create drag handlers for piece tray
   const createDragHandlers = useCallback((piece) => {
-    console.log('[WeeklyChallenge] createDragHandlers called for:', piece, { 
-      gameOver, 
-      isUsed: usedPieces.includes(piece), 
-      gameStarted 
-    });
-    
     if (gameOver || usedPieces.includes(piece) || !gameStarted) {
-      console.log('[WeeklyChallenge] Returning empty handlers for:', piece);
       return {};
     }
 
-    let startX = 0, startY = 0, elementRect = null, isDragGesture = false;
-    let touchStartTime = 0;
+    let elementRect = null;
 
-    // Touch start - capture initial position
+    // Touch start - start drag immediately (touch-action: none prevents scrolling)
     const handleTouchStart = (e) => {
-      console.log('[WeeklyChallenge] handleTouchStart for:', piece);
       const touch = e.touches?.[0];
       if (!touch) return;
       
-      startX = touch.clientX;
-      startY = touch.clientY;
-      // Capture element rect immediately - currentTarget may be null later
+      // Capture element rect
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
-      isDragGesture = false;
-      touchStartTime = Date.now();
-      hasDragStartedRef.current = false;
-      dragStartRef.current = { x: startX, y: startY };
       
-      if (boardRef.current) {
+      // Update board bounds for drop detection
+      if (boardRef?.current) {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
+      
+      // Start drag immediately
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
-    // Touch move - detect gesture type and start drag if appropriate
-    const handleTouchMove = (e) => {
-      const touch = e.touches?.[0];
-      if (!touch) return;
-      
-      const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      const elapsed = Date.now() - touchStartTime;
-      
-      // Determine if this is a drag gesture
-      if (!isDragGesture && distance > DRAG_THRESHOLD) {
-        const isHorizontalish = Math.abs(deltaX) > Math.abs(deltaY) * 0.5;
-        
-        if (isHorizontalish || elapsed < 150) {
-          isDragGesture = true;
-          console.log('[WeeklyChallenge] Recognized drag gesture');
-        } else {
-          console.log('[WeeklyChallenge] Detected vertical scroll, ignoring');
-          return;
-        }
-      }
-      
-      // Start drag if gesture detected and threshold met
-      if (isDragGesture && distance > DRAG_THRESHOLD && !hasDragStartedRef.current) {
-        // Note: Don't call e.preventDefault() - passive listeners don't allow it
-        // The touch-action: none CSS handles preventing scroll
-        startDrag(piece, touch.clientX, touch.clientY, elementRect);
-      }
-      
-      // Continue updating drag position
-      if (hasDragStartedRef.current) {
-        // Global touch handler will call preventDefault
-        updateDrag(touch.clientX, touch.clientY);
-      }
-    };
+    // Touch move/end - global handlers take care of updates when isDragging
+    const handleTouchMove = () => {};
+    const handleTouchEnd = () => {};
 
-    // Touch end
-    const handleTouchEnd = () => {
-      console.log('[WeeklyChallenge] handleTouchEnd, dragStarted:', hasDragStartedRef.current);
-      if (hasDragStartedRef.current) {
-        endDrag();
-      }
-      isDragGesture = false;
-    };
-
-    // Mouse down - immediate drag for desktop
+    // Mouse handlers for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
-      console.log('[WeeklyChallenge] handleMouseDown for:', piece);
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       
-      const rect = e.currentTarget?.getBoundingClientRect() || null;
-      startDrag(piece, e.clientX, e.clientY, rect);
+      if (boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
-    console.log('[WeeklyChallenge] Returning handlers for:', piece);
     return {
       onMouseDown: handleMouseDown,
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
-      // CRITICAL: This CSS prevents default touch behavior
-      style: { touchAction: 'none' },
     };
-  }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
+  }, [gameOver, usedPieces, gameStarted, startDrag]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
-    console.log('[WeeklyChallenge] handleBoardDragStart:', piece);
     if (gameOver || !gameStarted) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
     
@@ -535,8 +467,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   useEffect(() => {
     if (!isDragging) return;
     
-    console.log('[WeeklyChallenge] Setting up global drag listeners');
-    
     const handleGlobalMove = (e) => {
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -548,7 +478,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     };
     
     const handleGlobalEnd = () => {
-      console.log('[WeeklyChallenge] Global drag end');
       endDrag();
     };
     

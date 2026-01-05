@@ -94,12 +94,14 @@ const PieceTray = ({
           
           // Get drag handlers if available
           const dragHandlers = createDragHandlers ? createDragHandlers(name) : {};
+          // Extract style separately since it needs to be merged
+          const { style: dragStyle, ...dragEvents } = dragHandlers;
           
           return (
             <button
               key={name}
               onClick={() => !isUsed && !isGeneratingPuzzle && !isDragging && onSelectPiece(name)}
-              {...dragHandlers}
+              {...dragEvents}
               className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden ${
                 isUsed
                   ? 'bg-slate-800/30 opacity-25 cursor-not-allowed border border-slate-700/30'
@@ -111,13 +113,14 @@ const PieceTray = ({
               }`}
               disabled={isDisabled(name)}
               style={{
+                // CRITICAL: Prevent default touch behaviors like scrolling
+                touchAction: 'none',
                 // Prevent text selection during drag
                 WebkitUserSelect: 'none',
                 userSelect: 'none',
                 // Prevent context menu on long press
                 WebkitTouchCallout: 'none',
-                // CRITICAL: Prevent browser from intercepting touch for scroll
-                touchAction: 'none',
+                ...dragStyle,
               }}
             >
               {/* Selection glow effect */}

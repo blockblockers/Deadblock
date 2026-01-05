@@ -307,8 +307,13 @@ const GameScreen = ({
 
   // Start drag from piece tray
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
     if (gameOver || usedPieces.includes(piece)) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    
+    // Set ref FIRST to prevent duplicate calls
+    hasDragStartedRef.current = true;
     
     // Calculate offset - if no elementRect, default to 0 (center piece on touch)
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
@@ -318,11 +323,9 @@ const GameScreen = ({
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
-    hasDragStartedRef.current = true;
     
-    // Also select the piece
+    // Select the piece - this plays the sound via useGameState, don't play again
     onSelectPiece?.(piece);
-    soundManager.playPieceSelect();
     
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
@@ -331,8 +334,13 @@ const GameScreen = ({
 
   // Handle starting drag from a pending piece on the board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    
+    // Set ref FIRST to prevent duplicate calls
+    hasDragStartedRef.current = true;
     
     // Clear the pending move first (piece is being "picked up")
     if (setPendingMove) {
@@ -347,9 +355,8 @@ const GameScreen = ({
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
-    hasDragStartedRef.current = true;
     
-    // Piece is already selected, just play sound
+    // Play sound for picking up from board (piece already selected)
     soundManager.playPieceSelect();
     
     // Prevent scroll while dragging
@@ -404,83 +411,43 @@ const GameScreen = ({
   }, [isDragging]);
 
   // Create drag handlers for PieceTray
+  // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece)) return {};
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
 
-    let startX = 0;
-    let startY = 0;
     let elementRect = null;
-    let gestureDecided = false;
 
+    // Touch start - start drag immediately (touch-action: none prevents scrolling)
     const handleTouchStart = (e) => {
-      console.log('[GameScreen] handleTouchStart for piece:', piece);
-      const touch = e.touches[0];
-      if (!touch) return;
-      
-      startX = touch.clientX;
-      startY = touch.clientY;
-      // Capture element rect immediately - currentTarget may be null later
-      elementRect = e.currentTarget?.getBoundingClientRect() || null;
-      gestureDecided = false;
-      hasDragStartedRef.current = false;
-      dragStartRef.current = { x: startX, y: startY };
-      
-      // Update board bounds for drop detection
-      if (boardBoundsRef && boardRef?.current) {
-        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-      }
-    };
-
-    const handleTouchMove = (e) => {
-      if (gestureDecided && !hasDragStartedRef.current) return;
-      
       const touch = e.touches?.[0];
       if (!touch) return;
       
-      const currentX = touch.clientX;
-      const currentY = touch.clientY;
+      // Capture element rect
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
       
-      if (!gestureDecided) {
-        const isScroll = isScrollGesture(startX, startY, currentX, currentY);
-        console.log('[GameScreen] handleTouchMove - isScroll:', isScroll, 'gestureDecided:', gestureDecided);
-        
-        if (isScroll === null) return;
-        
-        gestureDecided = true;
-        
-        if (isScroll) {
-          console.log('[GameScreen] Detected scroll, not starting drag');
-          return; // It's a scroll
-        } else {
-          console.log('[GameScreen] Starting drag for piece:', piece);
-          // Note: Don't call e.preventDefault() here - it fails on passive listeners
-          // The touch-action: none CSS and global handlers will take care of it
-          startDrag(piece, currentX, currentY, elementRect);
-        }
+      // Update board bounds for drop detection
+      if (boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
       
-      if (hasDragStartedRef.current) {
-        // Global touch handler will call preventDefault
-        updateDrag(currentX, currentY);
-      }
+      // Start drag immediately
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
-    const handleTouchEnd = (e) => {
-      console.log('[GameScreen] handleTouchEnd - hasDragStarted:', hasDragStartedRef.current);
-      if (hasDragStartedRef.current) {
-        endDrag();
-      }
-      gestureDecided = false;
-    };
+    // Touch move/end - global handlers take care of updates when isDragging
+    const handleTouchMove = () => {};
+    const handleTouchEnd = () => {};
 
     // Mouse handlers for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
-      console.log('[GameScreen] handleMouseDown for piece:', piece);
-      startX = e.clientX;
-      startY = e.clientY;
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
+      
+      if (boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
@@ -489,10 +456,8 @@ const GameScreen = ({
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
-      // CRITICAL: This CSS prevents default touch behavior without needing preventDefault
-      style: { touchAction: 'none' },
     };
-  }, [gameOver, usedPieces, gameMode, currentPlayer, isScrollGesture, startDrag, updateDrag, endDrag]);
+  }, [gameOver, usedPieces, gameMode, currentPlayer, startDrag]);
 
   // Global mouse move/up handlers for desktop drag
   useEffect(() => {

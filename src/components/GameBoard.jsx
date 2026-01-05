@@ -239,33 +239,32 @@ const GameBoard = forwardRef(({
             const pendingIndex = isPending ? pendingCells.findIndex(p => p.row === rowIdx && p.col === colIdx) : -1;
             
             // v7.8: Handle touch start for re-dragging pending pieces
-            // v7.9: Fixed - prevent default to stop browser from capturing touch for scrolling
+            // v7.17: Fixed - use touch-action: none instead of preventDefault
             const handlePendingTouchStart = (e) => {
               if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
               
-              // Prevent default to stop browser scroll/gesture handling
-              e.preventDefault();
+              // Don't call preventDefault - it fails on passive listeners
+              // touch-action: none on the element handles scroll prevention
               e.stopPropagation();
               
               // Get touch position
-              const touch = e.touches[0];
-              const rect = e.currentTarget.getBoundingClientRect();
+              const touch = e.touches?.[0];
+              if (!touch) return;
+              
+              const rect = e.currentTarget?.getBoundingClientRect() || null;
               
               // Start drag of the pending piece
               onPendingPieceDragStart(pendingMove.piece, touch.clientX, touch.clientY, rect);
             };
             
             // v7.8: Handle mouse down for re-dragging pending pieces (desktop)
-            // v7.9: Fixed - prevent default to avoid text selection
             const handlePendingMouseDown = (e) => {
               if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
               if (e.button !== 0) return; // Left click only
               
-              // Prevent default to stop text selection
-              e.preventDefault();
               e.stopPropagation();
               
-              const rect = e.currentTarget.getBoundingClientRect();
+              const rect = e.currentTarget?.getBoundingClientRect() || null;
               onPendingPieceDragStart(pendingMove.piece, e.clientX, e.clientY, rect);
             };
             
