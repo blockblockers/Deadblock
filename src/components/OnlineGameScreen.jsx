@@ -219,7 +219,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
   // Refs for global touch handlers - allows immediate attachment/detachment
-  const globalTouchHandlersRef = useRef({ move: null, end: null });
+  const globalTouchHandlersRef = useRef({ move: null, end: null, cancel: null });
   
   // Refs to store latest callback functions (avoids stale closure issues)
   const updateDragRef = useRef(null);
@@ -229,6 +229,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // State updates are async, but refs update synchronously
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
+  const dragCellRef = useRef(null); // v7.22: Store current cell during drag
   
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
@@ -348,14 +349,16 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
+    // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
-      setPendingMove({ piece: draggedPieceRef.current, row: cell.row, col: cell.col });
+      dragCellRef.current = cell;
       const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
+      dragCellRef.current = null;
       setIsValidDrop(false);
     }
   }, [rotation, flipped, board, calculateBoardCell]);
@@ -367,9 +370,18 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
-    // Update refs FIRST (synchronous)
+    // v7.22: Set pendingMove from the final drag position
+    const finalCell = dragCellRef.current;
+    const piece = draggedPieceRef.current;
+    
+    if (finalCell && piece) {
+      setPendingMove({ piece, row: finalCell.row, col: finalCell.col });
+    }
+    
+    // Update refs (synchronous)
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
+    dragCellRef.current = null;
     
     // Then update state (async, triggers re-render)
     setIsDragging(false);

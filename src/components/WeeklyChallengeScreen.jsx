@@ -279,7 +279,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
   // Refs for global touch handlers - allows immediate attachment/detachment
-  const globalTouchHandlersRef = useRef({ move: null, end: null });
+  const globalTouchHandlersRef = useRef({ move: null, end: null, cancel: null });
   
   // Refs to store latest callback functions (avoids stale closure issues)
   const updateDragRef = useRef(null);
@@ -289,6 +289,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // State updates are async, but refs update synchronously
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
+  const dragCellRef = useRef(null); // v7.22: Store current cell during drag
   
   // Calculate which cell of the piece was touched
   const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
@@ -401,24 +402,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     setDragPosition({ x: clientX, y: clientY });
     
+    // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPieceRef.current) {
+      dragCellRef.current = cell;
       const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
-      
-      if (valid && setPendingMove) {
-        setPendingMove({
-          piece: draggedPieceRef.current,
-          row: cell.row,
-          col: cell.col,
-          coords
-        });
-      }
     } else {
+      dragCellRef.current = null;
       setIsValidDrop(false);
     }
-  }, [rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [rotation, flipped, board, calculateBoardCell]);
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
@@ -428,41 +423,35 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
-    const currentPiece = draggedPieceRef.current;
+    // v7.22: Set pendingMove from the final drag position
+    const finalCell = dragCellRef.current;
+    const piece = draggedPieceRef.current;
     
-    // Recompute validity based on current drag position
-    if (currentPiece && dragPosition && boardBoundsRef.current) {
-      const cell = calculateBoardCell(dragPosition.x, dragPosition.y);
-      if (cell) {
-        const coords = getPieceCoords(currentPiece, rotation, flipped);
-        const valid = canPlacePiece(board, cell.row, cell.col, coords);
-        
-        if (valid) {
-          // Select piece - this plays sound via useGameState
-          selectPiece(currentPiece);
-          
-          // Set pending move after piece is selected
-          setTimeout(() => {
-            setPendingMove({
-              piece: currentPiece,
-              row: cell.row,
-              col: cell.col,
-              coords
-            });
-          }, 10);
-        } else {
-          // Invalid drop - clear
-          setPendingMove(null);
-        }
+    if (finalCell && piece) {
+      const coords = getPieceCoords(piece, rotation, flipped);
+      const valid = canPlacePiece(board, finalCell.row, finalCell.col, coords);
+      
+      if (valid) {
+        selectPiece(piece);
+        setTimeout(() => {
+          setPendingMove({
+            piece,
+            row: finalCell.row,
+            col: finalCell.col,
+            coords
+          });
+        }, 10);
       } else {
-        // Outside board - clear
         setPendingMove(null);
       }
+    } else {
+      setPendingMove(null);
     }
     
-    // Update refs FIRST (synchronous)
+    // Update refs (synchronous)
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
+    dragCellRef.current = null;
     
     // Then update state (async, triggers re-render)
     setIsDragging(false);
@@ -473,7 +462,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove, detachGlobalTouchHandlers]);
+  }, [rotation, flipped, board, selectPiece, setPendingMove, detachGlobalTouchHandlers]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire

@@ -274,7 +274,7 @@ const GameScreen = ({
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
   // Refs for global touch handlers - allows immediate attachment/detachment
-  const globalTouchHandlersRef = useRef({ move: null, end: null });
+  const globalTouchHandlersRef = useRef({ move: null, end: null, cancel: null });
   
   // Refs to store latest callback functions (avoids stale closure issues)
   const updateDragRef = useRef(null);
@@ -284,6 +284,7 @@ const GameScreen = ({
   // State updates are async, but refs update synchronously
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
+  const dragCellRef = useRef(null); // v7.22: Store current cell during drag
   
   // Calculate which board cell the drag position is over
   // Allow positions outside the board for pieces that extend beyond their anchor
@@ -382,7 +383,6 @@ const GameScreen = ({
     
     const handleTouchMove = (e) => {
       if (e.touches && e.touches[0]) {
-        // Use ref to get latest updateDrag function
         updateDragRef.current?.(e.touches[0].clientX, e.touches[0].clientY);
         if (e.cancelable) {
           e.preventDefault();
@@ -391,12 +391,10 @@ const GameScreen = ({
     };
 
     const handleTouchEnd = () => {
-      // Use ref to get latest endDrag function
       endDragRef.current?.();
     };
     
     const handleTouchCancel = () => {
-      // Treat cancel same as end
       endDragRef.current?.();
     };
 
@@ -421,21 +419,24 @@ const GameScreen = ({
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Calculate which cell we're over
+    // Calculate which cell we're over and check validity
+    // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
+    // We'll set pendingMove in endDrag instead
     const cell = calculateBoardCell(clientX, clientY);
     
-    if (cell && setPendingMove) {
-      // Update pending move for visual feedback
-      setPendingMove({ piece: draggedPieceRef.current, row: cell.row, col: cell.col });
+    if (cell) {
+      // Store the current cell for use in endDrag
+      dragCellRef.current = cell;
       
       // Check if valid drop position
       const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
+      dragCellRef.current = null;
       setIsValidDrop(false);
     }
-  }, [rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [rotation, flipped, board, calculateBoardCell]);
 
   // End drag
   const endDrag = useCallback(() => {
@@ -445,12 +446,19 @@ const GameScreen = ({
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
-    // Keep pending move for user to confirm/adjust
-    // They can still use D-pad and rotate/flip
+    // v7.22: Set pendingMove from the final drag position
+    // Capture values before clearing refs
+    const finalCell = dragCellRef.current;
+    const piece = draggedPieceRef.current;
     
-    // Update refs FIRST (synchronous)
+    if (finalCell && piece && setPendingMove) {
+      setPendingMove({ piece, row: finalCell.row, col: finalCell.col });
+    }
+    
+    // Update refs (synchronous)
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
+    dragCellRef.current = null;
     
     // Then update state (async, triggers re-render)
     setIsDragging(false);
@@ -464,7 +472,7 @@ const GameScreen = ({
     // Re-enable scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [detachGlobalTouchHandlers]);
+  }, [detachGlobalTouchHandlers, setPendingMove]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire

@@ -291,8 +291,8 @@ const GameBoard = forwardRef(({
                   animationDelay: `${pendingIndex * 0.15}s`,
                   touchAction: 'none', // v7.9: Prevent browser touch handling on draggable cells
                   userSelect: 'none',
-                  // v7.22: Hide pending cells during drag (DragOverlay shows the piece)
-                  opacity: isDragging ? 0 : 1,
+                  // v7.22: Don't change opacity during drag - DOM changes can cancel touches
+                  // DragOverlay has z-index: 9999 so it covers pending cells visually
                 } : undefined}
               >
                 {/* Base shine layer for occupied cells - subtle highlight */}

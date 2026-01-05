@@ -717,7 +717,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
   // Refs for global touch handlers - allows immediate attachment/detachment
-  const globalTouchHandlersRef = useRef({ move: null, end: null });
+  const globalTouchHandlersRef = useRef({ move: null, end: null, cancel: null });
   
   // Refs to store latest callback functions (avoids stale closure issues)
   const updateDragRef = useRef(null);
@@ -727,6 +727,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // State updates are async, but refs update synchronously
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
+  const dragCellRef = useRef(null); // v7.22: Store current cell during drag
   
   // Calculate which cell of the piece was touched
   const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
@@ -839,21 +840,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     setDragPosition({ x: clientX, y: clientY });
     
+    // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPieceRef.current) {
+      dragCellRef.current = cell;
       const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
-      
-      if (valid) {
-        setPendingMove({
-          piece: draggedPieceRef.current,
-          row: cell.row,
-          col: cell.col,
-          coords
-        });
-      }
     } else {
+      dragCellRef.current = null;
       setIsValidDrop(false);
     }
   }, [rotation, flipped, board, calculateBoardCell]);
@@ -866,17 +861,33 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
-    if (isValidDrop && pendingMove) {
-      // Keep pending move for confirmation
-      setSelectedPiece(pendingMove.piece);
+    // v7.22: Set pendingMove from the final drag position
+    const finalCell = dragCellRef.current;
+    const piece = draggedPieceRef.current;
+    
+    if (finalCell && piece) {
+      const coords = getPieceCoords(piece, rotation, flipped);
+      const valid = canPlacePiece(board, finalCell.row, finalCell.col, coords);
+      
+      if (valid) {
+        setPendingMove({
+          piece,
+          row: finalCell.row,
+          col: finalCell.col,
+          coords
+        });
+        setSelectedPiece(piece);
+      } else {
+        setPendingMove(null);
+      }
     } else {
-      // Cancel if invalid drop
       setPendingMove(null);
     }
     
-    // Update refs FIRST (synchronous)
+    // Update refs (synchronous)
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
+    dragCellRef.current = null;
     
     // Then update state (async, triggers re-render)
     setIsDragging(false);
@@ -887,7 +898,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isValidDrop, pendingMove, detachGlobalTouchHandlers]);
+  }, [rotation, flipped, board, detachGlobalTouchHandlers]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire
