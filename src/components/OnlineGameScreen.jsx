@@ -329,6 +329,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     // Set ref first to prevent duplicate calls
     hasDragStartedRef.current = true;
     
+    // CRITICAL: Update board bounds FIRST before using them
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
     // For board drag, calculate which cell was touched
     if (pendingMove && elementRect && boardBoundsRef.current) {
       const { left, top, width, height } = boardBoundsRef.current;
@@ -348,10 +353,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     // Clear pending move - piece is being "picked up"
     setPendingMove(null);
-    
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
     
     // Handle null elementRect gracefully
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;

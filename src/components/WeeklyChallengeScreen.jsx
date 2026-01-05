@@ -509,6 +509,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Set ref first
     hasDragStartedRef.current = true;
     
+    // CRITICAL: Update board bounds FIRST before using them
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
     // For board drag, calculate which cell was touched
     if (elementRect && boardBoundsRef.current) {
       const { left, top, width, height } = boardBoundsRef.current;
@@ -529,10 +534,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Clear pending move
     if (setPendingMove) {
       setPendingMove(null);
-    }
-    
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;

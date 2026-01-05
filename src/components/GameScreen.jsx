@@ -394,6 +394,11 @@ const GameScreen = ({
     // Set ref FIRST to prevent duplicate calls
     hasDragStartedRef.current = true;
     
+    // CRITICAL: Update board bounds FIRST before using them
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
     // For board drag, calculate which cell was touched
     // The elementRect is a single cell, so we need to figure out its position in the piece
     if (pendingMove && elementRect && boardBoundsRef.current) {
