@@ -225,6 +225,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const updateDragRef = useRef(null);
   const endDragRef = useRef(null);
   
+  // CRITICAL: Use ref for isDragging to avoid stale closure issues
+  // State updates are async, but refs update synchronously
+  const isDraggingRef = useRef(false);
+  const draggedPieceRef = useRef(null);
+  
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -326,7 +331,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [detachGlobalTouchHandlers]);
 
   const updateDrag = useCallback((clientX, clientY) => {
-    if (!isDragging || !draggedPiece) return;
+    // CRITICAL: Use refs for guards - state closures are stale during first touch
+    if (!isDraggingRef.current || !draggedPieceRef.current) return;
     
     setDragPosition({ x: clientX, y: clientY });
     
@@ -337,21 +343,27 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      setPendingMove({ piece: draggedPieceRef.current, row: cell.row, col: cell.col });
+      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [rotation, flipped, board, calculateBoardCell]);
 
   const endDrag = useCallback(() => {
-    if (!isDragging) return;
+    // CRITICAL: Use ref for guard - state closures are stale during first touch
+    if (!isDraggingRef.current) return;
     
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
+    // Update refs FIRST (synchronous)
+    isDraggingRef.current = false;
+    draggedPieceRef.current = null;
+    
+    // Then update state (async, triggers re-render)
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
@@ -362,7 +374,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, detachGlobalTouchHandlers]);
+  }, [detachGlobalTouchHandlers]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire
@@ -374,8 +386,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (hasDragStartedRef.current) return;
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) return;
     
-    // Set ref first to prevent duplicate calls
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
@@ -392,6 +406,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
+    // Update state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
@@ -411,8 +426,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (hasDragStartedRef.current) return;
     if (game?.status !== 'active' || !isMyTurn) return;
     
-    // Set ref first to prevent duplicate calls
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
@@ -446,6 +463,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
+    // Update state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });

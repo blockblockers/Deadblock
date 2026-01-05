@@ -723,6 +723,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const updateDragRef = useRef(null);
   const endDragRef = useRef(null);
   
+  // CRITICAL: Use ref for isDragging to avoid stale closure issues
+  // State updates are async, but refs update synchronously
+  const isDraggingRef = useRef(false);
+  const draggedPieceRef = useRef(null);
+  
   // Calculate which cell of the piece was touched
   const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
     if (!elementRect || !piece) return { row: 0, col: 0 };
@@ -821,17 +826,20 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
 
   // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
+    // CRITICAL: Use refs for guards - state closures are stale during first touch
+    if (!isDraggingRef.current || !draggedPieceRef.current) return;
+    
     setDragPosition({ x: clientX, y: clientY });
     
     const cell = calculateBoardCell(clientX, clientY);
-    if (cell && draggedPiece) {
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+    if (cell && draggedPieceRef.current) {
+      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
       
       if (valid) {
         setPendingMove({
-          piece: draggedPiece,
+          piece: draggedPieceRef.current,
           row: cell.row,
           col: cell.col,
           coords
@@ -840,10 +848,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [rotation, flipped, board, calculateBoardCell]);
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
+    // CRITICAL: Use ref for guard - state closures are stale during first touch
+    if (!isDraggingRef.current) return;
+    
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
@@ -855,6 +866,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       setPendingMove(null);
     }
     
+    // Update refs FIRST (synchronous)
+    isDraggingRef.current = false;
+    draggedPieceRef.current = null;
+    
+    // Then update state (async, triggers re-render)
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
@@ -886,8 +902,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       const touch = e.touches?.[0];
       if (!touch) return;
       
-      // Set ref first to prevent duplicate calls
+      // Set refs FIRST (synchronous) - these are checked by handlers
       hasDragStartedRef.current = true;
+      isDraggingRef.current = true;
+      draggedPieceRef.current = piece;
       
       // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
       attachGlobalTouchHandlers();
@@ -908,7 +926,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
       
-      // Start drag
+      // Update state (async, triggers re-render)
       setIsDragging(true);
       setDraggedPiece(piece);
       setSelectedPiece(piece);
@@ -932,8 +950,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       // Guard against duplicate calls
       if (hasDragStartedRef.current) return;
       
-      // Set ref first
+      // Set refs FIRST (synchronous)
       hasDragStartedRef.current = true;
+      isDraggingRef.current = true;
+      draggedPieceRef.current = piece;
       
       const { clientX, clientY } = e;
       const rect = e.currentTarget?.getBoundingClientRect() || null;
@@ -949,6 +969,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
       
+      // Update state (async)
       setIsDragging(true);
       setDraggedPiece(piece);
       setSelectedPiece(piece);
@@ -977,8 +998,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     if (gameState !== GAME_STATES.PLAYING) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
     
-    // Set ref first
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
@@ -1008,6 +1031,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     // Clear pending move - piece is being picked up
     setPendingMove(null);
     
+    // Update state (async)
     setIsDragging(true);
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });

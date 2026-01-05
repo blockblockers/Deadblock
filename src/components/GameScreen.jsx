@@ -280,6 +280,11 @@ const GameScreen = ({
   const updateDragRef = useRef(null);
   const endDragRef = useRef(null);
   
+  // CRITICAL: Use ref for isDragging to avoid stale closure issues
+  // State updates are async, but refs update synchronously
+  const isDraggingRef = useRef(false);
+  const draggedPieceRef = useRef(null);
+  
   // Calculate which board cell the drag position is over
   // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
@@ -395,7 +400,8 @@ const GameScreen = ({
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
-    if (!isDragging || !draggedPiece) return;
+    // CRITICAL: Use refs for guards - state closures are stale during first touch
+    if (!isDraggingRef.current || !draggedPieceRef.current) return;
     
     setDragPosition({ x: clientX, y: clientY });
     
@@ -409,20 +415,21 @@ const GameScreen = ({
     
     if (cell && setPendingMove) {
       // Update pending move for visual feedback
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+      setPendingMove({ piece: draggedPieceRef.current, row: cell.row, col: cell.col });
       
       // Check if valid drop position
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // End drag
   const endDrag = useCallback(() => {
-    if (!isDragging) return;
+    // CRITICAL: Use ref for guard - state closures are stale during first touch
+    if (!isDraggingRef.current) return;
     
     // Detach global touch handlers
     detachGlobalTouchHandlers();
@@ -430,6 +437,11 @@ const GameScreen = ({
     // Keep pending move for user to confirm/adjust
     // They can still use D-pad and rotate/flip
     
+    // Update refs FIRST (synchronous)
+    isDraggingRef.current = false;
+    draggedPieceRef.current = null;
+    
+    // Then update state (async, triggers re-render)
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
@@ -441,7 +453,7 @@ const GameScreen = ({
     // Re-enable scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, detachGlobalTouchHandlers]);
+  }, [detachGlobalTouchHandlers]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire
@@ -455,8 +467,10 @@ const GameScreen = ({
     if (gameOver || usedPieces.includes(piece)) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    // Set ref FIRST to prevent duplicate calls
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
@@ -469,6 +483,7 @@ const GameScreen = ({
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
+    // Update state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
@@ -489,8 +504,10 @@ const GameScreen = ({
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    // Set ref FIRST to prevent duplicate calls
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
@@ -529,6 +546,7 @@ const GameScreen = ({
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
+    // Update state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });

@@ -285,6 +285,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const updateDragRef = useRef(null);
   const endDragRef = useRef(null);
   
+  // CRITICAL: Use ref for isDragging to avoid stale closure issues
+  // State updates are async, but refs update synchronously
+  const isDraggingRef = useRef(false);
+  const draggedPieceRef = useRef(null);
+  
   // Calculate which cell of the piece was touched
   const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
     if (!elementRect || !piece) return { row: 0, col: 0 };
@@ -383,17 +388,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
   // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
+    // CRITICAL: Use refs for guards - state closures are stale during first touch
+    if (!isDraggingRef.current || !draggedPieceRef.current) return;
+    
     setDragPosition({ x: clientX, y: clientY });
     
     const cell = calculateBoardCell(clientX, clientY);
-    if (cell && draggedPiece) {
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+    if (cell && draggedPieceRef.current) {
+      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
       
       if (valid && setPendingMove) {
         setPendingMove({
-          piece: draggedPiece,
+          piece: draggedPieceRef.current,
           row: cell.row,
           col: cell.col,
           coords
@@ -402,17 +410,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     } else {
       setIsValidDrop(false);
     }
-  }, [draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
-
-  // Keep current piece in ref to avoid stale closures
-  const draggedPieceRef = useRef(null);
-  
-  useEffect(() => {
-    draggedPieceRef.current = draggedPiece;
-  }, [draggedPiece]);
+  }, [rotation, flipped, board, calculateBoardCell, setPendingMove]);
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
+    // CRITICAL: Use ref for guard - state closures are stale during first touch
+    if (!isDraggingRef.current) return;
+    
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
@@ -448,6 +452,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       }
     }
     
+    // Update refs FIRST (synchronous)
+    isDraggingRef.current = false;
+    draggedPieceRef.current = null;
+    
+    // Then update state (async, triggers re-render)
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
@@ -469,8 +478,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     if (hasDragStartedRef.current) return;
     if (gameOver || usedPieces.includes(piece) || !gameStarted) return;
     
-    // Set ref FIRST to prevent duplicate calls
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
@@ -486,6 +497,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
+    // Update state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
@@ -555,8 +567,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     if (gameOver || !gameStarted) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
     
-    // Set ref first
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
@@ -591,6 +605,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
+    // Update state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
