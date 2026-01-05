@@ -218,6 +218,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // Track which cell of the piece is under the finger
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
+  // Refs for global touch handlers - allows immediate attachment/detachment
+  const globalTouchHandlersRef = useRef({ move: null, end: null });
+  
+  // Refs to store latest callback functions (avoids stale closure issues)
+  const updateDragRef = useRef(null);
+  const endDragRef = useRef(null);
+  
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -287,6 +294,82 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     return angle > SCROLL_ANGLE_THRESHOLD;
   }, []);
 
+  // Detach global touch handlers
+  const detachGlobalTouchHandlers = useCallback(() => {
+    const { move, end } = globalTouchHandlersRef.current;
+    if (move) window.removeEventListener('touchmove', move);
+    if (end) window.removeEventListener('touchend', end);
+    globalTouchHandlersRef.current = { move: null, end: null };
+  }, []);
+
+  // Attach global touch handlers SYNCHRONOUSLY (must be called during touch event)
+  const attachGlobalTouchHandlers = useCallback(() => {
+    // Detach any existing handlers first
+    detachGlobalTouchHandlers();
+    
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches[0]) {
+        updateDragRef.current?.(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      endDragRef.current?.();
+    };
+
+    globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd };
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+  }, [detachGlobalTouchHandlers]);
+
+  const updateDrag = useCallback((clientX, clientY) => {
+    if (!isDragging || !draggedPiece) return;
+    
+    setDragPosition({ x: clientX, y: clientY });
+    
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    const cell = calculateBoardCell(clientX, clientY);
+    
+    if (cell) {
+      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      setIsValidDrop(valid);
+    } else {
+      setIsValidDrop(false);
+    }
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+
+  const endDrag = useCallback(() => {
+    if (!isDragging) return;
+    
+    // Detach global touch handlers
+    detachGlobalTouchHandlers();
+    
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setDragPosition({ x: 0, y: 0 });
+    setDragOffset({ x: 0, y: 0 });
+    setIsValidDrop(false);
+    hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+  }, [isDragging, detachGlobalTouchHandlers]);
+
+  // Keep refs updated with latest functions
+  useEffect(() => {
+    updateDragRef.current = updateDrag;
+    endDragRef.current = endDrag;
+  }, [updateDrag, endDrag]);
+
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     // Guard against duplicate calls
     if (hasDragStartedRef.current) return;
@@ -294,6 +377,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     // Set ref first to prevent duplicate calls
     hasDragStartedRef.current = true;
+    
+    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    attachGlobalTouchHandlers();
     
     // Calculate which cell of the piece is under the finger
     const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
@@ -318,7 +404,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [game?.status, usedPieces, isMyTurn, rotation, flipped, calculateTouchedPieceCell]);
+  }, [game?.status, usedPieces, isMyTurn, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
 
   // FIXED: Handle drag from pending piece on board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -328,6 +414,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     // Set ref first to prevent duplicate calls
     hasDragStartedRef.current = true;
+    
+    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    attachGlobalTouchHandlers();
     
     // CRITICAL: Update board bounds FIRST before using them
     if (boardRef.current) {
@@ -367,43 +456,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [game?.status, isMyTurn, pendingMove]);
-
-  const updateDrag = useCallback((clientX, clientY) => {
-    if (!isDragging || !draggedPiece) return;
-    
-    setDragPosition({ x: clientX, y: clientY });
-    
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
-    
-    const cell = calculateBoardCell(clientX, clientY);
-    
-    if (cell) {
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
-      setIsValidDrop(valid);
-    } else {
-      setIsValidDrop(false);
-    }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
-
-  const endDrag = useCallback(() => {
-    if (!isDragging) return;
-    
-    setIsDragging(false);
-    setDraggedPiece(null);
-    setDragPosition({ x: 0, y: 0 });
-    setDragOffset({ x: 0, y: 0 });
-    setIsValidDrop(false);
-    hasDragStartedRef.current = false;
-    pieceCellOffsetRef.current = { row: 0, col: 0 };
-    
-    document.body.style.overflow = '';
-    document.body.style.touchAction = '';
-  }, [isDragging]);
+  }, [game?.status, isMyTurn, pendingMove, attachGlobalTouchHandlers]);
 
   // Create drag handlers for PieceTray
   // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately
@@ -591,10 +644,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      detachGlobalTouchHandlers();
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
     };
-  }, []);
+  }, [detachGlobalTouchHandlers]);
 
   // Update board bounds
   useEffect(() => {

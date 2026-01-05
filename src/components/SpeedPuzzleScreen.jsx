@@ -716,6 +716,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // Track which cell of the piece is under the finger
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
+  // Refs for global touch handlers - allows immediate attachment/detachment
+  const globalTouchHandlersRef = useRef({ move: null, end: null });
+  
+  // Refs to store latest callback functions (avoids stale closure issues)
+  const updateDragRef = useRef(null);
+  const endDragRef = useRef(null);
+  
   // Calculate which cell of the piece was touched
   const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
     if (!elementRect || !piece) return { row: 0, col: 0 };
@@ -781,6 +788,37 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     return null;
   }, []);
 
+  // Detach global touch handlers
+  const detachGlobalTouchHandlers = useCallback(() => {
+    const { move, end } = globalTouchHandlersRef.current;
+    if (move) window.removeEventListener('touchmove', move);
+    if (end) window.removeEventListener('touchend', end);
+    globalTouchHandlersRef.current = { move: null, end: null };
+  }, []);
+
+  // Attach global touch handlers SYNCHRONOUSLY (must be called during touch event)
+  const attachGlobalTouchHandlers = useCallback(() => {
+    // Detach any existing handlers first
+    detachGlobalTouchHandlers();
+    
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches[0]) {
+        updateDragRef.current?.(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      endDragRef.current?.();
+    };
+
+    globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd };
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+  }, [detachGlobalTouchHandlers]);
+
   // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
     setDragPosition({ x: clientX, y: clientY });
@@ -806,6 +844,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
+    // Detach global touch handlers
+    detachGlobalTouchHandlers();
+    
     if (isValidDrop && pendingMove) {
       // Keep pending move for confirmation
       setSelectedPiece(pendingMove.piece);
@@ -822,7 +863,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isValidDrop, pendingMove]);
+  }, [isValidDrop, pendingMove, detachGlobalTouchHandlers]);
+
+  // Keep refs updated with latest functions
+  useEffect(() => {
+    updateDragRef.current = updateDrag;
+    endDragRef.current = endDrag;
+  }, [updateDrag, endDrag]);
 
   // Create drag handlers for piece tray
   // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately
@@ -842,6 +889,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       
       // Set ref first to prevent duplicate calls
       hasDragStartedRef.current = true;
+      
+      // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+      attachGlobalTouchHandlers();
       
       // Capture element rect
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
@@ -919,7 +969,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameState, usedPieces, rotation, flipped, calculateTouchedPieceCell, updateDrag, endDrag]);
+  }, [gameState, usedPieces, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -930,6 +980,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     // Set ref first
     hasDragStartedRef.current = true;
+    
+    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    attachGlobalTouchHandlers();
     
     // Update board bounds
     if (boardRef.current) {
@@ -965,38 +1018,41 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameState, pendingMove]);
+  }, [gameState, pendingMove, attachGlobalTouchHandlers]);
 
-  // Global move/end handlers for drag
+  // Global mouse handlers for desktop drag (touch is handled synchronously)
   useEffect(() => {
     if (!isDragging) return;
     
     const handleGlobalMove = (e) => {
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      updateDrag(clientX, clientY);
-      
-      if (e.cancelable) {
-        e.preventDefault();
-      }
+      // Only handle mouse events here - touch is handled by synchronous handlers
+      if (e.touches) return;
+      updateDrag(e.clientX, e.clientY);
     };
     
-    const handleGlobalEnd = () => {
+    const handleGlobalEnd = (e) => {
+      // Only handle mouse events here
+      if (e.touches) return;
       endDrag();
     };
     
     window.addEventListener('mousemove', handleGlobalMove);
     window.addEventListener('mouseup', handleGlobalEnd);
-    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
-    window.addEventListener('touchend', handleGlobalEnd);
     
     return () => {
       window.removeEventListener('mousemove', handleGlobalMove);
       window.removeEventListener('mouseup', handleGlobalEnd);
-      window.removeEventListener('touchmove', handleGlobalMove);
-      window.removeEventListener('touchend', handleGlobalEnd);
     };
   }, [isDragging, updateDrag, endDrag]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      detachGlobalTouchHandlers();
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [detachGlobalTouchHandlers]);
 
   // -------------------------------------------------------------------------
   // EFFECT: Load database stats on mount

@@ -278,6 +278,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Track which cell of the piece is under the finger
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
+  // Refs for global touch handlers - allows immediate attachment/detachment
+  const globalTouchHandlersRef = useRef({ move: null, end: null });
+  
+  // Refs to store latest callback functions (avoids stale closure issues)
+  const updateDragRef = useRef(null);
+  const endDragRef = useRef(null);
+  
   // Calculate which cell of the piece was touched
   const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
     if (!elementRect || !piece) return { row: 0, col: 0 };
@@ -313,39 +320,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     return closestCell;
   }, []);
 
-  // Helper function to start drag
-  const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
-    // Guard against duplicate calls
-    if (hasDragStartedRef.current) return;
-    if (gameOver || usedPieces.includes(piece) || !gameStarted) return;
-    
-    // Set ref FIRST to prevent duplicate calls
-    hasDragStartedRef.current = true;
-    
-    // Calculate which cell of the piece is under the finger
-    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
-    pieceCellOffsetRef.current = touchedCell;
-    
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
-    
-    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
-    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
-    
-    setDraggedPiece(piece);
-    setDragPosition({ x: clientX, y: clientY });
-    setDragOffset({ x: offsetX, y: offsetY });
-    setIsDragging(true);
-    
-    // Select piece - this plays sound, don't play again
-    selectPiece(piece);
-    if (setPendingMove) setPendingMove(null);
-    
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-  }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell]);
-  
   // Calculate which board cell the drag position is over
   // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
@@ -375,6 +349,37 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     return null;
   }, []);
+
+  // Detach global touch handlers
+  const detachGlobalTouchHandlers = useCallback(() => {
+    const { move, end } = globalTouchHandlersRef.current;
+    if (move) window.removeEventListener('touchmove', move);
+    if (end) window.removeEventListener('touchend', end);
+    globalTouchHandlersRef.current = { move: null, end: null };
+  }, []);
+
+  // Attach global touch handlers SYNCHRONOUSLY (must be called during touch event)
+  const attachGlobalTouchHandlers = useCallback(() => {
+    // Detach any existing handlers first
+    detachGlobalTouchHandlers();
+    
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches[0]) {
+        updateDragRef.current?.(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      endDragRef.current?.();
+    };
+
+    globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd };
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+  }, [detachGlobalTouchHandlers]);
 
   // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
@@ -408,6 +413,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
   // End drag - either place piece or cancel
   const endDrag = useCallback(() => {
+    // Detach global touch handlers
+    detachGlobalTouchHandlers();
+    
     const currentPiece = draggedPieceRef.current;
     
     // Recompute validity based on current drag position
@@ -448,7 +456,49 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove]);
+  }, [dragPosition, rotation, flipped, board, calculateBoardCell, selectPiece, setPendingMove, detachGlobalTouchHandlers]);
+
+  // Keep refs updated with latest functions
+  useEffect(() => {
+    updateDragRef.current = updateDrag;
+    endDragRef.current = endDrag;
+  }, [updateDrag, endDrag]);
+
+  // Helper function to start drag
+  const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
+    if (gameOver || usedPieces.includes(piece) || !gameStarted) return;
+    
+    // Set ref FIRST to prevent duplicate calls
+    hasDragStartedRef.current = true;
+    
+    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    attachGlobalTouchHandlers();
+    
+    // Calculate which cell of the piece is under the finger
+    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
+    pieceCellOffsetRef.current = touchedCell;
+    
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+    
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    
+    // Select piece - this plays sound, don't play again
+    selectPiece(piece);
+    if (setPendingMove) setPendingMove(null);
+    
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
 
   // Create drag handlers for piece tray
   const createDragHandlers = useCallback((piece) => {
@@ -509,6 +559,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Set ref first
     hasDragStartedRef.current = true;
     
+    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+    attachGlobalTouchHandlers();
+    
     // CRITICAL: Update board bounds FIRST before using them
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
@@ -549,38 +602,41 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameStarted, pendingMove, setPendingMove, selectPiece]);
+  }, [gameOver, gameStarted, pendingMove, setPendingMove, selectPiece, attachGlobalTouchHandlers]);
 
-  // Global move/end handlers for drag
+  // Global mouse handlers for desktop drag (touch is handled synchronously)
   useEffect(() => {
     if (!isDragging) return;
     
     const handleGlobalMove = (e) => {
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      updateDrag(clientX, clientY);
-      
-      if (e.cancelable) {
-        e.preventDefault();
-      }
+      // Only handle mouse events here - touch is handled by synchronous handlers
+      if (e.touches) return;
+      updateDrag(e.clientX, e.clientY);
     };
     
-    const handleGlobalEnd = () => {
+    const handleGlobalEnd = (e) => {
+      // Only handle mouse events here
+      if (e.touches) return;
       endDrag();
     };
     
     window.addEventListener('mousemove', handleGlobalMove);
     window.addEventListener('mouseup', handleGlobalEnd);
-    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
-    window.addEventListener('touchend', handleGlobalEnd);
     
     return () => {
       window.removeEventListener('mousemove', handleGlobalMove);
       window.removeEventListener('mouseup', handleGlobalEnd);
-      window.removeEventListener('touchmove', handleGlobalMove);
-      window.removeEventListener('touchend', handleGlobalEnd);
     };
   }, [isDragging, updateDrag, endDrag]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      detachGlobalTouchHandlers();
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, [detachGlobalTouchHandlers]);
   
   // =========================================================================
   // TIMER AND GAME LOGIC
