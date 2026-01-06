@@ -215,6 +215,7 @@ const GameScreen = ({
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: Live preview cell during drag
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -371,37 +372,41 @@ const GameScreen = ({
     // Calculate which cell we're over
     const cell = calculateBoardCell(clientX, clientY);
     
-    if (cell && setPendingMove) {
-      // Update pending move for visual feedback
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+    if (cell) {
+      // v7.22: Update dragPreviewCell for live board preview (doesn't trigger DOM changes on touch elements)
+      setDragPreviewCell({ row: cell.row, col: cell.col });
       
       // Check if valid drop position
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
+      setDragPreviewCell(null);
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell, setPendingMove]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag
   const endDrag = useCallback(() => {
     if (!isDragging) return;
     
-    // Keep pending move for user to confirm/adjust
-    // They can still use D-pad and rotate/flip
+    // v7.22: Set pendingMove from dragPreviewCell when drag ends
+    if (dragPreviewCell && draggedPiece && setPendingMove) {
+      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
+    }
     
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     // Re-enable scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging]);
+  }, [isDragging, dragPreviewCell, draggedPiece, setPendingMove]);
 
   // Create drag handlers for PieceTray
   const createDragHandlers = useCallback((piece) => {
@@ -618,6 +623,11 @@ const GameScreen = ({
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
+                isDragging={isDragging}
+                dragPreviewCell={dragPreviewCell}
+                draggedPiece={draggedPiece}
+                dragRotation={rotation}
+                dragFlipped={flipped}
               />
             </div>
 

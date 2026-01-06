@@ -193,6 +193,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: Live preview cell during drag
   
   // Refs
   const boardRef = useRef(null);
@@ -311,13 +312,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
-      // Update pending move for visual feedback on board
-      setPendingMove({ piece: draggedPiece, row: cell.row, col: cell.col });
+      // v7.22: Update dragPreviewCell for live board preview
+      setDragPreviewCell({ row: cell.row, col: cell.col });
       
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
+      setDragPreviewCell(null);
       setIsValidDrop(false);
     }
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
@@ -326,21 +328,27 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const endDrag = useCallback(() => {
     if (!isDragging) return;
     
-    // Keep pending move for user to confirm/adjust
+    // v7.22: Set pendingMove from dragPreviewCell when drag ends
+    if (dragPreviewCell && draggedPiece) {
+      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
+    }
     
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging]);
+  }, [isDragging, dragPreviewCell, draggedPiece]);
 
   // Create drag handlers for PieceTray
   // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately
+  // Create drag handlers for PieceTray
+  // Since pieces have touch-action: none, we start drag immediately on touchstart
   const createDragHandlers = useCallback((piece) => {
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) {
       return {};
@@ -365,9 +373,21 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
-    // Touch move/end - global handlers take care of updates when isDragging
-    const handleTouchMove = () => {};
-    const handleTouchEnd = () => {};
+    // Touch move - handle locally before global handlers attach
+    const handleTouchMove = (e) => {
+      if (hasDragStartedRef.current && e.touches?.[0]) {
+        e.preventDefault();
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+    
+    // Touch end - handle locally before global handlers attach
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        endDrag();
+      }
+    };
 
     // Mouse handlers for desktop
     const handleMouseDown = (e) => {
@@ -387,7 +407,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
     };
-  }, [game?.status, usedPieces, isMyTurn, startDrag]);
+  }, [game?.status, usedPieces, isMyTurn, startDrag, updateDrag, endDrag]);
 
   // Global mouse handlers
   useEffect(() => {

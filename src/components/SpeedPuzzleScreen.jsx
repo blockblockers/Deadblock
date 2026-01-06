@@ -849,19 +849,15 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     if (cell && piece) {
       dragCellRef.current = cell;
       
-      // Update pending move for visual feedback on board
+      // v7.22: Update dragPreviewCell for live board preview (not pendingMove - causes DOM changes)
+      setDragPreviewCell({ row: cell.row, col: cell.col });
+      
       const coords = getPieceCoords(piece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
-      
-      setPendingMove({
-        piece,
-        row: cell.row,
-        col: cell.col,
-        coords
-      });
       setIsValidDrop(valid);
     } else {
       dragCellRef.current = null;
+      setDragPreviewCell(null);
       setIsValidDrop(false);
     }
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
@@ -874,8 +870,18 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
-    // Keep pending move for user to confirm/adjust
-    // (pendingMove is already set during updateDrag)
+    // v7.22: Set pendingMove from dragCellRef/dragPreviewCell when drag ends
+    const piece = draggedPiece || draggedPieceRef.current;
+    const cell = dragCellRef.current || dragPreviewCell;
+    if (cell && piece) {
+      const coords = getPieceCoords(piece, rotation, flipped);
+      setPendingMove({
+        piece,
+        row: cell.row,
+        col: cell.col,
+        coords
+      });
+    }
     
     // Update refs (synchronous)
     isDraggingRef.current = false;
@@ -886,12 +892,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, detachGlobalTouchHandlers]);
+  }, [isDragging, draggedPiece, dragPreviewCell, rotation, flipped, detachGlobalTouchHandlers]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire

@@ -314,8 +314,12 @@ const GameBoard = forwardRef(({
                 )}
 
                 {/* Pending piece display - original color with subtle glow */}
+                {/* Wrap in pointer-events-none div so opacity change doesn't affect touch */}
                 {isPending && (
-                  <>
+                  <div 
+                    className="absolute inset-0 pointer-events-none transition-opacity duration-75"
+                    style={{ opacity: isDragging ? 0 : 1 }}
+                  >
                     {/* Base color */}
                     <div className={`absolute inset-0 ${pendingPieceColor} rounded-md`} />
                     
@@ -327,14 +331,16 @@ const GameBoard = forwardRef(({
                     
                     {/* Rolling edge glow effect - slow and elegant */}
                     <div className="absolute inset-0 pending-shine rounded-md overflow-hidden" />
-                  </>
+                  </div>
                 )}
                 
                 {/* Validity border indicator */}
+                {/* Also hide during drag */}
                 {isPending && (
                   <div 
-                    className="absolute inset-0 rounded-md pointer-events-none"
+                    className="absolute inset-0 rounded-md pointer-events-none transition-opacity duration-75"
                     style={{
+                      opacity: isDragging ? 0 : 1,
                       border: isPendingValid ? '2px solid rgba(34, 211, 238, 0.7)' : '2px solid rgba(239, 68, 68, 0.7)',
                       boxShadow: isPendingValid 
                         ? '0 0 10px rgba(34, 211, 238, 0.4), inset 0 0 8px rgba(34, 211, 238, 0.2)'
