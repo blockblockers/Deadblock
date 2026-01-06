@@ -333,14 +333,17 @@ const GameScreen = ({
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    // Clear the pending move first (piece is being "picked up")
-    if (setPendingMove) {
-      setPendingMove(null);
-    }
+    // DON'T clear pending move here - DOM changes during touch cause touch cancel on mobile
+    // The pending move will be updated during drag via updateDrag
     
     // Start the drag
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
     const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
+    // Update board bounds for drop detection
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
@@ -354,7 +357,7 @@ const GameScreen = ({
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameMode, currentPlayer, setPendingMove]);
+  }, [gameOver, gameMode, currentPlayer]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
