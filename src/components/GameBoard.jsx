@@ -284,15 +284,15 @@ const GameBoard = forwardRef(({
                   ${isOverlapping ? 'overlap-cell' : ''}
                   ${isAiAnimating ? (isAiWinningMove ? 'ai-winning-cell' : 'ai-placing-cell') : ''}
                   ${isPlayerAnimating ? (isPlayerWinningMove ? 'player-winning-cell' : 'player-placing-cell') : ''}
-                  ${isPending ? 'pending cursor-grab active:cursor-grabbing' : ''}
+                  ${isPending && !isDragging ? 'pending cursor-grab active:cursor-grabbing' : ''}
                   ${isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating ? 'last-move-cell' : ''}
                 `}
                 style={isPending ? {
                   animationDelay: `${pendingIndex * 0.15}s`,
-                  touchAction: 'none', // v7.9: Prevent browser touch handling on draggable cells
+                  touchAction: 'none',
                   userSelect: 'none',
-                  // v7.22: Don't change opacity during drag - DOM changes can cancel touches
-                  // DragOverlay has z-index: 9999 so it covers pending cells visually
+                  // v7.22: Make pending cells invisible during drag (opacity preserves touch target)
+                  opacity: isDragging ? 0 : 1,
                 } : undefined}
               >
                 {/* Base shine layer for occupied cells - subtle highlight */}
@@ -315,7 +315,8 @@ const GameBoard = forwardRef(({
                 )}
 
                 {/* Pending piece display - original color with subtle glow */}
-                {isPending && (
+                {/* v7.22: Hide pending visuals during drag - DragOverlay shows the piece */}
+                {isPending && !isDragging && (
                   <>
                     {/* Base color */}
                     <div className={`absolute inset-0 ${pendingPieceColor} rounded-md`} />
@@ -332,7 +333,8 @@ const GameBoard = forwardRef(({
                 )}
                 
                 {/* Validity border indicator */}
-                {isPending && (
+                {/* v7.22: Hide during drag */}
+                {isPending && !isDragging && (
                   <div 
                     className="absolute inset-0 rounded-md pointer-events-none"
                     style={{

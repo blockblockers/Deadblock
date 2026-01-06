@@ -652,6 +652,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: For board preview during drag
+  const [pieceCellOffset, setPieceCellOffset] = useState({ row: 0, col: 0 }); // v7.22: Which cell is under finger
 
   // -------------------------------------------------------------------------
   // REFS - For values that shouldn't trigger re-renders
@@ -898,6 +899,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setDraggedPiece(null);
     setIsValidDrop(false);
     setDragPreviewCell(null); // v7.22: Clear preview
+    setPieceCellOffset({ row: 0, col: 0 }); // v7.22: Clear offset
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
@@ -940,6 +942,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       // Calculate which cell of the piece is under the finger
       const touchedCell = calculateTouchedPieceCell(piece, touch.clientX, touch.clientY, elementRect, rotation, flipped);
       pieceCellOffsetRef.current = touchedCell;
+      setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
       
       // Calculate offset from piece center
       const offsetX = elementRect ? touch.clientX - (elementRect.left + elementRect.width / 2) : 0;
@@ -985,6 +988,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       // Calculate which cell of the piece is under the finger
       const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, rect, rotation, flipped);
       pieceCellOffsetRef.current = touchedCell;
+      setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
       
       const offsetX = rect ? clientX - (rect.left + rect.width / 2) : 0;
       const offsetY = rect ? clientY - (rect.top + rect.height / 2) : 0;
@@ -1035,21 +1039,26 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // For board drag, calculate which cell was touched
-    if (elementRect && boardBoundsRef.current) {
+    // v7.22: Calculate which cell of the piece was touched using touch position
+    if (pendingMove && boardBoundsRef.current) {
       const { left, top, width, height } = boardBoundsRef.current;
       const cellWidth = width / BOARD_SIZE;
       const cellHeight = height / BOARD_SIZE;
       
-      const clickedRow = Math.round((elementRect.top + elementRect.height / 2 - top) / cellHeight);
-      const clickedCol = Math.round((elementRect.left + elementRect.width / 2 - left) / cellWidth);
+      // Get the board cell directly under the finger
+      const fingerCol = Math.floor((clientX - left) / cellWidth);
+      const fingerRow = Math.floor((clientY - top) / cellHeight);
       
-      pieceCellOffsetRef.current = {
-        row: clickedRow - pendingMove.row,
-        col: clickedCol - pendingMove.col
+      // Calculate offset from piece anchor to touched cell
+      const offset = {
+        row: fingerRow - pendingMove.row,
+        col: fingerCol - pendingMove.col
       };
+      pieceCellOffsetRef.current = offset;
+      setPieceCellOffset(offset);
     } else {
       pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
     }
     
     // v7.22: DON'T clear pending move - keep it in DOM to prevent touch cancel
@@ -1588,12 +1597,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             {/* Drag Overlay */}
             {isDragging && draggedPiece && (
               <DragOverlay
+                isDragging={isDragging}
                 piece={draggedPiece}
                 rotation={rotation}
                 flipped={flipped}
                 position={dragPosition}
                 offset={dragOffset}
                 isValidDrop={isValidDrop}
+                cellOffset={pieceCellOffset}
               />
             )}
             

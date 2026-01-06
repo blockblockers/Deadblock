@@ -194,6 +194,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: For board preview during drag
+  const [pieceCellOffset, setPieceCellOffset] = useState({ row: 0, col: 0 }); // v7.22: Which cell is under finger
   
   // Refs
   const boardRef = useRef(null);
@@ -394,6 +395,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
     setDragPreviewCell(null); // v7.22: Clear preview
+    setPieceCellOffset({ row: 0, col: 0 }); // v7.22: Clear offset
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
@@ -422,6 +424,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     // Calculate which cell of the piece is under the finger
     const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
     pieceCellOffsetRef.current = touchedCell;
+    setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
     
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
@@ -464,21 +467,26 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // For board drag, calculate which cell was touched
-    if (pendingMove && elementRect && boardBoundsRef.current) {
+    // v7.22: Calculate which cell of the piece was touched using touch position
+    if (pendingMove && boardBoundsRef.current) {
       const { left, top, width, height } = boardBoundsRef.current;
       const cellWidth = width / BOARD_SIZE;
       const cellHeight = height / BOARD_SIZE;
       
-      const clickedRow = Math.round((elementRect.top + elementRect.height / 2 - top) / cellHeight);
-      const clickedCol = Math.round((elementRect.left + elementRect.width / 2 - left) / cellWidth);
+      // Get the board cell directly under the finger
+      const fingerCol = Math.floor((clientX - left) / cellWidth);
+      const fingerRow = Math.floor((clientY - top) / cellHeight);
       
-      pieceCellOffsetRef.current = {
-        row: clickedRow - pendingMove.row,
-        col: clickedCol - pendingMove.col
+      // Calculate offset from piece anchor to touched cell
+      const offset = {
+        row: fingerRow - pendingMove.row,
+        col: fingerCol - pendingMove.col
       };
+      pieceCellOffsetRef.current = offset;
+      setPieceCellOffset(offset);
     } else {
       pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
     }
     
     // v7.22: DON'T clear pending move - keep it in DOM to prevent touch cancel
@@ -1334,12 +1342,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       {/* Drag Overlay */}
       {isDragging && draggedPiece && (
         <DragOverlay
+          isDragging={isDragging}
           piece={draggedPiece}
           rotation={rotation}
           flipped={flipped}
           position={dragPosition}
           offset={dragOffset}
           isValidDrop={isValidDrop}
+          cellOffset={pieceCellOffset}
         />
       )}
 
