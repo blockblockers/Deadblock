@@ -284,15 +284,14 @@ const GameBoard = forwardRef(({
                   ${isOverlapping ? 'overlap-cell' : ''}
                   ${isAiAnimating ? (isAiWinningMove ? 'ai-winning-cell' : 'ai-placing-cell') : ''}
                   ${isPlayerAnimating ? (isPlayerWinningMove ? 'player-winning-cell' : 'player-placing-cell') : ''}
-                  ${isPending && !isDragging ? 'pending cursor-grab active:cursor-grabbing' : ''}
+                  ${isPending ? 'pending cursor-grab active:cursor-grabbing' : ''}
                   ${isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating ? 'last-move-cell' : ''}
                 `}
                 style={isPending ? {
                   animationDelay: `${pendingIndex * 0.15}s`,
                   touchAction: 'none',
                   userSelect: 'none',
-                  // v7.22: Make pending cells invisible during drag (opacity preserves touch target)
-                  opacity: isDragging ? 0 : 1,
+                  // v7.22: Do NOT change any styles during drag - DOM changes cancel touch events
                 } : undefined}
               >
                 {/* Base shine layer for occupied cells - subtle highlight */}

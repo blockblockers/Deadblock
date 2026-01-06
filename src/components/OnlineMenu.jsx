@@ -998,13 +998,9 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
+      className="min-h-screen bg-slate-950 overflow-x-hidden"
       style={{ 
-        WebkitOverflowScrolling: 'touch', 
-        touchAction: 'pan-y',
-        height: '100%',
-        width: '100%',
-        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
       }}
     >
       {/* Themed Grid background */}
@@ -1038,14 +1034,9 @@ const OnlineMenu = ({
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4 pt-6 sm:pt-8 pb-32"
         style={{ 
-          minHeight: '100%',
+          minHeight: '100vh',
           paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
           paddingTop: 'max(24px, env(safe-area-inset-top))',
-          touchAction: 'pan-y',
-          WebkitOverflowScrolling: 'touch',
-        }}
-        onTouchMove={(e) => {
-          // Allow vertical scrolling by not preventing default
         }}
       >
         <div className="w-full max-w-md">
