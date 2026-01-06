@@ -215,6 +215,7 @@ const GameScreen = ({
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: For board preview during drag
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -421,12 +422,13 @@ const GameScreen = ({
     
     // Calculate which cell we're over and check validity
     // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
-    // We'll set pendingMove in endDrag instead
+    // But DO update dragPreviewCell - it only affects visual styling (pointer-events-none)
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
       // Store the current cell for use in endDrag
       dragCellRef.current = cell;
+      setDragPreviewCell(cell); // v7.22: Update preview for visual feedback
       
       // Check if valid drop position
       const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
@@ -434,6 +436,7 @@ const GameScreen = ({
       setIsValidDrop(valid);
     } else {
       dragCellRef.current = null;
+      setDragPreviewCell(null);
       setIsValidDrop(false);
     }
   }, [rotation, flipped, board, calculateBoardCell]);
@@ -466,6 +469,7 @@ const GameScreen = ({
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
+    setDragPreviewCell(null); // v7.22: Clear preview
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
@@ -739,6 +743,12 @@ const GameScreen = ({
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
+                // v7.22: Drag preview props for board highlighting during drag
+                isDragging={isDragging}
+                dragPreviewCell={dragPreviewCell}
+                draggedPiece={draggedPiece}
+                dragRotation={rotation}
+                dragFlipped={flipped}
               />
             </div>
 

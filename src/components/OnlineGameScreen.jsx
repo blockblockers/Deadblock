@@ -193,6 +193,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: For board preview during drag
   
   // Refs
   const boardRef = useRef(null);
@@ -350,15 +351,18 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     }
     
     // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
+    // But DO update dragPreviewCell for visual feedback (uses pointer-events-none)
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
       dragCellRef.current = cell;
+      setDragPreviewCell(cell); // v7.22: Update preview for visual feedback
       const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
       dragCellRef.current = null;
+      setDragPreviewCell(null);
       setIsValidDrop(false);
     }
   }, [rotation, flipped, board, calculateBoardCell]);
@@ -389,6 +393,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
+    setDragPreviewCell(null); // v7.22: Clear preview
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
@@ -1398,6 +1403,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   currentPlayer={myPlayerNumber}
                   onCellClick={handleCellClick}
                   onPendingPieceDragStart={handleBoardDragStart}
+                  // v7.22: Drag preview props for board highlighting during drag
+                  isDragging={isDragging}
+                  dragPreviewCell={dragPreviewCell}
+                  draggedPiece={draggedPiece}
+                  dragRotation={rotation}
+                  dragFlipped={flipped}
                 />
                 {/* Placement Animation Overlay */}
                 {placementAnimation && (

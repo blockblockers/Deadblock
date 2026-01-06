@@ -651,6 +651,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
+  const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: For board preview during drag
 
   // -------------------------------------------------------------------------
   // REFS - For values that shouldn't trigger re-renders
@@ -841,14 +842,17 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setDragPosition({ x: clientX, y: clientY });
     
     // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
+    // But DO update dragPreviewCell for visual feedback (uses pointer-events-none)
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && draggedPieceRef.current) {
       dragCellRef.current = cell;
+      setDragPreviewCell(cell); // v7.22: Update preview for visual feedback
       const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
       setIsValidDrop(valid);
     } else {
       dragCellRef.current = null;
+      setDragPreviewCell(null);
       setIsValidDrop(false);
     }
   }, [rotation, flipped, board, calculateBoardCell]);
@@ -893,6 +897,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
+    setDragPreviewCell(null); // v7.22: Clear preview
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
@@ -1611,6 +1616,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                     1: 'bg-gradient-to-br from-cyan-400 to-blue-500',
                     2: 'bg-gradient-to-br from-rose-400 to-pink-500',
                   }}
+                  // v7.22: Drag preview props for board highlighting during drag
+                  isDragging={isDragging}
+                  dragPreviewCell={dragPreviewCell}
+                  draggedPiece={draggedPiece}
+                  dragRotation={rotation}
+                  dragFlipped={flipped}
                 />
               </div>
               
