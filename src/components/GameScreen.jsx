@@ -333,17 +333,15 @@ const GameScreen = ({
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    // DON'T clear pending move here - DOM changes during touch cause touch cancel on mobile
-    // The pending move will be updated during drag via updateDrag
+    // DON'T clear pending move - causes touch cancel on mobile
+    // The piece will be updated during drag via updateDrag
+    // if (setPendingMove) {
+    //   setPendingMove(null);
+    // }
     
     // Start the drag
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
     const offsetY = clientY - (elementRect.top + elementRect.height / 2);
-    
-    // Update board bounds for drop detection
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });

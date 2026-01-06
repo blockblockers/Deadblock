@@ -2063,29 +2063,40 @@ const OnlineMenu = ({
       {/* Active Games Modal */}
       {showActiveGames && (
         <div 
-          className="fixed inset-0 bg-black/80 z-50 p-4 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowActiveGames(false);
-          }}
+          className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm"
+          onTouchMove={(e) => e.stopPropagation()}
         >
-          <div className="bg-slate-900 rounded-xl max-w-md w-full mx-auto mt-[10vh] max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
-            {/* Header - fixed */}
-            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Swords size={24} className="text-amber-400" />
-                <h2 className="text-lg font-bold text-amber-300">Active Games</h2>
+          {/* Backdrop click to close */}
+          <div 
+            className="absolute inset-0" 
+            onClick={() => setShowActiveGames(false)}
+          />
+          
+          {/* Modal content */}
+          <div className="relative z-10 flex items-start justify-center p-4 pt-[10vh]">
+            <div className="bg-slate-900 rounded-xl max-w-md w-full border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+              {/* Header */}
+              <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Swords size={24} className="text-amber-400" />
+                  <h2 className="text-lg font-bold text-amber-300">Active Games</h2>
+                </div>
+                <button
+                  onClick={() => setShowActiveGames(false)}
+                  className="p-1 text-slate-400 hover:text-white transition-colors"
+                >
+                  <X size={24} />
+                </button>
               </div>
-              <button
-                onClick={() => setShowActiveGames(false)}
-                className="p-1 text-slate-400 hover:text-white transition-colors"
+              
+              {/* Scrollable content */}
+              <div 
+                className="p-4 overflow-y-auto"
+                style={{ 
+                  maxHeight: '60vh',
+                  WebkitOverflowScrolling: 'touch'
+                }}
               >
-                <X size={24} />
-              </button>
-            </div>
-            
-            {/* Scrollable content */}
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 70px)' }}>
-              <div className="p-4">
                 {activeGames.length === 0 ? (
                   <div className="text-center py-8">
                     <Swords className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2104,13 +2115,13 @@ const OnlineMenu = ({
                             setShowActiveGames(false);
                             onResumeGame(game);
                           }}
-                          className={`w-full p-4 rounded-lg flex items-center justify-between cursor-pointer select-none ${
+                          className={`w-full p-4 rounded-lg flex items-center justify-between cursor-pointer active:opacity-80 ${
                             isMyTurn 
                               ? 'bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]' 
-                              : 'bg-slate-800/60 active:bg-slate-700/60 border border-slate-700/50'
+                              : 'bg-slate-800/60 border border-slate-700/50'
                           }`}
                         >
-                          <div className="flex items-center gap-3 pointer-events-none">
+                          <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">
                               {opponentName?.[0]?.toUpperCase() || '?'}
                             </div>
@@ -2121,7 +2132,7 @@ const OnlineMenu = ({
                               </div>
                             </div>
                           </div>
-                          <ChevronRight size={20} className={`pointer-events-none ${isMyTurn ? 'text-amber-400' : 'text-slate-600'}`} />
+                          <ChevronRight size={20} className={isMyTurn ? 'text-amber-400' : 'text-slate-600'} />
                         </div>
                       );
                     })}
