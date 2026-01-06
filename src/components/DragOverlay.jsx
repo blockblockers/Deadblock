@@ -1,5 +1,5 @@
 // DragOverlay.jsx - Floating piece preview during drag operations
-// v7.22: Position touched cell under finger for smart alignment
+// Simplified: Center piece under touch/cursor position
 // This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
 
 import { memo } from 'react';
@@ -9,8 +9,8 @@ import { pieceColors } from '../utils/pieces';
 /**
  * DragOverlay - Renders ONLY the floating piece that follows the drag position
  * 
- * v7.22: The piece is positioned so the touched cell is under the finger,
- * with a slight vertical offset so the user's finger doesn't cover it.
+ * The piece is centered under the touch point, with a slight vertical offset
+ * so the user's finger doesn't cover the piece on mobile.
  */
 const DragOverlay = memo(({ 
   piece, 
@@ -22,7 +22,6 @@ const DragOverlay = memo(({
   isValidDrop,
   isDragging = true,
   hasValidCell = true,
-  cellOffset = { row: 0, col: 0 }, // v7.22: Which cell of the piece is under finger
 }) => {
   // Support both prop names for compatibility
   const showAsValid = hasValidCell || isValidDrop || isValid;
@@ -62,31 +61,16 @@ const DragOverlay = memo(({
     ? '0 0 25px rgba(34,211,238,0.5), 0 0 50px rgba(34,211,238,0.3)'
     : '0 0 15px rgba(239,68,68,0.4), 0 0 30px rgba(239,68,68,0.2)';
 
-  // v7.22: No vertical offset - piece should be exactly where finger points
-  // This ensures the preview matches where the piece will land
-  const fingerOffset = 0;
-  
-  // v7.22: Calculate position so the touched cell is under the finger
-  // cellOffset tells us which cell of the piece (relative to anchor) is being dragged
-  // We need to find where that cell is in the rendered grid
-  const touchedCellCol = cellOffset.col - minX; // Column in the rendered grid (0-indexed)
-  const touchedCellRow = cellOffset.row - minY; // Row in the rendered grid (0-indexed)
-  
-  // Calculate the center of the touched cell within the piece
-  const touchedCellCenterX = touchedCellCol * (cellSize + gap) + cellSize / 2;
-  const touchedCellCenterY = touchedCellRow * (cellSize + gap) + cellSize / 2;
-  
-  // Position piece so touched cell center is at finger position
-  const pieceLeft = position.x - touchedCellCenterX;
-  const pieceTop = position.y - touchedCellCenterY - fingerOffset;
+  // Slight vertical offset on mobile so finger doesn't cover the piece
+  const fingerOffset = isMobile ? 40 : 20;
 
   return (
     <>
       <div
         className="fixed pointer-events-none z-[9999]"
         style={{
-          left: pieceLeft,
-          top: pieceTop,
+          left: position.x - pieceWidth / 2,
+          top: position.y - pieceHeight / 2 - fingerOffset,
           transform: 'translate3d(0, 0, 0)',
           willChange: 'left, top',
         }}

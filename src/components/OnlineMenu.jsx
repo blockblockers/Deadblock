@@ -2062,10 +2062,16 @@ const OnlineMenu = ({
       
       {/* Active Games Modal */}
       {showActiveGames && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            // Close when clicking backdrop
+            if (e.target === e.currentTarget) setShowActiveGames(false);
+          }}
+        >
+          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] flex flex-col border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
             {/* Header */}
-            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">
                 <Swords size={24} className="text-amber-400" />
                 <h2 className="text-lg font-bold text-amber-300">Active Games</h2>
@@ -2078,8 +2084,14 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List */}
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
+            {/* Games List - Fixed scrolling */}
+            <div 
+              className="p-4 flex-1 overflow-y-auto"
+              style={{
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
+              }}
+            >
               {activeGames.length === 0 ? (
                 <div className="text-center py-8">
                   <Swords className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2128,10 +2140,15 @@ const OnlineMenu = ({
       
       {/* Recent Games Modal */}
       {showRecentGames && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowRecentGames(false);
+          }}
+        >
+          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] flex flex-col border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
             {/* Header */}
-            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">
                 <History size={24} className="text-amber-400" />
                 <h2 className="text-lg font-bold text-amber-300">Recent Games</h2>
@@ -2144,8 +2161,14 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List */}
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
+            {/* Games List - Fixed scrolling */}
+            <div 
+              className="p-4 flex-1 overflow-y-auto"
+              style={{
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
+              }}
+            >
               {recentGames.length === 0 ? (
                 <div className="text-center py-8">
                   <History className="mx-auto text-slate-600 mb-2" size={40} />

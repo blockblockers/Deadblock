@@ -398,59 +398,45 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
   // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
-    // CRITICAL: Use refs for guards - state closures are stale during first touch
-    if (!isDraggingRef.current || !draggedPieceRef.current) return;
+    // Use state OR refs for guards - support both patterns
+    if (!isDragging && !isDraggingRef.current) return;
+    if (!draggedPiece && !draggedPieceRef.current) return;
+    
+    const piece = draggedPiece || draggedPieceRef.current;
     
     setDragPosition({ x: clientX, y: clientY });
     
-    // v7.22: Don't update pendingMove during drag - DOM changes can cancel mobile touches
-    // But DO update dragPreviewCell for visual feedback (uses pointer-events-none)
     const cell = calculateBoardCell(clientX, clientY);
-    if (cell && draggedPieceRef.current) {
+    if (cell && piece) {
       dragCellRef.current = cell;
-      setDragPreviewCell(cell); // v7.22: Update preview for visual feedback
-      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
+      
+      // Update pending move for visual feedback on board
+      const coords = getPieceCoords(piece, rotation, flipped);
       const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      
+      setPendingMove({
+        piece,
+        row: cell.row,
+        col: cell.col,
+        coords
+      });
       setIsValidDrop(valid);
     } else {
       dragCellRef.current = null;
-      setDragPreviewCell(null);
       setIsValidDrop(false);
     }
-  }, [rotation, flipped, board, calculateBoardCell]);
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
-  // End drag - either place piece or cancel
+  // End drag - keep pending move for confirmation
   const endDrag = useCallback(() => {
-    // CRITICAL: Use ref for guard - state closures are stale during first touch
-    if (!isDraggingRef.current) return;
+    // Use state OR refs for guards
+    if (!isDragging && !isDraggingRef.current) return;
     
     // Detach global touch handlers
     detachGlobalTouchHandlers();
     
-    // v7.22: Set pendingMove from the final drag position
-    const finalCell = dragCellRef.current;
-    const piece = draggedPieceRef.current;
-    
-    if (finalCell && piece) {
-      const coords = getPieceCoords(piece, rotation, flipped);
-      const valid = canPlacePiece(board, finalCell.row, finalCell.col, coords);
-      
-      if (valid) {
-        selectPiece(piece);
-        setTimeout(() => {
-          setPendingMove({
-            piece,
-            row: finalCell.row,
-            col: finalCell.col,
-            coords
-          });
-        }, 10);
-      } else {
-        setPendingMove(null);
-      }
-    } else {
-      setPendingMove(null);
-    }
+    // Keep pending move for user to confirm/adjust
+    // (pendingMove is already set during updateDrag)
     
     // Update refs (synchronous)
     isDraggingRef.current = false;
@@ -461,14 +447,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setIsDragging(false);
     setDraggedPiece(null);
     setIsValidDrop(false);
-    setDragPreviewCell(null); // v7.22: Clear preview
-    setPieceCellOffset({ row: 0, col: 0 }); // v7.22: Clear offset
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [rotation, flipped, board, selectPiece, setPendingMove, detachGlobalTouchHandlers]);
+  }, [isDragging, detachGlobalTouchHandlers]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire
@@ -624,19 +608,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     document.body.style.touchAction = 'none';
   }, [gameOver, gameStarted, pendingMove, selectPiece, attachGlobalTouchHandlers]);
 
-  // Global mouse handlers for desktop drag (touch is handled synchronously)
+  // Global mouse handlers for desktop drag
   useEffect(() => {
     if (!isDragging) return;
     
     const handleGlobalMove = (e) => {
-      // Only handle mouse events here - touch is handled by synchronous handlers
-      if (e.touches) return;
       updateDrag(e.clientX, e.clientY);
     };
     
-    const handleGlobalEnd = (e) => {
-      // Only handle mouse events here
-      if (e.touches) return;
+    const handleGlobalEnd = () => {
       endDrag();
     };
     
@@ -646,6 +626,31 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     return () => {
       window.removeEventListener('mousemove', handleGlobalMove);
       window.removeEventListener('mouseup', handleGlobalEnd);
+    };
+  }, [isDragging, updateDrag, endDrag]);
+
+  // Global touch handlers (backup for synchronous handlers)
+  useEffect(() => {
+    if (!isDragging) return;
+    
+    const handleTouchMove = (e) => {
+      if (e.touches?.[0]) {
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+    
+    const handleTouchEnd = () => endDrag();
+    const handleTouchCancel = () => endDrag();
+    
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchcancel', handleTouchCancel);
+    
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchCancel);
     };
   }, [isDragging, updateDrag, endDrag]);
 
