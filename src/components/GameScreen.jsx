@@ -330,32 +330,23 @@ const GameScreen = ({
 
   // Handle starting drag from a pending piece on the board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
-    // Guard against duplicate calls
-    if (hasDragStartedRef.current) return;
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
     
-    // v7.22: DON'T clear pending move - DOM changes during touch cause touch cancel on mobile
-    // Instead, we'll use isDragging to hide the pending visuals in GameBoard
-    // The pendingMove will be updated during drag to show the new position preview
+    // Clear the pending move first (piece is being "picked up")
+    if (setPendingMove) {
+      setPendingMove(null);
+    }
     
     // Start the drag
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
     const offsetY = clientY - (elementRect.top + elementRect.height / 2);
     
-    // Set ref first (synchronous)
-    hasDragStartedRef.current = true;
-    
-    // Then set state (async)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
-    
-    // Update board bounds for drag calculations
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
+    hasDragStartedRef.current = true;
     
     // Piece is already selected, just play sound
     soundManager.playPieceSelect();
@@ -363,7 +354,7 @@ const GameScreen = ({
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameMode, currentPlayer]);
+  }, [gameOver, gameMode, currentPlayer, setPendingMove]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
@@ -529,20 +520,13 @@ const GameScreen = ({
     const handleTouchEnd = () => {
       endDrag();
     };
-    
-    // v7.22: Also handle touchcancel to prevent stuck drags
-    const handleTouchCancel = () => {
-      endDrag();
-    };
 
     window.addEventListener('touchmove', handleTouchMove, { passive: false });
     window.addEventListener('touchend', handleTouchEnd);
-    window.addEventListener('touchcancel', handleTouchCancel);
 
     return () => {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('touchcancel', handleTouchCancel);
     };
   }, [isDragging, updateDrag, endDrag]);
 
@@ -633,7 +617,6 @@ const GameScreen = ({
                 aiAnimatingMove={aiAnimatingMove}
                 playerAnimatingMove={playerAnimatingMove}
                 selectedPiece={selectedPiece}
-                isDragging={isDragging}
               />
             </div>
 

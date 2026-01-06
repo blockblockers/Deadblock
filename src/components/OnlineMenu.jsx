@@ -2084,13 +2084,10 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - Fixed scrolling */}
+            {/* Games List - Simple scroll without overscroll containment */}
             <div 
-              className="p-4 flex-1 overflow-y-auto"
-              style={{
-                WebkitOverflowScrolling: 'touch',
-                overscrollBehavior: 'contain',
-              }}
+              className="p-4 flex-1 overflow-y-auto min-h-0"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {activeGames.length === 0 ? (
                 <div className="text-center py-8">
@@ -2098,7 +2095,7 @@ const OnlineMenu = ({
                   <p className="text-slate-400">No active games</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 pb-2">
                   {activeGames.filter(g => g).map(game => {
                     const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
                     const opponentName = getOpponentName(game);
@@ -2161,13 +2158,10 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - Fixed scrolling */}
+            {/* Games List - Simple scroll without overscroll containment */}
             <div 
-              className="p-4 flex-1 overflow-y-auto"
-              style={{
-                WebkitOverflowScrolling: 'touch',
-                overscrollBehavior: 'contain',
-              }}
+              className="p-4 flex-1 overflow-y-auto min-h-0"
+              style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {recentGames.length === 0 ? (
                 <div className="text-center py-8">
@@ -2175,7 +2169,7 @@ const OnlineMenu = ({
                   <p className="text-slate-400">No recent games</p>
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 pb-2">
              {recentGames.filter(g => g).map(game => {
   const result = getGameResult(game);
   const opponent = getOpponentData(game);

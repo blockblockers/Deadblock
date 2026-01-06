@@ -314,8 +314,7 @@ const GameBoard = forwardRef(({
                 )}
 
                 {/* Pending piece display - original color with subtle glow */}
-                {/* v7.22: Hide pending visuals during drag - DragOverlay shows the piece */}
-                {isPending && !isDragging && (
+                {isPending && (
                   <>
                     {/* Base color */}
                     <div className={`absolute inset-0 ${pendingPieceColor} rounded-md`} />
@@ -332,8 +331,7 @@ const GameBoard = forwardRef(({
                 )}
                 
                 {/* Validity border indicator */}
-                {/* v7.22: Hide during drag */}
-                {isPending && !isDragging && (
+                {isPending && (
                   <div 
                     className="absolute inset-0 rounded-md pointer-events-none"
                     style={{
