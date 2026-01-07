@@ -204,6 +204,38 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { data: null, error: { message: 'Not authenticated' } };
       
+      // Check for active game between these users
+      const activeGameUrl = `${SUPABASE_URL}/rest/v1/games?select=id&or=(and(player1_id.eq.${fromUserId},player2_id.eq.${toUserId}),and(player1_id.eq.${toUserId},player2_id.eq.${fromUserId}))&status=eq.active&limit=1`;
+      const activeGameResponse = await fetch(activeGameUrl, { headers });
+      if (activeGameResponse.ok) {
+        const activeGames = await activeGameResponse.json();
+        if (activeGames?.length > 0) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'You already have an active game with this player. Finish it first!',
+              code: 'ACTIVE_GAME_EXISTS'
+            } 
+          };
+        }
+      }
+      
+      // Check for pending rematch request between these users
+      const rematchUrl = `${SUPABASE_URL}/rest/v1/rematch_requests?select=id&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
+      const rematchResponse = await fetch(rematchUrl, { headers });
+      if (rematchResponse.ok) {
+        const rematches = await rematchResponse.json();
+        if (rematches?.length > 0) {
+          return { 
+            data: null, 
+            error: { 
+              message: 'There is already a pending rematch request with this player. Check "Rematch Requests" in the Online Menu.',
+              code: 'REMATCH_EXISTS'
+            } 
+          };
+        }
+      }
+      
       // Check existing invites between these users
       const existingUrl = `${SUPABASE_URL}/rest/v1/game_invites?select=id,status,from_user_id,order_preference&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
       
@@ -222,7 +254,14 @@ class InviteService {
             }
             return await this.acceptInvite(existingInvite.id, fromUserId, firstMoveOption);
           }
-          return { data: null, error: { message: 'Invite already sent' } };
+          // User already has a pending invite to this player
+          return { 
+            data: null, 
+            error: { 
+              message: 'You already have a pending challenge to this player. Check your "Pending Invites" or wait for them to respond.',
+              code: 'INVITE_EXISTS'
+            } 
+          };
         }
       }
 
