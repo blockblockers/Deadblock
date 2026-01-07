@@ -325,11 +325,13 @@ function AppContent() {
   // Redirect after OAuth completes - handle invite links and normal flow
   useEffect(() => {
     const storedInviteCode = localStorage.getItem('deadblock_pending_invite_code');
-    // console.log('OAuth redirect check:', { 
+    /* OAuth redirect debug - disabled for production
+    console.log('OAuth redirect check:', { 
       isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, 
       hasPassedEntryAuth, hasProfile: !!profile, pendingOnlineIntent,
       pendingInviteCode, storedInviteCode
     });
+    */
     
     if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
       // Check if we need to wait for profile to process invite
@@ -722,8 +724,8 @@ function AppContent() {
   // Keep showing during OAuth callback until redirect effect handles it
   const showAuthLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !hasRedirectedAfterOAuth));
   
-  // DEBUG: Always log current state (even before loading check)
-  // console.log('=== App Render Debug ===', {
+  /* DEBUG: Always log current state (even before loading check) - disabled for production
+  console.log('=== App Render Debug ===', {
     showAuthLoading,
     authLoading,
     isOAuthCallback,
@@ -734,6 +736,7 @@ function AppContent() {
     gameMode,
     hasProfile: !!profile,
   });
+  */
   
   // INLINE OAuth completion handling - if we're in OAuth callback but user is authenticated,
   // trigger the redirect immediately instead of waiting for effect
@@ -822,8 +825,8 @@ function AppContent() {
     );
   }
 
-  // Debug logging - comprehensive state dump
-  // console.log('App render state:', { 
+  /* Debug logging - comprehensive state dump - disabled for production
+  console.log('App render state:', { 
     gameMode, 
     onlineGameId, 
     isAuthenticated, 
@@ -835,6 +838,7 @@ function AppContent() {
     isOnlineEnabled,
     hasProfile: !!profile
   });
+  */
 
   // Show Entry Auth Screen first (before anything else)
   // Skip if:
