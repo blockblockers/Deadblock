@@ -468,22 +468,41 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { error: { message: 'Not authenticated' } };
       
-      const inviteUrl = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&select=from_user_id`;
-      const inviteResponse = await fetch(inviteUrl, { 
-        headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
-      });
+      // First verify the invite exists and belongs to this user
+      const inviteUrl = `${SUPABASE_URL}/rest/v1/game_invites?id=eq.${inviteId}&select=from_user_id,status`;
+      const inviteResponse = await fetch(inviteUrl, { headers });
       
-      if (inviteResponse.ok) {
-        const invite = await inviteResponse.json();
-        if (invite?.from_user_id !== userId) {
-          return { error: { message: 'Not authorized' } };
-        }
+      if (!inviteResponse.ok) {
+        return { error: { message: 'Failed to fetch invite' } };
+      }
+      
+      const invites = await inviteResponse.json();
+      
+      if (!invites || invites.length === 0) {
+        return { error: { message: 'Invite not found' } };
+      }
+      
+      const invite = invites[0];
+      
+      if (invite.from_user_id !== userId) {
+        return { error: { message: 'Not authorized to cancel this invite' } };
+      }
+      
+      if (invite.status !== 'pending') {
+        return { error: { message: 'Invite is no longer pending' } };
       }
 
-      return await dbUpdate('game_invites',
+      // Now cancel it
+      const result = await dbUpdate('game_invites',
         { status: 'cancelled' },
         { eq: { id: inviteId } }
       );
+      
+      if (result.error) {
+        return { error: { message: result.error } };
+      }
+      
+      return { data: true, error: null };
     } catch (e) {
       console.error('cancelInvite exception:', e);
       return { error: { message: e.message } };

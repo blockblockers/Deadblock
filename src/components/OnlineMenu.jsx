@@ -717,8 +717,20 @@ const OnlineMenu = ({
     setProcessingInvite(invite.id);
     soundManager.playButtonClick();
     
-    await inviteService.cancelInvite(invite.id, profile.id);
-    await loadInvites();
+    try {
+      const { error } = await inviteService.cancelInvite(invite.id, profile.id);
+      
+      if (error) {
+        setInviteError(error.message || 'Failed to cancel invite');
+        setTimeout(() => setInviteError(null), 5000);
+      }
+      
+      await loadInvites();
+    } catch (err) {
+      console.error('handleCancelInvite error:', err);
+      setInviteError('Failed to cancel invite');
+      setTimeout(() => setInviteError(null), 5000);
+    }
     
     setProcessingInvite(null);
   };
