@@ -99,7 +99,7 @@ class RealtimeManager {
     await this.disconnectUser();
     
     this.userId = userId;
-    console.log('[RealtimeManager] Connecting user channel for:', userId);
+    // console.log('[RealtimeManager] Connecting user channel for:', userId);
     
     try {
       // Single consolidated channel for all user notifications
@@ -119,7 +119,7 @@ class RealtimeManager {
             filter: `to_user_id=eq.${userId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Game invite received:', payload.new?.id);
+            // console.log('[RealtimeManager] Game invite received:', payload.new?.id);
             this.notifyHandlers('gameInvite', payload.new);
           }
         )
@@ -133,7 +133,7 @@ class RealtimeManager {
             filter: `friend_id=eq.${userId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Friend request received:', payload.new?.id);
+            // console.log('[RealtimeManager] Friend request received:', payload.new?.id);
             this.notifyHandlers('friendRequest', payload.new);
           }
         )
@@ -150,7 +150,7 @@ class RealtimeManager {
             // Only notify for new games (matchmaking found)
             if (payload.eventType === 'INSERT' || 
                 (payload.eventType === 'UPDATE' && payload.new?.status === 'active' && payload.old?.status === 'pending')) {
-              console.log('[RealtimeManager] Match found:', payload.new?.id);
+              // console.log('[RealtimeManager] Match found:', payload.new?.id);
               this.notifyHandlers('matchFound', payload.new);
             }
           }
@@ -165,7 +165,7 @@ class RealtimeManager {
             filter: `from_user_id=eq.${userId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Email invite updated:', payload.new?.id, payload.new?.status);
+            // console.log('[RealtimeManager] Email invite updated:', payload.new?.id, payload.new?.status);
             // When status changes from pending/sent to accepted/declined, notify
             if (payload.new?.status === 'accepted' || payload.new?.status === 'declined') {
               this.notifyHandlers('emailInviteUpdated', payload.new);
@@ -182,7 +182,7 @@ class RealtimeManager {
             filter: `to_user_id=eq.${userId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Rematch request received:', payload.new?.id);
+            // console.log('[RealtimeManager] Rematch request received:', payload.new?.id);
             this.notifyHandlers('rematchRequest', payload.new);
           }
         )
@@ -196,7 +196,7 @@ class RealtimeManager {
             filter: `from_user_id=eq.${userId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Rematch request updated (sent):', payload.new?.id, payload.new?.status);
+            // console.log('[RealtimeManager] Rematch request updated (sent):', payload.new?.id, payload.new?.status);
             this.notifyHandlers('rematchRequest', payload.new);
           }
         )
@@ -210,7 +210,7 @@ class RealtimeManager {
             filter: `to_user_id=eq.${userId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Rematch request updated (received):', payload.new?.id, payload.new?.status);
+            // console.log('[RealtimeManager] Rematch request updated (received):', payload.new?.id, payload.new?.status);
             this.notifyHandlers('rematchRequest', payload.new);
           }
         );
@@ -218,7 +218,7 @@ class RealtimeManager {
       // Subscribe with connection status tracking
       const status = await new Promise((resolve) => {
         this.userChannel.subscribe((status) => {
-          console.log('[RealtimeManager] User channel status:', status);
+          // console.log('[RealtimeManager] User channel status:', status);
           if (status === 'SUBSCRIBED') {
             this.isConnected = true;
             this.connectionAttempts = 0;
@@ -251,7 +251,7 @@ class RealtimeManager {
   // Disconnect user channel - call on logout or long idle
   async disconnectUser() {
     if (this.userChannel) {
-      console.log('[RealtimeManager] Disconnecting user channel');
+      // console.log('[RealtimeManager] Disconnecting user channel');
       await this.userChannel.unsubscribe();
       this.userChannel = null;
     }
@@ -276,7 +276,7 @@ class RealtimeManager {
     
     this.currentGameId = gameId;
     this.lastGameState = null; // Reset for new game
-    console.log('[RealtimeManager] Connecting game channel for:', gameId);
+    // console.log('[RealtimeManager] Connecting game channel for:', gameId);
     
     try {
       this.gameChannel = supabase
@@ -291,7 +291,7 @@ class RealtimeManager {
             filter: `id=eq.${gameId}`
           },
           (payload) => {
-            console.log('[RealtimeManager] Game update received');
+            // console.log('[RealtimeManager] Game update received');
             this.notifyHandlers('gameUpdate', payload.new);
           }
         )
@@ -305,19 +305,21 @@ class RealtimeManager {
             filter: `game_id=eq.${gameId}`
           },
           (payload) => {
+            /* Chat message debug - disabled for production
             console.log('[RealtimeManager] 📨 Chat message received:', {
               id: payload.new?.id,
               user_id: payload.new?.user_id,
               message_type: payload.new?.message_type,
               message_key: payload.new?.message_key
             });
+            */
             this.notifyHandlers('chatMessage', payload.new);
           }
         );
       
       const status = await new Promise((resolve) => {
         this.gameChannel.subscribe((status) => {
-          console.log('[RealtimeManager] Game channel status:', status);
+          // console.log('[RealtimeManager] Game channel status:', status);
           if (status === 'SUBSCRIBED') {
             resolve('connected');
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -345,7 +347,7 @@ class RealtimeManager {
   // Disconnect from game channel
   async disconnectGame() {
     if (this.gameChannel) {
-      console.log('[RealtimeManager] Disconnecting game channel');
+      // console.log('[RealtimeManager] Disconnecting game channel');
       await this.gameChannel.unsubscribe();
       this.gameChannel = null;
     }
@@ -359,7 +361,7 @@ class RealtimeManager {
   on(event, handler) {
     if (this.handlers[event]) {
       this.handlers[event].add(handler);
-      console.log(`[RealtimeManager] Handler registered for ${event}, count: ${this.handlers[event].size}`);
+      // console.log(`[RealtimeManager] Handler registered for ${event}, count: ${this.handlers[event].size}`);
     }
     
     // Return unsubscribe function
@@ -370,7 +372,7 @@ class RealtimeManager {
   off(event, handler) {
     if (this.handlers[event]) {
       this.handlers[event].delete(handler);
-      console.log(`[RealtimeManager] Handler removed for ${event}, count: ${this.handlers[event].size}`);
+      // console.log(`[RealtimeManager] Handler removed for ${event}, count: ${this.handlers[event].size}`);
     }
   }
   
@@ -394,7 +396,7 @@ class RealtimeManager {
   resetIdleTimeout() {
     this.clearIdleTimeout();
     this.idleTimeout = setTimeout(() => {
-      console.log('[RealtimeManager] Idle timeout - disconnecting');
+      // console.log('[RealtimeManager] Idle timeout - disconnecting');
       this.disconnectUser();
     }, this.idleTimeoutMs);
   }
@@ -411,7 +413,7 @@ class RealtimeManager {
   enablePollingFallback() {
     if (this.usePollingFallback) return;
     
-    console.log('[RealtimeManager] Enabling polling fallback');
+    // console.log('[RealtimeManager] Enabling polling fallback');
     this.usePollingFallback = true;
     
     // Poll for invites every 10 seconds
@@ -457,7 +459,7 @@ class RealtimeManager {
   }
   
   disablePollingFallback() {
-    console.log('[RealtimeManager] Disabling polling fallback');
+    // console.log('[RealtimeManager] Disabling polling fallback');
     this.usePollingFallback = false;
     
     Object.values(this.pollingIntervals).forEach(interval => {
@@ -469,7 +471,7 @@ class RealtimeManager {
   // Game polling when realtime fails
   // UPDATED: Uses direct fetch and only notifies on actual changes
   startGamePolling(gameId) {
-    console.log('[RealtimeManager] Starting game polling for:', gameId);
+    // console.log('[RealtimeManager] Starting game polling for:', gameId);
     
     this.pollingIntervals.game = setInterval(async () => {
       if (this.currentGameId !== gameId) {

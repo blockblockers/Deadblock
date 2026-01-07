@@ -479,7 +479,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           
           // Handle accepted rematch - navigate to new game
           if (request.status === 'accepted' && request.new_game_id) {
-            console.log('[OnlineGameScreen] Rematch accepted! New game:', request.new_game_id);
+            // console.log('[OnlineGameScreen] Rematch accepted! New game:', request.new_game_id);
             setRematchAccepted(true);
             setShowRematchModal(false);
             soundManager.playSound('notification');
@@ -581,7 +581,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const updateGameState = useCallback((gameData, currentUserId) => {
     if (!gameData || !mountedRef.current) return;
 
-    console.log('updateGameState: Received', { 
+    // console.log('updateGameState: Received', { 
       id: gameData.id, 
       status: gameData.status,
       current_player: gameData.current_player,
@@ -671,7 +671,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (!currentGameId || !userId) return;
     
     mountedRef.current = true;
-    console.log('OnlineGameScreen: Starting game load', { gameId: currentGameId, userId });
+    // console.log('OnlineGameScreen: Starting game load', { gameId: currentGameId, userId });
 
     const loadingTimeout = setTimeout(() => {
       if (mountedRef.current && loading) {
@@ -713,7 +713,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     loadGame();
 
     // FIXED: Subscribe to real-time updates via gameSyncService ONLY (no duplicate)
-    console.log('[OnlineGameScreen] Subscribing to real-time updates via gameSyncService');
+    // console.log('[OnlineGameScreen] Subscribing to real-time updates via gameSyncService');
     
     const subscription = gameSyncService.subscribeToGame(
       currentGameId,
@@ -721,17 +721,19 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         if (!mountedRef.current) return;
         if (!updatedGame || updatedGame.id !== currentGameId) return;
         
+        /* Real-time update debug - disabled for production
         console.log('Real-time update received', {
           pieces: updatedGame?.used_pieces?.length,
           expected: expectedPieceCountRef.current,
           moveInProgress: moveInProgressRef.current
         });
+        */
         
         // Skip stale updates
         if (expectedPieceCountRef.current !== null) {
           const incoming = updatedGame.used_pieces?.length || 0;
           if (incoming < expectedPieceCountRef.current) {
-            console.log('Ignoring stale update');
+            // console.log('Ignoring stale update');
             return;
           }
           expectedPieceCountRef.current = null;
@@ -739,7 +741,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         
         // Skip if move in progress
         if (moveInProgressRef.current) {
-          console.log('Move in progress, will fetch fresh state after');
+          // console.log('Move in progress, will fetch fresh state after');
           return;
         }
         
@@ -766,7 +768,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   useEffect(() => {
     if (!currentGameId || !user?.id || !supabase) return;
     
-    console.log('[OnlineGameScreen] Setting up chat notification subscription');
+    // console.log('[OnlineGameScreen] Setting up chat notification subscription');
     
     // Subscribe to chat messages
     const chatChannel = supabase
@@ -782,7 +784,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         (payload) => {
           // Only notify if message is from opponent and chat is closed
           if (payload.new.sender_id !== user.id && !chatOpen) {
-            console.log('[OnlineGameScreen] New chat message from opponent!');
+            // console.log('[OnlineGameScreen] New chat message from opponent!');
             setHasUnreadChat(true);
             soundManager.playSound('notification');
             
@@ -811,11 +813,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         }
       )
       .subscribe((status) => {
-        console.log('[OnlineGameScreen] Chat channel status:', status);
+        // console.log('[OnlineGameScreen] Chat channel status:', status);
       });
     
     return () => {
-      console.log('[OnlineGameScreen] Cleaning up chat subscription');
+      // console.log('[OnlineGameScreen] Cleaning up chat subscription');
       chatChannel.unsubscribe();
     };
   }, [currentGameId, user?.id, chatOpen, opponent]);
@@ -916,7 +918,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (!pendingMove || !canConfirm || moveInProgressRef.current) return;
     
     moveInProgressRef.current = true;
-    console.log('handleConfirm: Starting...', { pendingMove, rotation, flipped });
+    // console.log('handleConfirm: Starting...', { pendingMove, rotation, flipped });
 
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
@@ -942,7 +944,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let winnerId = null;
     let gameOverReason = null;
     
-    console.log('handleConfirm: Checking game over...', { 
+    // console.log('handleConfirm: Checking game over...', { 
       usedPiecesCount: newUsedPieces.length, 
       totalPieces,
       myPlayerNumber,
@@ -964,7 +966,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         }
       }
       
-      console.log('handleConfirm: ALL PIECES PLACED - Counting cells', { player1Cells, player2Cells });
+      // console.log('handleConfirm: ALL PIECES PLACED - Counting cells', { player1Cells, player2Cells });
       
       // Determine winner by cell count (more cells = winner)
       if (myPlayerNumber === 1) {
@@ -973,22 +975,22 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         winnerId = player2Cells >= player1Cells ? user.id : game.player1_id;
       }
       
-      console.log('handleConfirm: GAME OVER - All pieces placed, winner determined by cell count');
+      // console.log('handleConfirm: GAME OVER - All pieces placed, winner determined by cell count');
     }
     // Case 2: Check if opponent can place any remaining pieces
     else if (newUsedPieces.length >= 2) {
-      console.log('handleConfirm: Checking if opponent can move...');
+      // console.log('handleConfirm: Checking if opponent can move...');
       // FIXED: Pass usedPieces (pieces to skip), not remainingPieces
       // The function signature is canAnyPieceBePlaced(board, usedPieces)
       const opponentCanMove = canAnyPieceBePlaced(newBoard, newUsedPieces);
       
-      console.log('handleConfirm: Opponent can move?', opponentCanMove);
+      // console.log('handleConfirm: Opponent can move?', opponentCanMove);
       
       if (!opponentCanMove) {
         gameOver = true;
         gameOverReason = 'opponent_blocked';
         winnerId = user.id;
-        console.log('handleConfirm: GAME OVER - Opponent cannot move, I win!');
+        // console.log('handleConfirm: GAME OVER - Opponent cannot move, I win!');
       }
     }
 
@@ -1019,7 +1021,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       // CRITICAL: If we detected game over locally but server failed, 
       // still show the game over screen and retry the server update
       if (gameOver) {
-        console.log('handleConfirm: Server failed but game over detected locally - showing result anyway');
+        // console.log('handleConfirm: Server failed but game over detected locally - showing result anyway');
         
         const isWin = winnerId === user.id;
         setGameResult({ isWin, winnerId, reason: gameOverReason || 'opponent_blocked' });
@@ -1033,7 +1035,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         setGame(prev => prev ? { ...prev, status: 'completed', winner_id: winnerId } : prev);
         
         // Retry the server update in background (the RLS policy needs to be fixed)
-        console.log('handleConfirm: Retrying server update in background...');
+        // console.log('handleConfirm: Retrying server update in background...');
         setTimeout(async () => {
           try {
             const retryResult = await gameSyncService.makeMove(
@@ -1042,9 +1044,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 rotation, flipped, newBoard, newBoardPieces, newUsedPieces,
                 nextPlayer, gameOver: true, winnerId }
             );
-            console.log('handleConfirm: Background retry result:', retryResult.error ? 'failed' : 'success');
+            // console.log('handleConfirm: Background retry result:', retryResult.error ? 'failed' : 'success');
           } catch (e) {
-            console.log('handleConfirm: Background retry exception:', e.message);
+            // console.log('handleConfirm: Background retry exception:', e.message);
           }
         }, 2000);
         
@@ -1058,7 +1060,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       return;
     }
 
-    console.log('handleConfirm: Move successful');
+    // console.log('handleConfirm: Move successful');
     
     // Set expected piece count to ignore stale updates
     expectedPieceCountRef.current = newUsedPieces.length;
@@ -1093,7 +1095,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     // Handle game over
     if (gameOver) {
       const isWin = winnerId === user.id;
-      console.log('handleConfirm: Game over!', { isWin, winnerId, userId: user.id, reason: gameOverReason });
+      // console.log('handleConfirm: Game over!', { isWin, winnerId, userId: user.id, reason: gameOverReason });
       
       setGameResult({ isWin, winnerId, reason: gameOverReason || 'normal' });
       setShowGameOver(true);
@@ -1530,7 +1532,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           }}
           onRematch={async () => {
             try {
-              console.log('[OnlineGameScreen] Initiating rematch request...');
+              // console.log('[OnlineGameScreen] Initiating rematch request...');
               
               // Create rematch request (this will check if opponent already requested)
               const { data, error } = await rematchService.createRematchRequest(
@@ -1547,7 +1549,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               
               // Check if rematch was auto-accepted (opponent already requested)
               if (data?.game) {
-                console.log('[OnlineGameScreen] Rematch auto-accepted, new game:', data.game.id);
+                // console.log('[OnlineGameScreen] Rematch auto-accepted, new game:', data.game.id);
                 setRematchAccepted(true);
                 setNewGameFromRematch(data.game);
                 
@@ -1574,7 +1576,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               }
               
               // Show rematch modal in waiting state
-              console.log('[OnlineGameScreen] Rematch request sent:', data.id);
+              // console.log('[OnlineGameScreen] Rematch request sent:', data.id);
               setRematchRequest(data);
               setIsRematchRequester(true);
               setRematchWaiting(true);
@@ -1651,7 +1653,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         onAccept={async () => {
           if (!rematchRequest?.id) return;
           
-          console.log('[OnlineGameScreen] Accepting rematch...');
+          // console.log('[OnlineGameScreen] Accepting rematch...');
           const { data, error } = await rematchService.acceptRematchRequest(rematchRequest.id, user.id);
           
           if (error) {
@@ -1660,7 +1662,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           }
           
           if (data?.game) {
-            console.log('[OnlineGameScreen] Rematch accepted! New game:', data.game.id);
+            // console.log('[OnlineGameScreen] Rematch accepted! New game:', data.game.id);
             setRematchAccepted(true);
             setNewGameFromRematch(data.game);
             soundManager.playSound('notification');
@@ -1674,11 +1676,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               // If onNavigateToGame is provided, use it to navigate (preferred)
               // This tells App.jsx about the new game ID
               if (onNavigateToGame) {
-                console.log('[OnlineGameScreen] Using onNavigateToGame to navigate to:', data.game.id);
+                // console.log('[OnlineGameScreen] Using onNavigateToGame to navigate to:', data.game.id);
                 onNavigateToGame(data.game);
               } else {
                 // Fallback: reset internal state and load new game
-                console.log('[OnlineGameScreen] Fallback: resetting internal state');
+                // console.log('[OnlineGameScreen] Fallback: resetting internal state');
                 setRematchWaiting(false);
                 setRematchRequest(null);
                 setIsRematchRequester(false);

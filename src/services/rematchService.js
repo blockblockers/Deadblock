@@ -438,11 +438,13 @@ class RematchService {
           lastStatus = data.status;
           lastNewGameId = data.new_game_id;
           
-          // console.log('[RematchService] Status update:', { 
+          /* RematchService status update - disabled for production
+          console.log('[RematchService] Status update:', { 
             status: data.status, 
             new_game_id: data.new_game_id,
             from_user_id: data.from_user_id 
           });
+          */
         
           callback(data);
         }
