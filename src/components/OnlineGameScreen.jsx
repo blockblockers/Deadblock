@@ -30,10 +30,6 @@ import { ratingService } from '../services/ratingService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { realtimeManager } from '../services/realtimeManager';
 
-// Drag detection constants
-const DRAG_THRESHOLD = 5; // Reduced from 10 for faster drag response on phones
-const SCROLL_ANGLE_THRESHOLD = 60;
-
 // Orange/Amber theme for online mode
 const theme = {
   gridColor: 'rgba(251,191,36,0.4)',
@@ -199,7 +195,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
   const hasDragStartedRef = useRef(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
   const turnStartRef = useRef(Date.now());
   const moveInProgressRef = useRef(false);
   const expectedPieceCountRef = useRef(null);
@@ -224,8 +219,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
+    // Match DragOverlay fingerOffset - piece is shown above finger
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    const fingerOffset = isMobile ? 40 : 20;
+    
     const relX = clientX - left;
-    const relY = clientY - top;
+    const relY = (clientY - fingerOffset) - top;
     
     const col = Math.floor(relX / cellWidth);
     const row = Math.floor(relY / cellHeight);
@@ -237,14 +236,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       return { row, col };
     }
     return null;
-  }, []);
-
-  const isScrollGesture = useCallback((startX, startY, currentX, currentY) => {
-    const deltaX = Math.abs(currentX - startX);
-    const deltaY = Math.abs(currentY - startY);
-    if (deltaX + deltaY < DRAG_THRESHOLD) return null;
-    const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
-    return angle > SCROLL_ANGLE_THRESHOLD;
   }, []);
 
   // Start drag from piece tray
@@ -312,11 +303,27 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const cell = calculateBoardCell(clientX, clientY);
     
     if (cell) {
-      // v7.22: Update dragPreviewCell for live board preview
-      setDragPreviewCell({ row: cell.row, col: cell.col });
-      
+      // Get piece coordinates to calculate center offset
       const coords = getPieceCoords(draggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      
+      // Calculate piece bounds
+      const minX = Math.min(...coords.map(([x]) => x));
+      const maxX = Math.max(...coords.map(([x]) => x));
+      const minY = Math.min(...coords.map(([, y]) => y));
+      const maxY = Math.max(...coords.map(([, y]) => y));
+      
+      // Calculate center offset (piece anchor is at 0,0, we want center under finger)
+      const centerOffsetCol = Math.floor((maxX + minX) / 2);
+      const centerOffsetRow = Math.floor((maxY + minY) / 2);
+      
+      // Offset the cell so piece CENTER is under finger, not anchor
+      const adjustedRow = cell.row - centerOffsetRow;
+      const adjustedCol = cell.col - centerOffsetCol;
+      
+      // v7.22: Update dragPreviewCell for live board preview
+      setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+      
+      const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
       setDragPreviewCell(null);

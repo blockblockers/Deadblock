@@ -336,10 +336,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
-    const relX = clientX - left;
-    const relY = clientY - top;
+    // Match DragOverlay fingerOffset - piece is shown above finger
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    const fingerOffset = isMobile ? 40 : 20;
     
-    // Raw cell under finger
+    const relX = clientX - left;
+    const relY = (clientY - fingerOffset) - top;
+    
+    // Raw cell under finger (adjusted for fingerOffset)
     const fingerCol = Math.floor(relX / cellWidth);
     const fingerRow = Math.floor(relY / cellHeight);
     
@@ -408,13 +412,29 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && piece) {
-      dragCellRef.current = cell;
-      
-      // v7.22: Update dragPreviewCell for live board preview (not pendingMove - causes DOM changes)
-      setDragPreviewCell({ row: cell.row, col: cell.col });
-      
+      // Get piece coordinates to calculate center offset
       const coords = getPieceCoords(piece, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+      
+      // Calculate piece bounds
+      const minX = Math.min(...coords.map(([x]) => x));
+      const maxX = Math.max(...coords.map(([x]) => x));
+      const minY = Math.min(...coords.map(([, y]) => y));
+      const maxY = Math.max(...coords.map(([, y]) => y));
+      
+      // Calculate center offset (piece anchor is at 0,0, we want center under finger)
+      const centerOffsetCol = Math.floor((maxX + minX) / 2);
+      const centerOffsetRow = Math.floor((maxY + minY) / 2);
+      
+      // Offset the cell so piece CENTER is under finger, not anchor
+      const adjustedRow = cell.row - centerOffsetRow;
+      const adjustedCol = cell.col - centerOffsetCol;
+      
+      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+      
+      // v7.22: Update dragPreviewCell for live board preview
+      setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+      
+      const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
       dragCellRef.current = null;

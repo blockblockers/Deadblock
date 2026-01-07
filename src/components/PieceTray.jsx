@@ -97,12 +97,104 @@ const PieceTray = ({
           // Extract style separately since it needs to be merged
           const { style: dragStyle, ...dragEvents } = dragHandlers;
           
+          // Hold threshold in ms - shorter = faster drag start
+          const HOLD_THRESHOLD = 100;
+          let holdTimer = null;
+          let touchStartPos = { x: 0, y: 0 };
+          let cachedRect = null;
+          let hasMoved = false;
+          let dragStarted = false;
+          
+          const startDragFromTouch = (touchX, touchY) => {
+            if (dragStarted) return;
+            dragStarted = true;
+            
+            // Create a synthetic event-like object with the info the handler needs
+            const syntheticEvent = {
+              touches: [{ clientX: touchX, clientY: touchY }],
+              currentTarget: { getBoundingClientRect: () => cachedRect },
+              preventDefault: () => {},
+              stopPropagation: () => {},
+            };
+            
+            if (dragEvents.onTouchStart) {
+              dragEvents.onTouchStart(syntheticEvent);
+            }
+          };
+          
+          const handleTouchStart = (e) => {
+            const touch = e.touches[0];
+            touchStartPos = { x: touch.clientX, y: touch.clientY };
+            cachedRect = e.currentTarget.getBoundingClientRect();
+            hasMoved = false;
+            dragStarted = false;
+            
+            // Start hold timer - after threshold, begin drag
+            holdTimer = setTimeout(() => {
+              if (!hasMoved && !dragStarted) {
+                startDragFromTouch(touch.clientX, touch.clientY);
+              }
+            }, HOLD_THRESHOLD);
+          };
+          
+          const handleTouchMove = (e) => {
+            const touch = e.touches[0];
+            const dx = Math.abs(touch.clientX - touchStartPos.x);
+            const dy = Math.abs(touch.clientY - touchStartPos.y);
+            
+            // If moved more than 5px, consider it a drag attempt
+            if (dx > 5 || dy > 5) {
+              hasMoved = true;
+              // Clear hold timer and start drag immediately on movement
+              if (holdTimer) {
+                clearTimeout(holdTimer);
+                holdTimer = null;
+              }
+              if (!dragStarted) {
+                startDragFromTouch(touch.clientX, touch.clientY);
+              }
+            }
+            
+            // Forward move event if dragging
+            if (dragStarted && dragEvents.onTouchMove) {
+              dragEvents.onTouchMove(e);
+            }
+          };
+          
+          const handleTouchEnd = (e) => {
+            // Clear hold timer
+            if (holdTimer) {
+              clearTimeout(holdTimer);
+              holdTimer = null;
+            }
+            
+            // If didn't drag and didn't move much, treat as tap for selection
+            if (!dragStarted && !hasMoved) {
+              if (!isUsed && !isGeneratingPuzzle) {
+                onSelectPiece(name);
+              }
+            }
+            
+            // Forward end event if dragging
+            if (dragStarted && dragEvents.onTouchEnd) {
+              dragEvents.onTouchEnd(e);
+            }
+          };
+          
           return (
-            <button
+            <div
               key={name}
-              onClick={() => !isUsed && !isGeneratingPuzzle && !isDragging && onSelectPiece(name)}
-              {...dragEvents}
-              className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden ${
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={dragEvents.onMouseDown}
+              onClick={() => {
+                // Desktop click for selection (drag is handled by mousedown)
+                if (!isUsed && !isGeneratingPuzzle && !isDragging) {
+                  onSelectPiece(name);
+                }
+              }}
+              className={`p-1.5 rounded-lg transition-all flex items-center justify-center relative overflow-hidden cursor-pointer ${
                 isUsed
                   ? 'bg-slate-800/30 opacity-25 cursor-not-allowed border border-slate-700/30'
                   : isBeingDragged
@@ -111,7 +203,6 @@ const PieceTray = ({
                       ? 'bg-slate-700/80 ring-2 ring-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.7),inset_0_0_15px_rgba(34,211,238,0.2)] border border-cyan-400/50'
                       : 'bg-slate-800/60 hover:bg-slate-700/70 border border-cyan-500/20 hover:border-cyan-500/40 hover:shadow-[0_0_15px_rgba(34,211,238,0.3)]'
               }`}
-              disabled={isDisabled(name)}
               style={{
                 // CRITICAL: Prevent default touch behaviors like scrolling
                 touchAction: 'none',
@@ -134,7 +225,7 @@ const PieceTray = ({
               )}
               
               <MiniPiece name={name} coords={coords} />
-            </button>
+            </div>
           );
         })}
       </div>
@@ -148,7 +239,7 @@ const PieceTray = ({
       {/* Drag hint - moved to bottom so pieces are visible during placement */}
       {!gameOver && !isGeneratingPuzzle && (
         <div className="text-[10px] text-cyan-400/60 text-center mt-1 font-medium tracking-wide">
-          TAP TO SELECT • DRAG TO PLACE
+          TAP TO SELECT • HOLD TO DRAG
         </div>
       )}
     </div>
