@@ -110,7 +110,7 @@ function AppContent() {
   // Show welcome modal when new user is detected
   useEffect(() => {
     if (isNewUser && profile && !showWelcomeModal) {
-      console.log('[App] New user detected, showing welcome modal');
+      // console.log('[App] New user detected, showing welcome modal');
       setShowWelcomeModal(true);
     }
   }, [isNewUser, profile, showWelcomeModal]);
@@ -121,7 +121,7 @@ function AppContent() {
     const inviteCode = params.get('invite');
     
     if (inviteCode) {
-      console.log('App: Found invite code in URL:', inviteCode);
+      // console.log('App: Found invite code in URL:', inviteCode);
       setPendingInviteCode(inviteCode);
       // Persist to localStorage so it survives OAuth redirect
       localStorage.setItem('deadblock_pending_invite_code', inviteCode);
@@ -139,13 +139,13 @@ function AppContent() {
           
           if (data && !error) {
             setInviteInfo(data);
-            console.log('App: Invite info loaded:', data);
+            // console.log('App: Invite info loaded:', data);
           } else if (error) {
-            console.log('App: Could not fetch invite preview:', error.message);
+            // console.log('App: Could not fetch invite preview:', error.message);
             setInviteError(error.message);
           } else {
             // Don't clear the invite code - let acceptInvite handle validation
-            console.log('App: Could not fetch invite preview (will try to accept anyway)');
+            // console.log('App: Could not fetch invite preview (will try to accept anyway)');
           }
         } catch (err) {
           console.error('App: Error fetching invite info:', err);
@@ -170,7 +170,7 @@ function AppContent() {
     const inviteCode = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
     
     if (inviteCode && isAuthenticated && profile?.id && isOnlineEnabled) {
-      console.log('App: User logged in with pending invite, accepting...', inviteCode);
+      // console.log('App: User logged in with pending invite, accepting...', inviteCode);
       
       try {
         const { inviteService } = await import('./services/inviteService');
@@ -178,10 +178,10 @@ function AppContent() {
         // Use inviteService to accept the invite (creates game directly)
         const { data, error } = await inviteService.acceptInviteByCode(inviteCode, profile.id);
         
-        console.log('App: acceptInviteByCode result:', { data, error });
+        // console.log('App: acceptInviteByCode result:', { data, error });
         
         if (data?.success && data?.game_id) {
-          console.log('App: Invite accepted! Game ID:', data.game_id);
+          // console.log('App: Invite accepted! Game ID:', data.game_id);
           // Clear the pending invite from both state and localStorage
           setPendingInviteCode(null);
           setInviteInfo(null);
@@ -192,7 +192,7 @@ function AppContent() {
           // A user is considered "new" if they just created their account
           const isFirstGame = !localStorage.getItem('deadblock_has_played_online');
           if (isFirstGame || isNewUser) {
-            console.log('[App] New user joining via invite - will show tutorial');
+            // console.log('[App] New user joining via invite - will show tutorial');
             setShowTutorialOnJoin(true);
             localStorage.setItem('deadblock_has_played_online', 'true');
           }
@@ -201,7 +201,7 @@ function AppContent() {
           setOnlineGameId(data.game_id);
           if (setGameModeFn) setGameModeFn('online-game');
         } else if (error) {
-          console.log('App: Could not accept invite:', error.message);
+          // console.log('App: Could not accept invite:', error.message);
           if (error.message !== 'Cannot accept your own invite') {
             alert(error.message);
           }
@@ -213,7 +213,7 @@ function AppContent() {
           if (setGameModeFn) setGameModeFn('online-menu');
         } else {
           // No success and no error - something went wrong
-          console.log('App: Unexpected response from acceptInviteByCode');
+          // console.log('App: Unexpected response from acceptInviteByCode');
           setPendingInviteCode(null);
           setInviteInfo(null);
           setInviteError(null);
@@ -238,7 +238,7 @@ function AppContent() {
     
     // If we're on /auth/callback but there's no actual auth data, clean up the URL
     if (path.includes('/auth/callback') && !hasRealAuthData) {
-      console.log('App: Cleaning up stale OAuth callback URL');
+      // console.log('App: Cleaning up stale OAuth callback URL');
       window.history.replaceState({}, document.title, '/');
     }
   }, []); // Run once on mount
@@ -292,12 +292,12 @@ function AppContent() {
   // This handles page refresh, OAuth return, and any other case where user is authenticated
   useEffect(() => {
     if (!authLoading && isAuthenticated && !hasPassedEntryAuth) {
-      console.log('App: User authenticated, marking entry auth as passed');
+      // console.log('App: User authenticated, marking entry auth as passed');
       setHasPassedEntryAuth(true);
       
       // If there was a pending online intent, clear it and go to online menu
       if (pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true') {
-        console.log('App: Found pending online intent, going to online menu');
+        // console.log('App: Found pending online intent, going to online menu');
         localStorage.removeItem('deadblock_pending_online_intent');
         setPendingOnlineIntent(false);
         setIsOfflineMode(false);
@@ -317,7 +317,7 @@ function AppContent() {
   useEffect(() => {
     const inviteCode = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
     if (inviteCode && !isAuthenticated && !authLoading && isOnlineEnabled && gameMode === null) {
-      console.log('App: Invite code detected but user not logged in, redirecting to auth');
+      // console.log('App: Invite code detected but user not logged in, redirecting to auth');
       setGameMode('auth');
     }
   }, [pendingInviteCode, isAuthenticated, authLoading, isOnlineEnabled, gameMode, setGameMode]);
@@ -325,7 +325,7 @@ function AppContent() {
   // Redirect after OAuth completes - handle invite links and normal flow
   useEffect(() => {
     const storedInviteCode = localStorage.getItem('deadblock_pending_invite_code');
-    console.log('OAuth redirect check:', { 
+    // console.log('OAuth redirect check:', { 
       isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, 
       hasPassedEntryAuth, hasProfile: !!profile, pendingOnlineIntent,
       pendingInviteCode, storedInviteCode
@@ -337,7 +337,7 @@ function AppContent() {
       
       // If there's an invite code but no profile yet, wait for profile to load
       if (inviteCode && !profile?.id) {
-        console.log('OAuth complete with invite - waiting for profile to load...');
+        // console.log('OAuth complete with invite - waiting for profile to load...');
         return; // Effect will re-run when profile changes
       }
       
@@ -357,16 +357,16 @@ function AppContent() {
         
         // PRIORITY 1: Handle pending invite link
         if (inviteCode && profile?.id) {
-          console.log('OAuth complete with pending invite - processing invite...', inviteCode);
+          // console.log('OAuth complete with pending invite - processing invite...', inviteCode);
           try {
             const { inviteService } = await import('./services/inviteService');
             
             const { data, error } = await inviteService.acceptInviteByCode(inviteCode, profile.id);
             
-            console.log('OAuth invite accept result:', { data, error });
+            // console.log('OAuth invite accept result:', { data, error });
             
             if (data?.success && data?.game_id) {
-              console.log('Invite accepted! Starting game:', data.game_id);
+              // console.log('Invite accepted! Starting game:', data.game_id);
               // Clear invite state
               setPendingInviteCode(null);
               setInviteInfo(null);
@@ -379,7 +379,7 @@ function AppContent() {
               setGameMode('online-game');
               return; // Don't continue to other redirects
             } else if (error) {
-              console.log('Invite error:', error.message);
+              // console.log('Invite error:', error.message);
               if (error.message !== 'Cannot accept your own invite') {
                 alert(error.message);
               }
@@ -399,11 +399,11 @@ function AppContent() {
         
         // PRIORITY 2: Online intent or already past entry
         if (hadOnlineIntent || hasPassedEntryAuth) {
-          console.log('OAuth complete with online intent - going to online menu');
+          // console.log('OAuth complete with online intent - going to online menu');
           setGameMode('online-menu');
         } else {
           // PRIORITY 3: Default to game menu
-          console.log('OAuth complete from entry screen - going to game menu');
+          // console.log('OAuth complete from entry screen - going to game menu');
           setGameMode(null);
         }
       };
@@ -424,20 +424,20 @@ function AppContent() {
 
   // Handle starting a game (with difficulty selection for AI mode)
   const handleStartGame = (mode) => {
-    console.log('handleStartGame called:', { mode, isOnlineEnabled, isOfflineMode, isAuthenticated });
+    // console.log('handleStartGame called:', { mode, isOnlineEnabled, isOfflineMode, isAuthenticated });
     
     if (mode === 'ai') {
       setGameMode('difficulty-select');
     } else if (mode === 'online') {
       // Check if online is enabled and user is authenticated
       if (!isOnlineEnabled) {
-        console.log('Online not enabled - showing alert');
+        // console.log('Online not enabled - showing alert');
         alert('Online features are not configured. Please set up Supabase.');
         return;
       }
       // If user is in offline mode, show auth prompt
       if (isOfflineMode && !isAuthenticated) {
-        console.log('Offline mode, not authenticated - showing auth prompt for online-menu');
+        // console.log('Offline mode, not authenticated - showing auth prompt for online-menu');
         // Set intent and destination before showing auth
         localStorage.setItem('deadblock_pending_online_intent', 'true');
         localStorage.setItem('deadblock_pending_auth_destination', 'online-menu');
@@ -447,10 +447,10 @@ function AppContent() {
         return;
       }
       if (!isAuthenticated) {
-        console.log('Not authenticated - going to auth screen');
+        // console.log('Not authenticated - going to auth screen');
         setGameMode('auth');
       } else {
-        console.log('Authenticated - going to online-menu');
+        // console.log('Authenticated - going to online-menu');
         setGameMode('online-menu');
       }
     } else {
@@ -472,7 +472,7 @@ function AppContent() {
 
   // Handle online auth from offline mode
   const handleOnlineAuthSuccess = () => {
-    console.log('handleOnlineAuthSuccess - redirecting to:', pendingAuthDestination);
+    // console.log('handleOnlineAuthSuccess - redirecting to:', pendingAuthDestination);
     // Get the destination before clearing
     const destination = pendingAuthDestination || 'online-menu';
     
@@ -490,16 +490,16 @@ function AppContent() {
 
   // Handle weekly challenge button click
   const handleWeeklyChallenge = () => {
-    console.log('handleWeeklyChallenge called:', { isOnlineEnabled, isOfflineMode, isAuthenticated });
+    // console.log('handleWeeklyChallenge called:', { isOnlineEnabled, isOfflineMode, isAuthenticated });
     
     // Weekly challenge requires authentication
     if (!isOnlineEnabled) {
-      console.log('Online not enabled - showing alert');
+      // console.log('Online not enabled - showing alert');
       alert('Online features are not configured. Please set up Supabase.');
       return;
     }
     if (isOfflineMode && !isAuthenticated) {
-      console.log('Offline mode, not authenticated - showing auth prompt for weekly-menu');
+      // console.log('Offline mode, not authenticated - showing auth prompt for weekly-menu');
       // Set intent and destination before showing auth
       localStorage.setItem('deadblock_pending_online_intent', 'true');
       localStorage.setItem('deadblock_pending_auth_destination', 'weekly-menu');
@@ -509,11 +509,11 @@ function AppContent() {
       return;
     }
     if (!isAuthenticated) {
-      console.log('Not authenticated - going to auth screen');
+      // console.log('Not authenticated - going to auth screen');
       setGameMode('auth');
       return;
     }
-    console.log('Authenticated - going to weekly-menu');
+    // console.log('Authenticated - going to weekly-menu');
     setGameMode('weekly-menu');
   };
 
@@ -553,7 +553,7 @@ function AppContent() {
 
   // Handle resume game
   const handleResumeGame = (game) => {
-    console.log('handleResumeGame called:', { gameId: game?.id, game });
+    // console.log('handleResumeGame called:', { gameId: game?.id, game });
     if (!game?.id) {
       console.error('handleResumeGame: No game ID!');
       return;
@@ -564,14 +564,14 @@ function AppContent() {
 
   // Handle spectate game
   const handleSpectateGame = (gameId) => {
-    console.log('handleSpectateGame called:', gameId);
+    // console.log('handleSpectateGame called:', gameId);
     setSpectatingGameId(gameId);
     setGameMode('spectate');
   };
 
   // Handle view replay
   const handleViewReplay = (gameId) => {
-    console.log('handleViewReplay called:', gameId);
+    // console.log('handleViewReplay called:', gameId);
     setReplayGameId(gameId);
     setGameMode('replay');
   };
@@ -579,18 +579,18 @@ function AppContent() {
   // Handle service worker notification clicks and URL-based navigation
   useEffect(() => {
     const handleServiceWorkerMessage = (event) => {
-      console.log('[App] Received service worker message:', event.data);
+      // console.log('[App] Received service worker message:', event.data);
       
       if (event.data?.type === 'NOTIFICATION_CLICK') {
         const { data } = event.data;
         // FIXED: Service worker sends 'type', not 'notificationType'
         const { gameId, type: notificationType, inviteId, rematchId } = data || {};
         
-        console.log('[App] Processing notification click:', { gameId, notificationType, inviteId, rematchId });
+        // console.log('[App] Processing notification click:', { gameId, notificationType, inviteId, rematchId });
         
         // Ensure we're authenticated and past entry screen
         if (!hasPassedEntryAuth) {
-          console.log('[App] Not past entry auth, storing for later navigation');
+          // console.log('[App] Not past entry auth, storing for later navigation');
           if (gameId) {
             localStorage.setItem('deadblock_pending_game_id', gameId);
           }
@@ -600,22 +600,22 @@ function AppContent() {
         
         // Navigate based on notification type
         if (notificationType === 'your_turn' && gameId) {
-          console.log('[App] Navigating to game:', gameId);
+          // console.log('[App] Navigating to game:', gameId);
           setOnlineGameId(gameId);
           setGameMode('online-game');
         } else if (notificationType === 'game_invite') {
-          console.log('[App] Navigating to online menu for invite');
+          // console.log('[App] Navigating to online menu for invite');
           setGameMode('online-menu');
         } else if ((notificationType === 'rematch_request' || notificationType === 'rematch_accepted') && gameId) {
-          console.log('[App] Navigating to game from rematch:', gameId);
+          // console.log('[App] Navigating to game from rematch:', gameId);
           setOnlineGameId(gameId);
           setGameMode('online-game');
         } else if (notificationType === 'chat_message' && gameId) {
-          console.log('[App] Navigating to game for chat:', gameId);
+          // console.log('[App] Navigating to game for chat:', gameId);
           setOnlineGameId(gameId);
           setGameMode('online-game');
         } else {
-          console.log('[App] Default navigation to online menu');
+          // console.log('[App] Default navigation to online menu');
           setGameMode('online-menu');
         }
       }
@@ -654,7 +654,7 @@ function AppContent() {
       const pendingGameId = sessionStorage.getItem('deadblock_pending_game_id');
       
       if (pendingNav === 'online') {
-        console.log('[App] Processing pending navigation, gameId:', pendingGameId);
+        // console.log('[App] Processing pending navigation, gameId:', pendingGameId);
         sessionStorage.removeItem('deadblock_pending_nav');
         sessionStorage.removeItem('deadblock_pending_game_id');
         
@@ -683,13 +683,13 @@ function AppContent() {
   useEffect(() => {
     if (shouldShowLoading) {
       const timeout = setTimeout(() => {
-        console.log('Loading stuck timeout triggered');
+        // console.log('Loading stuck timeout triggered');
         setLoadingStuck(true);
       }, 5000); // 5 seconds
       
       // If we're stuck for too long (10 seconds), force clear the OAuth callback
       const forceTimeout = setTimeout(() => {
-        console.log('Force clearing stuck OAuth state');
+        // console.log('Force clearing stuck OAuth state');
         if (clearOAuthCallback) {
           clearOAuthCallback();
         }
@@ -699,7 +699,7 @@ function AppContent() {
         }
         // If there was pending online intent, go to online menu
         if (pendingOnlineIntent || localStorage.getItem('deadblock_pending_online_intent') === 'true') {
-          console.log('Force timeout: handling pending online intent');
+          // console.log('Force timeout: handling pending online intent');
           localStorage.removeItem('deadblock_pending_online_intent');
           setPendingOnlineIntent(false);
           setIsOfflineMode(false);
@@ -723,7 +723,7 @@ function AppContent() {
   const showAuthLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !hasRedirectedAfterOAuth));
   
   // DEBUG: Always log current state (even before loading check)
-  console.log('=== App Render Debug ===', {
+  // console.log('=== App Render Debug ===', {
     showAuthLoading,
     authLoading,
     isOAuthCallback,
@@ -738,7 +738,7 @@ function AppContent() {
   // INLINE OAuth completion handling - if we're in OAuth callback but user is authenticated,
   // trigger the redirect immediately instead of waiting for effect
   if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
-    console.log('=== INLINE OAuth completion - triggering redirect ===');
+    // console.log('=== INLINE OAuth completion - triggering redirect ===');
     // Use setTimeout to avoid state update during render
     setTimeout(() => {
       setHasRedirectedAfterOAuth(true);
@@ -751,10 +751,10 @@ function AppContent() {
       setPendingOnlineIntent(false);
       
       if (hadOnlineIntent) {
-        console.log('OAuth complete - going to online menu');
+        // console.log('OAuth complete - going to online menu');
         setGameMode('online-menu');
       } else {
-        console.log('OAuth complete - going to main menu');
+        // console.log('OAuth complete - going to main menu');
         setGameMode(null);
       }
     }, 0);
@@ -823,7 +823,7 @@ function AppContent() {
   }
 
   // Debug logging - comprehensive state dump
-  console.log('App render state:', { 
+  // console.log('App render state:', { 
     gameMode, 
     onlineGameId, 
     isAuthenticated, 
@@ -843,10 +843,10 @@ function AppContent() {
   // 3. OAuth callback in progress  
   // 4. User is already authenticated (effect will set hasPassedEntryAuth)
   const shouldShowEntryAuth = !hasPassedEntryAuth && !authLoading && !isOAuthCallback && !isAuthenticated;
-  console.log('Entry auth check:', { shouldShowEntryAuth, hasPassedEntryAuth, authLoading, isOAuthCallback, isAuthenticated });
+  // console.log('Entry auth check:', { shouldShowEntryAuth, hasPassedEntryAuth, authLoading, isOAuthCallback, isAuthenticated });
   
   if (shouldShowEntryAuth) {
-    console.log('Rendering: EntryAuthScreen');
+    // console.log('Rendering: EntryAuthScreen');
     return (
       <EntryAuthScreen
         onComplete={handleEntryAuthComplete}
@@ -857,7 +857,7 @@ function AppContent() {
 
   // Online Auth Prompt (for offline users trying to go online)
   if (showOnlineAuthPrompt) {
-    console.log('Rendering: Online Auth Prompt for destination:', pendingAuthDestination);
+    // console.log('Rendering: Online Auth Prompt for destination:', pendingAuthDestination);
     return (
       <EntryAuthScreen
         onComplete={handleOnlineAuthSuccess}
@@ -878,12 +878,12 @@ function AppContent() {
   // Render Menu Screen - this should be the default after auth
   // Changed from !gameMode to explicit null check plus fallback
   if (gameMode === null || gameMode === undefined) {
-    console.log('Rendering: MenuScreen (gameMode is null/undefined)');
-    console.log('MenuScreen props:', { isOnlineEnabled, isAuthenticated, isOfflineMode, hasProfile: !!profile });
+    // console.log('Rendering: MenuScreen (gameMode is null/undefined)');
+    // console.log('MenuScreen props:', { isOnlineEnabled, isAuthenticated, isOfflineMode, hasProfile: !!profile });
     
     // If user just authenticated but hasPassedEntryAuth not set yet, set it now
     if (isAuthenticated && !hasPassedEntryAuth) {
-      console.log('Setting hasPassedEntryAuth from render');
+      // console.log('Setting hasPassedEntryAuth from render');
       // Schedule for next tick to avoid state update during render
       setTimeout(() => setHasPassedEntryAuth(true), 0);
     }
@@ -940,7 +940,7 @@ function AppContent() {
 
   // Auth Screen (Login/Signup)
   if (gameMode === 'auth') {
-    console.log('Rendering: EntryAuthScreen for auth mode with inviteInfo:', !!inviteInfo);
+    // console.log('Rendering: EntryAuthScreen for auth mode with inviteInfo:', !!inviteInfo);
     return (
       <EntryAuthScreen
         onComplete={() => {
@@ -1141,7 +1141,7 @@ function AppContent() {
 
   // Weekly Challenge Menu
   if (gameMode === 'weekly-menu') {
-    console.log('Rendering: WeeklyChallengeMenu');
+    // console.log('Rendering: WeeklyChallengeMenu');
     return (
       <LazyWrapper message="Loading weekly challenge...">
         <WeeklyChallengeMenu
@@ -1179,7 +1179,7 @@ function AppContent() {
   }
 
   // Render Game Screen (for ai, 2player, and puzzle modes)
-  console.log('Rendering: GameScreen (fallback) - gameMode:', gameMode);
+  // console.log('Rendering: GameScreen (fallback) - gameMode:', gameMode);
   return (
     <GameScreen
       board={board}
@@ -1217,7 +1217,7 @@ function AppContent() {
       onQuitGame={(isForfeit) => {
         // For now, just go back to menu
         // In the future, could record a loss for VS AI mode if isForfeit is true
-        console.log('Quit game:', { isForfeit, gameMode });
+        // console.log('Quit game:', { isForfeit, gameMode });
         setGameMode(null);
       }}
       onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'difficulty-select')}

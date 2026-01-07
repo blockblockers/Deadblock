@@ -176,7 +176,7 @@ class InviteService {
       
       const url = `${SUPABASE_URL}/rest/v1/profiles?select=id,username,display_name,rating,games_played,games_won&or=(${encodeURIComponent(orFilter)})&id=neq.${currentUserId}&order=rating.desc&limit=${limit}`;
       
-      console.log('[InviteService] Searching users with query:', searchQuery);
+      // console.log('[InviteService] Searching users with query:', searchQuery);
       
       const response = await fetch(url, { headers });
       if (!response.ok) {
@@ -185,7 +185,7 @@ class InviteService {
       }
       
       const data = await response.json();
-      console.log('[InviteService] Search results:', data?.length || 0, 'users found');
+      // console.log('[InviteService] Search results:', data?.length || 0, 'users found');
       
       return { data: data || [], error: null };
     } catch (e) {
@@ -203,22 +203,6 @@ class InviteService {
     try {
       const headers = getAuthHeaders();
       if (!headers) return { data: null, error: { message: 'Not authenticated' } };
-      
-      // Check for active game between these users
-      const activeGameUrl = `${SUPABASE_URL}/rest/v1/games?select=id&or=(and(player1_id.eq.${fromUserId},player2_id.eq.${toUserId}),and(player1_id.eq.${toUserId},player2_id.eq.${fromUserId}))&status=eq.active&limit=1`;
-      const activeGameResponse = await fetch(activeGameUrl, { headers });
-      if (activeGameResponse.ok) {
-        const activeGames = await activeGameResponse.json();
-        if (activeGames?.length > 0) {
-          return { 
-            data: null, 
-            error: { 
-              message: 'You already have an active game with this player. Finish it first!',
-              code: 'ACTIVE_GAME_EXISTS'
-            } 
-          };
-        }
-      }
       
       // Check for pending rematch request between these users
       const rematchUrl = `${SUPABASE_URL}/rest/v1/rematch_requests?select=id&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
@@ -513,7 +497,7 @@ class InviteService {
     if (!isSupabaseConfigured()) return { data: null, error: { message: 'Not configured' } };
 
     try {
-      console.log('[InviteService] Creating invite link for user:', fromUserId);
+      // console.log('[InviteService] Creating invite link for user:', fromUserId);
       
       const inviteData = {
         from_user_id: fromUserId,
@@ -537,7 +521,7 @@ class InviteService {
       const appUrl = window.location.origin;
       const inviteLink = `${appUrl}/?invite=${invite.invite_code}`;
 
-      console.log('[InviteService] Invite link created successfully:', inviteLink);
+      // console.log('[InviteService] Invite link created successfully:', inviteLink);
 
       return {
         data: { ...invite, inviteLink, recipientName: recipientName.trim() || 'Friend' },
@@ -565,7 +549,7 @@ class InviteService {
       // - Status is pending or sent (not cancelled, accepted, or expired)
       const url = `${SUPABASE_URL}/rest/v1/email_invites?select=*&from_user_id=eq.${userId}&status=in.(pending,sent)&expires_at=gt.${now}&game_id=is.null&order=created_at.desc`;
 
-      console.log('[InviteService] Fetching invite links for user:', userId);
+      // console.log('[InviteService] Fetching invite links for user:', userId);
       
       // Add cache-busting headers to prevent stale data
       const fetchHeaders = {
@@ -585,7 +569,7 @@ class InviteService {
       const data = await response.json();
       
       // v7.7: No additional client-side filtering needed since query is more precise
-      console.log('[InviteService] Got', data?.length || 0, 'active invite links');
+      // console.log('[InviteService] Got', data?.length || 0, 'active invite links');
       
       const appUrl = window.location.origin;
       
@@ -609,7 +593,7 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { error: { message: 'Not authenticated' } };
 
-      console.log('[InviteService] Deleting invite link:', inviteId, 'for user:', userId);
+      // console.log('[InviteService] Deleting invite link:', inviteId, 'for user:', userId);
 
       // v7.7 FIX: Use DELETE method to actually remove the invite link
       // This ensures the link is removed from the database entirely
@@ -625,7 +609,7 @@ class InviteService {
         console.error('[InviteService] Delete failed:', response.status, errorText);
         
         // Fallback: Try PATCH to set status to 'cancelled' if DELETE fails (RLS issue)
-        console.log('[InviteService] Attempting fallback PATCH...');
+        // console.log('[InviteService] Attempting fallback PATCH...');
         const patchResponse = await fetch(url, {
           method: 'PATCH',
           headers: { ...headers, 'Prefer': 'return=minimal' },
@@ -638,7 +622,7 @@ class InviteService {
         }
       }
       
-      console.log('[InviteService] Invite link deleted successfully');
+      // console.log('[InviteService] Invite link deleted successfully');
       return { error: null };
     } catch (e) {
       console.error('cancelInviteLink exception:', e);
@@ -678,21 +662,21 @@ class InviteService {
       
       const url = `${SUPABASE_URL}/rest/v1/email_invites?invite_code=eq.${code}&status=in.(pending,sent)&expires_at=gt.${new Date().toISOString()}&select=*`;
       
-      console.log('[InviteService] Getting invite by code:', code);
+      // console.log('[InviteService] Getting invite by code:', code);
       
       const response = await fetch(url, { 
         headers: { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
       });
 
       if (!response.ok) {
-        console.log('[InviteService] Invite not found or expired');
+        // console.log('[InviteService] Invite not found or expired');
         return { data: null, error: { message: 'Invite not found' } };
       }
       
       const data = await response.json();
       
       if (!data || !data.id) {
-        console.log('[InviteService] No valid invite data');
+        // console.log('[InviteService] No valid invite data');
         return { data: null, error: { message: 'Invite not found' } };
       }
       
@@ -707,7 +691,7 @@ class InviteService {
         inviterProfile = await profileResponse.json();
       }
       
-      console.log('[InviteService] Found invite:', { id: data.id, from: inviterProfile?.username });
+      // console.log('[InviteService] Found invite:', { id: data.id, from: inviterProfile?.username });
       
       return { 
         data: { 
@@ -730,25 +714,25 @@ class InviteService {
       const headers = getAuthHeaders();
       if (!headers) return { data: null, error: { message: 'Not authenticated' } };
 
-      console.log('[InviteService] Accepting invite by code:', code, 'user:', acceptingUserId);
+      // console.log('[InviteService] Accepting invite by code:', code, 'user:', acceptingUserId);
 
       // First get the invite
       const { data: invite, error: getError } = await this.getInviteByCode(code);
       
       if (getError || !invite) {
-        console.log('[InviteService] Invite not found');
+        // console.log('[InviteService] Invite not found');
         return { data: null, error: { message: 'Invite not found or expired' } };
       }
       
       // Check if user is trying to accept their own invite
       if (invite.from_user_id === acceptingUserId) {
-        console.log('[InviteService] Cannot accept own invite');
+        // console.log('[InviteService] Cannot accept own invite');
         return { data: null, error: { message: 'Cannot accept your own invite' } };
       }
       
       // Check if invite is still valid
       if (invite.status !== 'pending' && invite.status !== 'sent') {
-        console.log('[InviteService] Invite already used');
+        // console.log('[InviteService] Invite already used');
         return { data: null, error: { message: 'Invite already used' } };
       }
       
@@ -782,11 +766,11 @@ class InviteService {
       const games = await createResponse.json();
       const game = games[0];
       
-      console.log('[InviteService] Game created:', game.id);
+      // console.log('[InviteService] Game created:', game.id);
 
       // Update the invite to mark it as accepted
       const updateUrl = `${SUPABASE_URL}/rest/v1/email_invites?id=eq.${invite.id}`;
-      console.log('[InviteService] Updating invite status to accepted:', invite.id);
+      // console.log('[InviteService] Updating invite status to accepted:', invite.id);
       
       const updateResponse = await fetch(updateUrl, {
         method: 'PATCH',
@@ -803,10 +787,10 @@ class InviteService {
         console.error('[InviteService] Failed to update invite status:', updateResponse.status);
       } else {
         const updatedInvite = await updateResponse.json();
-        console.log('[InviteService] Invite status updated:', updatedInvite);
+        // console.log('[InviteService] Invite status updated:', updatedInvite);
       }
 
-      console.log('[InviteService] Invite accepted successfully, game:', game.id);
+      // console.log('[InviteService] Invite accepted successfully, game:', game.id);
 
       return { 
         data: { 

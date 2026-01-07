@@ -43,7 +43,7 @@ class RematchService {
     if (!headers) return { data: null, error: { message: 'Not authenticated' } };
 
     try {
-      console.log('[RematchService] Creating rematch request:', { gameId, fromUserId, toUserId });
+      // console.log('[RematchService] Creating rematch request:', { gameId, fromUserId, toUserId });
 
       // Check if there's already a pending rematch request for this game
       const existingUrl = `${SUPABASE_URL}/rest/v1/rematch_requests?game_id=eq.${gameId}&status=eq.pending&select=*`;
@@ -55,12 +55,12 @@ class RematchService {
           // If opponent already requested, auto-accept
           const existingRequest = existing[0];
           if (existingRequest.from_user_id === toUserId) {
-            console.log('[RematchService] Opponent already requested rematch, auto-accepting...');
+            // console.log('[RematchService] Opponent already requested rematch, auto-accepting...');
             return await this.acceptRematchRequest(existingRequest.id, fromUserId);
           }
           // If we already requested, return existing
           if (existingRequest.from_user_id === fromUserId) {
-            console.log('[RematchService] Rematch already requested');
+            // console.log('[RematchService] Rematch already requested');
             return { data: existingRequest, error: null };
           }
         }
@@ -94,7 +94,7 @@ class RematchService {
       const data = await createResponse.json();
       const request = Array.isArray(data) ? data[0] : data;
 
-      console.log('[RematchService] Rematch request created:', request.id);
+      // console.log('[RematchService] Rematch request created:', request.id);
       return { data: request, error: null };
 
     } catch (e) {
@@ -177,7 +177,7 @@ class RematchService {
     if (!headers) return { data: [], error: { message: 'Not authenticated' } };
 
     try {
-      console.log('[RematchService] Getting pending rematch requests for:', userId);
+      // console.log('[RematchService] Getting pending rematch requests for:', userId);
 
       // Get rematch requests where user is sender or receiver and status is pending
       const url = `${SUPABASE_URL}/rest/v1/rematch_requests?or=(from_user_id.eq.${userId},to_user_id.eq.${userId})&status=eq.pending&order=created_at.desc`;
@@ -190,7 +190,7 @@ class RematchService {
       }
 
       const requests = await response.json();
-      console.log('[RematchService] Found', requests?.length || 0, 'pending rematch requests');
+      // console.log('[RematchService] Found', requests?.length || 0, 'pending rematch requests');
 
       if (!requests || requests.length === 0) {
         return { data: [], error: null };
@@ -244,7 +244,7 @@ class RematchService {
     if (!headers) return { data: null, error: { message: 'Not authenticated' } };
 
     try {
-      console.log('[RematchService] Accepting rematch request:', requestId);
+      // console.log('[RematchService] Accepting rematch request:', requestId);
 
       // First, get the request details
       const getUrl = `${SUPABASE_URL}/rest/v1/rematch_requests?id=eq.${requestId}&select=*`;
@@ -298,7 +298,7 @@ class RematchService {
       const games = await createResponse.json();
       const newGame = Array.isArray(games) ? games[0] : games;
 
-      console.log('[RematchService] New game created:', newGame.id);
+      // console.log('[RematchService] New game created:', newGame.id);
 
       // Update the rematch request with the new game ID
       const updateUrl = `${SUPABASE_URL}/rest/v1/rematch_requests?id=eq.${requestId}`;
@@ -312,7 +312,7 @@ class RematchService {
         })
       });
 
-      console.log('[RematchService] Rematch accepted, game:', newGame.id);
+      // console.log('[RematchService] Rematch accepted, game:', newGame.id);
 
       return {
         data: {
@@ -342,7 +342,7 @@ class RematchService {
     if (!headers) return { data: null, error: { message: 'Not authenticated' } };
 
     try {
-      console.log('[RematchService] Declining rematch request:', requestId);
+      // console.log('[RematchService] Declining rematch request:', requestId);
 
       const url = `${SUPABASE_URL}/rest/v1/rematch_requests?id=eq.${requestId}`;
       const response = await fetch(url, {
@@ -361,7 +361,7 @@ class RematchService {
       const data = await response.json();
       const request = Array.isArray(data) ? data[0] : null;
 
-      console.log('[RematchService] Rematch declined');
+      // console.log('[RematchService] Rematch declined');
       return { data: request, error: null };
 
     } catch (e) {
@@ -383,7 +383,7 @@ class RematchService {
     if (!headers) return { data: null, error: { message: 'Not authenticated' } };
 
     try {
-      console.log('[RematchService] Cancelling rematch request:', requestId);
+      // console.log('[RematchService] Cancelling rematch request:', requestId);
 
       const url = `${SUPABASE_URL}/rest/v1/rematch_requests?id=eq.${requestId}&from_user_id=eq.${userId}`;
       const response = await fetch(url, {
@@ -399,7 +399,7 @@ class RematchService {
         return { data: null, error: { message: 'Failed to cancel request' } };
       }
 
-      console.log('[RematchService] Rematch cancelled');
+      // console.log('[RematchService] Rematch cancelled');
       return { data: { cancelled: true }, error: null };
 
     } catch (e) {
@@ -438,7 +438,7 @@ class RematchService {
           lastStatus = data.status;
           lastNewGameId = data.new_game_id;
           
-          console.log('[RematchService] Status update:', { 
+          // console.log('[RematchService] Status update:', { 
             status: data.status, 
             new_game_id: data.new_game_id,
             from_user_id: data.from_user_id 

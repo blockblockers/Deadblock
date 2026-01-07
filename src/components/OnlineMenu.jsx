@@ -179,19 +179,15 @@ const OnlineMenu = ({
       // Mark as loaded immediately to prevent re-runs
       profileLoadedRef.current = true;
       
-      console.log('OnlineMenu: Refreshing profile on mount');
       setProfileError(false);
       
       try {
         const result = await refreshProfile();
-        console.log('OnlineMenu: Profile refresh result', { hasProfile: !!result });
         
         // If profile is still null after refresh and we have a user, retry once
         if (!result && user) {
-          console.log('OnlineMenu: Profile still null, will retry...');
           await new Promise(r => setTimeout(r, 1000));
           const retryResult = await refreshProfile();
-          console.log('OnlineMenu: Profile retry result', { hasProfile: !!retryResult });
           
           if (!retryResult) {
             console.error('OnlineMenu: Failed to load profile after retry');
@@ -232,6 +228,9 @@ const OnlineMenu = ({
   // Pending rematch requests state
   const [pendingRematches, setPendingRematches] = useState([]);
   const [processingRematch, setProcessingRematch] = useState(null);
+  
+  // Error message state (for in-GUI display instead of alert)
+  const [inviteError, setInviteError] = useState(null);
   
   // Notification state
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
@@ -284,7 +283,7 @@ const OnlineMenu = ({
         const { data } = await gameSyncService.getMatchmakingCount?.();
         setLobbyCount(data?.count || 0);
       } catch (e) {
-        console.log('Lobby count unavailable');
+        // Silently ignore - lobby count is optional
       }
     };
     
@@ -309,11 +308,8 @@ const OnlineMenu = ({
   useEffect(() => {
     // Wait for session to be verified AND profile to exist
     if (!sessionReady || !profile?.id) {
-      console.log('OnlineMenu: Waiting for session/profile', { sessionReady, hasProfile: !!profile?.id });
       return;
     }
-    
-    console.log('OnlineMenu: Session ready, loading data for', profile.id);
     
     // Set loading only on initial load
     setLoading(true);
@@ -325,27 +321,34 @@ const OnlineMenu = ({
     
     load();
     
-    // Periodic refresh every 15 seconds for active games and invites
+    // Periodic refresh every 45 seconds (reduced from 15s to save battery/CPU)
     const refreshInterval = setInterval(() => {
       loadGames();
       loadInvites();
-    }, 15000);
+    }, 45000);
     
-    // Also refresh when tab becomes visible again
+    // Also refresh when tab becomes visible again (but throttle)
+    let lastRefresh = Date.now();
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[OnlineMenu] Tab visible, refreshing data...');
-        loadGames();
-        loadInvites();
+        // Only refresh if more than 10 seconds since last refresh
+        if (Date.now() - lastRefresh > 10000) {
+          lastRefresh = Date.now();
+          loadGames();
+          loadInvites();
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     
-    // Refresh when window gets focus
+    // Refresh when window gets focus (but throttle)
     const handleFocus = () => {
-      console.log('[OnlineMenu] Window focused, refreshing data...');
-      loadGames();
-      loadInvites();
+      // Only refresh if more than 10 seconds since last refresh
+      if (Date.now() - lastRefresh > 10000) {
+        lastRefresh = Date.now();
+        loadGames();
+        loadInvites();
+      }
     };
     window.addEventListener('focus', handleFocus);
     
@@ -400,7 +403,6 @@ const OnlineMenu = ({
     
     // ADDED: Subscribe to email invite updates (for invite links)
     const emailInviteHandler = realtimeManager.on('emailInviteUpdated', async (updatedInvite) => {
-      console.log('[OnlineMenu] Email invite link updated:', updatedInvite?.id, updatedInvite?.status);
       await loadInvites();
       
       // If accepted, refresh games to show the new game
@@ -412,7 +414,6 @@ const OnlineMenu = ({
     
     // Subscribe to rematch request updates
     const rematchHandler = realtimeManager.on('rematchRequest', async (rematchData) => {
-      console.log('[OnlineMenu] Rematch request update:', rematchData);
       await loadInvites();
       
       // Send push notification for new rematch request (if we're the receiver)
@@ -460,22 +461,12 @@ const OnlineMenu = ({
     if (!profile?.id) return;
     
     try {
-      console.log('[OnlineMenu] loadInvites: Fetching for', profile.id);
-      
       const [received, sent, links, rematches] = await Promise.all([
         inviteService.getReceivedInvites(profile.id),
         inviteService.getSentInvites(profile.id),
         inviteService.getInviteLinks(profile.id),
         rematchService.getPendingRematchRequests(profile.id)
       ]);
-      
-      console.log('[OnlineMenu] loadInvites results:', {
-        received: received.data?.length || 0,
-        sent: sent.data?.length || 0,
-        links: links.data?.length || 0,
-        linkStatuses: links.data?.map(l => ({ id: l.id, status: l.status })),
-        rematches: rematches.data?.length || 0
-      });
       
       setReceivedInvites(received.data || []);
       setSentInvites(sent.data || []);
@@ -494,41 +485,28 @@ const OnlineMenu = ({
   
   const loadGames = async () => {
     if (!profile?.id) {
-      console.log('OnlineMenu.loadGames: No profile ID');
       setLoading(false);
       return;
     }
     
     // Prevent duplicate calls while one is in progress
     if (loadGamesInProgress.current) {
-      console.log('OnlineMenu.loadGames: Already loading, skipping');
       return;
     }
     
     loadGamesInProgress.current = true;
-    console.log('OnlineMenu.loadGames: Loading games for', profile.id);
 
     try {
       // Get active games
-      const { data: active, error: activeError } = await gameSyncService.getActiveGames(profile.id);
-      console.log('OnlineMenu.loadGames: Active games result', { 
-        count: active?.length, 
-        error: activeError?.message,
-        gameIds: active?.map(g => g.id)
-      });
+      const { data: active } = await gameSyncService.getActiveGames(profile.id);
       setActiveGames(active || []);
 
       // Get recent completed games - UPDATED: Increased from 5 to 10
-      const { data: recent, error: recentError } = await gameSyncService.getPlayerGames(profile.id, 10);
+      const { data: recent } = await gameSyncService.getPlayerGames(profile.id, 10);
       const completedGames = (recent || []).filter(g => g.status === 'completed');
-      console.log('OnlineMenu.loadGames: Recent games', { 
-        total: recent?.length, 
-        completed: completedGames.length,
-        error: recentError?.message
-      });
       setRecentGames(completedGames);
     } catch (err) {
-      console.error('OnlineMenu.loadGames: Error loading games:', err);
+      console.error('Error loading games:', err);
     }
     
     loadGamesInProgress.current = false;
@@ -657,7 +635,10 @@ const OnlineMenu = ({
     
     if (error) {
       console.error('Error sending invite:', error);
-      alert(error.message || 'Failed to send invite');
+      // Show themed error message instead of alert
+      setInviteError(error.message || 'Failed to send invite');
+      // Auto-clear after 5 seconds
+      setTimeout(() => setInviteError(null), 5000);
     } else if (data?.game) {
       // If the other user had already invited us, a game was created
       soundManager.playSound('win');
@@ -681,25 +662,17 @@ const OnlineMenu = ({
     soundManager.playButtonClick();
     
     try {
-      console.log('handleAcceptInvite: Starting', { inviteId: invite.id, profileId: profile.id });
-      
       const { data, error } = await inviteService.acceptInvite(invite.id, profile.id);
-      
-      console.log('handleAcceptInvite: Result', { data, error, hasGame: !!data?.game });
       
       if (error) {
         console.error('Error accepting invite:', error);
-        alert(error.message || 'Failed to accept invite');
+        setInviteError(error.message || 'Failed to accept invite');
+        setTimeout(() => setInviteError(null), 5000);
         setProcessingInvite(null);
         return;
       }
       
       if (data?.game) {
-        console.log('handleAcceptInvite: Game created successfully', { 
-          gameId: data.game.id,
-          player1: data.game.player1?.username,
-          player2: data.game.player2?.username
-        });
         soundManager.playSound('win');
         
         // Clear spinner immediately before navigation
@@ -709,16 +682,17 @@ const OnlineMenu = ({
         await new Promise(resolve => setTimeout(resolve, 100));
         
         // Navigate to game
-        console.log('handleAcceptInvite: Navigating to game...');
         onResumeGame(data.game);
       } else {
         console.error('handleAcceptInvite: No game in response', data);
-        alert('Error: Game was not created properly. Please try again.');
+        setInviteError('Error: Game was not created properly. Please try again.');
+        setTimeout(() => setInviteError(null), 5000);
         setProcessingInvite(null);
       }
     } catch (err) {
       console.error('handleAcceptInvite: Exception', err);
-      alert('An unexpected error occurred: ' + (err.message || 'Unknown error'));
+      setInviteError('An unexpected error occurred: ' + (err.message || 'Unknown error'));
+      setTimeout(() => setInviteError(null), 5000);
       setProcessingInvite(null);
     }
   };
@@ -760,7 +734,8 @@ const OnlineMenu = ({
       const { data, error } = await inviteService.createInviteLink(profile.id, friendName.trim());
       
       if (error) {
-        alert(error.message || 'Failed to create invite link');
+        setInviteError(error.message || 'Failed to create invite link');
+        setTimeout(() => setInviteError(null), 5000);
         setCreatingLink(false);
         return;
       }
@@ -776,12 +751,13 @@ const OnlineMenu = ({
           setCopiedLinkId(data.id);
           setTimeout(() => setCopiedLinkId(null), 2000);
         } catch (clipErr) {
-          console.log('Could not auto-copy:', clipErr);
+          // Silent fail - clipboard access might be restricted
         }
       }
     } catch (err) {
       console.error('handleCreateInviteLink error:', err);
-      alert('Failed to create invite: ' + err.message);
+      setInviteError('Failed to create invite: ' + err.message);
+      setTimeout(() => setInviteError(null), 5000);
     }
     
     setCreatingLink(false);
@@ -800,8 +776,9 @@ const OnlineMenu = ({
       setTimeout(() => setCopiedLinkId(null), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
-      // Fallback: show the link in an alert
-      alert(`Copy this link:\n${invite.inviteLink}`);
+      // Fallback: show the link in an error banner - user can manually copy
+      setInviteError(`Could not auto-copy. Link: ${invite.inviteLink}`);
+      setTimeout(() => setInviteError(null), 8000);
     }
   };
 
@@ -848,18 +825,17 @@ const OnlineMenu = ({
     soundManager.playButtonClick();
     
     try {
-      console.log('[OnlineMenu] Accepting rematch:', rematch.id);
       const { data, error } = await rematchService.acceptRematchRequest(rematch.id, profile.id);
       
       if (error) {
         console.error('Error accepting rematch:', error);
-        alert(error.message || 'Failed to accept rematch');
+        setInviteError(error.message || 'Failed to accept rematch');
+        setTimeout(() => setInviteError(null), 5000);
         setProcessingRematch(null);
         return;
       }
       
       if (data?.game) {
-        console.log('[OnlineMenu] Rematch accepted! New game:', data.game.id);
         soundManager.playSound('win');
         await loadInvites();
         await loadGames();
@@ -869,7 +845,8 @@ const OnlineMenu = ({
       }
     } catch (err) {
       console.error('handleAcceptRematch error:', err);
-      alert('Failed to accept rematch: ' + err.message);
+      setInviteError('Failed to accept rematch: ' + err.message);
+      setTimeout(() => setInviteError(null), 5000);
     }
     
     setProcessingRematch(null);
@@ -1298,6 +1275,26 @@ const OnlineMenu = ({
     )}
   </div>
 </button>
+
+            {/* Error Banner - Themed in-GUI message */}
+            {inviteError && (
+              <div className="mb-3 p-3 bg-red-900/40 border border-red-500/50 rounded-xl animate-scaleIn">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 bg-red-500/20 rounded-lg shrink-0">
+                    <X size={16} className="text-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-red-300 text-sm font-medium">{inviteError}</p>
+                  </div>
+                  <button 
+                    onClick={() => setInviteError(null)}
+                    className="text-red-400/60 hover:text-red-300 transition-colors p-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Challenge a Player - Purple Glow Orb Button */}
             <button

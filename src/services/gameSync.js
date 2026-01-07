@@ -46,14 +46,14 @@ class GameSyncService {
     this.unsubscribe();
     this.currentGameId = gameId;
 
-    console.log('[GameSync] Subscribing to game via RealtimeManager:', gameId);
+    // console.log('[GameSync] Subscribing to game via RealtimeManager:', gameId);
 
     // Connect to game channel via RealtimeManager
     realtimeManager.connectGame(gameId);
 
     // Register handler for game updates
     const wrappedHandler = (gameData) => {
-      console.log('[GameSync] Game update received:', gameData?.id);
+      // console.log('[GameSync] Game update received:', gameData?.id);
       try {
         if (typeof onUpdate === 'function') {
           onUpdate(gameData);
@@ -90,7 +90,7 @@ class GameSyncService {
   async getGame(gameId) {
     if (!supabase) return { data: null, error: { message: 'Not configured' } };
 
-    console.log('gameSync.getGame: Starting fetch for game:', gameId);
+    // console.log('gameSync.getGame: Starting fetch for game:', gameId);
 
     const headers = getAuthHeaders();
     if (!headers) {
@@ -115,7 +115,7 @@ class GameSyncService {
       }
 
       const game = await response.json();
-      console.log('gameSync.getGame: Game fetched successfully');
+      // console.log('gameSync.getGame: Game fetched successfully');
 
       // Fetch player profiles
       let player1 = null;
@@ -136,11 +136,11 @@ class GameSyncService {
           player1 = profiles?.find(p => p.id === game.player1_id) || null;
           player2 = profiles?.find(p => p.id === game.player2_id) || null;
         } else {
-          console.log('gameSync.getGame: Profiles fetch failed, returning game without profiles');
+          // console.log('gameSync.getGame: Profiles fetch failed, returning game without profiles');
         }
       }
 
-      console.log('gameSync.getGame: Complete success, returning game with profiles');
+      // console.log('gameSync.getGame: Complete success, returning game with profiles');
 
       return {
         data: {
@@ -179,7 +179,7 @@ class GameSyncService {
   async makeMove(gameId, playerId, moveData) {
     if (!supabase) return { error: { message: 'Not configured' } };
 
-    console.log('gameSync.makeMove: Starting move', { gameId, playerId });
+    // console.log('gameSync.makeMove: Starting move', { gameId, playerId });
 
     const headers = getAuthHeaders();
     if (!headers) {
@@ -220,10 +220,10 @@ class GameSyncService {
           if (match) moveCount = parseInt(match[1], 10);
         }
       } catch (e) {
-        console.log('gameSync.makeMove: Could not get move count, using 0');
+        // console.log('gameSync.makeMove: Could not get move count, using 0');
       }
 
-      console.log('gameSync.makeMove: Current move count:', moveCount);
+      // console.log('gameSync.makeMove: Current move count:', moveCount);
 
       // Step 2: Record the move in history using direct fetch
       // FIXED: board_state is optional - don't include if column doesn't exist
@@ -254,7 +254,7 @@ class GameSyncService {
           console.error('gameSync.makeMove: Error recording move:', errorText);
           // Don't fail the entire operation - move recording is for replay
         } else {
-          console.log('gameSync.makeMove: Move recorded successfully');
+          // console.log('gameSync.makeMove: Move recorded successfully');
         }
       } catch (moveErr) {
         console.warn('gameSync.makeMove: Could not record move history:', moveErr.message);
@@ -276,7 +276,7 @@ class GameSyncService {
         updateData.winner_id = winnerId || null;
       }
 
-      console.log('gameSync.makeMove: Updating game state...', { 
+      // console.log('gameSync.makeMove: Updating game state...', { 
         nextPlayer, 
         gameOver, 
         usedPiecesCount: newUsedPieces.length 
@@ -301,14 +301,14 @@ class GameSyncService {
       }
 
       const updatedGame = await gameUpdateResponse.json();
-      console.log('gameSync.makeMove: Game updated successfully', { 
+      // console.log('gameSync.makeMove: Game updated successfully', { 
         newCurrentPlayer: updatedGame.current_player,
         status: updatedGame.status 
       });
 
       // Step 4: Update player stats if game is over
       if (gameOver && winnerId) {
-        console.log('gameSync.makeMove: Game over, updating stats...');
+        // console.log('gameSync.makeMove: Game over, updating stats...');
         await this.updatePlayerStats(gameId, winnerId);
       }
 
@@ -337,7 +337,7 @@ class GameSyncService {
       if (!headers) return;
 
       // CRITICAL: Update ELO ratings first
-      console.log('gameSync.updatePlayerStats: Updating ELO ratings...');
+      // console.log('gameSync.updatePlayerStats: Updating ELO ratings...');
       try {
         const eloResponse = await fetch(
           `${SUPABASE_URL}/rest/v1/rpc/update_ratings_after_game`,
@@ -352,7 +352,7 @@ class GameSyncService {
         );
         
         if (eloResponse.ok) {
-          console.log('gameSync.updatePlayerStats: ELO ratings updated successfully');
+          // console.log('gameSync.updatePlayerStats: ELO ratings updated successfully');
         } else {
           const errorText = await eloResponse.text();
           console.error('gameSync.updatePlayerStats: ELO update failed:', errorText);
@@ -390,7 +390,7 @@ class GameSyncService {
   async getActiveGames(userId) {
     if (!supabase || !userId) return { data: [], error: null };
 
-    console.log('[GameSync] getActiveGames: Using direct fetch for', userId);
+    // console.log('[GameSync] getActiveGames: Using direct fetch for', userId);
 
     const headers = getAuthHeaders();
     if (!headers) {
@@ -409,7 +409,7 @@ class GameSyncService {
       }
 
       const games = await response.json();
-      console.log('[GameSync] getActiveGames: Fetched', games.length, 'games');
+      // console.log('[GameSync] getActiveGames: Fetched', games.length, 'games');
 
       // Fetch opponent profiles
       const opponentIds = games.map(g => 
@@ -451,7 +451,7 @@ class GameSyncService {
   async getPlayerGames(userId, limit = 10) {
     if (!supabase || !userId) return { data: [], error: null };
 
-    console.log('[GameSync] getPlayerGames: Using direct fetch for', userId);
+    // console.log('[GameSync] getPlayerGames: Using direct fetch for', userId);
 
     const headers = getAuthHeaders();
     if (!headers) {
@@ -470,7 +470,7 @@ class GameSyncService {
       }
 
       const games = await response.json();
-      console.log('[GameSync] getPlayerGames: Fetched', games.length, 'games');
+      // console.log('[GameSync] getPlayerGames: Fetched', games.length, 'games');
 
       // Fetch all player profiles (both players for each game)
       const allPlayerIds = new Set();
@@ -514,7 +514,7 @@ class GameSyncService {
       return { error: { message: 'Invalid parameters' } };
     }
 
-    console.log('gameSync.forfeitGame:', { gameId, userId });
+    // console.log('gameSync.forfeitGame:', { gameId, userId });
 
     const headers = getAuthHeaders();
     if (!headers) {
@@ -567,7 +567,7 @@ class GameSyncService {
       return { error: { message: 'Invalid parameters' } };
     }
 
-    console.log('gameSync.abandonGame:', { gameId });
+    // console.log('gameSync.abandonGame:', { gameId });
 
     const headers = getAuthHeaders();
     if (!headers) {
@@ -606,7 +606,7 @@ class GameSyncService {
 export async function createRematchGame(originalGameId, currentUserId, opponentId, firstPlayerId) {
   if (!supabase) return { data: null, error: { message: 'Not configured' } };
 
-  console.log('[GameSync] Creating rematch game:', { originalGameId, currentUserId, opponentId, firstPlayerId });
+  // console.log('[GameSync] Creating rematch game:', { originalGameId, currentUserId, opponentId, firstPlayerId });
 
   const headers = getAuthHeaders();
   if (!headers) {
@@ -635,7 +635,7 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
       // - database will auto-generate these
     };
 
-    console.log('[GameSync] Rematch game data:', newGame);
+    // console.log('[GameSync] Rematch game data:', newGame);
 
     const createHeaders = { ...headers, 'Prefer': 'return=representation' };
 
@@ -658,7 +658,7 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
     const games = await response.json();
     const createdGame = Array.isArray(games) ? games[0] : games;
     
-    console.log('[GameSync] Rematch created successfully:', createdGame?.id);
+    // console.log('[GameSync] Rematch created successfully:', createdGame?.id);
 
     return { data: createdGame, error: null };
 
