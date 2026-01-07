@@ -61,6 +61,7 @@ class RealtimeManager {
       friendRequest: new Set(),
       matchFound: new Set(),
       emailInviteUpdated: new Set(),  // For invite link status changes
+      rematchRequest: new Set(),      // For rematch request notifications
       
       // Game-level events  
       gameUpdate: new Set(),
@@ -169,6 +170,48 @@ class RealtimeManager {
             if (payload.new?.status === 'accepted' || payload.new?.status === 'declined') {
               this.notifyHandlers('emailInviteUpdated', payload.new);
             }
+          }
+        )
+        // Rematch requests received (new requests where user is recipient)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'rematch_requests',
+            filter: `to_user_id=eq.${userId}`
+          },
+          (payload) => {
+            console.log('[RealtimeManager] Rematch request received:', payload.new?.id);
+            this.notifyHandlers('rematchRequest', payload.new);
+          }
+        )
+        // Rematch requests sent (updates to requests where user is sender)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'rematch_requests',
+            filter: `from_user_id=eq.${userId}`
+          },
+          (payload) => {
+            console.log('[RealtimeManager] Rematch request updated (sent):', payload.new?.id, payload.new?.status);
+            this.notifyHandlers('rematchRequest', payload.new);
+          }
+        )
+        // Rematch requests received updates (updates to requests where user is recipient)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'rematch_requests',
+            filter: `to_user_id=eq.${userId}`
+          },
+          (payload) => {
+            console.log('[RealtimeManager] Rematch request updated (received):', payload.new?.id, payload.new?.status);
+            this.notifyHandlers('rematchRequest', payload.new);
           }
         );
       

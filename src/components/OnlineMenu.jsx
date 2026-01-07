@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, RotateCcw } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -45,15 +45,15 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.display_name || game.player2?.username || 'Unknown';
+      return game.player2?.username || 'Unknown';
     }
-    return game.player1?.display_name || game.player1?.username || 'Unknown';
+    return game.player1?.username || 'Unknown';
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
-  const displayName = profile?.display_name || profile?.username;
+  const displayName = profile?.username;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -155,7 +155,6 @@ const OnlineMenu = ({
   const needsScroll = true;
   const [activeGames, setActiveGames] = useState([]);
   const [recentGames, setRecentGames] = useState([]);
-  const [calculatedStats, setCalculatedStats] = useState({ wins: 0, losses: 0, totalGames: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showActivePrompt, setShowActivePrompt] = useState(true);
@@ -171,22 +170,6 @@ const OnlineMenu = ({
   // Ref to track if profile has been loaded (prevents infinite loop)
   const profileLoadedRef = useRef(false);
   
-  // CRITICAL: Restore scroll on mount - fixes scroll regression from game screens
-  useEffect(() => {
-    // Reset any scroll blocking from game screens
-    document.body.style.overflow = '';
-    document.body.style.touchAction = '';
-    document.documentElement.style.overflow = '';
-    document.documentElement.style.touchAction = '';
-    
-    // Ensure the page is scrollable
-    return () => {
-      // Cleanup on unmount
-      document.body.style.overflow = '';
-      document.body.style.touchAction = '';
-    };
-  }, []);
-  
   // Refresh profile on mount to ensure fresh data (only once)
   useEffect(() => {
     // Skip if already loaded or no refresh function
@@ -201,15 +184,7 @@ const OnlineMenu = ({
       
       try {
         const result = await refreshProfile();
-        // DEBUG: Log profile stats specifically
-        console.log('OnlineMenu: Profile refresh result', { 
-          hasProfile: !!result,
-          wins: result?.wins,
-          losses: result?.losses,
-          rating: result?.rating,
-          elo_rating: result?.elo_rating,
-          allKeys: result ? Object.keys(result) : []
-        });
+        console.log('OnlineMenu: Profile refresh result', { hasProfile: !!result });
         
         // If profile is still null after refresh and we have a user, retry once
         if (!result && user) {
@@ -331,9 +306,6 @@ const OnlineMenu = ({
   }, [sessionReady, profile?.id]);
 
   // Load games and invites
-  // Also add a mount counter to force refresh on each navigation to this screen
-  const mountCountRef = useRef(0);
-  
   useEffect(() => {
     // Wait for session to be verified AND profile to exist
     if (!sessionReady || !profile?.id) {
@@ -341,11 +313,7 @@ const OnlineMenu = ({
       return;
     }
     
-    // Increment mount counter - this helps force fresh data on each navigation
-    mountCountRef.current += 1;
-    const currentMount = mountCountRef.current;
-    
-    console.log('OnlineMenu: Session ready, loading data for', profile.id, 'mount:', currentMount);
+    console.log('OnlineMenu: Session ready, loading data for', profile.id);
     
     // Set loading only on initial load
     setLoading(true);
@@ -387,26 +355,6 @@ const OnlineMenu = ({
       window.removeEventListener('focus', handleFocus);
     };
   }, [sessionReady, profile?.id]);
-  
-  // ADDED: Force refresh when returning to menu (e.g., after rematch game creation)
-  // This catches games that were created while we were on another screen
-  useEffect(() => {
-    // Skip on first render (handled by the main useEffect above)
-    if (!sessionReady || !profile?.id) return;
-    
-    // This effect runs on every render, but we only want to refresh on "return"
-    // The main useEffect handles initial load, so we check if enough time has passed
-    const lastRefresh = sessionStorage.getItem('deadblock_last_games_refresh');
-    const now = Date.now();
-    
-    // If more than 3 seconds since last refresh, do a quick refresh
-    // This catches cases where the user navigated away and back
-    if (!lastRefresh || (now - parseInt(lastRefresh, 10)) > 3000) {
-      console.log('[OnlineMenu] Refreshing games on return navigation');
-      loadGames();
-      sessionStorage.setItem('deadblock_last_games_refresh', now.toString());
-    }
-  });
   
   // Subscribe to invite updates
   useEffect(() => {
@@ -462,9 +410,49 @@ const OnlineMenu = ({
       }
     });
     
+    // Subscribe to rematch request updates
+    const rematchHandler = realtimeManager.on('rematchRequest', async (rematchData) => {
+      console.log('[OnlineMenu] Rematch request update:', rematchData);
+      await loadInvites();
+      
+      // Send push notification for new rematch request (if we're the receiver)
+      if (rematchData?.to_user_id === profile.id && rematchData?.status === 'pending') {
+        soundManager.playSound('notification');
+        
+        if (notificationService.isEnabled()) {
+          // Get the requester's name from the original game
+          const { data: game } = await gameSyncService.getGame(rematchData.game_id);
+          if (game) {
+            const requesterName = game.player1_id === rematchData.from_user_id 
+              ? game.player1?.username 
+              : game.player2?.username;
+            notificationService.notifyRematchRequest(requesterName || 'Opponent', rematchData.game_id, rematchData.id);
+          }
+        }
+      }
+      
+      // If rematch was accepted, navigate to the new game
+      if (rematchData?.status === 'accepted' && rematchData?.new_game_id) {
+        await loadGames();
+        soundManager.playSound('notification');
+        
+        // Send notification to the requester that rematch was accepted
+        if (notificationService.isEnabled() && rematchData?.from_user_id === profile.id) {
+          const { data: newGame } = await gameSyncService.getGame(rematchData.new_game_id);
+          if (newGame) {
+            const accepterName = newGame.player1_id === profile.id
+              ? newGame.player2?.username
+              : newGame.player1?.username;
+            notificationService.notifyRematchAccepted(accepterName || 'Opponent', rematchData.new_game_id);
+          }
+        }
+      }
+    });
+    
     return () => {
       inviteService.unsubscribeFromInvites(subscription);
       if (emailInviteHandler) emailInviteHandler();
+      if (rematchHandler) rematchHandler();
     };
   }, [sessionReady, profile?.id]);
 
@@ -492,7 +480,9 @@ const OnlineMenu = ({
       setReceivedInvites(received.data || []);
       setSentInvites(sent.data || []);
       // inviteService now returns properly formatted data with recipientName and inviteLink
-      setInviteLinks(links.data || []);
+      // Filter out links that have a game_id (game already started)
+      const activeLinks = (links.data || []).filter(link => !link.game_id);
+      setInviteLinks(activeLinks);
       setPendingRematches(rematches.data || []);
     } catch (err) {
       console.error('Error loading invites:', err);
@@ -528,27 +518,15 @@ const OnlineMenu = ({
       });
       setActiveGames(active || []);
 
-      // Get ALL completed games for accurate stats (up to 100)
-      const { data: allGames, error: allError } = await gameSyncService.getPlayerGames(profile.id, 100);
-      const completedGames = (allGames || []).filter(g => g.status === 'completed');
-      
-      // Calculate wins/losses from all completed games
-      const wins = completedGames.filter(g => g.winner_id === profile.id).length;
-      const losses = completedGames.filter(g => g.winner_id && g.winner_id !== profile.id).length;
-      
-      console.log('OnlineMenu.loadGames: All completed games', { 
-        total: allGames?.length, 
+      // Get recent completed games - UPDATED: Increased from 5 to 10
+      const { data: recent, error: recentError } = await gameSyncService.getPlayerGames(profile.id, 10);
+      const completedGames = (recent || []).filter(g => g.status === 'completed');
+      console.log('OnlineMenu.loadGames: Recent games', { 
+        total: recent?.length, 
         completed: completedGames.length,
-        wins,
-        losses,
-        error: allError?.message
+        error: recentError?.message
       });
-      
-      // Store only the 10 most recent for display, but keep stats from all
-      setRecentGames(completedGames.slice(0, 10));
-      
-      // Store calculated stats for display (as a workaround for missing profile columns)
-      setCalculatedStats({ wins, losses, totalGames: completedGames.length });
+      setRecentGames(completedGames);
     } catch (err) {
       console.error('OnlineMenu.loadGames: Error loading games:', err);
     }
@@ -771,96 +749,6 @@ const OnlineMenu = ({
     setProcessingInvite(null);
   };
 
-  // =========================================================================
-  // REMATCH REQUEST HANDLERS
-  // =========================================================================
-  
-  const handleAcceptRematch = async (rematch) => {
-    if (!profile?.id) return;
-    
-    setProcessingRematch(rematch.id);
-    soundManager.playButtonClick();
-    
-    try {
-      console.log('[OnlineMenu] Accepting rematch:', rematch.id);
-      const { data, error } = await rematchService.acceptRematchRequest(rematch.id, profile.id);
-      
-      if (error) {
-        console.error('[OnlineMenu] Accept rematch error:', error);
-        alert(error.message || 'Failed to accept rematch');
-        setProcessingRematch(null);
-        return;
-      }
-      
-      if (data?.game) {
-        console.log('[OnlineMenu] Rematch accepted, navigating to game:', data.game.id);
-        soundManager.playClickSound('confirm');
-        
-        // Notify the requester that rematch was accepted
-        if (notificationService.isEnabled()) {
-          notificationService.notifyRematchAccepted(
-            rematch.opponent_name || 'Opponent',
-            data.game.id
-          );
-        }
-        
-        // Navigate to the new game
-        onStartGame(data.game.id);
-      }
-    } catch (err) {
-      console.error('[OnlineMenu] Accept rematch exception:', err);
-      alert('Failed to accept rematch');
-    }
-    
-    setProcessingRematch(null);
-  };
-
-  const handleDeclineRematch = async (rematch) => {
-    if (!profile?.id) return;
-    
-    setProcessingRematch(rematch.id);
-    soundManager.playButtonClick();
-    
-    try {
-      console.log('[OnlineMenu] Declining rematch:', rematch.id);
-      await rematchService.declineRematchRequest(rematch.id, profile.id);
-      
-      // Notify the requester that rematch was declined
-      if (notificationService.isEnabled() && rematch.is_sender === false) {
-        notificationService.notifyRematchDeclined(rematch.opponent_name || 'Opponent');
-      }
-      
-      await loadInvites();
-    } catch (err) {
-      console.error('[OnlineMenu] Decline rematch error:', err);
-    }
-    
-    setProcessingRematch(null);
-  };
-
-  const handleCancelRematch = async (rematch) => {
-    if (!profile?.id) return;
-    
-    setProcessingRematch(rematch.id);
-    soundManager.playButtonClick();
-    
-    try {
-      console.log('[OnlineMenu] Cancelling rematch:', rematch.id);
-      await rematchService.cancelRematchRequest(rematch.id, profile.id);
-      await loadInvites();
-    } catch (err) {
-      console.error('[OnlineMenu] Cancel rematch error:', err);
-    }
-    
-    setProcessingRematch(null);
-  };
-
-  const handleViewRematchGame = (rematch) => {
-    // Navigate to the original game to view it / handle rematch from there
-    soundManager.playButtonClick();
-    onStartGame(rematch.game_id);
-  };
-
   // Create a shareable invite link
   const handleCreateInviteLink = async () => {
     if (!profile?.id) return;
@@ -952,12 +840,81 @@ const OnlineMenu = ({
     setProcessingInvite(null);
   };
 
+  // Accept a rematch request
+  const handleAcceptRematch = async (rematch) => {
+    if (!profile?.id || !rematch?.id) return;
+    
+    setProcessingRematch(rematch.id);
+    soundManager.playButtonClick();
+    
+    try {
+      console.log('[OnlineMenu] Accepting rematch:', rematch.id);
+      const { data, error } = await rematchService.acceptRematchRequest(rematch.id, profile.id);
+      
+      if (error) {
+        console.error('Error accepting rematch:', error);
+        alert(error.message || 'Failed to accept rematch');
+        setProcessingRematch(null);
+        return;
+      }
+      
+      if (data?.game) {
+        console.log('[OnlineMenu] Rematch accepted! New game:', data.game.id);
+        soundManager.playSound('win');
+        await loadInvites();
+        await loadGames();
+        
+        // Navigate to the new game
+        onResumeGame(data.game);
+      }
+    } catch (err) {
+      console.error('handleAcceptRematch error:', err);
+      alert('Failed to accept rematch: ' + err.message);
+    }
+    
+    setProcessingRematch(null);
+  };
+
+  // Decline a rematch request
+  const handleDeclineRematch = async (rematch) => {
+    if (!profile?.id || !rematch?.id) return;
+    
+    setProcessingRematch(rematch.id);
+    soundManager.playButtonClick();
+    
+    try {
+      await rematchService.declineRematchRequest(rematch.id, profile.id);
+      await loadInvites();
+    } catch (err) {
+      console.error('handleDeclineRematch error:', err);
+    }
+    
+    setProcessingRematch(null);
+  };
+
+  // Cancel a rematch request (if you sent it)
+  const handleCancelRematch = async (rematch) => {
+    if (!profile?.id || !rematch?.id) return;
+    
+    setProcessingRematch(rematch.id);
+    soundManager.playButtonClick();
+    
+    try {
+      await rematchService.cancelRematchRequest(rematch.id, profile.id);
+      await loadInvites();
+    } catch (err) {
+      console.error('handleCancelRematch error:', err);
+    }
+    
+    setProcessingRematch(null);
+  };
+
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.display_name || game.player2?.username || 'Unknown';
+      return game.player2?.username || 'Unknown';
     }
-    return game.player1?.display_name || game.player1?.username || 'Unknown';
+    return game.player1?.username || 'Unknown';
   };
 
   // Get opponent ID from game
@@ -971,17 +928,17 @@ const OnlineMenu = ({
 
   // Get opponent data from game
   const getOpponentData = (game) => {
-  if (!game || !profile?.id) return { id: null, displayName: 'Unknown' };
+  if (!game || !profile?.id) return { id: null, username: 'Unknown' };
   if (game.player1_id === profile.id) {
     return { 
       id: game.player2_id,
-      displayName: game.player2?.display_name || game.player2?.username || 'Unknown',
+      username: game.player2?.username || 'Unknown',
       data: game.player2
     };
   }
   return { 
     id: game.player1_id,
-    displayName: game.player1?.display_name || game.player1?.username || 'Unknown',
+    username: game.player1?.username || 'Unknown',
     data: game.player1
   };
 };
@@ -998,9 +955,13 @@ const OnlineMenu = ({
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 overflow-x-hidden"
+      className="fixed inset-0 bg-slate-950 overflow-y-auto overflow-x-hidden"
       style={{ 
-        WebkitOverflowScrolling: 'touch',
+        WebkitOverflowScrolling: 'touch', 
+        touchAction: 'pan-y',
+        height: '100%',
+        width: '100%',
+        overscrollBehavior: 'contain',
       }}
     >
       {/* Themed Grid background */}
@@ -1034,9 +995,14 @@ const OnlineMenu = ({
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4 pt-6 sm:pt-8 pb-32"
         style={{ 
-          minHeight: '100vh',
+          minHeight: '100%',
           paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
           paddingTop: 'max(24px, env(safe-area-inset-top))',
+          touchAction: 'pan-y',
+          WebkitOverflowScrolling: 'touch',
+        }}
+        onTouchMove={(e) => {
+          // Allow vertical scrolling by not preventing default
         }}
       >
         <div className="w-full max-w-md">
@@ -1100,11 +1066,11 @@ const OnlineMenu = ({
               {/* Top row: Avatar and actions */}
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {(profile?.display_name || profile?.username)?.[0]?.toUpperCase() || '?'}
+                  {(profile?.username)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
+                    <h2 className="text-white font-bold text-lg">{profile?.username || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
                       className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
@@ -1114,27 +1080,8 @@ const OnlineMenu = ({
                     </button>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
-                    {/* Use calculated stats from loaded games (more accurate than profile columns) */}
-                    {(() => {
-                      // Prefer profile values if they exist and are non-zero
-                      let wins = profile?.wins || 0;
-                      let losses = profile?.losses || 0;
-                      
-                      // Fall back to calculated stats from loaded games
-                      if (wins === 0 && losses === 0 && calculatedStats.totalGames > 0) {
-                        wins = calculatedStats.wins;
-                        losses = calculatedStats.losses;
-                      }
-                      
-                      const totalGames = wins + losses;
-                      
-                      return (
-                        <>
-                          <span className="text-slate-500">{totalGames} games</span>
-                          <span className="text-green-400">{wins} wins</span>
-                        </>
-                      );
-                    })()}
+                    <span className="text-slate-500">{profile?.games_played || 0} games</span>
+                    <span className="text-green-400">{profile?.games_won || 0} wins</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -1590,6 +1537,84 @@ const OnlineMenu = ({
               </div>
             )}
 
+            {/* Pending Rematch Requests */}
+            {pendingRematches.length > 0 && (
+              <div className="bg-orange-900/20 rounded-xl p-4 mb-4 border border-orange-500/30">
+                <h3 className="text-orange-400 font-bold text-sm mb-3 flex items-center gap-2">
+                  <RefreshCw size={16} />
+                  REMATCH REQUESTS ({pendingRematches.length})
+                </h3>
+                <div 
+                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
+                  style={{ WebkitOverflowScrolling: 'touch' }}
+                >
+                  {pendingRematches.map(rematch => {
+                    // rematchService provides: is_sender, opponent_name, opponent_id
+                    const isSender = rematch.is_sender;
+                    const opponentName = rematch.opponent_name || 'Opponent';
+                    const initial = opponentName?.[0]?.toUpperCase() || '?';
+                    
+                    return (
+                      <div
+                        key={rematch.id}
+                        className="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-orange-500/20"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-orange-600 flex items-center justify-center text-white text-xs font-bold">
+                            {initial}
+                          </div>
+                          <div>
+                            <div className="text-white text-sm font-medium">{opponentName}</div>
+                            <div className="text-orange-400/70 text-xs">
+                              {isSender ? 'Waiting for response...' : 'Wants a rematch!'}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {isSender ? (
+                            // You sent the request - show cancel button
+                            <button
+                              onClick={() => handleCancelRematch(rematch)}
+                              disabled={processingRematch === rematch.id}
+                              className="px-3 py-1.5 text-xs bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-all active:scale-95 disabled:opacity-50"
+                            >
+                              {processingRematch === rematch.id ? (
+                                <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                'Cancel'
+                              )}
+                            </button>
+                          ) : (
+                            // You received the request - show accept/decline
+                            <>
+                              <button
+                                onClick={() => handleAcceptRematch(rematch)}
+                                disabled={processingRematch === rematch.id}
+                                className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all active:scale-95 disabled:opacity-50"
+                              >
+                                {processingRematch === rematch.id ? (
+                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Check size={16} />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => handleDeclineRematch(rematch)}
+                                disabled={processingRematch === rematch.id}
+                                className="p-2 bg-slate-700 text-slate-400 rounded-lg hover:bg-slate-600 hover:text-white transition-all active:scale-95 disabled:opacity-50"
+                              >
+                                <X size={16} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Received Invites */}
             {receivedInvites.length > 0 && (
               <div className="bg-green-900/20 rounded-xl p-4 mb-4 border border-green-500/30">
@@ -1681,83 +1706,6 @@ const OnlineMenu = ({
                         >
                           Cancel
                         </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Pending Rematch Requests */}
-            {pendingRematches.length > 0 && (
-              <div className="bg-purple-900/20 rounded-xl p-4 mb-4 border border-purple-500/30">
-                <h3 className="text-purple-400 font-bold text-sm mb-3 flex items-center gap-2">
-                  <RotateCcw size={16} />
-                  REMATCH REQUESTS ({pendingRematches.length})
-                </h3>
-                <div 
-                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
-                >
-                  {pendingRematches.map(rematch => {
-                    const displayName = rematch.opponent_name || 'Opponent';
-                    const initial = displayName?.[0]?.toUpperCase() || '?';
-                    const isSender = rematch.is_sender;
-                    
-                    return (
-                      <div
-                        key={rematch.id}
-                        className="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-purple-500/20"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                            {initial}
-                          </div>
-                          <div>
-                            <div className="text-white text-sm font-medium">{displayName}</div>
-                            <div className="text-purple-400/70 text-xs">
-                              {isSender ? 'Waiting for response...' : 'wants a rematch!'}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {isSender ? (
-                            // Sender can only cancel
-                            <button
-                              onClick={() => handleCancelRematch(rematch)}
-                              disabled={processingRematch === rematch.id}
-                              className="text-xs text-slate-500 hover:text-red-400 transition-colors disabled:opacity-50 px-2 py-1"
-                            >
-                              {processingRematch === rematch.id ? (
-                                <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-                              ) : (
-                                'Cancel'
-                              )}
-                            </button>
-                          ) : (
-                            // Receiver can accept or decline
-                            <>
-                              <button
-                                onClick={() => handleAcceptRematch(rematch)}
-                                disabled={processingRematch === rematch.id}
-                                className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all active:scale-95 disabled:opacity-50"
-                              >
-                                {processingRematch === rematch.id ? (
-                                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                  <Check size={16} />
-                                )}
-                              </button>
-                              <button
-                                onClick={() => handleDeclineRematch(rematch)}
-                                disabled={processingRematch === rematch.id}
-                                className="p-2 bg-slate-700 text-slate-400 rounded-lg hover:bg-slate-600 hover:text-white transition-all active:scale-95 disabled:opacity-50"
-                              >
-                                <X size={16} />
-                              </button>
-                            </>
-                          )}
-                        </div>
                       </div>
                     );
                   })}
@@ -2062,83 +2010,65 @@ const OnlineMenu = ({
       
       {/* Active Games Modal */}
       {showActiveGames && (
-        <div 
-          className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm"
-          onTouchMove={(e) => e.stopPropagation()}
-        >
-          {/* Backdrop click to close */}
-          <div 
-            className="absolute inset-0" 
-            onClick={() => setShowActiveGames(false)}
-          />
-          
-          {/* Modal content */}
-          <div className="relative z-10 flex items-start justify-center p-4 pt-[10vh]">
-            <div className="bg-slate-900 rounded-xl max-w-md w-full border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
-              {/* Header */}
-              <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Swords size={24} className="text-amber-400" />
-                  <h2 className="text-lg font-bold text-amber-300">Active Games</h2>
-                </div>
-                <button
-                  onClick={() => setShowActiveGames(false)}
-                  className="p-1 text-slate-400 hover:text-white transition-colors"
-                >
-                  <X size={24} />
-                </button>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+            {/* Header */}
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Swords size={24} className="text-amber-400" />
+                <h2 className="text-lg font-bold text-amber-300">Active Games</h2>
               </div>
-              
-              {/* Scrollable content */}
-              <div 
-                className="p-4 overflow-y-auto"
-                style={{ 
-                  maxHeight: '60vh',
-                  WebkitOverflowScrolling: 'touch'
-                }}
+              <button
+                onClick={() => setShowActiveGames(false)}
+                className="p-1 text-slate-400 hover:text-white transition-colors"
               >
-                {activeGames.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Swords className="mx-auto text-slate-600 mb-2" size={40} />
-                    <p className="text-slate-400">No active games</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {activeGames.filter(g => g).map(game => {
-                      const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
-                      const opponentName = getOpponentName(game);
-                      return (
-                        <div
-                          key={game.id}
-                          onClick={() => {
-                            soundManager.playButtonClick();
-                            setShowActiveGames(false);
-                            onResumeGame(game);
-                          }}
-                          className={`w-full p-4 rounded-lg flex items-center justify-between cursor-pointer active:opacity-80 ${
-                            isMyTurn 
-                              ? 'bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]' 
-                              : 'bg-slate-800/60 border border-slate-700/50'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">
-                              {opponentName?.[0]?.toUpperCase() || '?'}
-                            </div>
-                            <div className="text-left">
-                              <div className="text-white font-medium">vs {opponentName}</div>
-                              <div className={`text-sm ${isMyTurn ? 'text-amber-300 font-medium' : 'text-slate-500'}`}>
-                                {isMyTurn ? '🎮 Your turn!' : 'Waiting for opponent...'}
-                              </div>
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Games List */}
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {activeGames.length === 0 ? (
+                <div className="text-center py-8">
+                  <Swords className="mx-auto text-slate-600 mb-2" size={40} />
+                  <p className="text-slate-400">No active games</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeGames.filter(g => g).map(game => {
+                    const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
+                    const opponentName = getOpponentName(game);
+                    return (
+                      <button
+                        key={game.id}
+                        onClick={() => {
+                          soundManager.playButtonClick();
+                          setShowActiveGames(false);
+                          onResumeGame(game);
+                        }}
+                        className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
+                          isMyTurn 
+                            ? 'bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]' 
+                            : 'bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">
+                            {opponentName?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div className="text-left">
+                            <div className="text-white font-medium">vs {opponentName}</div>
+                            <div className={`text-sm ${isMyTurn ? 'text-amber-300 font-medium' : 'text-slate-500'}`}>
+                              {isMyTurn ? '🎮 Your turn!' : 'Waiting for opponent...'}
                             </div>
                           </div>
-                          <ChevronRight size={20} className={isMyTurn ? 'text-amber-400' : 'text-slate-600'} />
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                        <ChevronRight size={20} className={`${isMyTurn ? 'text-amber-400' : 'text-slate-600'}`} />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2146,13 +2076,8 @@ const OnlineMenu = ({
       
       {/* Recent Games Modal */}
       {showRecentGames && (
-        <div 
-          className="fixed inset-0 bg-black/80 z-50 p-4 backdrop-blur-sm"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setShowRecentGames(false);
-          }}
-        >
-          <div className="bg-slate-900 rounded-xl max-w-md w-full mx-auto mt-[10vh] max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
             {/* Header */}
             <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -2167,16 +2092,15 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Scrollable content */}
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(80vh - 70px)' }}>
-              <div className="p-4">
-                {recentGames.length === 0 ? (
-                  <div className="text-center py-8">
-                    <History className="mx-auto text-slate-600 mb-2" size={40} />
-                    <p className="text-slate-400">No recent games</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
+            {/* Games List */}
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {recentGames.length === 0 ? (
+                <div className="text-center py-8">
+                  <History className="mx-auto text-slate-600 mb-2" size={40} />
+                  <p className="text-slate-400">No recent games</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
              {recentGames.filter(g => g).map(game => {
   const result = getGameResult(game);
   const opponent = getOpponentData(game);
@@ -2259,9 +2183,8 @@ const OnlineMenu = ({
   );
 })}
 
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -2351,8 +2274,8 @@ const OnlineMenu = ({
           boardPieces={selectedGameForFinalView.board_pieces}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
-          player1Name={selectedGameForFinalView.player1?.display_name || selectedGameForFinalView.player1?.username || 'Player 1'}
-          player2Name={selectedGameForFinalView.player2?.display_name || selectedGameForFinalView.player2?.username || 'Player 2'}
+          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
         />
       )}

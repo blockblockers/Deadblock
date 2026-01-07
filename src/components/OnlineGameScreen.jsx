@@ -555,11 +555,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      detachGlobalTouchHandlers();
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
     };
-  }, [detachGlobalTouchHandlers]);
+  }, []);
 
   // Update board bounds
   useEffect(() => {
