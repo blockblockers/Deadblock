@@ -581,12 +581,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const updateGameState = useCallback((gameData, currentUserId) => {
     if (!gameData || !mountedRef.current) return;
 
-    // console.log('updateGameState: Received', { 
+    /* updateGameState debug - disabled for production
+    console.log('updateGameState: Received', { 
       id: gameData.id, 
       status: gameData.status,
       current_player: gameData.current_player,
       pieces: gameData.used_pieces?.length 
     });
+    */
 
     let validBoard = gameData.board;
     if (!Array.isArray(validBoard) || validBoard.length !== BOARD_SIZE) {
@@ -944,12 +946,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let winnerId = null;
     let gameOverReason = null;
     
-    // console.log('handleConfirm: Checking game over...', { 
+    /* handleConfirm game over check debug - disabled for production
+    console.log('handleConfirm: Checking game over...', { 
       usedPiecesCount: newUsedPieces.length, 
       totalPieces,
       myPlayerNumber,
       nextPlayer
     });
+    */
     
     // Case 1: All pieces have been placed - game ends, count cells to determine winner
     if (newUsedPieces.length >= totalPieces) {

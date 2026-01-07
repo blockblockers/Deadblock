@@ -276,11 +276,13 @@ class GameSyncService {
         updateData.winner_id = winnerId || null;
       }
 
-      // console.log('gameSync.makeMove: Updating game state...', { 
+      /* makeMove updating game state debug - disabled for production
+      console.log('gameSync.makeMove: Updating game state...', { 
         nextPlayer, 
         gameOver, 
         usedPiecesCount: newUsedPieces.length 
       });
+      */
 
       const updateHeaders = { ...headers };
       updateHeaders['Accept'] = 'application/vnd.pgrst.object+json';
@@ -301,10 +303,12 @@ class GameSyncService {
       }
 
       const updatedGame = await gameUpdateResponse.json();
-      // console.log('gameSync.makeMove: Game updated successfully', { 
+      /* makeMove success debug - disabled for production
+      console.log('gameSync.makeMove: Game updated successfully', { 
         newCurrentPlayer: updatedGame.current_player,
         status: updatedGame.status 
       });
+      */
 
       // Step 4: Update player stats if game is over
       if (gameOver && winnerId) {
