@@ -9,9 +9,6 @@ import MenuScreen from './components/MenuScreen';
 import GameScreen from './components/GameScreen';
 import NeonTitle from './components/NeonTitle';
 
-// Global persistent background animation (renders once, never remounts)
-import GlobalBackground from './components/GlobalBackground';
-
 // Loading screen for Suspense fallback
 import LoadingScreen from './components/LoadingScreen';
 import { LazyWrapper, LazyInline, preloadOnlineComponents, preloadPuzzleComponents, preloadWeeklyComponents } from './components/LazyWrapper';
@@ -52,7 +49,7 @@ const GameReplay = lazy(() => import('./components/GameReplay'));
 import IOSInstallPrompt from './components/IOSInstallPrompt';
 
 // Main App Content (wrapped in AuthProvider)
-function AppContent({ onBgThemeChange }) {
+function AppContent() {
   const [isMobile, setIsMobile] = useState(false);
   const [onlineGameId, setOnlineGameId] = useState(null);
   const [hasRedirectedAfterOAuth, setHasRedirectedAfterOAuth] = useState(false);
@@ -290,35 +287,6 @@ function AppContent({ onBgThemeChange }) {
     flipPiece,
     resetCurrentPuzzle,
   } = useGameState();
-
-  // Update background theme based on current screen/gameMode
-  useEffect(() => {
-    if (!onBgThemeChange) return;
-    
-    // Map gameMode to background theme
-    const themeMap = {
-      'null': 'menu',           // Main menu
-      'undefined': 'menu',
-      'auth': 'auth',           // Login/signup screens
-      'online-menu': 'online',  // Online lobby
-      'online-game': 'online',  // Online match
-      'matchmaking': 'online',  // Finding opponent
-      'puzzle': 'puzzle',       // Puzzle mode
-      'puzzle-select': 'puzzle',
-      'speed-puzzle': 'puzzle',
-      'weekly-menu': 'puzzle',  // Weekly uses puzzle theme
-      'weekly-challenge': 'puzzle',
-      'weekly-leaderboard': 'puzzle',
-      'difficulty-select': 'game',
-      'ai': 'game',             // AI games
-      'local': 'game',          // Local 2P
-      'profile': 'online',
-      'leaderboard': 'online',
-    };
-    
-    const theme = themeMap[String(gameMode)] || 'menu';
-    onBgThemeChange(theme);
-  }, [gameMode, onBgThemeChange]);
 
   // Check if user was already authenticated (skip entry screen)
   // This handles page refresh, OAuth return, and any other case where user is authenticated
@@ -1263,14 +1231,9 @@ function AppContent({ onBgThemeChange }) {
 
 // Main App with Auth Provider wrapper
 function App() {
-  // Background theme state - persists across screen changes
-  const [bgTheme, setBgTheme] = useState('menu');
-  
   return (
     <AuthProvider>
-      {/* Global background - rendered once, never remounts */}
-      <GlobalBackground theme={bgTheme} />
-      <AppContent onBgThemeChange={setBgTheme} />
+      <AppContent />
       <IOSInstallPrompt />
     </AuthProvider>
   );

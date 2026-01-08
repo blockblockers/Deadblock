@@ -22,6 +22,7 @@ import GameInviteNotification from './GameInviteNotification';
 import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import FloatingPieces from './FloatingPieces';
 
 // Online theme - amber/orange to match the menu button
 const theme = {
@@ -1043,10 +1044,19 @@ const OnlineMenu = ({
         overscrollBehavior: 'contain',
       }}
     >
+      {/* Themed Grid background */}
+      <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
+        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
+        backgroundSize: '40px 40px'
+      }} />
+      
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
+
+      {/* Floating pieces background animation */}
+      <FloatingPieces count={15} theme="online" minOpacity={0.2} maxOpacity={0.45} />
 
       {/* Active Game Prompt Modal */}
       {showActivePrompt && hasMyTurnGames && !loading && (
