@@ -172,6 +172,41 @@ class GameSyncService {
     return game.current_player === playerNum;
   }
 
+  // Get the last move for a game (for replay animation on load)
+  async getLastMove(gameId) {
+    if (!supabase) return { data: null, error: { message: 'Not configured' } };
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return { data: null, error: { message: 'Not authenticated' } };
+    }
+
+    try {
+      // Fetch the most recent move for this game
+      const fetchHeaders = { ...headers };
+      fetchHeaders['Accept'] = 'application/vnd.pgrst.object+json';
+      
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&order=move_number.desc&limit=1`,
+        { headers: fetchHeaders }
+      );
+
+      if (!response.ok) {
+        // If 406 (no rows), return null without error
+        if (response.status === 406) {
+          return { data: null, error: null };
+        }
+        return { data: null, error: { message: `Failed to fetch last move: ${response.status}` } };
+      }
+
+      const move = await response.json();
+      return { data: move, error: null };
+    } catch (e) {
+      console.error('gameSync.getLastMove: Exception:', e.message);
+      return { data: null, error: { message: e.message } };
+    }
+  }
+
   // =====================================================
   // FIXED: makeMove now uses direct fetch
   // board_state is now optional (won't break if column doesn't exist)
@@ -604,73 +639,6 @@ class GameSyncService {
       return { error: { message: e.message } };
     }
   }
-}
-
-// Standalone function for creating rematch games
-export async function createRematchGame(originalGameId, currentUserId, opponentId, firstPlayerId) {
-  if (!supabase) return { data: null, error: { message: 'Not configured' } };
-
-  // console.log('[GameSync] Creating rematch game:', { originalGameId, currentUserId, opponentId, firstPlayerId });
-
-  const headers = getAuthHeaders();
-  if (!headers) {
-    return { data: null, error: { message: 'Not authenticated' } };
-  }
-
-  try {
-    // Determine player positions based on who goes first
-    // firstPlayerId becomes player1 (who always goes first)
-    const player1Id = firstPlayerId;
-    const player2Id = firstPlayerId === currentUserId ? opponentId : currentUserId;
-
-    // Create empty board - must use 0 not null (matches working format)
-    const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
-
-    // Create new game matching the format used in inviteService
-    const newGame = {
-      player1_id: player1Id,
-      player2_id: player2Id,
-      status: 'active',
-      current_player: 1, // Player 1 always goes first
-      board: emptyBoard,
-      board_pieces: {},
-      used_pieces: []
-      // Don't include timer_seconds, turn_started_at, created_at, updated_at
-      // - database will auto-generate these
-    };
-
-    // console.log('[GameSync] Rematch game data:', newGame);
-
-    const createHeaders = { ...headers, 'Prefer': 'return=representation' };
-
-    const response = await fetch(
-      `${SUPABASE_URL}/rest/v1/games`,
-      {
-        method: 'POST',
-        headers: createHeaders,
-        body: JSON.stringify(newGame)
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[GameSync] Rematch creation failed:', response.status, errorText);
-      return { data: null, error: { message: `Failed to create rematch: ${response.status}` } };
-    }
-
-    // Response is an array when using 'return=representation'
-    const games = await response.json();
-    const createdGame = Array.isArray(games) ? games[0] : games;
-    
-    // console.log('[GameSync] Rematch created successfully:', createdGame?.id);
-
-    return { data: createdGame, error: null };
-
-  } catch (e) {
-    console.error('[GameSync] Rematch error:', e);
-    return { data: null, error: { message: e.message } };
-  }
-}
 
   // Check for and auto-forfeit games with no activity for 2+ weeks
   // Only reduces rating for inactive player, doesn't increase opponent's rating
@@ -745,6 +713,72 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
       console.error('[GameSync] checkAndForfeitStaleGames error:', e);
       return { forfeited: [] };
     }
+  }
+}
+
+// Standalone function for creating rematch games
+export async function createRematchGame(originalGameId, currentUserId, opponentId, firstPlayerId) {
+  if (!supabase) return { data: null, error: { message: 'Not configured' } };
+
+  // console.log('[GameSync] Creating rematch game:', { originalGameId, currentUserId, opponentId, firstPlayerId });
+
+  const headers = getAuthHeaders();
+  if (!headers) {
+    return { data: null, error: { message: 'Not authenticated' } };
+  }
+
+  try {
+    // Determine player positions based on who goes first
+    // firstPlayerId becomes player1 (who always goes first)
+    const player1Id = firstPlayerId;
+    const player2Id = firstPlayerId === currentUserId ? opponentId : currentUserId;
+
+    // Create empty board - must use 0 not null (matches working format)
+    const emptyBoard = Array(8).fill(null).map(() => Array(8).fill(0));
+
+    // Create new game matching the format used in inviteService
+    const newGame = {
+      player1_id: player1Id,
+      player2_id: player2Id,
+      status: 'active',
+      current_player: 1, // Player 1 always goes first
+      board: emptyBoard,
+      board_pieces: {},
+      used_pieces: []
+      // Don't include timer_seconds, turn_started_at, created_at, updated_at
+      // - database will auto-generate these
+    };
+
+    // console.log('[GameSync] Rematch game data:', newGame);
+
+    const createHeaders = { ...headers, 'Prefer': 'return=representation' };
+
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/games`,
+      {
+        method: 'POST',
+        headers: createHeaders,
+        body: JSON.stringify(newGame)
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[GameSync] Rematch creation failed:', response.status, errorText);
+      return { data: null, error: { message: `Failed to create rematch: ${response.status}` } };
+    }
+
+    // Response is an array when using 'return=representation'
+    const games = await response.json();
+    const createdGame = Array.isArray(games) ? games[0] : games;
+    
+    // console.log('[GameSync] Rematch created successfully:', createdGame?.id);
+
+    return { data: createdGame, error: null };
+
+  } catch (e) {
+    console.error('[GameSync] Rematch error:', e);
+    return { data: null, error: { message: e.message } };
   }
 }
 
