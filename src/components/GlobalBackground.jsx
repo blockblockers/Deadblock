@@ -1,132 +1,137 @@
-// GlobalBackground.jsx - Persistent animated background that doesn't remount between screens
-// Uses CSS custom properties to avoid re-parsing keyframes on navigation
-// This component renders ONCE at the App level and persists across all screen changes
-// FIX: Added bg-slate-950 base color so screens can be transparent
+// GlobalBackground.jsx - Fixed with improved sporadic floating pieces animation
+// CHANGES:
+// 1. Better random distribution of pieces across the grid (not diagonal)
+// 2. Pieces appear, move around, and fade in/out sporadically
+// 3. Uses staggered animation delays and varied movement patterns
 
-import { memo, useEffect, useRef } from 'react';
+import { memo, useRef, useEffect, useMemo } from 'react';
 import { pieces } from '../utils/pieces';
 
-// Piece types to use - FIXED: Only valid pentomino pieces (removed O, S, J which are Tetris pieces)
-const PIECE_TYPES = ['I', 'T', 'L', 'P', 'F', 'N', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+// Pre-generate piece data with TRULY random positions (not diagonal)
+const generatePiecesData = () => {
+  const pieceNames = Object.keys(pieces);
+  const numPieces = 16; // More pieces for better coverage
+  
+  // Create a grid-based distribution to ensure good spread
+  const gridCols = 4;
+  const gridRows = 4;
+  const cellWidth = 100 / gridCols;
+  const cellHeight = 100 / gridRows;
+  
+  const result = [];
+  
+  for (let i = 0; i < numPieces; i++) {
+    // Distribute across grid cells with random offset within each cell
+    const gridCol = i % gridCols;
+    const gridRow = Math.floor(i / gridCols) % gridRows;
+    
+    // Random position within the grid cell (with some overlap allowed)
+    const baseX = gridCol * cellWidth;
+    const baseY = gridRow * cellHeight;
+    const offsetX = Math.random() * cellWidth * 0.8;
+    const offsetY = Math.random() * cellHeight * 0.8;
+    
+    result.push({
+      id: i,
+      piece: pieceNames[Math.floor(Math.random() * pieceNames.length)],
+      // Position with grid-based distribution + random offset
+      startX: baseX + offsetX,
+      startY: baseY + offsetY,
+      // Longer, staggered delays so pieces appear at different times
+      delay: (Math.random() * 15) - (15 / 2), // Negative delays start mid-animation
+      // Varied durations for more organic movement
+      duration: 12 + Math.random() * 18,
+      // Movement pattern - random direction and distance
+      floatX: (Math.random() - 0.5) * 100,
+      floatY: (Math.random() - 0.5) * 80,
+      // Random rotation
+      rotation: Math.random() * 360,
+      rotationSpeed: (Math.random() - 0.5) * 180,
+      // Size variation
+      scale: 0.5 + Math.random() * 0.6,
+      // Fade timing (staggered appearance)
+      fadeOffset: Math.random() * 0.4,
+    });
+  }
+  
+  return result;
+};
 
-// Color themes for different screens
+// Static data - generated once
+const PIECES_DATA = generatePiecesData();
+
+// Theme color configurations
 const THEMES = {
   menu: [
-    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan
-    { color: '#a855f7', glow: 'rgba(168,85,247,0.5)' },   // purple
-    { color: '#ec4899', glow: 'rgba(236,72,153,0.5)' },   // pink
+    { color: '#22d3ee', glow: 'rgba(34,211,238,0.6)' },   // cyan
+    { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },   // pink
+    { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },   // purple
+    { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },    // green
   ],
   online: [
-    { color: '#f59e0b', glow: 'rgba(245,158,11,0.5)' },   // amber
-    { color: '#f97316', glow: 'rgba(249,115,22,0.5)' },   // orange
-    { color: '#eab308', glow: 'rgba(234,179,8,0.5)' },    // yellow
+    { color: '#fbbf24', glow: 'rgba(251,191,36,0.6)' },   // amber
+    { color: '#f97316', glow: 'rgba(249,115,22,0.6)' },   // orange
+    { color: '#eab308', glow: 'rgba(234,179,8,0.6)' },    // yellow
+    { color: '#fb923c', glow: 'rgba(251,146,60,0.6)' },   // light orange
   ],
   game: [
-    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan
-    { color: '#a855f7', glow: 'rgba(168,85,247,0.5)' },   // purple
-    { color: '#6366f1', glow: 'rgba(99,102,241,0.5)' },   // indigo
+    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan (lighter)
+    { color: '#ec4899', glow: 'rgba(236,72,153,0.5)' },   // pink (lighter)
   ],
   puzzle: [
-    { color: '#10b981', glow: 'rgba(16,185,129,0.5)' },   // green
-    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan
-    { color: '#14b8a6', glow: 'rgba(20,184,166,0.5)' },   // teal
-  ],
-  auth: [
-    { color: '#6366f1', glow: 'rgba(99,102,241,0.5)' },   // indigo
-    { color: '#8b5cf6', glow: 'rgba(139,92,246,0.5)' },   // violet
-    { color: '#a855f7', glow: 'rgba(168,85,247,0.5)' },   // purple
+    { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },    // green
+    { color: '#10b981', glow: 'rgba(16,185,129,0.6)' },   // emerald
+    { color: '#14b8a6', glow: 'rgba(20,184,166,0.6)' },   // teal
   ],
 };
 
-// Global CSS - injected once into document head
-// Using CSS custom properties allows animation to continue without re-parsing
+// Global styles - injected once
 const GLOBAL_STYLES = `
-  @keyframes gbFloat {
-    0%, 100% {
-      transform: translate(0, 0) rotate(var(--gb-rot)) scale(1);
-      opacity: 0.4;
-    }
-    25% {
-      transform: translate(calc(var(--gb-fx) * 0.6), calc(var(--gb-fy) * 0.4)) rotate(calc(var(--gb-rot) + 45deg)) scale(1.05);
-      opacity: 0.6;
-    }
-    50% {
-      transform: translate(var(--gb-fx), var(--gb-fy)) rotate(calc(var(--gb-rot) + 90deg)) scale(1.1);
-      opacity: 0.7;
-    }
-    75% {
-      transform: translate(calc(var(--gb-fx) * 0.4), calc(var(--gb-fy) * 0.8)) rotate(calc(var(--gb-rot) + 135deg)) scale(1.05);
-      opacity: 0.6;
-    }
-  }
-  
-  .gb-piece {
-    position: absolute;
-    pointer-events: none;
-    animation: gbFloat var(--gb-dur) ease-in-out infinite;
-    animation-delay: var(--gb-delay);
-    will-change: transform, opacity;
-  }
-  
-  .gb-cell {
-    position: absolute;
-    border-radius: 2px;
-    transition: background-color 0.8s ease, box-shadow 0.8s ease;
-  }
-  
-  .gb-grid {
-    position: absolute;
-    inset: 0;
-    opacity: 0.25;
-    transition: background-image 0.8s ease;
-  }
-  
   .gb-container {
     position: fixed;
     inset: 0;
     overflow: hidden;
     pointer-events: none;
     z-index: 0;
-    background-color: #020617; /* bg-slate-950 - provides dark base */
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+  }
+  
+  .gb-grid {
+    position: absolute;
+    inset: 0;
+    opacity: 0.25;
+    animation: gb-grid-drift 30s ease-in-out infinite;
+  }
+  
+  @keyframes gb-grid-drift {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(10px, 10px); }
+  }
+  
+  .gb-piece {
+    position: absolute;
+    pointer-events: none;
+    will-change: transform, opacity;
   }
 `;
 
-// Generate stable pieces data once - uses deterministic "randomness"
-const generatePiecesData = (count) => {
-  const data = [];
-  for (let i = 0; i < count; i++) {
-    const seed = i * 7919; // Prime for distribution
-    const rand = (offset) => ((seed + offset * 13) % 1000) / 1000;
-    
-    data.push({
-      id: i,
-      piece: PIECE_TYPES[i % PIECE_TYPES.length],
-      startX: rand(1) * 100,
-      startY: rand(2) * 100,
-      size: 0.6 + rand(3) * 0.8,
-      duration: 20 + rand(4) * 25,
-      delay: -rand(5) * 30, // Negative = start mid-animation
-      rotation: rand(6) * 360,
-      floatX: (rand(7) - 0.5) * 60,
-      floatY: (rand(8) - 0.5) * 60,
-      colorIndex: i % 3,
-    });
-  }
-  return data;
-};
-
-// Pre-generate pieces data at module level (truly static)
-const PIECES_DATA = generatePiecesData(15);
-
-// Single floating piece - uses CSS custom properties for animation
+// Individual floating piece component with improved animation
 const FloatingPiece = memo(({ data, colors }) => {
-  const { piece, startX, startY, size, duration, delay, rotation, floatX, floatY, colorIndex } = data;
+  const { 
+    piece, startX, startY, delay, duration, 
+    floatX, floatY, rotation, rotationSpeed, scale, fadeOffset 
+  } = data;
+  
   const coords = pieces[piece] || pieces.T;
   const minX = Math.min(...coords.map(([x]) => x));
   const minY = Math.min(...coords.map(([, y]) => y));
   
-  const color = colors[colorIndex]?.color || '#22d3ee';
-  const glow = colors[colorIndex]?.glow || 'rgba(34,211,238,0.5)';
+  // Pick color based on piece index for variety
+  const colorIndex = data.id % colors.length;
+  const { color, glow } = colors[colorIndex];
+  
+  // Unique keyframe name for this piece's animation
+  const keyframeName = `gb-float-${data.id}`;
   
   return (
     <div
@@ -134,29 +139,61 @@ const FloatingPiece = memo(({ data, colors }) => {
       style={{
         left: `${startX}%`,
         top: `${startY}%`,
-        '--gb-rot': `${rotation}deg`,
-        '--gb-fx': `${floatX}px`,
-        '--gb-fy': `${floatY}px`,
-        '--gb-dur': `${duration}s`,
-        '--gb-delay': `${delay}s`,
-        filter: `drop-shadow(0 0 8px ${glow})`,
+        filter: `drop-shadow(0 0 10px ${glow})`,
       }}
     >
-      <div style={{ transform: `scale(${size})`, position: 'relative' }}>
-        {coords.map(([x, y], idx) => (
-          <div
-            key={idx}
-            className="gb-cell"
-            style={{
-              width: 8,
-              height: 8,
-              left: (x - minX) * 10,
-              top: (y - minY) * 10,
-              backgroundColor: color,
-              boxShadow: `0 0 12px ${glow}`,
-            }}
-          />
-        ))}
+      <style>{`
+        @keyframes ${keyframeName} {
+          0% {
+            transform: translate(0, 0) rotate(${rotation}deg) scale(${scale});
+            opacity: 0;
+          }
+          ${10 + fadeOffset * 20}% {
+            opacity: 0.6;
+          }
+          25% {
+            transform: translate(${floatX * 0.4}px, ${floatY * 0.3}px) rotate(${rotation + rotationSpeed * 0.25}deg) scale(${scale * 1.05});
+            opacity: 0.7;
+          }
+          50% {
+            transform: translate(${floatX}px, ${floatY}px) rotate(${rotation + rotationSpeed * 0.5}deg) scale(${scale * 1.1});
+            opacity: 0.8;
+          }
+          75% {
+            transform: translate(${floatX * 0.6}px, ${floatY * 1.2}px) rotate(${rotation + rotationSpeed * 0.75}deg) scale(${scale * 1.05});
+            opacity: 0.6;
+          }
+          ${90 - fadeOffset * 10}% {
+            opacity: 0.4;
+          }
+          100% {
+            transform: translate(0, 0) rotate(${rotation + rotationSpeed}deg) scale(${scale});
+            opacity: 0;
+          }
+        }
+      `}</style>
+      <div
+        style={{
+          animation: `${keyframeName} ${duration}s ease-in-out infinite`,
+          animationDelay: `${delay}s`,
+        }}
+      >
+        <div style={{ transform: `scale(${scale})` }}>
+          {coords.map(([x, y], idx) => (
+            <div
+              key={idx}
+              className="absolute rounded-sm"
+              style={{
+                width: 10,
+                height: 10,
+                left: (x - minX) * 12,
+                top: (y - minY) * 12,
+                backgroundColor: color,
+                boxShadow: `0 0 12px ${glow}`,
+              }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -164,11 +201,11 @@ const FloatingPiece = memo(({ data, colors }) => {
 
 FloatingPiece.displayName = 'FloatingPiece';
 
-// Main background component - renders once, updates colors via props
+// Main background component
 const GlobalBackground = memo(({ theme = 'menu' }) => {
   const stylesInjectedRef = useRef(false);
   
-  // Inject global styles exactly once (survives across renders)
+  // Inject global styles exactly once
   useEffect(() => {
     if (stylesInjectedRef.current) return;
     if (document.getElementById('gb-styles')) {
@@ -201,7 +238,7 @@ const GlobalBackground = memo(({ theme = 'menu' }) => {
         }}
       />
       
-      {/* Floating pieces - use pre-generated static data */}
+      {/* Floating pieces with sporadic animation */}
       {PIECES_DATA.map(piece => (
         <FloatingPiece key={piece.id} data={piece} colors={colors} />
       ))}
