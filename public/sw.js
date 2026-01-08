@@ -121,35 +121,33 @@ self.addEventListener('notificationclick', (event) => {
   notification.close();
   
   // Determine URL to open based on action and notification type
-  let urlToOpen = data.url || '/';
+  // Use query params that the SPA can handle
+  let urlToOpen = '/';
   
   if (data.type === 'your_turn' && data.gameId) {
-    urlToOpen = `/game/${data.gameId}`;
+    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
   } else if (data.type === 'game_invite') {
     if (action === 'accept' && data.inviteId) {
-      // Will handle accept on the client side
-      urlToOpen = `/online?acceptInvite=${data.inviteId}`;
+      urlToOpen = `/?navigateTo=online&acceptInvite=${data.inviteId}`;
     } else if (action === 'decline') {
       // Just close, decline handled passively
       return;
     } else {
-      urlToOpen = '/online';
+      urlToOpen = '/?navigateTo=online';
     }
   } else if (data.type === 'rematch_request' && data.gameId) {
-    // Navigate to the game to handle rematch
-    urlToOpen = `/game/${data.gameId}`;
+    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
   } else if (data.type === 'rematch_accepted' && data.gameId) {
-    // Navigate to the new game
-    urlToOpen = `/game/${data.gameId}`;
+    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
   } else if (data.type === 'rematch' && data.gameId) {
-    // Legacy support
-    urlToOpen = `/game/${data.gameId}`;
+    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
   } else if (data.type === 'chat_message' && data.gameId) {
-    // Navigate to game with chat open
-    urlToOpen = `/game/${data.gameId}?openChat=true`;
+    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}&openChat=true`;
   } else if (data.type === 'chat' && data.gameId) {
-    // Legacy support
-    urlToOpen = `/game/${data.gameId}?openChat=true`;
+    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}&openChat=true`;
+  } else if (data.gameId) {
+    // Fallback for any notification with a gameId
+    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
   }
   
   console.log('[SW] Opening URL:', urlToOpen, 'for type:', data.type);

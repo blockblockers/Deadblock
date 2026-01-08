@@ -11,7 +11,6 @@ import DPad from './DPad';
 import GameStatus from './GameStatus';
 import GameOverModal from './GameOverModal';
 import DragOverlay from './DragOverlay';
-import FloatingPiecesBackground from './FloatingPiecesBackground';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
@@ -553,18 +552,9 @@ const GameScreen = ({
         touchAction: isDragging ? 'none' : 'pan-y',
       } : {}}
     >
-      {/* Dynamic grid background */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
-        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
-        backgroundSize: '30px 30px'
-      }} />
-      
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
-      
-      {/* Floating pieces background animation */}
-      <FloatingPiecesBackground />
 
       {/* Main content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>

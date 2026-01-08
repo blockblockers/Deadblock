@@ -22,7 +22,6 @@ import GameInviteNotification from './GameInviteNotification';
 import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
-import FloatingPieces from './FloatingPieces';
 
 // Online theme - amber/orange to match the menu button
 const theme = {
@@ -45,15 +44,15 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || 'Unknown';
+      return game.player2?.display_name || game.player2?.username || 'Unknown';
     }
-    return game.player1?.username || 'Unknown';
+    return game.player1?.display_name || game.player1?.username || 'Unknown';
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
-  const displayName = profile?.username;
+  const displayName = profile?.display_name || profile?.username;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -252,11 +251,38 @@ const OnlineMenu = ({
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
 
   // Initialize notifications
+  // Auto-request notification permission on first online visit (mobile only)
   useEffect(() => {
     const initNotifications = async () => {
       await notificationService.init();
       setNotificationsEnabled(notificationService.isEnabled());
-      setShowNotificationPrompt(notificationService.shouldPrompt());
+      
+      // Only auto-prompt on mobile - desktop notifications require browser to be open
+      // so they're less useful and we don't want to be annoying
+      if (!notificationService.isMobileDevice()) {
+        setShowNotificationPrompt(false);
+        return;
+      }
+      
+      // Check if this is first time in online mode and notifications not yet decided
+      const hasAskedBefore = localStorage.getItem('deadblock_notification_asked');
+      const permission = notificationService.permission;
+      
+      if (!hasAskedBefore && permission === 'default' && notificationService.isPushSupported()) {
+        // Mark that we've asked (so we only auto-ask once)
+        localStorage.setItem('deadblock_notification_asked', 'true');
+        
+        // Small delay to let the page load, then auto-trigger permission request
+        setTimeout(async () => {
+          const result = await notificationService.requestPermission();
+          setNotificationsEnabled(result === 'granted');
+          // Don't show the manual prompt since we just asked
+          setShowNotificationPrompt(false);
+        }, 1500);
+      } else {
+        // For subsequent visits, show prompt only if they haven't decided yet
+        setShowNotificationPrompt(notificationService.shouldPrompt());
+      }
     };
     initNotifications();
   }, []);
@@ -375,8 +401,9 @@ const OnlineMenu = ({
           // Get inviter info
           const { data: invites } = await inviteService.getReceivedInvites(profile.id);
           const invite = invites?.find(i => i.id === newInvite.id);
-          if (invite?.from_user?.username) {
-            notificationService.notifyGameInvite(invite.from_user.username, newInvite.id);
+          if (invite?.from_user) {
+            const inviterName = invite.from_user.display_name || invite.from_user.username;
+            notificationService.notifyGameInvite(inviterName, newInvite.id);
           }
         }
       },
@@ -392,8 +419,8 @@ const OnlineMenu = ({
             const { data: game } = await gameSyncService.getGame(updatedInvite.game_id);
             if (game) {
               const opponentName = game.player1_id === profile.id 
-                ? game.player2?.username 
-                : game.player1?.username;
+                ? (game.player2?.display_name || game.player2?.username)
+                : (game.player1?.display_name || game.player1?.username);
               notificationService.notifyInviteAccepted(opponentName || 'Opponent', updatedInvite.game_id);
             }
           }
@@ -425,8 +452,8 @@ const OnlineMenu = ({
           const { data: game } = await gameSyncService.getGame(rematchData.game_id);
           if (game) {
             const requesterName = game.player1_id === rematchData.from_user_id 
-              ? game.player1?.username 
-              : game.player2?.username;
+              ? (game.player1?.display_name || game.player1?.username)
+              : (game.player2?.display_name || game.player2?.username);
             notificationService.notifyRematchRequest(requesterName || 'Opponent', rematchData.game_id, rematchData.id);
           }
         }
@@ -442,8 +469,8 @@ const OnlineMenu = ({
           const { data: newGame } = await gameSyncService.getGame(rematchData.new_game_id);
           if (newGame) {
             const accepterName = newGame.player1_id === profile.id
-              ? newGame.player2?.username
-              : newGame.player1?.username;
+              ? (newGame.player2?.display_name || newGame.player2?.username)
+              : (newGame.player1?.display_name || newGame.player1?.username);
             notificationService.notifyRematchAccepted(accepterName || 'Opponent', rematchData.new_game_id);
           }
         }
@@ -497,6 +524,18 @@ const OnlineMenu = ({
     loadGamesInProgress.current = true;
 
     try {
+      // Check for stale games once per session (every 6 hours)
+      const lastStaleCheck = localStorage.getItem('deadblock_last_stale_check');
+      const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
+      
+      if (!lastStaleCheck || parseInt(lastStaleCheck) < sixHoursAgo) {
+        const { forfeited } = await gameSyncService.checkAndForfeitStaleGames(profile.id);
+        if (forfeited?.length > 0) {
+          console.log(`[OnlineMenu] Auto-forfeited ${forfeited.length} stale game(s)`);
+        }
+        localStorage.setItem('deadblock_last_stale_check', Date.now().toString());
+      }
+      
       // Get active games
       const { data: active } = await gameSyncService.getActiveGames(profile.id);
       setActiveGames(active || []);
@@ -564,11 +603,11 @@ const OnlineMenu = ({
     
     // Validate format
     if (value.length < 3) {
-      setUsernameError('Username must be at least 3 characters');
+      setUsernameError('Name must be at least 3 characters');
       return;
     }
     if (value.length > 20) {
-      setUsernameError('Username must be 20 characters or less');
+      setUsernameError('Name must be 20 characters or less');
       return;
     }
     if (!/^[a-zA-Z0-9_]+$/.test(value)) {
@@ -576,17 +615,58 @@ const OnlineMenu = ({
       return;
     }
     
-    // Check availability (debounced would be better, but keeping it simple)
+    // Check availability for both username AND display_name
     if (value.toLowerCase() !== profile?.username?.toLowerCase()) {
       setCheckingUsername(true);
-      const { available, error } = await checkUsernameAvailable(value);
-      setCheckingUsername(false);
       
-      if (error) {
-        setUsernameError('Error checking username');
-      } else if (!available) {
-        setUsernameError('Username is already taken');
+      try {
+        // Check if username OR display_name is taken (case-insensitive)
+        const { available: usernameAvailable, error: usernameError } = await checkUsernameAvailable(value);
+        
+        if (usernameError) {
+          setUsernameError('Error checking availability');
+          setCheckingUsername(false);
+          return;
+        }
+        
+        if (!usernameAvailable) {
+          setUsernameError('This name is already taken');
+          setCheckingUsername(false);
+          return;
+        }
+        
+        // Also check display_name directly (for users who have different display_name than username)
+        const headers = {
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json'
+        };
+        const authData = localStorage.getItem(`sb-${import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0]}-auth-token`);
+        if (authData) {
+          try {
+            const parsed = JSON.parse(authData);
+            if (parsed?.access_token) {
+              headers['Authorization'] = `Bearer ${parsed.access_token}`;
+            }
+          } catch (e) {}
+        }
+        
+        const displayNameUrl = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/profiles?select=id&display_name=ilike.${encodeURIComponent(value)}&id=neq.${profile?.id}&limit=1`;
+        const displayNameResponse = await fetch(displayNameUrl, { headers });
+        
+        if (displayNameResponse.ok) {
+          const existing = await displayNameResponse.json();
+          if (existing && existing.length > 0) {
+            setUsernameError('This name is already taken');
+            setCheckingUsername(false);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error('Error checking name availability:', err);
+        setUsernameError('Error checking availability');
       }
+      
+      setCheckingUsername(false);
     }
   };
 
@@ -602,7 +682,15 @@ const OnlineMenu = ({
     setSavingUsername(false);
     
     if (error) {
-      setUsernameError(error.message || 'Failed to update username');
+      // Handle specific database errors
+      const errorMsg = error.message || '';
+      if (errorMsg.includes('unique') || errorMsg.includes('duplicate') || errorMsg.includes('already')) {
+        setUsernameError('This name is already taken');
+      } else if (errorMsg.includes('length') || errorMsg.includes('too short') || errorMsg.includes('too long')) {
+        setUsernameError('Name must be 3-20 characters');
+      } else {
+        setUsernameError(errorMsg || 'Failed to update name');
+      }
     } else {
       soundManager.playSound('success');
       setShowUsernameEdit(false);
@@ -800,7 +888,7 @@ const OnlineMenu = ({
       try {
         await navigator.share({
           title: 'Play Deadblock with me!',
-          text: `${profile?.username || 'A friend'} wants to challenge you to Deadblock!`,
+          text: `${profile?.display_name || profile?.username || 'A friend'} wants to challenge you to Deadblock!`,
           url: invite.inviteLink
         });
         soundManager.playClickSound('confirm');
@@ -901,9 +989,9 @@ const OnlineMenu = ({
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || 'Unknown';
+      return game.player2?.display_name || game.player2?.username || 'Unknown';
     }
-    return game.player1?.username || 'Unknown';
+    return game.player1?.display_name || game.player1?.username || 'Unknown';
   };
 
   // Get opponent ID from game
@@ -917,17 +1005,19 @@ const OnlineMenu = ({
 
   // Get opponent data from game
   const getOpponentData = (game) => {
-  if (!game || !profile?.id) return { id: null, username: 'Unknown' };
+  if (!game || !profile?.id) return { id: null, username: 'Unknown', displayName: 'Unknown' };
   if (game.player1_id === profile.id) {
     return { 
       id: game.player2_id,
       username: game.player2?.username || 'Unknown',
+      displayName: game.player2?.display_name || game.player2?.username || 'Unknown',
       data: game.player2
     };
   }
   return { 
     id: game.player1_id,
     username: game.player1?.username || 'Unknown',
+    displayName: game.player1?.display_name || game.player1?.username || 'Unknown',
     data: game.player1
   };
 };
@@ -953,19 +1043,10 @@ const OnlineMenu = ({
         overscrollBehavior: 'contain',
       }}
     >
-      {/* Themed Grid background */}
-      <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
-        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
-        backgroundSize: '40px 40px'
-      }} />
-      
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
-
-      {/* Floating pieces background animation */}
-      <FloatingPieces count={15} theme="online" minOpacity={0.2} maxOpacity={0.45} />
 
       {/* Active Game Prompt Modal */}
       {showActivePrompt && hasMyTurnGames && !loading && (
@@ -1055,11 +1136,11 @@ const OnlineMenu = ({
               {/* Top row: Avatar and actions */}
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {(profile?.username)?.[0]?.toUpperCase() || '?'}
+                  {(profile?.display_name || profile?.username)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.username || 'Player'}</h2>
+                    <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
                       className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
@@ -1350,7 +1431,13 @@ const OnlineMenu = ({
               
             {/* Expanded Challenge Options */}
             {showSearch && (
-              <div className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30 space-y-3" style={{ boxShadow: '0 0 15px rgba(168,85,247,0.15)' }}>
+              <div 
+                className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30 space-y-3" 
+                style={{ 
+                  boxShadow: '0 0 15px rgba(168,85,247,0.15)',
+                  touchAction: 'pan-y',
+                  WebkitOverflowScrolling: 'touch',
+                }}>
                 {/* Option 1: Search by Username/Email */}
                 <div className="bg-slate-900/50 rounded-lg p-3 border border-purple-500/20">
                   <div className="flex items-center gap-2 mb-2">
@@ -1368,6 +1455,7 @@ const OnlineMenu = ({
                       onChange={(e) => handleSearch(e.target.value)}
                       placeholder="Enter username or email..."
                       className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-purple-500/50 focus:outline-none placeholder:text-slate-600"
+                      style={{ touchAction: 'manipulation' }}
                     />
                     {searching && (
                       <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -1381,6 +1469,7 @@ const OnlineMenu = ({
                     <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                       {searchResults.map(user => {
                         const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
+                        const displayName = user.display_name || user.username;
                         return (
                           <div
                             key={user.id}
@@ -1388,10 +1477,10 @@ const OnlineMenu = ({
                           >
                               <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-xs font-bold">
-                                  {user.username?.[0]?.toUpperCase() || '?'}
+                                  {displayName?.[0]?.toUpperCase() || '?'}
                                 </div>
                                 <div>
-                                  <div className="text-white text-sm font-medium">{user.username}</div>
+                                  <div className="text-white text-sm font-medium">{displayName}</div>
                                   <div className="text-cyan-400/70 text-xs flex items-center gap-1">
                                     <TierIcon shape={ratingService.getRatingTier(user.rating || 1000).shape} glowColor={ratingService.getRatingTier(user.rating || 1000).glowColor} size="small" />
                                     <span>{user.rating || 1000}</span>
@@ -1451,6 +1540,7 @@ const OnlineMenu = ({
                           onChange={(e) => setFriendName(e.target.value)}
                           placeholder="Friend's name (optional)"
                           className="w-full pl-9 pr-4 py-2.5 bg-slate-800 rounded-lg text-white text-sm border border-slate-700/50 focus:border-purple-500/50 focus:outline-none placeholder:text-slate-600"
+                          style={{ touchAction: 'manipulation' }}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               handleCreateInviteLink();
@@ -1635,17 +1725,19 @@ const OnlineMenu = ({
                   className="space-y-2 max-h-60 overflow-y-auto pr-1"
                   style={{ WebkitOverflowScrolling: 'touch' }}
                 >
-                  {receivedInvites.map(invite => (
+                  {receivedInvites.map(invite => {
+                    const inviterName = invite.from_user?.display_name || invite.from_user?.username || 'Unknown';
+                    return (
                     <div
                       key={invite.id}
                       className="flex items-center justify-between p-3 bg-slate-900/60 rounded-lg border border-green-500/20"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-xs font-bold">
-                          {invite.from_user?.username?.[0]?.toUpperCase() || '?'}
+                          {inviterName?.[0]?.toUpperCase() || '?'}
                         </div>
                         <div>
-                          <div className="text-white text-sm font-medium">{invite.from_user?.username || 'Unknown'}</div>
+                          <div className="text-white text-sm font-medium">{inviterName}</div>
                           <div className="text-green-400/70 text-xs">wants to play!</div>
                         </div>
                       </div>
@@ -1670,7 +1762,8 @@ const OnlineMenu = ({
                         </button>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             )}
@@ -1687,9 +1780,9 @@ const OnlineMenu = ({
                   style={{ WebkitOverflowScrolling: 'touch' }}
                 >
                   {sentInvites.map(invite => {
-                    // Get the best display name available
-                    const displayName = invite.to_user?.username 
-                      || invite.to_user?.display_name 
+                    // Get the best display name available - prefer display_name over username
+                    const displayName = invite.to_user?.display_name 
+                      || invite.to_user?.username 
                       || invite.recipientName
                       || 'Player';
                     const initial = displayName?.[0]?.toUpperCase() || '?';
@@ -2133,11 +2226,11 @@ const OnlineMenu = ({
           disabled={!opponent.id}
         >
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-slate-300 font-bold border border-slate-600/50">
-            {opponent.username?.[0]?.toUpperCase() || '?'}
+            {opponent.displayName?.[0]?.toUpperCase() || '?'}
           </div>
           <div>
             <div className="text-slate-200 font-medium flex items-center gap-1">
-              vs {opponent.username}
+              vs {opponent.displayName}
               {opponent.id && <ChevronRight size={14} className="text-slate-500" />}
             </div>
             <div className="text-slate-500 text-xs">

@@ -3,7 +3,6 @@ import NeonTitle from './NeonTitle';
 import HowToPlayModal from './HowToPlayModal';
 import SettingsModal from './SettingsModal';
 import PlayerProfileCard from './PlayerProfileCard';
-import FloatingPieces from './FloatingPieces';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { isSupabaseConfigured } from '../utils/supabase';
@@ -124,12 +123,6 @@ const MenuScreen = ({
       className="fixed inset-0 bg-slate-950"
       style={scrollStyles}
     >
-      {/* Grid background with subtle drift animation */}
-      <div className="fixed inset-0 opacity-30 pointer-events-none animate-grid-drift" style={{
-        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
-        backgroundSize: '40px 40px'
-      }} />
-      
       {/* Animated glow orbs */}
       <div className="fixed top-1/4 left-1/4 w-64 h-64 bg-pink-500/20 rounded-full blur-3xl pointer-events-none animate-orb-1" />
       <div className="fixed bottom-1/4 right-1/4 w-64 h-64 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none animate-orb-2" />
@@ -137,10 +130,6 @@ const MenuScreen = ({
       
       {/* Background animation keyframes */}
       <style>{`
-        @keyframes grid-drift {
-          0%, 100% { transform: translate(0, 0); }
-          50% { transform: translate(10px, 10px); }
-        }
         @keyframes orb-1 {
           0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.2; }
           33% { transform: translate(30px, -20px) scale(1.1); opacity: 0.3; }
@@ -155,14 +144,10 @@ const MenuScreen = ({
           0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
           50% { transform: translate(-15px, -25px) scale(1.15); opacity: 0.22; }
         }
-        .animate-grid-drift { animation: grid-drift 20s ease-in-out infinite; }
         .animate-orb-1 { animation: orb-1 15s ease-in-out infinite; }
         .animate-orb-2 { animation: orb-2 18s ease-in-out infinite; }
         .animate-orb-3 { animation: orb-3 12s ease-in-out infinite; }
       `}</style>
-      
-      {/* Floating pentomino pieces */}
-      <FloatingPieces count={18} theme="mixed" minOpacity={0.2} maxOpacity={0.45} />
       
       {/* Content */}
       <div className={`relative ${needsScroll ? 'min-h-full' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
