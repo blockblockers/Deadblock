@@ -20,7 +20,6 @@ import RematchModal from './RematchModal';
 import QuickChat from './QuickChat';
 import TurnTimer from './TurnTimer';
 import HeadToHead from './HeadToHead';
-import FloatingPiecesBackground from './FloatingPiecesBackground';
 import TierIcon from './TierIcon';
 import PlacementAnimation, { usePlacementAnimation } from './PlacementAnimation';
 import { pieces } from '../utils/pieces';
@@ -602,14 +601,19 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const prevPieces = prevBoardPiecesRef.current;
     const newCellKeys = Object.keys(newBoardPieces).filter(key => !prevPieces[key]);
     
+    // Track if we're animating a new opponent move
+    let animatingOpponentMove = false;
+    
     // If there are new cells and it's now our turn (opponent just moved), trigger opponent animation
     if (currentUserId && newCellKeys.length > 0 && !moveInProgressRef.current) {
       const playerNum = gameData.player1_id === currentUserId ? 1 : 2;
       const opponentNum = playerNum === 1 ? 2 : 1;
       const isNowMyTurn = gameData.current_player === playerNum && gameData.status === 'active';
+      const isGameOver = gameData.status === 'completed';
       
-      // Only animate if it's now our turn (meaning opponent just moved)
-      if (isNowMyTurn && boardRef.current) {
+      // Animate if it's now our turn (meaning opponent just moved) OR if game just ended
+      if ((isNowMyTurn || isGameOver) && boardRef.current) {
+        animatingOpponentMove = true;
         const newCells = newCellKeys.map(key => {
           const [row, col] = key.split(',').map(Number);
           return { row, col };
@@ -654,16 +658,29 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         soundManager.playSound('notification');
       }
 
-      // FIXED: Game over detection
+      // FIXED: Game over detection with animation delay
       if (gameData.status === 'completed' && !showGameOver) {
         const iWon = gameData.winner_id === currentUserId;
-        setGameResult({
+        const result = {
           isWin: iWon,
           winnerId: gameData.winner_id,
           reason: gameData.winner_id ? 'normal' : 'draw'
-        });
-        setShowGameOver(true);
-        soundManager.playSound(iWon ? 'win' : 'lose');
+        };
+        setGameResult(result);
+        
+        // If we're animating opponent's final move, delay the popup
+        // Otherwise show immediately (game was already over when loaded)
+        if (animatingOpponentMove) {
+          setTimeout(() => {
+            if (mountedRef.current) {
+              setShowGameOver(true);
+              soundManager.playSound(iWon ? 'win' : 'lose');
+            }
+          }, 1200); // Delay to let animation complete
+        } else {
+          setShowGameOver(true);
+          soundManager.playSound(iWon ? 'win' : 'lose');
+        }
       }
     }
   }, [isMyTurn, showGameOver, triggerAnimation]);
@@ -701,8 +718,62 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           return;
         }
 
+        // Update game state first
         updateGameState(data, userId);
         setLoading(false);
+        
+        // REPLAY LAST MOVE: If there are pieces on the board and it's now our turn,
+        // fetch and replay the opponent's last move so user can see what changed
+        const playerNum = data.player1_id === userId ? 1 : 2;
+        const isMyTurnNow = data.current_player === playerNum && data.status === 'active';
+        const hasMovesOnBoard = data.used_pieces && data.used_pieces.length > 0;
+        
+        if (hasMovesOnBoard && isMyTurnNow) {
+          // Fetch the last move
+          const { data: lastMove } = await gameSyncService.getLastMove(currentGameId);
+          
+          if (lastMove && lastMove.player_id !== userId) {
+            // This was opponent's move - replay animation after a short delay
+            const opponentNum = playerNum === 1 ? 2 : 1;
+            
+            // Wait for board to render, then trigger animation
+            setTimeout(() => {
+              if (!mountedRef.current || !boardRef.current) return;
+              
+              // Get the piece cells from the move
+              const pieceCoords = pieces[lastMove.piece_type];
+              if (!pieceCoords) return;
+              
+              // Apply rotation and flip to get actual placed cells
+              let coords = [...pieceCoords];
+              const rot = lastMove.rotation || 0;
+              const flip = lastMove.flipped || false;
+              
+              // Rotate
+              for (let r = 0; r < rot; r++) {
+                coords = coords.map(([x, y]) => [-y, x]);
+              }
+              // Flip
+              if (flip) {
+                coords = coords.map(([x, y]) => [-x, y]);
+              }
+              
+              // Calculate actual board positions
+              const placedCells = coords.map(([dx, dy]) => ({
+                row: lastMove.row + dy,
+                col: lastMove.col + dx
+              })).filter(cell => 
+                cell.row >= 0 && cell.row < BOARD_SIZE && 
+                cell.col >= 0 && cell.col < BOARD_SIZE
+              );
+              
+              // Trigger animation
+              const boardRect = boardRef.current.getBoundingClientRect();
+              const cellSize = boardRect.width / BOARD_SIZE;
+              triggerAnimation(placedCells, opponentNum, boardRef, cellSize);
+            }, 500); // Delay to let board render first
+          }
+        }
       } catch (err) {
         if (mountedRef.current) {
           clearTimeout(loadingTimeout);
@@ -1029,14 +1100,34 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         
         const isWin = winnerId === user.id;
         setGameResult({ isWin, winnerId, reason: gameOverReason || 'opponent_blocked' });
-        setShowGameOver(true);
-        soundManager.playSound(isWin ? 'win' : 'lose');
         
         // Apply the local board state so user sees their move
         setBoard(newBoard);
         setBoardPieces(newBoardPieces);
         setUsedPieces(newUsedPieces);
         setGame(prev => prev ? { ...prev, status: 'completed', winner_id: winnerId } : prev);
+        
+        // Trigger placement animation for the move
+        if (boardRef.current) {
+          const boardRect = boardRef.current.getBoundingClientRect();
+          const cellSize = boardRect.width / BOARD_SIZE;
+          const placedCells = coords.map(([dx, dy]) => ({
+            row: pendingMove.row + dy,
+            col: pendingMove.col + dx
+          })).filter(cell => 
+            cell.row >= 0 && cell.row < BOARD_SIZE && 
+            cell.col >= 0 && cell.col < BOARD_SIZE
+          );
+          triggerAnimation(placedCells, myPlayerNumber, boardRef, cellSize);
+        }
+        
+        // Delay the popup so user can see the final placement animation
+        setTimeout(() => {
+          if (mountedRef.current) {
+            setShowGameOver(true);
+            soundManager.playSound(isWin ? 'win' : 'lose');
+          }
+        }, 1200);
         
         // Retry the server update in background (the RLS policy needs to be fixed)
         // console.log('handleConfirm: Retrying server update in background...');
@@ -1096,15 +1187,21 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     setRotation(0);
     setFlipped(false);
     
-    // Handle game over
+    // Handle game over - DELAY popup to let placement animation complete
     if (gameOver) {
       const isWin = winnerId === user.id;
       // console.log('handleConfirm: Game over!', { isWin, winnerId, userId: user.id, reason: gameOverReason });
       
       setGameResult({ isWin, winnerId, reason: gameOverReason || 'normal' });
-      setShowGameOver(true);
-      soundManager.playSound(isWin ? 'win' : 'lose');
       setGame(prev => prev ? { ...prev, status: 'completed', winner_id: winnerId } : prev);
+      
+      // Delay the popup so user can see the final placement animation
+      setTimeout(() => {
+        if (mountedRef.current) {
+          setShowGameOver(true);
+          soundManager.playSound(isWin ? 'win' : 'lose');
+        }
+      }, 1200); // 1.2s delay - animation is ~600ms, plus buffer for appreciation
     }
 
     // Clear move in progress after a delay
@@ -1157,12 +1254,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
-          backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
-          backgroundSize: '40px 40px'
-        }} />
-        <FloatingPiecesBackground colorPreset="online" />
+      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <div className="relative text-center">
           <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-amber-300 mb-6">Loading game...</p>
@@ -1176,7 +1269,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
+      <div className="min-h-screen bg-transparent flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
           <button onClick={handleLeave} className="px-6 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">
@@ -1189,22 +1283,16 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 overflow-x-hidden"
+      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
+      className="min-h-screen bg-transparent overflow-x-hidden"
       style={{ 
         overflowY: needsScroll ? 'auto' : 'hidden',
         touchAction: isDragging ? 'none' : 'pan-y'
       }}
     >
-      {/* Background effects */}
-      <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
-        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
-        backgroundSize: '40px 40px'
-      }} />
+      {/* Background glow effects */}
       <div className={`fixed top-1/4 right-1/4 w-64 h-64 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-1/4 left-1/4 w-64 h-64 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
-      
-      {/* Floating pieces background animation - amber/online theme */}
-      <FloatingPiecesBackground colorPreset="online" />
 
       {/* Drag Overlay */}
       {isDragging && draggedPiece && (

@@ -3,7 +3,7 @@
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
 // - Subscription handler properly validates callbacks
-import { supabase } from '../utils/supabase';
+import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
 // Constants for direct fetch

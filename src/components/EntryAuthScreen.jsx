@@ -12,7 +12,6 @@ import { useState, useEffect } from 'react';
 import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star, ChevronRight, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
-import FloatingPiecesBackground from './FloatingPiecesBackground';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -1061,22 +1060,14 @@ const EntryAuthScreen = ({
 
   return (
     <div 
-      className="min-h-screen bg-slate-950 flex flex-col"
+      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
+      className="min-h-screen bg-transparent flex flex-col"
       style={scrollStyles}
     >
-      {/* Themed Grid Background - matching PuzzleSelect */}
-      <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
-        backgroundImage: `linear-gradient(${activeTheme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${activeTheme.gridColor} 1px, transparent 1px)`,
-        backgroundSize: '40px 40px'
-      }} />
-      
       {/* Multiple themed glow orbs - matching PuzzleSelect */}
       <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      
-      {/* Floating Pentomino Pieces Background Animation */}
-      <FloatingPiecesBackground count={10} colorPreset="default" />
       
       {/* Content - Grouped title+subtitle+card together, positioned in upper-center area */}
       <div className="relative z-10 flex-1 flex flex-col items-center p-4 pt-12 sm:pt-16"
