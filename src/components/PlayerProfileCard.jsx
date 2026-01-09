@@ -1,5 +1,6 @@
 // Player Profile Card - Enhanced display for main menu with rating info, username editing, and achievements
 // FIXED: Loading state race condition - now shows profile immediately when available
+// v7.10: Added iOS scroll fixes for RatingInfoModal
 import { useState, useEffect } from 'react';
 import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader, LogIn } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,8 +29,11 @@ const RatingInfoModal = ({ onClose }) => {
           </div>
         </div>
         
-        {/* Content */}
-        <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        {/* Content - v7.10: iOS scroll fix */}
+        <div 
+          className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        >
           <p className="text-sm text-slate-400">
             Your ELO rating changes based on match results. Beat higher-rated players to gain more points!
           </p>

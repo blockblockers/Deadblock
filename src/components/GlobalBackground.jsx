@@ -3,6 +3,7 @@
 // 1. Better random distribution of pieces across the grid (not diagonal)
 // 2. Pieces appear, move around, and fade in/out sporadically
 // 3. Uses staggered animation delays and varied movement patterns
+// FIX: Restored original dark background color (#020617 / slate-950)
 
 import { memo, useRef, useEffect, useMemo } from 'react';
 import { pieces } from '../utils/pieces';
@@ -63,29 +64,34 @@ const PIECES_DATA = generatePiecesData();
 // Theme color configurations
 const THEMES = {
   menu: [
-    { color: '#22d3ee', glow: 'rgba(34,211,238,0.6)' },   // cyan
-    { color: '#ec4899', glow: 'rgba(236,72,153,0.6)' },   // pink
-    { color: '#a855f7', glow: 'rgba(168,85,247,0.6)' },   // purple
-    { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },    // green
+    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan
+    { color: '#ec4899', glow: 'rgba(236,72,153,0.5)' },   // pink
+    { color: '#a855f7', glow: 'rgba(168,85,247,0.5)' },   // purple
   ],
   online: [
-    { color: '#fbbf24', glow: 'rgba(251,191,36,0.6)' },   // amber
-    { color: '#f97316', glow: 'rgba(249,115,22,0.6)' },   // orange
-    { color: '#eab308', glow: 'rgba(234,179,8,0.6)' },    // yellow
-    { color: '#fb923c', glow: 'rgba(251,146,60,0.6)' },   // light orange
+    { color: '#f59e0b', glow: 'rgba(245,158,11,0.5)' },   // amber
+    { color: '#f97316', glow: 'rgba(249,115,22,0.5)' },   // orange
+    { color: '#eab308', glow: 'rgba(234,179,8,0.5)' },    // yellow
   ],
   game: [
-    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan (lighter)
-    { color: '#ec4899', glow: 'rgba(236,72,153,0.5)' },   // pink (lighter)
+    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan
+    { color: '#a855f7', glow: 'rgba(168,85,247,0.5)' },   // purple
+    { color: '#6366f1', glow: 'rgba(99,102,241,0.5)' },   // indigo
   ],
   puzzle: [
-    { color: '#22c55e', glow: 'rgba(34,197,94,0.6)' },    // green
-    { color: '#10b981', glow: 'rgba(16,185,129,0.6)' },   // emerald
-    { color: '#14b8a6', glow: 'rgba(20,184,166,0.6)' },   // teal
+    { color: '#10b981', glow: 'rgba(16,185,129,0.5)' },   // green
+    { color: '#22d3ee', glow: 'rgba(34,211,238,0.5)' },   // cyan
+    { color: '#14b8a6', glow: 'rgba(20,184,166,0.5)' },   // teal
+  ],
+  auth: [
+    { color: '#6366f1', glow: 'rgba(99,102,241,0.5)' },   // indigo
+    { color: '#8b5cf6', glow: 'rgba(139,92,246,0.5)' },   // violet
+    { color: '#a855f7', glow: 'rgba(168,85,247,0.5)' },   // purple
   ],
 };
 
 // Global styles - injected once
+// FIX: Restored original solid dark background (#020617 = slate-950)
 const GLOBAL_STYLES = `
   .gb-container {
     position: fixed;
@@ -93,7 +99,7 @@ const GLOBAL_STYLES = `
     overflow: hidden;
     pointer-events: none;
     z-index: 0;
-    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+    background-color: #020617;
   }
   
   .gb-grid {

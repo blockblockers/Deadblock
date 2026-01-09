@@ -1,5 +1,6 @@
 // Achievements - View and track achievements
 // v7.8: Updated categories to match database (weekly, speed, puzzle, online, ai, general)
+// v7.10: Added iOS scroll fixes for modal content
 import { useState, useEffect } from 'react';
 import { Trophy, Lock, Star, X, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import achievementService from '../services/achievementService';
@@ -125,8 +126,11 @@ const Achievements = ({ userId, onClose, viewOnly = false, playerName = null }) 
           )}
         </div>
 
-        {/* Category Filter */}
-        <div className="flex gap-2 p-3 border-b border-amber-500/20 overflow-x-auto">
+        {/* Category Filter - v7.10: iOS scroll fix */}
+        <div 
+          className="flex gap-2 p-3 border-b border-amber-500/20 overflow-x-auto"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           {categories.map(cat => (
             <button
               key={cat}
@@ -144,8 +148,11 @@ const Achievements = ({ userId, onClose, viewOnly = false, playerName = null }) 
           ))}
         </div>
 
-        {/* Achievements List */}
-        <div className="p-4 overflow-y-auto max-h-[50vh]">
+        {/* Achievements List - v7.10: iOS scroll fix */}
+        <div 
+          className="p-4 overflow-y-auto max-h-[50vh]"
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        >
           {error ? (
             <div className="text-center py-8">
               <AlertTriangle className="mx-auto text-amber-400 mb-2" size={40} />

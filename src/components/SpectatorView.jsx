@@ -1,5 +1,6 @@
 // SpectatorView.jsx - Watch live games
 // v7.7: Added game switching for multiple active games (when watching a friend)
+// v7.10: Added iOS scroll fixes for games list
 import { useState, useEffect, useRef } from 'react';
 import { Eye, X, Users, Clock, Trophy, Radio, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { spectatorService } from '../services/spectatorService';
@@ -393,8 +394,15 @@ export const SpectatableGamesList = ({ userId, onSpectate, onClose }) => {
           </button>
         </div>
 
-        {/* Games list */}
-        <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 80px)' }}>
+        {/* Games list - v7.10: iOS scroll fix */}
+        <div 
+          className="p-4 overflow-y-auto" 
+          style={{ 
+            maxHeight: 'calc(80vh - 80px)',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain'
+          }}
+        >
           {loading ? (
             <div className="text-center py-8">
               <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2" />

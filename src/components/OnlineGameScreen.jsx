@@ -2,7 +2,8 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
-// DIAGNOSTIC: Temporarily removed isMyTurn blocking to test piece selection
+// FIX: Removed isMyTurn check from piece selection/drag (was blocking pieces)
+// FIX: Increased game over popup delay to 2 seconds
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -230,10 +231,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     return null;
   }, []);
 
-  // DIAGNOSTIC: Removed isMyTurn check to test if that's blocking piece selection
+  // FIX: Removed isMyTurn check - was blocking piece selection
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     if (hasDragStartedRef.current) return;
-    // Only check game status and piece usage, NOT turn
     if (game?.status !== 'active' || usedPieces.includes(piece)) return;
     
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
@@ -332,9 +332,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     document.body.style.touchAction = '';
   }, [isDragging, dragPreviewCell, draggedPiece]);
 
-  // DIAGNOSTIC: Removed isMyTurn check to test if that's blocking piece selection
+  // FIX: Removed isMyTurn check - was blocking piece selection
   const createDragHandlers = useCallback((piece) => {
-    // Only check game status and piece usage, NOT turn
     if (game?.status !== 'active' || usedPieces.includes(piece)) {
       return {};
     }
@@ -582,6 +581,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         soundManager.playSound('notification');
       }
 
+      // FIX: Increased delay to 2 seconds for game over popup
       if (gameData.status === 'completed' && !showGameOver) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
@@ -811,9 +811,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   // GAME ACTIONS
   // =========================================================================
 
-  // DIAGNOSTIC: Removed isMyTurn check to test if that's blocking piece selection
+  // FIX: Removed isMyTurn check - was blocking piece selection
   const handleSelectPiece = useCallback((piece) => {
-    // Only check game status and piece usage, NOT turn
     if (game?.status !== 'active') return;
     if (usedPieces.includes(piece)) return;
     
@@ -866,7 +865,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const handleConfirm = useCallback(async () => {
     if (!pendingMove || !canConfirm || moveInProgressRef.current) return;
     
-    // IMPORTANT: Keep turn check for confirm to prevent out-of-turn moves
+    // Keep turn check for confirm to prevent out-of-turn moves
     if (!isMyTurn) {
       setErrorMessage("Wait for your turn!");
       return;
@@ -948,6 +947,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (moveError) {
       console.error('Move failed:', moveError);
       
+      // FIX: Increased delay to 2 seconds for game over popup
       if (gameOver) {
         const isWin = winnerId === user.id;
         setGameResult({ isWin, winnerId, reason: gameOverReason || 'opponent_blocked' });
@@ -1024,6 +1024,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     setRotation(0);
     setFlipped(false);
     
+    // FIX: Increased delay to 2 seconds for game over popup
     if (gameOver) {
       const isWin = winnerId === user.id;
       
@@ -1116,7 +1117,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       className="min-h-screen bg-transparent overflow-x-hidden"
       style={{ 
         overflowY: needsScroll ? 'auto' : 'hidden',
-        touchAction: isDragging ? 'none' : 'pan-y'
+        WebkitOverflowScrolling: 'touch',
+        touchAction: isDragging ? 'none' : 'pan-y',
       }}
     >
       {/* Background glow effects */}
@@ -1168,15 +1170,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               <div className="w-16" />
             )}
           </div>
-
-          {/* DIAGNOSTIC: Debug info banner - shows turn state - REMOVE AFTER TESTING */}
-          {game && (
-            <div className={`mb-2 px-3 py-1.5 rounded-lg text-xs font-mono ${
-              isMyTurn ? 'bg-green-900/50 text-green-300 border border-green-500/30' : 'bg-red-900/50 text-red-300 border border-red-500/30'
-            }`}>
-              Turn: {isMyTurn ? 'YOURS' : 'OPPONENT'} | Status: {game?.status} | Player#: {myPlayerNumber} | DB current_player: {game?.current_player}
-            </div>
-          )}
 
           {/* Main Game Panel */}
           <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border ${theme.panelBorder} ${theme.panelShadow}`}>

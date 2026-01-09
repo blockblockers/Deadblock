@@ -2,6 +2,7 @@
 // UPDATED: Added custom text message input tab
 // UPDATED: Added onNewMessage callback for notification support
 // UPDATED: Enhanced received message notification with screen flash
+// v7.10: Added iOS scroll fixes for content and recent messages
 // Place in src/components/QuickChat.jsx
 
 import { useState, useEffect, useRef } from 'react';
@@ -383,8 +384,11 @@ const QuickChat = ({
             </button>
           </div>
 
-          {/* Content */}
-          <div className="p-2 max-h-64 overflow-y-auto">
+          {/* Content - v7.10: iOS scroll fix */}
+          <div 
+            className="p-2 max-h-64 overflow-y-auto"
+            style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+          >
             {activeTab === 'chat' ? (
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(QUICK_CHAT_MESSAGES).map(([key, { text, icon }]) => (
@@ -481,9 +485,12 @@ const QuickChat = ({
             )}
           </div>
 
-          {/* Recent messages */}
+          {/* Recent messages - v7.10: iOS scroll fix */}
           {recentMessages.length > 0 && (
-            <div className="border-t border-amber-500/20 p-2 max-h-28 overflow-y-auto">
+            <div 
+              className="border-t border-amber-500/20 p-2 max-h-28 overflow-y-auto"
+              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+            >
               <p className="text-xs text-slate-500 mb-1">Recent</p>
               <div className="space-y-1">
                 {recentMessages.slice(-5).map((msg, i) => {

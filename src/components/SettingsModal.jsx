@@ -1,5 +1,6 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
 // UPDATED: Added push notification subscription management
+// v7.10: Added iOS scroll fixes for modal content
 // Place in src/components/SettingsModal.jsx
 
 import { useState, useEffect } from 'react';
@@ -324,8 +325,11 @@ const SettingsModal = ({ isOpen, onClose }) => {
           </button>
         </div>
         
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Scrollable Content - v7.10: iOS scroll fix */}
+        <div 
+          className="flex-1 overflow-y-auto p-4 space-y-4"
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        >
           {/* Sound Settings */}
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Audio</h3>

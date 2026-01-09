@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.10: Added iOS scroll fixes for all modal scroll containers
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -1465,9 +1466,9 @@ const OnlineMenu = ({
                     )}
                   </div>
                   
-                  {/* Search Results */}
+                  {/* Search Results - v7.10: iOS scroll fix */}
                   {searchResults.length > 0 && (
-                    <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
                       {searchResults.map(user => {
                         const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
                         const displayName = user.display_name || user.username;
@@ -1569,7 +1570,7 @@ const OnlineMenu = ({
                     {inviteLinks.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-slate-700/50">
                         <p className="text-slate-400 text-xs mb-2 font-medium">Your active invite links:</p>
-                        <div className="space-y-2 max-h-40 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        <div className="space-y-2 max-h-40 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
                           {inviteLinks.map(invite => (
                             <div
                               key={invite.id}
@@ -1637,7 +1638,7 @@ const OnlineMenu = ({
               </div>
             )}
 
-            {/* Pending Rematch Requests */}
+            {/* Pending Rematch Requests - v7.10: iOS scroll fix */}
             {pendingRematches.length > 0 && (
               <div className="bg-orange-900/20 rounded-xl p-4 mb-4 border border-orange-500/30">
                 <h3 className="text-orange-400 font-bold text-sm mb-3 flex items-center gap-2">
@@ -1646,7 +1647,7 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-60 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
+                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
                 >
                   {pendingRematches.map(rematch => {
                     // rematchService provides: is_sender, opponent_name, opponent_id
@@ -1715,7 +1716,7 @@ const OnlineMenu = ({
               </div>
             )}
 
-            {/* Received Invites */}
+            {/* Received Invites - v7.10: iOS scroll fix */}
             {receivedInvites.length > 0 && (
               <div className="bg-green-900/20 rounded-xl p-4 mb-4 border border-green-500/30">
                 <h3 className="text-green-400 font-bold text-sm mb-3 flex items-center gap-2">
@@ -1724,7 +1725,7 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-60 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
+                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
                 >
                   {receivedInvites.map(invite => {
                     const inviterName = invite.from_user?.display_name || invite.from_user?.username || 'Unknown';
@@ -1770,6 +1771,7 @@ const OnlineMenu = ({
             )}
 
             {/* Sent Invites (Pending) */}
+            {/* Sent Invites - v7.10: iOS scroll fix */}
             {sentInvites.length > 0 && (
               <div className="bg-slate-800/30 rounded-xl p-4 mb-4 border border-slate-700/50">
                 <h3 className="text-slate-400 font-bold text-sm mb-3 flex items-center gap-2">
@@ -1778,7 +1780,7 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-40 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch' }}
+                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
                 >
                   {sentInvites.map(invite => {
                     // Get the best display name available - prefer display_name over username
@@ -1967,8 +1969,11 @@ const OnlineMenu = ({
               </div>
             </div>
             
-            {/* Content */}
-            <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* Content - v7.10: iOS scroll fix */}
+            <div 
+              className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"
+              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+            >
               {/* What is ELO explanation */}
               <div className="space-y-2">
                 <p className="text-sm text-slate-300">
@@ -2129,8 +2134,11 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List */}
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
+            {/* Games List - v7.10: iOS scroll fix */}
+            <div 
+              className="p-4 overflow-y-auto max-h-[60vh]"
+              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+            >
               {activeGames.length === 0 ? (
                 <div className="text-center py-8">
                   <Swords className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2195,8 +2203,11 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List */}
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
+            {/* Games List - v7.10: iOS scroll fix */}
+            <div 
+              className="p-4 overflow-y-auto max-h-[60vh]"
+              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+            >
               {recentGames.length === 0 ? (
                 <div className="text-center py-8">
                   <History className="mx-auto text-slate-600 mb-2" size={40} />

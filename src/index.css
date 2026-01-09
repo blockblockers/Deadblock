@@ -1,6 +1,7 @@
 /* =============================================================================
    DEADBLOCK - Global Styles
    v7.9: FIXED scroll handling - removed conflicting position:fixed rules
+   v7.10: Added iOS scroll fix utility classes
    ============================================================================= */
 
 /* Base Tailwind imports */
@@ -585,6 +586,73 @@ body.is-dragging * {
 /* Active games list - scrollable if many games */
 .games-list {
   max-height: 300px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* =============================================================================
+   iOS SCROLL FIX UTILITIES - v7.10
+   Apply to ANY scrollable container for iOS/iPad compatibility
+   Usage: Add style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+   Or use className="ios-scroll-fix" with overflow-y-auto
+   ============================================================================= */
+
+/* General purpose iOS scroll fix - apply alongside overflow-y-auto */
+.ios-scroll-fix {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+/* Modal-specific scroll with iOS fixes */
+.modal-scroll-ios {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+/* Chat/message list with thin scrollbar and iOS fixes */
+.chat-scroll-ios {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+.chat-scroll-ios::-webkit-scrollbar {
+  width: 4px;
+}
+
+.chat-scroll-ios::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-scroll-ios::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 2px;
+}
+
+/* Pre-defined height scroll containers with iOS fixes */
+.scroll-50vh {
+  max-height: 50vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.scroll-60vh {
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.scroll-70vh {
+  max-height: 70vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
