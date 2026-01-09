@@ -1,5 +1,7 @@
 // Online Menu - Hub for online features
-// v7.10: Added iOS scroll fixes for all modal scroll containers
+// v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
+// v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
+// v7.11: Android scroll fix for Active Games and Recent Games modals
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -45,15 +47,15 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.display_name || game.player2?.username || 'Unknown';
+      return game.player2?.username || game.player2?.display_name || 'Unknown';
     }
-    return game.player1?.display_name || game.player1?.username || 'Unknown';
+    return game.player1?.username || game.player1?.display_name || 'Unknown';
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
-  const displayName = profile?.display_name || profile?.username;
+  const displayName = profile?.username || profile?.display_name;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -403,7 +405,7 @@ const OnlineMenu = ({
           const { data: invites } = await inviteService.getReceivedInvites(profile.id);
           const invite = invites?.find(i => i.id === newInvite.id);
           if (invite?.from_user) {
-            const inviterName = invite.from_user.display_name || invite.from_user.username;
+            const inviterName = invite.from_user.username || invite.from_user.display_name;
             notificationService.notifyGameInvite(inviterName, newInvite.id);
           }
         }
@@ -420,8 +422,8 @@ const OnlineMenu = ({
             const { data: game } = await gameSyncService.getGame(updatedInvite.game_id);
             if (game) {
               const opponentName = game.player1_id === profile.id 
-                ? (game.player2?.display_name || game.player2?.username)
-                : (game.player1?.display_name || game.player1?.username);
+                ? (game.player2?.username || game.player2?.display_name)
+                : (game.player1?.username || game.player1?.display_name);
               notificationService.notifyInviteAccepted(opponentName || 'Opponent', updatedInvite.game_id);
             }
           }
@@ -453,8 +455,8 @@ const OnlineMenu = ({
           const { data: game } = await gameSyncService.getGame(rematchData.game_id);
           if (game) {
             const requesterName = game.player1_id === rematchData.from_user_id 
-              ? (game.player1?.display_name || game.player1?.username)
-              : (game.player2?.display_name || game.player2?.username);
+              ? (game.player1?.username || game.player1?.display_name)
+              : (game.player2?.username || game.player2?.display_name);
             notificationService.notifyRematchRequest(requesterName || 'Opponent', rematchData.game_id, rematchData.id);
           }
         }
@@ -470,8 +472,8 @@ const OnlineMenu = ({
           const { data: newGame } = await gameSyncService.getGame(rematchData.new_game_id);
           if (newGame) {
             const accepterName = newGame.player1_id === profile.id
-              ? (newGame.player2?.display_name || newGame.player2?.username)
-              : (newGame.player1?.display_name || newGame.player1?.username);
+              ? (newGame.player2?.username || newGame.player2?.display_name)
+              : (newGame.player1?.username || newGame.player1?.display_name);
             notificationService.notifyRematchAccepted(accepterName || 'Opponent', rematchData.new_game_id);
           }
         }
@@ -751,7 +753,9 @@ const OnlineMenu = ({
     soundManager.playButtonClick();
     
     try {
-      const { data, error } = await inviteService.acceptInvite(invite.id, profile.id);
+      // v7.10: Pass 'invitee' so the person accepting the invite goes first
+      // This ensures they can immediately start playing after clicking Accept
+      const { data, error } = await inviteService.acceptInvite(invite.id, profile.id, 'invitee');
       
       if (error) {
         console.error('Error accepting invite:', error);
@@ -764,8 +768,14 @@ const OnlineMenu = ({
       if (data?.game) {
         soundManager.playSound('win');
         
-        // Clear spinner immediately before navigation
+        // v7.10: Clear the invite from local state immediately so it disappears from the list
+        setReceivedInvites(prev => prev.filter(i => i.id !== invite.id));
+        
+        // Clear spinner before navigation
         setProcessingInvite(null);
+        
+        // Refresh invites in background (in case user comes back)
+        loadInvites().catch(() => {});
         
         // Small delay to ensure state updates are flushed
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -889,7 +899,7 @@ const OnlineMenu = ({
       try {
         await navigator.share({
           title: 'Play Deadblock with me!',
-          text: `${profile?.display_name || profile?.username || 'A friend'} wants to challenge you to Deadblock!`,
+          text: `${profile?.username || profile?.display_name || 'A friend'} wants to challenge you to Deadblock!`,
           url: invite.inviteLink
         });
         soundManager.playClickSound('confirm');
@@ -990,9 +1000,9 @@ const OnlineMenu = ({
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.display_name || game.player2?.username || 'Unknown';
+      return game.player2?.username || game.player2?.display_name || 'Unknown';
     }
-    return game.player1?.display_name || game.player1?.username || 'Unknown';
+    return game.player1?.username || game.player1?.display_name || 'Unknown';
   };
 
   // Get opponent ID from game
@@ -1011,14 +1021,14 @@ const OnlineMenu = ({
     return { 
       id: game.player2_id,
       username: game.player2?.username || 'Unknown',
-      displayName: game.player2?.display_name || game.player2?.username || 'Unknown',
+      displayName: game.player2?.username || game.player2?.display_name || 'Unknown',
       data: game.player2
     };
   }
   return { 
     id: game.player1_id,
     username: game.player1?.username || 'Unknown',
-    displayName: game.player1?.display_name || game.player1?.username || 'Unknown',
+    displayName: game.player1?.username || game.player1?.display_name || 'Unknown',
     data: game.player1
   };
 };
@@ -1035,14 +1045,12 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
+      // v7.10: Fixed scroll container - only ONE element should have scroll properties
       className="fixed inset-0 bg-transparent overflow-y-auto overflow-x-hidden"
       style={{ 
         WebkitOverflowScrolling: 'touch', 
-        touchAction: 'pan-y',
-        height: '100%',
-        width: '100%',
         overscrollBehavior: 'contain',
+        // Remove touchAction from outer - let iOS handle naturally
       }}
     >
       {/* Themed glow orbs */}
@@ -1063,18 +1071,14 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* Content - Enhanced padding for small screens */}
+      {/* Content - v7.10: Removed duplicate scroll styles, let parent handle scrolling */}
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4 pt-6 sm:pt-8 pb-32"
         style={{ 
           minHeight: '100%',
-          paddingBottom: 'max(128px, calc(env(safe-area-inset-bottom) + 128px))',
+          paddingBottom: 'max(160px, calc(env(safe-area-inset-bottom) + 160px))',
           paddingTop: 'max(24px, env(safe-area-inset-top))',
-          touchAction: 'pan-y',
-          WebkitOverflowScrolling: 'touch',
-        }}
-        onTouchMove={(e) => {
-          // Allow vertical scrolling by not preventing default
+          // v7.10: NO scroll styles here - parent handles all scrolling
         }}
       >
         <div className="w-full max-w-md">
@@ -1138,11 +1142,11 @@ const OnlineMenu = ({
               {/* Top row: Avatar and actions */}
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {(profile?.display_name || profile?.username)?.[0]?.toUpperCase() || '?'}
+                  {(profile?.username || profile?.display_name)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
+                    <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
                       className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
@@ -1466,12 +1470,19 @@ const OnlineMenu = ({
                     )}
                   </div>
                   
-                  {/* Search Results - v7.10: iOS scroll fix */}
+                  {/* Search Results - v7.11: Android scroll fix */}
                   {searchResults.length > 0 && (
-                    <div className="space-y-2 mt-3 max-h-48 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
-                      {searchResults.map(user => {
+                    <div 
+                      className="space-y-2 mt-3 max-h-48 overflow-y-auto" 
+                      style={{ 
+                        WebkitOverflowScrolling: 'touch', 
+                        overscrollBehavior: 'contain',
+                        touchAction: 'pan-y',
+                        transform: 'translate3d(0, 0, 0)'
+                      }}
+                    >                      {searchResults.map(user => {
                         const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
-                        const displayName = user.display_name || user.username;
+                        const displayName = user.username || user.display_name;
                         return (
                           <div
                             key={user.id}
@@ -1570,7 +1581,15 @@ const OnlineMenu = ({
                     {inviteLinks.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-slate-700/50">
                         <p className="text-slate-400 text-xs mb-2 font-medium">Your active invite links:</p>
-                        <div className="space-y-2 max-h-40 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}>
+                        <div 
+                          className="space-y-2 max-h-40 overflow-y-auto" 
+                          style={{ 
+                            WebkitOverflowScrolling: 'touch', 
+                            overscrollBehavior: 'contain',
+                            touchAction: 'pan-y',
+                            transform: 'translate3d(0, 0, 0)'
+                          }}
+                        >
                           {inviteLinks.map(invite => (
                             <div
                               key={invite.id}
@@ -1638,7 +1657,7 @@ const OnlineMenu = ({
               </div>
             )}
 
-            {/* Pending Rematch Requests - v7.10: iOS scroll fix */}
+            {/* Pending Rematch Requests - v7.11: Android scroll fix */}
             {pendingRematches.length > 0 && (
               <div className="bg-orange-900/20 rounded-xl p-4 mb-4 border border-orange-500/30">
                 <h3 className="text-orange-400 font-bold text-sm mb-3 flex items-center gap-2">
@@ -1647,7 +1666,12 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-60 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                  style={{ 
+                    WebkitOverflowScrolling: 'touch', 
+                    overscrollBehavior: 'contain',
+                    touchAction: 'pan-y',
+                    transform: 'translate3d(0, 0, 0)'
+                  }}
                 >
                   {pendingRematches.map(rematch => {
                     // rematchService provides: is_sender, opponent_name, opponent_id
@@ -1725,10 +1749,15 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-60 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                  style={{ 
+                    WebkitOverflowScrolling: 'touch', 
+                    overscrollBehavior: 'contain',
+                    touchAction: 'pan-y',
+                    transform: 'translate3d(0, 0, 0)'
+                  }}
                 >
                   {receivedInvites.map(invite => {
-                    const inviterName = invite.from_user?.display_name || invite.from_user?.username || 'Unknown';
+                    const inviterName = invite.from_user?.username || invite.from_user?.display_name || 'Unknown';
                     return (
                     <div
                       key={invite.id}
@@ -1780,7 +1809,12 @@ const OnlineMenu = ({
                 </h3>
                 <div 
                   className="space-y-2 max-h-40 overflow-y-auto pr-1"
-                  style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+                  style={{ 
+                    WebkitOverflowScrolling: 'touch', 
+                    overscrollBehavior: 'contain',
+                    touchAction: 'pan-y',
+                    transform: 'translate3d(0, 0, 0)'
+                  }}
                 >
                   {sentInvites.map(invite => {
                     // Get the best display name available - prefer display_name over username
@@ -1917,6 +1951,9 @@ const OnlineMenu = ({
             </button>
           )}
         </div>
+        
+        {/* v7.10: Explicit scroll sentinel - ensures iOS can scroll to very bottom */}
+        <div className="h-40 w-full flex-shrink-0" aria-hidden="true" />
       </div>
       
       {/* Notification Prompt */}
@@ -1930,11 +1967,14 @@ const OnlineMenu = ({
           userId={profile.id}
           onAccept={async (notification) => {
             if (notification.type === 'invite') {
-              // Accept the game invite
-              const { data, error } = await inviteService.acceptInviteById(notification.id);
-              if (!error && data?.game_id) {
+              // v7.10: Use acceptInvite with invitee option so acceptor goes first
+              const { data, error } = await inviteService.acceptInvite(notification.id, profile.id, 'invitee');
+              if (!error && data?.game) {
                 soundManager.playSound('success');
-                onResumeGame?.({ id: data.game_id });
+                // v7.10: Clear invite from local state and refresh list
+                setReceivedInvites(prev => prev.filter(i => i.id !== notification.id));
+                loadInvites().catch(() => {});
+                onResumeGame?.(data.game);
               }
             } else if (notification.type === 'friend_request') {
               // Accept friend request
@@ -1969,10 +2009,17 @@ const OnlineMenu = ({
               </div>
             </div>
             
-            {/* Content - v7.10: iOS scroll fix */}
+            {/* Content - v7.11: Android scroll fix */}
             <div 
               className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"
-              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+              style={{ 
+                WebkitOverflowScrolling: 'touch', 
+                overscrollBehavior: 'contain',
+                touchAction: 'pan-y',
+                transform: 'translate3d(0, 0, 0)',
+                willChange: 'scroll-position'
+              }}
+            >
             >
               {/* What is ELO explanation */}
               <div className="space-y-2">
@@ -2134,10 +2181,16 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.10: iOS scroll fix */}
+            {/* Games List - v7.11: Android scroll fix */}
             <div 
               className="p-4 overflow-y-auto max-h-[60vh]"
-              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+              style={{ 
+                WebkitOverflowScrolling: 'touch', 
+                overscrollBehavior: 'contain',
+                touchAction: 'pan-y',
+                transform: 'translate3d(0, 0, 0)',
+                willChange: 'scroll-position'
+              }}
             >
               {activeGames.length === 0 ? (
                 <div className="text-center py-8">
@@ -2203,10 +2256,16 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.10: iOS scroll fix */}
+            {/* Games List - v7.11: Android scroll fix */}
             <div 
               className="p-4 overflow-y-auto max-h-[60vh]"
-              style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+              style={{ 
+                WebkitOverflowScrolling: 'touch', 
+                overscrollBehavior: 'contain',
+                touchAction: 'pan-y',
+                transform: 'translate3d(0, 0, 0)',
+                willChange: 'scroll-position'
+              }}
             >
               {recentGames.length === 0 ? (
                 <div className="text-center py-8">

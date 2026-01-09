@@ -1,6 +1,6 @@
 // Weekly Challenge Service - Handles weekly puzzle challenges
+// v7.11: Added getUserPodiumBreakdown for detailed 1st/2nd/3rd place stats
 // FIXED: Uses direct fetch to bypass Supabase client timeout issues
-// UPDATED: Added debug logging for leaderboard profile fetch
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 // Helper to get auth data and make direct fetch calls
@@ -70,71 +70,28 @@ class WeeklyChallengeService {
             challenge_id: data.id,
             puzzle_seed: data.puzzle_seed
           });
-          
-          // Check if challenge is stale (ended before today)
-          if (endsAt && endsAt < now) {
-            console.warn('[WeeklyChallengeService] WARNING: Challenge has ended! This may be stale data.', {
-              ended: endsAt.toISOString(),
-              now: now.toISOString()
-            });
-          }
-          
-          // Check if challenge hasn't started yet
-          if (startsAt && startsAt > now) {
-            console.warn('[WeeklyChallengeService] WARNING: Challenge has not started yet!', {
-              starts: startsAt.toISOString(),
-              now: now.toISOString()
-            });
-          }
-          
-          // Calculate current ISO week number for comparison
-          const currentWeek = this.getISOWeekNumber(now);
-          if (data.week_number && data.week_number !== currentWeek) {
-            console.warn('[WeeklyChallengeService] WARNING: Challenge week_number mismatch!', {
-              challenge_week: data.week_number,
-              current_week: currentWeek
-            });
-          }
         }
         
         return { data, error: null };
       }
       
-      // RPC failed, try fallback query
-      console.log('[WeeklyChallengeService] RPC failed, trying fallback query...');
-      const now = new Date().toISOString();
-      
-      const fallbackResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/weekly_challenges?starts_at=lte.${now}&ends_at=gte.${now}&order=starts_at.desc&limit=1`,
-        { headers }
-      );
-      
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json();
-        if (fallbackData && fallbackData.length > 0) {
-          console.log('[WeeklyChallengeService] Fallback succeeded:', fallbackData[0].id);
-          return { data: fallbackData[0], error: null };
-        }
-      }
-      
-      const errorData = await rpcResponse.json().catch(() => ({}));
-      console.error('[WeeklyChallengeService] Both RPC and fallback failed');
-      return { data: null, error: errorData?.message || 'Failed to load challenge' };
-      
+      // Handle errors
+      const errorText = await rpcResponse.text();
+      console.error('[WeeklyChallengeService] RPC error:', rpcResponse.status, errorText);
+      return { data: null, error: `RPC failed: ${rpcResponse.status}` };
     } catch (err) {
-      console.error('[WeeklyChallengeService] Exception in getCurrentChallenge:', err);
+      console.error('[WeeklyChallengeService] Exception:', err);
       return { data: null, error: err.message };
     }
   }
   
   // Submit a result for the weekly challenge
-  async submitResult(challengeId, completionTimeMs, isFirstAttempt = false) {
+  async submitResult(challengeId, completionTimeMs) {
     if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
     
     const headers = getAuthHeaders();
     if (!headers) return { data: null, error: 'Not authenticated' };
     
-    // Get user ID from localStorage
     const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
     const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
     const userId = authData?.user?.id;
@@ -142,28 +99,35 @@ class WeeklyChallengeService {
     if (!userId) return { data: null, error: 'Not authenticated' };
     
     try {
-      // Check if user has existing result
-      const existingResponse = await fetch(
+      // Check if user already has a result for this challenge
+      const checkResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/weekly_challenge_results?user_id=eq.${userId}&challenge_id=eq.${challengeId}&select=*`,
         { headers }
       );
       
-      const existingResults = existingResponse.ok ? await existingResponse.json() : [];
-      const existingResult = existingResults[0];
+      if (!checkResponse.ok) {
+        return { data: null, error: 'Failed to check existing result' };
+      }
       
-      if (existingResult) {
-        // Update best time if improved
-        const currentBest = existingResult.best_time_ms || existingResult.completion_time_ms;
+      const existing = await checkResponse.json();
+      
+      if (existing && existing.length > 0) {
+        // User has existing result - update if this is a better time
+        const existingResult = existing[0];
+        const isImprovement = completionTimeMs < (existingResult.best_time_ms || Infinity);
         
-        if (completionTimeMs < currentBest) {
+        if (isImprovement) {
           const updateResponse = await fetch(
             `${SUPABASE_URL}/rest/v1/weekly_challenge_results?id=eq.${existingResult.id}`,
             {
               method: 'PATCH',
-              headers: { ...headers, 'Prefer': 'return=representation' },
+              headers: {
+                ...headers,
+                'Prefer': 'return=representation'
+              },
               body: JSON.stringify({
                 best_time_ms: completionTimeMs,
-                completion_time_ms: completionTimeMs
+                completed_at: new Date().toISOString()
               })
             }
           );
@@ -175,27 +139,32 @@ class WeeklyChallengeService {
               ...updatedData, 
               is_improvement: true,
               first_attempt_time_ms: existingResult.first_attempt_time_ms,
-              best_time_ms: completionTimeMs
+              best_time_ms: completionTimeMs,
+              was_first_attempt: false
+            }, 
+            error: null 
+          };
+        } else {
+          // Not an improvement
+          return { 
+            data: { 
+              ...existingResult, 
+              is_improvement: false,
+              was_first_attempt: false
             }, 
             error: null 
           };
         }
-        
-        // No improvement
-        return { 
-          data: { 
-            ...existingResult, 
-            is_improvement: false 
-          }, 
-          error: null 
-        };
       } else {
-        // First ever completion
+        // First attempt - insert new result
         const insertResponse = await fetch(
           `${SUPABASE_URL}/rest/v1/weekly_challenge_results`,
           {
             method: 'POST',
-            headers: { ...headers, 'Prefer': 'return=representation' },
+            headers: {
+              ...headers,
+              'Prefer': 'return=representation'
+            },
             body: JSON.stringify({
               user_id: userId,
               challenge_id: challengeId,
@@ -214,7 +183,8 @@ class WeeklyChallengeService {
             ...insertedData, 
             is_improvement: true,
             first_attempt_time_ms: completionTimeMs,
-            best_time_ms: completionTimeMs
+            best_time_ms: completionTimeMs,
+            was_first_attempt: true
           }, 
           error: insertResponse.ok ? null : 'Failed to save result'
         };
@@ -226,7 +196,6 @@ class WeeklyChallengeService {
   }
   
   // Get the leaderboard for a challenge (ranked by first_attempt_time_ms)
-  // UPDATED: Added comprehensive debug logging
   async getLeaderboard(challengeId, limit = 50) {
     console.log('[WeeklyChallengeService] getLeaderboard called:', { challengeId, limit });
     
@@ -238,7 +207,6 @@ class WeeklyChallengeService {
     try {
       // Query results
       const resultsUrl = `${SUPABASE_URL}/rest/v1/weekly_challenge_results?challenge_id=eq.${challengeId}&order=first_attempt_time_ms.asc.nullslast&limit=${limit}&select=user_id,first_attempt_time_ms,best_time_ms,completion_time_ms,completed_at`;
-      console.log('[WeeklyChallengeService] Fetching results from:', resultsUrl);
       
       const response = await fetch(resultsUrl, { headers });
       
@@ -248,7 +216,6 @@ class WeeklyChallengeService {
       }
       
       const results = await response.json();
-      console.log('[WeeklyChallengeService] Results fetched:', results.length, 'entries');
       
       if (results.length === 0) {
         return { data: [], error: null };
@@ -256,92 +223,33 @@ class WeeklyChallengeService {
       
       // Fetch profiles for all users
       const userIds = results.map(r => r.user_id);
-      console.log('[WeeklyChallengeService] Fetching profiles for user IDs:', userIds);
-      
-      // FIXED: Properly encode the user IDs in the URL
-      const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${userIds.join(',')})&select=id,username,display_name,avatar_url`;
-      console.log('[WeeklyChallengeService] Profiles URL:', profilesUrl);
+      const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${userIds.map(id => `"${id}"`).join(',')})&select=id,username,display_name,rating`;
       
       const profilesResponse = await fetch(profilesUrl, { headers });
-      console.log('[WeeklyChallengeService] Profiles response status:', profilesResponse.status);
       
-      let profiles = [];
+      let profilesMap = {};
       if (profilesResponse.ok) {
-        profiles = await profilesResponse.json();
-        console.log('[WeeklyChallengeService] Profiles fetched:', profiles.length, 'profiles');
-        console.log('[WeeklyChallengeService] Profile data sample:', profiles[0]);
-      } else {
-        const errorText = await profilesResponse.text();
-        console.error('[WeeklyChallengeService] Profiles fetch failed:', errorText);
+        const profiles = await profilesResponse.json();
+        profilesMap = Object.fromEntries(profiles.map(p => [p.id, p]));
       }
       
-      // Create profile map
-      const profileMap = {};
-      profiles.forEach(p => { 
-        profileMap[p.id] = p; 
-      });
-      console.log('[WeeklyChallengeService] ProfileMap keys:', Object.keys(profileMap));
-      
       // Combine results with profiles
-      const formattedData = results.map(entry => {
-        const profile = profileMap[entry.user_id];
-        console.log('[WeeklyChallengeService] Mapping entry:', entry.user_id, '-> profile:', profile?.username || 'NOT FOUND');
-        
-        return {
-          user_id: entry.user_id,
-          first_attempt_time_ms: entry.first_attempt_time_ms || entry.completion_time_ms,
-          best_time_ms: entry.best_time_ms || entry.completion_time_ms,
-          completion_time_ms: entry.completion_time_ms,
-          completed_at: entry.completed_at,
-          username: profile?.username || null,
-          display_name: profile?.display_name || null,
-          avatar_url: profile?.avatar_url || null
-        };
-      });
+      const leaderboard = results.map((result, index) => ({
+        ...result,
+        rank: index + 1,
+        profile: profilesMap[result.user_id] || { username: 'Unknown', display_name: 'Unknown' }
+      }));
       
-      console.log('[WeeklyChallengeService] Final formatted data:', formattedData);
-      
-      return { data: formattedData, error: null };
+      return { data: leaderboard, error: null };
     } catch (err) {
-      console.error('[WeeklyChallengeService] Error getting weekly leaderboard:', err);
+      console.error('Error getting leaderboard:', err);
       return { data: [], error: err.message };
     }
   }
   
-  // Get the user's result for a specific challenge
-  async getUserResult(challengeId) {
-    if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
-    
-    const headers = getAuthHeaders();
-    if (!headers) return { data: null, error: 'Not authenticated' };
-    
-    const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
-    const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
-    const userId = authData?.user?.id;
-    
-    if (!userId) return { data: null, error: 'Not authenticated' };
-    
-    try {
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/weekly_challenge_results?user_id=eq.${userId}&challenge_id=eq.${challengeId}&select=*`,
-        { headers }
-      );
-      
-      if (!response.ok) {
-        return { data: null, error: 'Failed to fetch result' };
-      }
-      
-      const results = await response.json();
-      return { data: results[0] || null, error: null };
-    } catch (err) {
-      console.error('Error getting user result:', err);
-      return { data: null, error: err.message };
-    }
-  }
-  
-  // Get user's rank in a challenge (based on first_attempt_time)
+  // Get user's rank in a challenge
   async getUserRank(challengeId) {
-    if (!isSupabaseConfigured()) return { rank: null, error: 'Supabase not configured' };
+    if (!isSupabaseConfigured()) return { rank: null, error: 'Not configured' };
     
     const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
     const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
@@ -452,19 +360,87 @@ class WeeklyChallengeService {
     }
   }
   
-  // Generate a deterministic puzzle seed for the week
-  // This method is called by WeeklyChallengeScreen to get a consistent seed for puzzle generation
-  generatePuzzleSeed(challenge) {
-    if (!challenge?.puzzle_seed) {
-      console.warn('[WeeklyChallengeService] No puzzle_seed in challenge, generating fallback');
-      // Fallback: create deterministic seed from challenge properties
-      const fallbackSeed = `week-${challenge?.week_number || 1}-${challenge?.id || 'unknown'}`;
-      return fallbackSeed;
+  // =========================================================================
+  // v7.11: NEW - Get detailed podium breakdown (1st, 2nd, 3rd place counts)
+  // =========================================================================
+  async getUserPodiumBreakdown(userId) {
+    if (!isSupabaseConfigured()) return { data: null, error: 'Not configured' };
+    
+    const headers = getAuthHeaders();
+    if (!headers) return { data: null, error: 'Not authenticated' };
+    
+    try {
+      // Get all completed challenges (ended before now)
+      const now = new Date().toISOString();
+      const challengesResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/weekly_challenges?ends_at=lt.${now}&select=id`,
+        { headers }
+      );
+      
+      if (!challengesResponse.ok) {
+        console.log('[WeeklyChallengeService] Failed to fetch completed challenges');
+        return { data: null, error: 'Failed to fetch challenges' };
+      }
+      
+      const challenges = await challengesResponse.json();
+      if (!challenges || challenges.length === 0) {
+        console.log('[WeeklyChallengeService] No completed challenges found');
+        return { data: { first: 0, second: 0, third: 0, total: 0 }, error: null };
+      }
+      
+      console.log('[WeeklyChallengeService] Processing', challenges.length, 'completed challenges for podium breakdown');
+      
+      let first = 0, second = 0, third = 0;
+      
+      // For each completed challenge, check user's rank
+      for (const challenge of challenges) {
+        const { data: leaderboard } = await this.getLeaderboard(challenge.id, 10);
+        
+        if (leaderboard && leaderboard.length > 0) {
+          const userIndex = leaderboard.findIndex(entry => entry.user_id === userId);
+          if (userIndex === 0) {
+            first++;
+            console.log('[WeeklyChallengeService] Found 1st place in challenge', challenge.id);
+          } else if (userIndex === 1) {
+            second++;
+            console.log('[WeeklyChallengeService] Found 2nd place in challenge', challenge.id);
+          } else if (userIndex === 2) {
+            third++;
+            console.log('[WeeklyChallengeService] Found 3rd place in challenge', challenge.id);
+          }
+        }
+      }
+      
+      const total = first + second + third;
+      console.log('[WeeklyChallengeService] Podium breakdown:', { first, second, third, total });
+      
+      return { data: { first, second, third, total }, error: null };
+    } catch (err) {
+      console.error('[WeeklyChallengeService] Error getting user podium breakdown:', err);
+      return { data: null, error: err.message };
     }
-    return challenge.puzzle_seed;
   }
   
-  // Get time remaining in the current challenge
+  // Generate a deterministic puzzle seed for the week
+  generatePuzzleSeed(challenge) {
+    return challenge?.puzzle_seed;
+  }
+  
+  // Format time from milliseconds
+  formatTime(ms) {
+    if (!ms) return '--:--';
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    const remainingMs = ms % 1000;
+    
+    if (minutes > 0) {
+      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}.${Math.floor(remainingMs / 100)}`;
+    }
+    return `${seconds}.${Math.floor(remainingMs / 100)}s`;
+  }
+  
+  // Get time remaining in the week
   getTimeRemaining(challenge) {
     if (!challenge?.ends_at) return null;
     
@@ -479,26 +455,6 @@ class WeeklyChallengeService {
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     
     return { days, hours, minutes, expired: false };
-  }
-  
-  // Format time for display (converts ms to mm:ss.cc format)
-  formatTime(ms) {
-    if (!ms) return '--:--';
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const centiseconds = Math.floor((ms % 1000) / 10);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}.${centiseconds.toString().padStart(2, '0')}`;
-  }
-  
-  // Get ISO week number for a date
-  // Used for validation to ensure challenge week matches current week
-  getISOWeekNumber(date) {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
 }
 

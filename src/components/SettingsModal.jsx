@@ -1,10 +1,11 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
 // UPDATED: Added push notification subscription management
 // v7.10: Added iOS scroll fixes for modal content
+// v7.11: Added granular notification preferences
 // Place in src/components/SettingsModal.jsx
 
 import { useState, useEffect } from 'react';
-import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music, Key, Lock, Eye, EyeOff, Check, Loader, Mail, Trash2, Bell, BellOff, Download, Smartphone, ExternalLink } from 'lucide-react';
+import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music, Key, Lock, Eye, EyeOff, Check, Loader, Mail, Trash2, Bell, BellOff, Download, Smartphone, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { useAuth } from '../contexts/AuthContext';
 import { pushNotificationService } from '../services/pushNotificationService';
@@ -61,6 +62,33 @@ const SettingsModal = ({ isOpen, onClose }) => {
   const [sendingResetEmail, setSendingResetEmail] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [resetEmailError, setResetEmailError] = useState('');
+
+  // v7.11: Granular notification preferences
+  const [notificationPrefs, setNotificationPrefs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('deadblock_notification_prefs');
+      return saved ? JSON.parse(saved) : {
+        yourTurn: true,
+        gameInvites: true,
+        friendRequests: true,
+        rematchRequests: true,
+        chatMessages: true,
+        gameStart: true,
+        weeklyChallenge: true
+      };
+    } catch {
+      return {
+        yourTurn: true,
+        gameInvites: true,
+        friendRequests: true,
+        rematchRequests: true,
+        chatMessages: true,
+        gameStart: true,
+        weeklyChallenge: true
+      };
+    }
+  });
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
 
   // Check if user is using Google OAuth (no password auth)
   const isGoogleUser = user?.app_metadata?.provider === 'google' || 
@@ -195,6 +223,30 @@ const SettingsModal = ({ isOpen, onClose }) => {
         setRequestingNotifications(false);
       }
     }
+  };
+
+  // v7.11: Toggle individual notification preference
+  const toggleNotificationPref = (key) => {
+    const newPrefs = { ...notificationPrefs, [key]: !notificationPrefs[key] };
+    setNotificationPrefs(newPrefs);
+    localStorage.setItem('deadblock_notification_prefs', JSON.stringify(newPrefs));
+    soundManager.playClickSound?.('click');
+  };
+
+  // v7.11: Enable all notifications
+  const enableAllNotifications = () => {
+    const allEnabled = {
+      yourTurn: true,
+      gameInvites: true,
+      friendRequests: true,
+      rematchRequests: true,
+      chatMessages: true,
+      gameStart: true,
+      weeklyChallenge: true
+    };
+    setNotificationPrefs(allEnabled);
+    localStorage.setItem('deadblock_notification_prefs', JSON.stringify(allEnabled));
+    soundManager.playClickSound?.('success');
   };
 
   // Handle PWA install
@@ -437,6 +489,129 @@ const SettingsModal = ({ isOpen, onClose }) => {
                   
                   {pushError && (
                     <p className="text-xs text-red-400 px-3">{pushError}</p>
+                  )}
+                  
+                  {/* v7.11: Granular Notification Settings */}
+                  {pushSubscribed && (
+                    <div className="space-y-1 mt-2">
+                      <button
+                        onClick={() => setShowNotificationPrefs(!showNotificationPrefs)}
+                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-700/30 rounded-lg transition-all"
+                      >
+                        <span className="text-xs text-slate-400 uppercase tracking-wide">Notification Types</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); enableAllNotifications(); }}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                          >
+                            Enable All
+                          </button>
+                          {showNotificationPrefs ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+                        </div>
+                      </button>
+                      
+                      {showNotificationPrefs && (
+                        <div className="space-y-1 pl-2">
+                          {/* Your Turn */}
+                          <button
+                            onClick={() => toggleNotificationPref('yourTurn')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🎮</span>
+                              <span className={notificationPrefs.yourTurn ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Your Turn</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.yourTurn ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.yourTurn ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Game Invites */}
+                          <button
+                            onClick={() => toggleNotificationPref('gameInvites')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">📩</span>
+                              <span className={notificationPrefs.gameInvites ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Game Invites</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.gameInvites ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.gameInvites ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Friend Requests */}
+                          <button
+                            onClick={() => toggleNotificationPref('friendRequests')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">👥</span>
+                              <span className={notificationPrefs.friendRequests ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Friend Requests</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.friendRequests ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.friendRequests ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Rematch Requests */}
+                          <button
+                            onClick={() => toggleNotificationPref('rematchRequests')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🔄</span>
+                              <span className={notificationPrefs.rematchRequests ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Rematch Requests</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.rematchRequests ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.rematchRequests ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Chat Messages */}
+                          <button
+                            onClick={() => toggleNotificationPref('chatMessages')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">💬</span>
+                              <span className={notificationPrefs.chatMessages ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Chat Messages</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.chatMessages ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.chatMessages ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Game Start */}
+                          <button
+                            onClick={() => toggleNotificationPref('gameStart')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🚀</span>
+                              <span className={notificationPrefs.gameStart ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Game Started</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.gameStart ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.gameStart ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Weekly Challenge */}
+                          <button
+                            onClick={() => toggleNotificationPref('weeklyChallenge')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">📅</span>
+                              <span className={notificationPrefs.weeklyChallenge ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Weekly Challenge</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.weeklyChallenge ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.weeklyChallenge ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </>
               ) : (
