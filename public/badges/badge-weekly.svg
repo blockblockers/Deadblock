@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- Z Pentomino - Weekly Challenge (Electric Lime like game's Z piece) -->
+  <defs>
+    <linearGradient id="weeklyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d9f99d"/>
+      <stop offset="50%" stop-color="#a3e635"/>
+      <stop offset="100%" stop-color="#65a30d"/>
+    </linearGradient>
+  </defs>
+  <!-- Z shape: zigzag pattern -->
+  <rect x="20" y="18" width="20" height="20" rx="3" fill="url(#weeklyGrad)"/>
+  <rect x="42" y="18" width="20" height="20" rx="3" fill="url(#weeklyGrad)"/>
+  <rect x="42" y="40" width="20" height="20" rx="3" fill="url(#weeklyGrad)"/>
+  <rect x="42" y="62" width="20" height="20" rx="3" fill="url(#weeklyGrad)"/>
+  <rect x="64" y="62" width="20" height="20" rx="3" fill="url(#weeklyGrad)"/>
+</svg>

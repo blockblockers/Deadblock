@@ -1,217 +1,183 @@
-// Service Worker for Deadblock Push Notifications
-// Place this file in your public folder (public/sw.js)
-// This runs in the background even when the app is closed
+// sw.js - Service Worker with Push Notifications
+// v7.11 - FIXES:
+// - Notifications navigate to SPECIFIC GAME (not just online menu)
+// - Uses pentomino-shaped badges with game-accurate colors
+// - Includes weekly_challenge notification type
+// Place in public/sw.js
 
-const CACHE_NAME = 'deadblock-v1';
+const CACHE_NAME = 'deadblock-v7.11';
 const APP_URL = self.location.origin;
 
-// Install event - cache essential assets
-self.addEventListener('install', (event) => {
-  console.log('[SW] Installing service worker...');
-  
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        '/pwa-192x192.png',
-        '/pwa-512x512.png'
-      ]).catch(err => {
-        console.log('[SW] Cache addAll failed:', err);
-      });
-    })
-  );
-  
-  // Activate immediately
+// Pentomino badge paths - place SVG files in public/badges/
+// Colors match the game's piece colors from pieces.js
+const BADGES = {
+  'your_turn': '/badges/badge-turn.svg',           // T pentomino - Chrome Silver
+  'game_start': '/badges/badge-turn.svg',          // T pentomino - Chrome Silver
+  'game_invite': '/badges/badge-invite.svg',       // I pentomino - Electric Cyan
+  'invite_accepted': '/badges/badge-invite.svg',   // I pentomino - Electric Cyan
+  'friend_request': '/badges/badge-friend.svg',    // F pentomino - Hot Magenta
+  'rematch_request': '/badges/badge-rematch.svg',  // X pentomino - Pure White
+  'rematch_accepted': '/badges/badge-rematch.svg', // X pentomino - Pure White
+  'chat_message': '/badges/badge-chat.svg',        // U pentomino (as C) - Neon Yellow
+  'chat': '/badges/badge-chat.svg',                // U pentomino (as C) - Neon Yellow
+  'victory': '/badges/badge-victory.svg',          // W pentomino - Scarlet Red
+  'defeat': '/badges/badge-defeat.svg',            // L pentomino - Plasma Orange
+  'weekly_challenge': '/badges/badge-weekly.svg',  // Z pentomino - Electric Lime
+  'default': '/badges/badge-default.svg'           // I pentomino - Electric Cyan
+};
+
+// Vibration patterns per notification type
+const VIBRATIONS = {
+  'your_turn': [100, 50, 100],
+  'game_start': [200, 100, 200],
+  'game_invite': [200, 100, 200, 100, 200],
+  'friend_request': [150, 75, 150],
+  'rematch_request': [150, 75, 150],
+  'chat_message': [50],
+  'chat': [50],
+  'victory': [100, 50, 100, 50, 300],
+  'defeat': [200, 200, 200],
+  'weekly_challenge': [100, 50, 100, 50, 100, 50, 200],
+  'default': [100, 50, 100]
+};
+
+// Install
+self.addEventListener('install', () => {
+  console.log('[SW] Installing v7.11');
   self.skipWaiting();
 });
 
-// Activate event - clean up old caches
+// Activate
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating service worker...');
-  
+  console.log('[SW] Activating');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    })
+    caches.keys().then(names => 
+      Promise.all(names.filter(n => n !== CACHE_NAME).map(n => caches.delete(n)))
+    ).then(() => self.clients.claim())
   );
-  
-  // Take control of all pages immediately
-  self.clients.claim();
 });
 
-// Push event - received a push notification from server
+// Push notification received
 self.addEventListener('push', (event) => {
-  console.log('[SW] Push received:', event);
+  console.log('[SW] Push received');
   
-  let data = {
-    title: 'Deadblock',
-    body: 'You have a new notification',
-    icon: '/pwa-192x192.png',
-    badge: '/pwa-192x192.png',
-    tag: 'deadblock-notification',
-    data: {}
-  };
+  let data = { title: 'Deadblock', body: 'New notification', type: 'default' };
   
-  // Parse push data if available
   if (event.data) {
     try {
-      const pushData = event.data.json();
-      data = { ...data, ...pushData };
+      const payload = event.data.json();
+      data = { ...data, ...payload };
     } catch (e) {
-      console.log('[SW] Failed to parse push data:', e);
       data.body = event.data.text();
     }
   }
   
-  // Notification options
+  const type = data.type || data.data?.type || 'default';
+  const gameId = data.gameId || data.data?.gameId;
+  const inviteId = data.inviteId || data.data?.inviteId;
+  const rematchId = data.rematchId || data.data?.rematchId;
+  
+  console.log('[SW] Notification type:', type, 'gameId:', gameId);
+  
   const options = {
     body: data.body,
-    icon: data.icon || '/pwa-192x192.png',
-    badge: data.badge || '/pwa-192x192.png',
-    tag: data.tag || 'deadblock-notification',
+    icon: '/pwa-192x192.png',
+    badge: BADGES[type] || BADGES['default'],
+    tag: `deadblock-${type}-${Date.now()}`,
     renotify: true,
-    requireInteraction: data.requireInteraction || false,
-    vibrate: [200, 100, 200],
-    data: {
-      url: data.url || '/',
-      gameId: data.gameId,
-      type: data.type,
-      timestamp: Date.now(),
-      ...data.data
-    },
-    actions: data.actions || []
+    requireInteraction: type === 'game_invite' || type === 'rematch_request' || type === 'weekly_challenge',
+    vibrate: VIBRATIONS[type] || VIBRATIONS['default'],
+    data: { type, gameId, inviteId, rematchId, url: data.url },
+    actions: getActions(type)
   };
   
-  // Add actions based on notification type
-  if (data.type === 'your_turn') {
-    options.actions = [
-      { action: 'play', title: 'Play Now', icon: '/icons/play.png' }
-    ];
-  } else if (data.type === 'game_invite') {
-    options.actions = [
-      { action: 'accept', title: 'Accept', icon: '/icons/check.png' },
-      { action: 'decline', title: 'Decline', icon: '/icons/x.png' }
-    ];
-  } else if (data.type === 'rematch_request' || data.type === 'rematch') {
-    options.actions = [
-      { action: 'view', title: 'View', icon: '/icons/play.png' }
-    ];
-  } else if (data.type === 'chat_message' || data.type === 'chat') {
-    options.actions = [
-      { action: 'reply', title: 'Reply', icon: '/icons/reply.png' }
-    ];
-  }
-  
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+  event.waitUntil(self.registration.showNotification(data.title, options));
 });
 
-// Notification click event - user clicked the notification
+function getActions(type) {
+  switch (type) {
+    case 'your_turn':
+    case 'game_start':
+      return [{ action: 'play', title: '🎮 Play Now' }];
+    case 'game_invite':
+      return [{ action: 'accept', title: '✓ Accept' }, { action: 'decline', title: '✗ Decline' }];
+    case 'rematch_request':
+      return [{ action: 'accept', title: '⚔️ Accept' }, { action: 'decline', title: '✗ Decline' }];
+    case 'chat_message':
+    case 'chat':
+      return [{ action: 'reply', title: '💬 Reply' }];
+    case 'weekly_challenge':
+      return [{ action: 'play', title: '🏆 Play Now' }];
+    default:
+      return [];
+  }
+}
+
+// Notification clicked - NAVIGATE TO SPECIFIC GAME
 self.addEventListener('notificationclick', (event) => {
-  console.log('[SW] Notification clicked:', event);
+  const { action } = event;
+  const data = event.notification.data || {};
+  const { type, gameId, inviteId, rematchId } = data;
   
-  const notification = event.notification;
-  const action = event.action;
-  const data = notification.data || {};
+  console.log('[SW] Click - action:', action, 'type:', type, 'gameId:', gameId);
+  event.notification.close();
   
-  notification.close();
+  // Build navigation URL
+  let url = '/?navigateTo=online';
   
-  // Determine URL to open based on action and notification type
-  // Use query params that the SPA can handle
-  let urlToOpen = '/';
-  
-  if (data.type === 'your_turn' && data.gameId) {
-    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
-  } else if (data.type === 'game_invite') {
-    if (action === 'accept' && data.inviteId) {
-      urlToOpen = `/?navigateTo=online&acceptInvite=${data.inviteId}`;
-    } else if (action === 'decline') {
-      // Just close, decline handled passively
-      return;
+  // v7.11: Navigate based on notification type
+  if (type === 'weekly_challenge') {
+    url = '/?navigateTo=weekly';
+  } else if (gameId) {
+    if (type === 'your_turn' || type === 'game_start' || action === 'play') {
+      url = `/?navigateTo=online&gameId=${gameId}`;
+    } else if (type === 'chat_message' || type === 'chat' || action === 'reply') {
+      url = `/?navigateTo=online&gameId=${gameId}&openChat=true`;
+    } else if (type === 'rematch_accepted' || type === 'invite_accepted') {
+      url = `/?navigateTo=online&gameId=${gameId}`;
     } else {
-      urlToOpen = '/?navigateTo=online';
+      url = `/?navigateTo=online&gameId=${gameId}`;
     }
-  } else if (data.type === 'rematch_request' && data.gameId) {
-    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
-  } else if (data.type === 'rematch_accepted' && data.gameId) {
-    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
-  } else if (data.type === 'rematch' && data.gameId) {
-    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
-  } else if (data.type === 'chat_message' && data.gameId) {
-    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}&openChat=true`;
-  } else if (data.type === 'chat' && data.gameId) {
-    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}&openChat=true`;
-  } else if (data.gameId) {
-    // Fallback for any notification with a gameId
-    urlToOpen = `/?navigateTo=online&gameId=${data.gameId}`;
+  } else if (inviteId && action === 'accept') {
+    url = `/?navigateTo=online&acceptInvite=${inviteId}`;
+  } else if (rematchId && action === 'accept') {
+    url = `/?navigateTo=online&acceptRematch=${rematchId}`;
   }
   
-  console.log('[SW] Opening URL:', urlToOpen, 'for type:', data.type);
+  console.log('[SW] Navigating to:', url);
   
-  // Focus existing window or open new one
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      // Check if there's already a window open
-      for (const client of windowClients) {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      // Find existing window
+      for (const client of clients) {
         if (client.url.includes(APP_URL) && 'focus' in client) {
-          // Navigate existing window to the URL
+          // Send navigation message to existing window
           client.postMessage({
             type: 'NOTIFICATION_CLICK',
-            url: urlToOpen,
-            data: data
+            url,
+            data: { type, gameId, inviteId, rematchId, openChat: url.includes('openChat') }
           });
           return client.focus();
         }
       }
-      
-      // Open new window if none exists
-      if (clients.openWindow) {
-        return clients.openWindow(urlToOpen);
+      // Open new window
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(url);
       }
     })
   );
 });
 
-// Notification close event
-self.addEventListener('notificationclose', (event) => {
-  console.log('[SW] Notification closed:', event);
-  
-  // Track dismissals if needed for analytics
-  const data = event.notification.data || {};
-  
-  // Could send to analytics here
+// Close
+self.addEventListener('notificationclose', () => {
+  console.log('[SW] Notification closed');
 });
 
-// Message event - communication from main app
+// Messages from app
 self.addEventListener('message', (event) => {
-  console.log('[SW] Message received:', event.data);
-  
-  if (event.data.type === 'SKIP_WAITING') {
+  if (event.data === 'skipWaiting' || event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  
-  if (event.data.type === 'GET_VERSION') {
-    event.ports[0].postMessage({ version: CACHE_NAME });
-  }
 });
 
-// Background sync for offline actions (optional enhancement)
-self.addEventListener('sync', (event) => {
-  console.log('[SW] Background sync:', event.tag);
-  
-  if (event.tag === 'sync-game-moves') {
-    event.waitUntil(syncGameMoves());
-  }
-});
-
-// Helper function for background sync (placeholder)
-async function syncGameMoves() {
-  // Could be used to sync offline moves when connection restored
-  console.log('[SW] Syncing game moves...');
-}
-
-console.log('[SW] Service worker loaded');
+console.log('[SW] v7.11 loaded');

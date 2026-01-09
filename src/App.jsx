@@ -611,45 +611,51 @@ function AppContent({ onBgThemeChange }) {
   };
 
   // Handle service worker notification clicks and URL-based navigation
+  // v7.11: Improved to ensure gameId navigation works properly
   useEffect(() => {
     const handleServiceWorkerMessage = (event) => {
-      // console.log('[App] Received service worker message:', event.data);
+      console.log('[App] Received service worker message:', event.data);
       
       if (event.data?.type === 'NOTIFICATION_CLICK') {
         const { data } = event.data;
-        // FIXED: Service worker sends 'type', not 'notificationType'
-        const { gameId, type: notificationType, inviteId, rematchId } = data || {};
+        // Service worker sends 'type', not 'notificationType'
+        const { gameId, type: notificationType, inviteId, rematchId, openChat } = data || {};
         
-        // console.log('[App] Processing notification click:', { gameId, notificationType, inviteId, rematchId });
+        console.log('[App] Processing notification click:', { gameId, notificationType, openChat });
         
-        // Ensure we're authenticated and past entry screen
+        // If not authenticated yet, store for later navigation
         if (!hasPassedEntryAuth) {
-          // console.log('[App] Not past entry auth, storing for later navigation');
+          console.log('[App] Not past entry auth, storing for later navigation');
           if (gameId) {
-            localStorage.setItem('deadblock_pending_game_id', gameId);
+            sessionStorage.setItem('deadblock_pending_game_id', gameId);
+          }
+          if (openChat) {
+            sessionStorage.setItem('deadblock_open_chat', 'true');
+          }
+          if (notificationType === 'weekly_challenge') {
+            sessionStorage.setItem('deadblock_pending_nav', 'weekly');
+          } else {
+            sessionStorage.setItem('deadblock_pending_nav', 'online');
           }
           localStorage.setItem('deadblock_pending_online_intent', 'true');
           return;
         }
         
-        // Navigate based on notification type
-        if (notificationType === 'your_turn' && gameId) {
-          // console.log('[App] Navigating to game:', gameId);
+        // Navigate immediately if authenticated
+        // v7.11: Always navigate to specific game when gameId is provided
+        if (gameId) {
+          console.log('[App] Navigating to game:', gameId);
+          if (openChat) {
+            sessionStorage.setItem('deadblock_open_chat', 'true');
+          }
           setOnlineGameId(gameId);
           setGameMode('online-game');
-        } else if (notificationType === 'game_invite') {
-          // console.log('[App] Navigating to online menu for invite');
-          setGameMode('online-menu');
-        } else if ((notificationType === 'rematch_request' || notificationType === 'rematch_accepted') && gameId) {
-          // console.log('[App] Navigating to game from rematch:', gameId);
-          setOnlineGameId(gameId);
-          setGameMode('online-game');
-        } else if (notificationType === 'chat_message' && gameId) {
-          // console.log('[App] Navigating to game for chat:', gameId);
-          setOnlineGameId(gameId);
-          setGameMode('online-game');
+        } else if (notificationType === 'weekly_challenge') {
+          // Weekly challenge notification - go to weekly menu
+          console.log('[App] Navigating to weekly challenge menu');
+          setGameMode('weekly-menu');
         } else {
-          // console.log('[App] Default navigation to online menu');
+          console.log('[App] Navigating to online menu');
           setGameMode('online-menu');
         }
       }
@@ -668,8 +674,8 @@ function AppContent({ onBgThemeChange }) {
     const openChat = params.get('openChat');
     
     // Store navigation params in sessionStorage so they survive auth loading
-    // This ensures we can navigate even if hasPassedEntryAuth isn't true yet
     if (navigateTo === 'online') {
+      console.log('[App] URL params detected - gameId:', urlGameId);
       if (urlGameId) {
         sessionStorage.setItem('deadblock_pending_game_id', urlGameId);
       }
@@ -677,28 +683,11 @@ function AppContent({ onBgThemeChange }) {
         sessionStorage.setItem('deadblock_open_chat', 'true');
       }
       sessionStorage.setItem('deadblock_pending_nav', 'online');
-      
-      // Clean URL immediately
       window.history.replaceState({}, document.title, '/');
-    }
-    
-    // Process navigation if we're ready (hasPassedEntryAuth is true)
-    if (hasPassedEntryAuth) {
-      const pendingNav = sessionStorage.getItem('deadblock_pending_nav');
-      const pendingGameId = sessionStorage.getItem('deadblock_pending_game_id');
-      
-      if (pendingNav === 'online') {
-        // console.log('[App] Processing pending navigation, gameId:', pendingGameId);
-        sessionStorage.removeItem('deadblock_pending_nav');
-        sessionStorage.removeItem('deadblock_pending_game_id');
-        
-        if (pendingGameId) {
-          setOnlineGameId(pendingGameId);
-          setGameMode('online-game');
-        } else {
-          setGameMode('online-menu');
-        }
-      }
+    } else if (navigateTo === 'weekly') {
+      // Handle weekly challenge notification navigation
+      sessionStorage.setItem('deadblock_pending_nav', 'weekly');
+      window.history.replaceState({}, document.title, '/');
     }
     
     return () => {
@@ -706,6 +695,38 @@ function AppContent({ onBgThemeChange }) {
         navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
       }
     };
+  }, []); // Empty deps - only run on mount
+  
+  // v7.11: Separate useEffect to process pending navigation after auth is ready
+  useEffect(() => {
+    if (!hasPassedEntryAuth) return;
+    
+    const pendingNav = sessionStorage.getItem('deadblock_pending_nav');
+    const pendingGameId = sessionStorage.getItem('deadblock_pending_game_id');
+    
+    if (pendingNav === 'online') {
+      console.log('[App] Processing pending online navigation, gameId:', pendingGameId);
+      sessionStorage.removeItem('deadblock_pending_nav');
+      sessionStorage.removeItem('deadblock_pending_game_id');
+      // Keep deadblock_open_chat for OnlineGameScreen to read
+      
+      // Small delay to ensure state is ready
+      setTimeout(() => {
+        if (pendingGameId) {
+          console.log('[App] Setting online game:', pendingGameId);
+          setOnlineGameId(pendingGameId);
+          setGameMode('online-game');
+        } else {
+          setGameMode('online-menu');
+        }
+      }, 100);
+    } else if (pendingNav === 'weekly') {
+      console.log('[App] Processing pending weekly navigation');
+      sessionStorage.removeItem('deadblock_pending_nav');
+      setTimeout(() => {
+        setGameMode('weekly-menu');
+      }, 100);
+    }
   }, [hasPassedEntryAuth, setGameMode, setOnlineGameId]);
 
   // Fallback timeout for stuck loading state
