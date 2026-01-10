@@ -232,14 +232,25 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   // Load achievement counts and check for new ones
   useEffect(() => {
     const loadAchievements = async () => {
-      if (!effectiveProfile?.id) return;
+      if (!effectiveProfile?.id) {
+        console.log('[PlayerProfileCard] No profile ID for achievements');
+        return;
+      }
       
       try {
+        console.log('[PlayerProfileCard] Loading achievements for:', effectiveProfile.id);
+        
         // Get all achievements with status
         const result = await achievementService.getAchievementsWithStatus(effectiveProfile.id);
-        if (result.data) {
+        console.log('[PlayerProfileCard] Achievement result:', { 
+          dataLength: result.data?.length, 
+          error: result.error 
+        });
+        
+        if (result.data && result.data.length > 0) {
           const unlocked = result.data.filter(a => a.unlocked);
           const total = result.data.length;
+          console.log('[PlayerProfileCard] Achievements loaded:', { unlocked: unlocked.length, total });
           setAchievementCount({ unlocked: unlocked.length, total });
           
           // Check for new (unviewed) achievements
@@ -257,6 +268,8 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
             // Never viewed - all unlocked are "new"
             setNewAchievementsCount(unlocked.length);
           }
+        } else {
+          console.log('[PlayerProfileCard] No achievements found or error:', result.error);
         }
       } catch (err) {
         console.error('[PlayerProfileCard] Error loading achievements:', err);
@@ -378,16 +391,16 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
             style={{ 
               background: newAchievementsCount > 0 
                 ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.2))'
-                : 'rgba(51, 65, 85, 0.8)',
+                : 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
               border: newAchievementsCount > 0 
                 ? '1px solid rgba(251, 191, 36, 0.5)'
-                : '1px solid rgba(100, 116, 139, 0.3)'
+                : '1px solid rgba(251, 191, 36, 0.3)'
             }}
             title={`Achievements (${achievementCount.unlocked}/${achievementCount.total})`}
           >
             <Trophy 
               size={14} 
-              className={newAchievementsCount > 0 ? 'text-amber-400' : 'text-slate-400'} 
+              className="text-amber-400" 
             />
             {/* NEW badge */}
             {newAchievementsCount > 0 && (
@@ -411,10 +424,13 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
               setShowUsernameEdit(true);
             }}
             className="p-1.5 rounded-lg transition-all hover:scale-110"
-            style={{ background: 'rgba(51, 65, 85, 0.8)', border: '1px solid rgba(100, 116, 139, 0.3)' }}
+            style={{ 
+              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.1))',
+              border: '1px solid rgba(59, 130, 246, 0.3)'
+            }}
             title="Edit username"
           >
-            <Pencil size={14} className="text-slate-400" />
+            <Pencil size={14} className="text-blue-400" />
           </button>
         </div>
         

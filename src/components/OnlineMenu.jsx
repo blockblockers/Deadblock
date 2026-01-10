@@ -236,6 +236,7 @@ const OnlineMenu = ({
   
   // Error message state (for in-GUI display instead of alert)
   const [inviteError, setInviteError] = useState(null);
+  const [inviteSuccess, setInviteSuccess] = useState(null);
   
   // Notification state
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
@@ -725,6 +726,10 @@ const OnlineMenu = ({
     setSendingInvite(toUserId);
     soundManager.playButtonClick();
     
+    // Get user info for success message
+    const targetUser = searchResults.find(u => u.id === toUserId);
+    const targetName = targetUser?.display_name || targetUser?.username || 'Player';
+    
     const { data, error } = await inviteService.sendInvite(profile.id, toUserId);
     
     if (error) {
@@ -741,6 +746,9 @@ const OnlineMenu = ({
       // Invite sent successfully
       soundManager.playClickSound('confirm');
       await loadInvites();
+      // Show success message
+      setInviteSuccess(`Challenge sent to ${targetName}!`);
+      setTimeout(() => setInviteSuccess(null), 4000);
       // Remove from search results
       setSearchResults(prev => prev.filter(u => u.id !== toUserId));
     }
@@ -1159,7 +1167,7 @@ const OnlineMenu = ({
                     <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
-                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
+                      className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
                       title="Edit Username"
                     >
                       <Pencil size={14} />
@@ -1288,13 +1296,13 @@ const OnlineMenu = ({
     onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
     className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
     style={{
-      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-      borderColor: 'rgba(168, 85, 247, 0.3)',
-      boxShadow: '0 0 15px rgba(168, 85, 247, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+      borderColor: 'rgba(245, 158, 11, 0.3)',
+      boxShadow: '0 0 15px rgba(245, 158, 11, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
     }}
   >
-    <Award size={14} className="text-purple-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-purple-300 transition-colors">Awards</span>
+    <Award size={14} className="text-amber-400 group-hover:scale-110 transition-transform" />
+    <span className="text-slate-300 group-hover:text-amber-300 transition-colors">Awards</span>
   </button>
   <button
     onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
@@ -1398,6 +1406,26 @@ const OnlineMenu = ({
                   <button 
                     onClick={() => setInviteError(null)}
                     className="text-red-400/60 hover:text-red-300 transition-colors p-1"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Success Banner - Themed in-GUI message */}
+            {inviteSuccess && (
+              <div className="mb-3 p-3 bg-green-900/40 border border-green-500/50 rounded-xl animate-scaleIn">
+                <div className="flex items-start gap-3">
+                  <div className="p-1.5 bg-green-500/20 rounded-lg shrink-0">
+                    <Check size={16} className="text-green-400" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-green-300 text-sm font-medium">{inviteSuccess}</p>
+                  </div>
+                  <button 
+                    onClick={() => setInviteSuccess(null)}
+                    className="text-green-400/60 hover:text-green-300 transition-colors p-1"
                   >
                     <X size={14} />
                   </button>
@@ -2531,8 +2559,13 @@ const OnlineMenu = ({
             setSendingInvite(friend.id);
             const { error } = await inviteService.sendInvite(profile.id, friend.id);
             setSendingInvite(null);
-            if (!error) {
+            if (error) {
+              setInviteError(error.message || 'Failed to send challenge');
+              setTimeout(() => setInviteError(null), 5000);
+            } else {
               soundManager.playSound('success');
+              setInviteSuccess(`Challenge sent to ${friend.display_name || friend.username}!`);
+              setTimeout(() => setInviteSuccess(null), 4000);
               setShowFriendsList(false);
             }
           }}
@@ -2556,8 +2589,15 @@ const OnlineMenu = ({
           currentUserId={profile?.id}
           onInviteToGame={async (player) => {
             const { error } = await inviteService.sendInvite(profile.id, player.id);
-            if (!error) {
+            if (error) {
+              // Show error message
+              setInviteError(error.message || 'Failed to send challenge');
+              setTimeout(() => setInviteError(null), 5000);
+            } else {
               soundManager.playSound('success');
+              // Show success message
+              setInviteSuccess(`Challenge sent to ${player.display_name || player.username}!`);
+              setTimeout(() => setInviteSuccess(null), 4000);
               setViewingPlayerId(null);
               setViewingPlayerData(null);
             }

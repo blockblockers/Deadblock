@@ -9,11 +9,29 @@ const isSupabaseConfigured = () => {
   return supabase && typeof supabase.from === 'function';
 };
 
-// Get current user ID
+// Get current user ID - tries multiple methods for compatibility
 const getCurrentUserId = () => {
   try {
-    const session = supabase?.auth?.session?.();
-    return session?.user?.id || null;
+    // Try to get from localStorage auth token first (most reliable)
+    const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+    const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
+    if (authData?.user?.id) {
+      return authData.user.id;
+    }
+    
+    // Try modern Supabase method
+    const session = supabase?.auth?.getSession?.();
+    if (session?.data?.session?.user?.id) {
+      return session.data.session.user.id;
+    }
+    
+    // Try legacy method
+    const legacySession = supabase?.auth?.session?.();
+    if (legacySession?.user?.id) {
+      return legacySession.user.id;
+    }
+    
+    return null;
   } catch {
     return null;
   }
@@ -108,15 +126,29 @@ class AchievementService {
 
   /**
    * Get user's unlocked achievements
+   * @param {string|boolean} userIdOrForceRefresh - Either userId to query, or boolean for forceRefresh
+   * @param {boolean} forceRefresh - Force cache refresh
    */
-  async getUserAchievements(forceRefresh = false) {
+  async getUserAchievements(userIdOrForceRefresh = false, forceRefresh = false) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
     
-    const userId = getCurrentUserId();
+    // Handle both signatures: (userId, forceRefresh) and (forceRefresh)
+    let userId;
+    let shouldRefresh = forceRefresh;
+    
+    if (typeof userIdOrForceRefresh === 'string') {
+      userId = userIdOrForceRefresh;
+    } else if (typeof userIdOrForceRefresh === 'boolean') {
+      shouldRefresh = userIdOrForceRefresh;
+      userId = getCurrentUserId();
+    } else {
+      userId = getCurrentUserId();
+    }
+    
     if (!userId) return { data: [], error: 'Not authenticated' };
     
-    // Check cache
-    if (!forceRefresh && this.cache && this.cacheTimestamp && 
+    // Check cache (only for current user's data)
+    if (!shouldRefresh && this.cache && this.cacheTimestamp && 
         Date.now() - this.cacheTimestamp < this.CACHE_DURATION) {
       return { data: this.cache, error: null };
     }
