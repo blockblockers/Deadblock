@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">
+  <!-- P Pentomino - Game Invite -->
+  <rect x="20" y="8" width="16" height="56" rx="2" fill="white"/>
+  <rect x="36" y="8" width="16" height="16" rx="2" fill="white"/>
+  <rect x="36" y="24" width="16" height="16" rx="2" fill="white"/>
+</svg>

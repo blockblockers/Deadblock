@@ -1,11 +1,21 @@
+import { lazy, Suspense } from 'react';
 import { Settings, HelpCircle, Globe } from 'lucide-react';
 import NeonTitle from './NeonTitle';
-import HowToPlayModal from './HowToPlayModal';
-import SettingsModal from './SettingsModal';
 import PlayerProfileCard from './PlayerProfileCard';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { isSupabaseConfigured } from '../utils/supabase';
+
+// Lazy load modals - they're only shown when user clicks buttons
+const HowToPlayModal = lazy(() => import('./HowToPlayModal'));
+const SettingsModal = lazy(() => import('./SettingsModal'));
+
+// Minimal loading fallback for modals (near-instant load, but just in case)
+const ModalLoadingFallback = () => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+  </div>
+);
 
 // Custom pentomino shapes for buttons
 const buttonShapes = {
@@ -270,9 +280,17 @@ const MenuScreen = ({
         {needsScroll && <div className="h-8 flex-shrink-0" />}
       </div>
 
-      {/* Modals */}
-      <HowToPlayModal isOpen={showHowToPlay} onClose={() => onToggleHowToPlay(false)} />
-      <SettingsModal isOpen={showSettings} onClose={() => onToggleSettings(false)} />
+      {/* Lazy-loaded Modals - only load when opened */}
+      {showHowToPlay && (
+        <Suspense fallback={<ModalLoadingFallback />}>
+          <HowToPlayModal isOpen={showHowToPlay} onClose={() => onToggleHowToPlay(false)} />
+        </Suspense>
+      )}
+      {showSettings && (
+        <Suspense fallback={<ModalLoadingFallback />}>
+          <SettingsModal isOpen={showSettings} onClose={() => onToggleSettings(false)} />
+        </Suspense>
+      )}
     </div>
   );
 };

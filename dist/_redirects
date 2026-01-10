@@ -1,0 +1,19 @@
+# Redirect old Netlify domain to new domain
+https://deadblock.netlify.app/*  https://deadblock.app/:splat  301!
+
+# Privacy and Terms pages
+/privacy    /privacy.html    200
+/terms      /terms.html      200
+/privacy-policy    /privacy.html    301
+/terms-of-service  /terms.html      301
+/privacy-policy.html    /privacy.html    301
+/terms-of-service.html  /terms.html      301
+
+# Auth callback for Supabase OAuth
+/auth/callback    /index.html    200
+
+# Invite links - ensure they work with SPA routing
+/invite/*    /index.html    200
+
+# SPA fallback - must be last
+/*    /index.html    200

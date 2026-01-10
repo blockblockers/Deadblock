@@ -1,0 +1,10 @@
+# Robots.txt for deadblock.app
+
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://deadblock.app/sitemap.xml
+
+# Disallow API and auth routes (not useful for search engines)
+Disallow: /auth/

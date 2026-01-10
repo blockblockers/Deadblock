@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- I Pentomino - Default (Electric Cyan like game's I piece) -->
+  <defs>
+    <linearGradient id="defaultGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a5f3fc"/>
+      <stop offset="50%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#0891b2"/>
+    </linearGradient>
+  </defs>
+  <!-- I shape: vertical line of 5 blocks -->
+  <rect x="38" y="8" width="20" height="16" rx="2" fill="url(#defaultGrad)"/>
+  <rect x="38" y="24" width="20" height="16" rx="2" fill="url(#defaultGrad)"/>
+  <rect x="38" y="40" width="20" height="16" rx="2" fill="url(#defaultGrad)"/>
+  <rect x="38" y="56" width="20" height="16" rx="2" fill="url(#defaultGrad)"/>
+  <rect x="38" y="72" width="20" height="16" rx="2" fill="url(#defaultGrad)"/>
+</svg>
