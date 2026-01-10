@@ -134,10 +134,17 @@
   <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
   
-  <!-- Fonts -->
+  <!-- Fonts - Async loading to prevent render blocking (Lighthouse optimization) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Preload fonts asynchronously -->
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+  <!-- Fallback for browsers with JS disabled -->
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  </noscript>
   
   <!-- =====================================================
        BOT DETECTION - Must run FIRST before anything renders
@@ -172,6 +179,17 @@
       --sar: env(safe-area-inset-right);
       --sab: env(safe-area-inset-bottom);
       --sal: env(safe-area-inset-left);
+    }
+
+    /* Font display swap to prevent Flash of Invisible Text (FOIT) */
+    /* Lighthouse optimization: ensures text visible immediately with fallback */
+    @font-face {
+      font-family: 'Orbitron';
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'Inter';
+      font-display: swap;
     }
 
     * {

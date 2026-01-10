@@ -2,8 +2,9 @@
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
 // v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
 // v7.11: Android scroll fix for Active Games and Recent Games modals
+// v7.12: Unviewed game results - losses highlighted in red with pulse animation
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
@@ -539,8 +540,8 @@ const OnlineMenu = ({
         localStorage.setItem('deadblock_last_stale_check', Date.now().toString());
       }
       
-      // Get active games
-      const { data: active } = await gameSyncService.getActiveGames(profile.id);
+      // Get active games + unviewed completed games (v7.12)
+      const { data: active } = await gameSyncService.getActiveAndUnviewedGames(profile.id);
       setActiveGames(active || []);
 
       // Get recent completed games - UPDATED: Increased from 5 to 10
@@ -2165,13 +2166,27 @@ const OnlineMenu = ({
       
       {/* Active Games Modal */}
       {showActiveGames && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
-            {/* Header */}
-            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            // Close modal when clicking backdrop
+            if (e.target === e.currentTarget) setShowActiveGames(false);
+          }}
+        >
+          <div 
+            className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] flex flex-col border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header - Fixed */}
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <Swords size={24} className="text-amber-400" />
                 <h2 className="text-lg font-bold text-amber-300">Active Games</h2>
+                {activeGames.length > 0 && (
+                  <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">
+                    {activeGames.length}
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => setShowActiveGames(false)}
@@ -2181,58 +2196,170 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.11: Android scroll fix */}
+            {/* Games List - v7.12: Enhanced scroll handling for mobile */}
             <div 
-              className="p-4 overflow-y-auto max-h-[60vh]"
+              className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
-                WebkitOverflowScrolling: 'touch', 
+                WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
                 touchAction: 'pan-y',
-                transform: 'translate3d(0, 0, 0)',
-                willChange: 'scroll-position'
+                // Force hardware acceleration and contain scroll
+                transform: 'translateZ(0)',
+                willChange: 'scroll-position',
+                // Prevent iOS bounce effect from propagating
+                position: 'relative',
+                isolation: 'isolate'
+              }}
+              onTouchStart={(e) => {
+                // Allow scroll to start from any touch position
+                e.currentTarget.style.scrollBehavior = 'auto';
+              }}
+              onTouchEnd={(e) => {
+                // Restore smooth scrolling after touch
+                e.currentTarget.style.scrollBehavior = 'smooth';
               }}
             >
-              {activeGames.length === 0 ? (
-                <div className="text-center py-8">
-                  <Swords className="mx-auto text-slate-600 mb-2" size={40} />
-                  <p className="text-slate-400">No active games</p>
-                </div>
-              ) : (
+              <div className="p-4 space-y-3">
+                {activeGames.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Swords className="mx-auto text-slate-600 mb-2" size={40} />
+                    <p className="text-slate-400">No active games</p>
+                  </div>
+                ) : (
                 <div className="space-y-3">
-                  {activeGames.filter(g => g).map(game => {
-                    const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
-                    const opponentName = getOpponentName(game);
+                  {/* v7.12: Separate unviewed completed games from active games */}
+                  {(() => {
+                    const unviewedCompleted = activeGames.filter(g => g?._isUnviewedResult);
+                    const reallyActive = activeGames.filter(g => g && !g._isUnviewedResult);
+                    
                     return (
-                      <button
-                        key={game.id}
-                        onClick={() => {
-                          soundManager.playButtonClick();
-                          setShowActiveGames(false);
-                          onResumeGame(game);
-                        }}
-                        className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
-                          isMyTurn 
-                            ? 'bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]' 
-                            : 'bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">
-                            {opponentName?.[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div className="text-left">
-                            <div className="text-white font-medium">vs {opponentName}</div>
-                            <div className={`text-sm ${isMyTurn ? 'text-amber-300 font-medium' : 'text-slate-500'}`}>
-                              {isMyTurn ? '🎮 Your turn!' : 'Waiting for opponent...'}
+                      <>
+                        {/* UNVIEWED COMPLETED GAMES - Show first with highlighting */}
+                        {unviewedCompleted.length > 0 && (
+                          <>
+                            <div className="text-xs text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                              <span>Game Results</span>
+                              <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 rounded text-xs">
+                                {unviewedCompleted.length} new
+                              </span>
                             </div>
-                          </div>
-                        </div>
-                        <ChevronRight size={20} className={`${isMyTurn ? 'text-amber-400' : 'text-slate-600'}`} />
-                      </button>
+                            
+                            {unviewedCompleted.map(game => {
+                              const opponentName = getOpponentName(game);
+                              const isLoss = game._isLoss;
+                              
+                              return (
+                                <button
+                                  key={game.id}
+                                  onClick={() => {
+                                    soundManager.playButtonClick();
+                                    setShowActiveGames(false);
+                                    onResumeGame(game);
+                                  }}
+                                  className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
+                                    isLoss 
+                                      ? 'bg-gradient-to-r from-red-900/40 to-red-800/30 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-pulse'
+                                      : 'bg-gradient-to-r from-green-900/40 to-emerald-900/30 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    {/* Result Icon */}
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                      isLoss 
+                                        ? 'bg-red-500/30 text-red-400' 
+                                        : 'bg-green-500/30 text-green-400'
+                                    }`}>
+                                      {isLoss ? <Skull size={20} /> : <Trophy size={20} />}
+                                    </div>
+                                    
+                                    {/* Game Info */}
+                                    <div className="text-left">
+                                      <div className="text-white font-medium flex items-center gap-2">
+                                        vs {opponentName}
+                                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                                          isLoss 
+                                            ? 'bg-red-500/30 text-red-300' 
+                                            : 'bg-green-500/30 text-green-300'
+                                        }`}>
+                                          {isLoss ? 'LOSS' : 'WIN'}
+                                        </span>
+                                      </div>
+                                      <div className={`text-sm ${isLoss ? 'text-red-300' : 'text-green-300'}`}>
+                                        Tap to view final board
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <ChevronRight size={20} className={isLoss ? 'text-red-400' : 'text-green-400'} />
+                                </button>
+                              );
+                            })}
+                            
+                            {/* Divider if there are also active games */}
+                            {reallyActive.length > 0 && (
+                              <div className="border-t border-slate-700/50 my-3" />
+                            )}
+                          </>
+                        )}
+                        
+                        {/* ACTIVE GAMES */}
+                        {reallyActive.length > 0 && (
+                          <>
+                            {unviewedCompleted.length > 0 && (
+                              <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">
+                                Active Games
+                              </div>
+                            )}
+                            
+                            {reallyActive.map(game => {
+                              const isMyTurn = gameSyncService.isPlayerTurn(game, profile?.id);
+                              const opponentName = getOpponentName(game);
+                              
+                              return (
+                                <button
+                                  key={game.id}
+                                  onClick={() => {
+                                    soundManager.playButtonClick();
+                                    setShowActiveGames(false);
+                                    onResumeGame(game);
+                                  }}
+                                  className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
+                                    isMyTurn 
+                                      ? 'bg-gradient-to-r from-amber-600/30 to-orange-600/30 border border-amber-400/50 shadow-[0_0_15px_rgba(251,191,36,0.3)]' 
+                                      : 'bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                                      isMyTurn ? 'bg-amber-500' : 'bg-purple-600'
+                                    }`}>
+                                      {opponentName?.[0]?.toUpperCase() || '?'}
+                                    </div>
+                                    <div className="text-left">
+                                      <div className="text-white font-medium">vs {opponentName}</div>
+                                      <div className={`text-sm flex items-center gap-1 ${
+                                        isMyTurn ? 'text-amber-300 font-medium' : 'text-slate-500'
+                                      }`}>
+                                        {isMyTurn ? (
+                                          <>🎮 Your turn!</>
+                                        ) : (
+                                          <><Clock size={12} /> Waiting for opponent...</>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <ChevronRight size={20} className={isMyTurn ? 'text-amber-400' : 'text-slate-600'} />
+                                </button>
+                              );
+                            })}
+                          </>
+                        )}
+                      </>
                     );
-                  })}
+                  })()}
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>
@@ -2240,13 +2367,26 @@ const OnlineMenu = ({
       
       {/* Recent Games Modal */}
       {showRecentGames && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]">
-            {/* Header */}
-            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between">
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowRecentGames(false);
+          }}
+        >
+          <div 
+            className="bg-slate-900 rounded-xl max-w-md w-full max-h-[80vh] flex flex-col border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header - Fixed */}
+            <div className="p-4 border-b border-amber-500/20 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <History size={24} className="text-amber-400" />
                 <h2 className="text-lg font-bold text-amber-300">Recent Games</h2>
+                {recentGames.length > 0 && (
+                  <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full">
+                    {recentGames.length}
+                  </span>
+                )}
               </div>
               <button
                 onClick={() => setShowRecentGames(false)}
@@ -2256,17 +2396,26 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.11: Android scroll fix */}
+            {/* Games List - v7.12: Enhanced scroll handling */}
             <div 
-              className="p-4 overflow-y-auto max-h-[60vh]"
+              className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
-                WebkitOverflowScrolling: 'touch', 
+                WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
                 touchAction: 'pan-y',
-                transform: 'translate3d(0, 0, 0)',
-                willChange: 'scroll-position'
+                transform: 'translateZ(0)',
+                willChange: 'scroll-position',
+                position: 'relative',
+                isolation: 'isolate'
+              }}
+              onTouchStart={(e) => {
+                e.currentTarget.style.scrollBehavior = 'auto';
+              }}
+              onTouchEnd={(e) => {
+                e.currentTarget.style.scrollBehavior = 'smooth';
               }}
             >
+              <div className="p-4">
               {recentGames.length === 0 ? (
                 <div className="text-center py-8">
                   <History className="mx-auto text-slate-600 mb-2" size={40} />
@@ -2358,6 +2507,7 @@ const OnlineMenu = ({
 
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>

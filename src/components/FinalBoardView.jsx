@@ -1,8 +1,6 @@
 // FinalBoardView.jsx - Game replay with move order display
-// v7.11 - COMPLETE REWRITE
-// 
-// FIXES:
-// ✅ NO extra whitespace - compact layout with minimal padding
+// v7.12 - FIXES:
+// ✅ Reduced padding - board takes more screen space
 // ✅ Move numbers VISIBLE on each cell with high contrast
 // ✅ Player color dots showing who played each move (cyan=P1, pink=P2)
 // ✅ Last move highlighted with golden glow + "FINAL" badge
@@ -71,127 +69,95 @@ const FinalBoardView = ({
     return boardPieces && typeof boardPieces === 'object' ? boardPieces : {};
   }, [boardPieces]);
 
-  // Build cell info map: { "row,col": { moveNumber, player, pieceType, isLastMove } }
+  // Build cell info map from move history - which move placed each cell
   const cellInfoMap = useMemo(() => {
     const map = {};
     if (!moveHistory || moveHistory.length === 0) return map;
-
+    
     moveHistory.forEach((move, idx) => {
-      const moveNum = move.move_number || (idx + 1);
-      const piece = move.piece_type;
-      const row = move.row;
-      const col = move.col;
-      const rot = move.rotation || 0;
-      const flip = move.flipped || false;
-      const player = (idx % 2) + 1; // P1=odd moves (1,3,5), P2=even moves (2,4,6)
-
-      if (piece === undefined || row === undefined || col === undefined) return;
-
-      try {
-        const coords = getPieceCoords(piece, rot, flip);
-        if (coords) {
-          coords.forEach(([dx, dy]) => {
-            const r = row + dy;
-            const c = col + dx;
-            if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-              map[`${r},${c}`] = {
-                moveNumber: moveNum,
-                player,
-                pieceType: piece,
-                isLastMove: idx === moveHistory.length - 1
-              };
-            }
-          });
+      if (!move?.piece_type || move.row === undefined || move.col === undefined) return;
+      
+      const rotation = move.rotation || 0;
+      const flipped = move.flipped || false;
+      const coords = getPieceCoords(move.piece_type, rotation, flipped);
+      
+      coords.forEach(([dx, dy]) => {
+        const r = move.row + dy;
+        const c = move.col + dx;
+        if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+          map[`${r},${c}`] = {
+            moveNumber: idx + 1,
+            player: move.player_number || ((idx % 2) + 1),
+            pieceType: move.piece_type,
+            isLastMove: idx === moveHistory.length - 1
+          };
         }
-      } catch (e) {}
+      });
     });
-
+    
     return map;
   }, [moveHistory]);
 
-  // Build board states for step-by-step replay
+  // Build progressive board states for replay
   const boardStates = useMemo(() => {
-    const states = [{ 
-      board: Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)), 
-      pieces: {} 
-    }];
-
+    const states = [{ board: Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)), pieces: {} }];
+    
     if (!moveHistory || moveHistory.length === 0) {
-      return [{ board: safeBoard, pieces: safeBoardPieces }];
+      states.push({ board: safeBoard, pieces: safeBoardPieces });
+      return states;
     }
-
-    let curBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
-    let curPieces = {};
-
+    
+    let currentBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+    let currentPieces = {};
+    
     moveHistory.forEach((move, idx) => {
-      const piece = move.piece_type;
-      const row = move.row;
-      const col = move.col;
-      const rot = move.rotation || 0;
-      const flip = move.flipped || false;
-      const player = (idx % 2) + 1;
-
-      if (piece === undefined || row === undefined || col === undefined) {
-        states.push({ board: curBoard.map(r => [...r]), pieces: { ...curPieces } });
-        return;
-      }
-
-      try {
-        const coords = getPieceCoords(piece, rot, flip);
-        if (coords) {
-          curBoard = curBoard.map(r => [...r]);
-          curPieces = { ...curPieces };
-          coords.forEach(([dx, dy]) => {
-            const r = row + dy;
-            const c = col + dx;
-            if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-              curBoard[r][c] = player;
-              curPieces[`${r},${c}`] = piece;
-            }
-          });
+      if (!move?.piece_type || move.row === undefined || move.col === undefined) return;
+      
+      const rotation = move.rotation || 0;
+      const flipped = move.flipped || false;
+      const player = move.player_number || ((idx % 2) + 1);
+      const coords = getPieceCoords(move.piece_type, rotation, flipped);
+      
+      currentBoard = currentBoard.map(row => [...row]);
+      currentPieces = { ...currentPieces };
+      
+      coords.forEach(([dx, dy]) => {
+        const r = move.row + dy;
+        const c = move.col + dx;
+        if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+          currentBoard[r][c] = player;
+          currentPieces[`${r},${c}`] = move.piece_type;
         }
-      } catch (e) {}
-
-      states.push({ board: curBoard.map(r => [...r]), pieces: { ...curPieces } });
+      });
+      
+      states.push({ board: currentBoard, pieces: currentPieces });
     });
-
+    
     return states;
   }, [moveHistory, safeBoard, safeBoardPieces]);
 
-  // Playback timer
+  // Playback
   useEffect(() => {
     if (!isPlaying || moveHistory.length === 0) return;
+    
     const timer = setInterval(() => {
       setCurrentMoveIndex(prev => {
         if (prev >= moveHistory.length - 1) {
           setIsPlaying(false);
-          return -1; // Back to final view
+          return -1; // Show final
         }
         return prev + 1;
       });
     }, playbackSpeed);
+    
     return () => clearInterval(timer);
-  }, [isPlaying, moveHistory.length, playbackSpeed]);
+  }, [isPlaying, playbackSpeed, moveHistory.length]);
 
   // Controls
-  const play = () => {
-    soundManager.playButtonClick?.();
-    if (currentMoveIndex === -1 || currentMoveIndex >= moveHistory.length - 1) {
-      setCurrentMoveIndex(0);
-    }
-    setIsPlaying(true);
-  };
+  const play = () => { setCurrentMoveIndex(0); setIsPlaying(true); soundManager.playButtonClick?.(); };
   const pause = () => { setIsPlaying(false); soundManager.playButtonClick?.(); };
-  const prev = () => {
-    setIsPlaying(false);
-    soundManager.playButtonClick?.();
-    setCurrentMoveIndex(i => i === -1 ? moveHistory.length - 1 : i === 0 ? -1 : i - 1);
-  };
-  const next = () => {
-    setIsPlaying(false);
-    soundManager.playButtonClick?.();
-    setCurrentMoveIndex(i => i === -1 ? 0 : i >= moveHistory.length - 1 ? -1 : i + 1);
-  };
+  const prev = () => { setIsPlaying(false); soundManager.playButtonClick?.(); setCurrentMoveIndex(i => Math.max(-1, i - 1)); };
+  const next = () => { setIsPlaying(false); soundManager.playButtonClick?.(); setCurrentMoveIndex(i => i < moveHistory.length - 1 ? i + 1 : -1); };
   const first = () => { setIsPlaying(false); soundManager.playButtonClick?.(); setCurrentMoveIndex(0); };
   const last = () => { setIsPlaying(false); soundManager.playButtonClick?.(); setCurrentMoveIndex(-1); };
 
@@ -207,48 +173,48 @@ const FinalBoardView = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
-      {/* HEADER - Minimal height */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900 border-b border-purple-500/30">
+      {/* HEADER - Minimal */}
+      <div className="flex items-center justify-between px-2 py-1 bg-slate-900 border-b border-purple-500/30 shrink-0">
         <button onClick={onClose} className="p-1 text-slate-400 hover:text-white">
-          <X size={20} />
+          <X size={18} />
         </button>
-        <div className="flex items-center gap-1.5">
-          <Film size={14} className="text-purple-400" />
-          <span className="text-purple-400 text-sm font-medium">Replay</span>
-          {dateStr && <span className="text-slate-500 text-xs">• {dateStr}</span>}
+        <div className="flex items-center gap-1">
+          <Film size={12} className="text-purple-400" />
+          <span className="text-purple-400 text-xs font-medium">Replay</span>
+          {dateStr && <span className="text-slate-500 text-[10px]">• {dateStr}</span>}
         </div>
-        <div className="w-7" />
+        <div className="w-6" />
       </div>
 
-      {/* PLAYERS - Compact */}
-      <div className="flex items-center justify-between px-3 py-1 bg-slate-800/50 text-xs">
-        <div className="flex items-center gap-1.5">
-          <div className="relative w-6 h-6 rounded flex items-center justify-center"
+      {/* PLAYERS - Ultra compact */}
+      <div className="flex items-center justify-between px-2 py-1 bg-slate-800/50 text-[10px] shrink-0">
+        <div className="flex items-center gap-1">
+          <div className="relative w-5 h-5 rounded flex items-center justify-center"
             style={{ background: `linear-gradient(135deg, ${hexToRgba(p1Tier.glowColor, 0.3)}, transparent)` }}>
             <TierIcon shape={p1Tier.shape} glowColor={p1Tier.glowColor} size="small" />
-            {isP1Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
+            {isP1Winner && <Trophy size={6} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
           </div>
           <div>
-            <div className={`font-medium ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
-            <div className="text-slate-500 text-[10px]">{p1Rating}</div>
+            <div className={`font-medium leading-tight ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
+            <div className="text-slate-500 text-[8px]">{p1Rating}</div>
           </div>
         </div>
-        <span className="text-slate-600 font-bold text-xs">VS</span>
-        <div className="flex items-center gap-1.5">
+        <span className="text-slate-600 font-bold text-[10px]">VS</span>
+        <div className="flex items-center gap-1">
           <div className="text-right">
-            <div className={`font-medium ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
-            <div className="text-slate-500 text-[10px]">{p2Rating}</div>
+            <div className={`font-medium leading-tight ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
+            <div className="text-slate-500 text-[8px]">{p2Rating}</div>
           </div>
-          <div className="relative w-6 h-6 rounded flex items-center justify-center"
+          <div className="relative w-5 h-5 rounded flex items-center justify-center"
             style={{ background: `linear-gradient(135deg, ${hexToRgba(p2Tier.glowColor, 0.3)}, transparent)` }}>
             <TierIcon shape={p2Tier.shape} glowColor={p2Tier.glowColor} size="small" />
-            {isP2Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
+            {isP2Winner && <Trophy size={6} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
           </div>
         </div>
       </div>
 
       {/* STATUS - Single line */}
-      <div className="text-center py-0.5 text-[11px] bg-slate-800/30">
+      <div className="text-center py-0.5 text-[10px] bg-slate-800/30 shrink-0">
         {showFinal ? (
           <span className="text-amber-400 font-medium">
             {(isP1Winner || isP2Winner) ? `🏆 ${isP1Winner ? p1Name : p2Name} wins!` : 'Final'} • {moveHistory.length} moves
@@ -260,19 +226,23 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* BOARD - Fills remaining space but stays compact */}
-      <div className="flex-1 flex flex-col items-center justify-center px-2 py-1 min-h-0">
+      {/* BOARD - Takes maximum space with minimal padding */}
+      <div className="flex-1 flex flex-col items-center justify-center px-1 py-1 min-h-0 overflow-hidden">
         {isLoadingMoves ? (
           <div className="text-center">
-            <Loader size={28} className="text-purple-400 animate-spin mx-auto mb-1" />
-            <p className="text-slate-400 text-xs">Loading...</p>
+            <Loader size={24} className="text-purple-400 animate-spin mx-auto mb-1" />
+            <p className="text-slate-400 text-xs">Loading moves...</p>
           </div>
         ) : (
-          <div className="w-full" style={{ maxWidth: 'min(85vw, 320px)' }}>
-            {/* Grid */}
+          <div className="w-full h-full flex flex-col items-center justify-center">
+            {/* Grid - maximize size */}
             <div 
-              className="grid grid-cols-8 gap-[1px] p-1 rounded-lg bg-slate-800/80 border border-slate-700/50 mx-auto"
-              style={{ aspectRatio: '1' }}
+              className="grid grid-cols-8 gap-[1px] rounded-lg bg-slate-800/80 border border-slate-700/50"
+              style={{ 
+                aspectRatio: '1',
+                width: 'min(95vw, calc(100vh - 180px), 400px)',
+                maxWidth: '400px'
+              }}
             >
               {state.board.map((row, ri) =>
                 row.map((cell, ci) => {
@@ -289,30 +259,26 @@ const FinalBoardView = ({
                   if (occupied && piece && pieceColors[piece]) {
                     bg = pieceColors[piece];
                   } else if (occupied) {
-                    bg = cell === 1 ? 'bg-gradient-to-br from-cyan-400 to-cyan-600' : 'bg-gradient-to-br from-pink-400 to-pink-600';
+                    bg = cell === 1 ? 'bg-cyan-500' : 'bg-pink-500';
                   }
                   
                   return (
-                    <div
+                    <div 
                       key={key}
-                      className={`aspect-square rounded-[2px] relative ${bg}`}
-                      style={{ 
-                        boxShadow: isLast 
-                          ? '0 0 0 2px #fbbf24, 0 0 10px #fbbf24, 0 0 20px rgba(251,191,36,0.4)'
-                          : occupied ? '0 0 3px rgba(255,255,255,0.1)' : 'none',
-                        transform: isLast ? 'scale(1.1)' : 'scale(1)',
-                        zIndex: isLast ? 10 : 1,
-                        transition: 'transform 0.15s'
+                      className={`relative rounded-sm ${bg} transition-all duration-200`}
+                      style={{
+                        aspectRatio: '1',
+                        boxShadow: isLast && showFinal
+                          ? '0 0 12px 3px rgba(251, 191, 36, 0.8), inset 0 0 8px rgba(251, 191, 36, 0.4)'
+                          : occupied 
+                            ? `inset 0 0 6px ${player === 1 ? 'rgba(34, 211, 238, 0.4)' : 'rgba(236, 72, 153, 0.4)'}`
+                            : 'none',
+                        border: isLast && showFinal ? '2px solid #fbbf24' : 'none'
                       }}
                     >
-                      {/* Shine overlay */}
-                      {occupied && (
-                        <div className="absolute inset-0 bg-gradient-to-br from-white/25 via-transparent to-black/25 rounded-[2px]" />
-                      )}
-                      
-                      {/* MOVE NUMBER + PLAYER DOT */}
+                      {/* Move number + player indicator */}
                       {showNum && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
                           {/* Player color dot */}
                           <div 
                             className={`w-1.5 h-1.5 rounded-full ${player === 1 ? 'bg-cyan-300' : 'bg-pink-300'}`}
@@ -325,7 +291,7 @@ const FinalBoardView = ({
                           <span 
                             className="font-black leading-none"
                             style={{ 
-                              fontSize: '10px',
+                              fontSize: 'clamp(8px, 2.5vw, 12px)',
                               color: isLast ? '#fef3c7' : '#ffffff',
                               textShadow: '0 0 3px #000, 0 1px 2px #000, 1px 0 2px #000, -1px 0 2px #000, 0 -1px 2px #000'
                             }}
@@ -335,10 +301,10 @@ const FinalBoardView = ({
                         </div>
                       )}
                       
-                      {/* FINAL badge */}
+                      {/* FINAL badge on last move */}
                       {isLast && showNum && (
                         <div 
-                          className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-900 font-black rounded px-1 whitespace-nowrap shadow-lg"
+                          className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-900 font-black rounded px-1 whitespace-nowrap shadow-lg z-10"
                           style={{ fontSize: '6px', lineHeight: '10px' }}
                         >
                           FINAL
@@ -350,15 +316,15 @@ const FinalBoardView = ({
               )}
             </div>
 
-            {/* LEGEND */}
-            <div className="flex justify-center gap-4 mt-1.5 text-[10px]">
+            {/* LEGEND - Shows player colors and move pattern */}
+            <div className="flex justify-center gap-3 mt-1 text-[9px]">
               <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-cyan-400" style={{ boxShadow: '0 0 4px #22d3ee' }} />
+                <div className="w-2 h-2 rounded-full bg-cyan-400" style={{ boxShadow: '0 0 4px #22d3ee' }} />
                 <span className="text-cyan-400 font-medium">{p1Name}</span>
                 <span className="text-slate-500">(1,3,5...)</span>
               </div>
               <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-pink-400" style={{ boxShadow: '0 0 4px #ec4899' }} />
+                <div className="w-2 h-2 rounded-full bg-pink-400" style={{ boxShadow: '0 0 4px #ec4899' }} />
                 <span className="text-pink-400 font-medium">{p2Name}</span>
                 <span className="text-slate-500">(2,4,6...)</span>
               </div>
@@ -369,11 +335,11 @@ const FinalBoardView = ({
 
       {/* CONTROLS - Compact */}
       {moveHistory.length > 0 && !isLoadingMoves && (
-        <div className="bg-slate-900 border-t border-slate-700 px-3 py-1.5">
+        <div className="bg-slate-900 border-t border-slate-700 px-2 py-1 shrink-0">
           <div className="max-w-xs mx-auto space-y-1">
-            {/* Progress */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[9px] text-slate-500 w-4 font-mono text-center">
+            {/* Progress bar */}
+            <div className="flex items-center gap-1">
+              <span className="text-[8px] text-slate-500 w-3 font-mono text-center">
                 {showFinal ? '●' : currentMoveIndex + 1}
               </span>
               <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
@@ -382,38 +348,38 @@ const FinalBoardView = ({
                   style={{ width: showFinal ? '100%' : `${((currentMoveIndex + 1) / moveHistory.length) * 100}%` }}
                 />
               </div>
-              <span className="text-[9px] text-slate-500 w-4 font-mono text-center">{moveHistory.length}</span>
+              <span className="text-[8px] text-slate-500 w-3 font-mono text-center">{moveHistory.length}</span>
             </div>
 
-            {/* Buttons */}
+            {/* Playback buttons */}
             <div className="flex items-center justify-center gap-1">
-              <button onClick={first} className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                <SkipBack size={14} />
+              <button onClick={first} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 active:scale-95">
+                <SkipBack size={12} />
               </button>
-              <button onClick={prev} className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                <ChevronLeft size={14} />
+              <button onClick={prev} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 active:scale-95">
+                <ChevronLeft size={12} />
               </button>
               <button 
                 onClick={isPlaying ? pause : play}
-                className="p-2.5 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg"
+                className="p-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg active:scale-95"
               >
-                {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+                {isPlaying ? <Pause size={16} /> : <Play size={16} />}
               </button>
-              <button onClick={next} className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                <ChevronRight size={14} />
+              <button onClick={next} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 active:scale-95">
+                <ChevronRight size={12} />
               </button>
-              <button onClick={last} className="p-1.5 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                <SkipForward size={14} />
+              <button onClick={last} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 active:scale-95">
+                <SkipForward size={12} />
               </button>
             </div>
 
-            {/* Speed */}
-            <div className="flex items-center justify-center gap-1 text-[8px]">
+            {/* Speed controls */}
+            <div className="flex items-center justify-center gap-0.5 text-[7px]">
               {[{ ms: 1600, lbl: '0.5x' }, { ms: 800, lbl: '1x' }, { ms: 400, lbl: '2x' }, { ms: 200, lbl: '4x' }].map(({ ms, lbl }) => (
                 <button
                   key={ms}
                   onClick={() => setPlaybackSpeed(ms)}
-                  className={`px-1.5 py-0.5 rounded transition-colors ${
+                  className={`px-1.5 py-0.5 rounded transition-colors active:scale-95 ${
                     playbackSpeed === ms ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
                   }`}
                 >
@@ -425,12 +391,12 @@ const FinalBoardView = ({
         </div>
       )}
 
-      {/* Close button fallback */}
+      {/* Close button when no moves */}
       {(isLoadingMoves || moveHistory.length === 0) && (
-        <div className="bg-slate-900 border-t border-slate-700 p-2">
+        <div className="bg-slate-900 border-t border-slate-700 p-2 shrink-0">
           <button 
             onClick={onClose} 
-            className="w-full max-w-xs mx-auto block py-2 bg-slate-800 text-slate-300 rounded font-medium hover:bg-slate-700"
+            className="w-full max-w-xs mx-auto block py-2 bg-slate-800 text-slate-300 rounded font-medium hover:bg-slate-700 active:scale-98"
           >
             Close
           </button>

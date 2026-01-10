@@ -2,6 +2,7 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
+// v7.12: Unviewed game result handling - 5s delay before modal, final piece animation
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -164,6 +165,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [rematchAccepted, setRematchAccepted] = useState(false);
   const [rematchDeclined, setRematchDeclined] = useState(false);
   const [newGameFromRematch, setNewGameFromRematch] = useState(null);
+  
+  // v7.12: Unviewed result handling (for viewing completed games user missed)
+  const [isUnviewedResult, setIsUnviewedResult] = useState(false);
+  const [shouldPlayFinalAnimation, setShouldPlayFinalAnimation] = useState(false);
   
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
@@ -648,7 +653,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      if (gameData.status === 'completed' && !showGameOver) {
+      // v7.12: Skip if this is an unviewed result (handled by separate useEffect with 5s delay)
+      if (gameData.status === 'completed' && !showGameOver && !isUnviewedResult) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -672,7 +678,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         }
       }
     }
-  }, [isMyTurn, showGameOver, triggerAnimation]);
+  }, [isMyTurn, showGameOver, isUnviewedResult, triggerAnimation]);
 
   // FIXED: Load game and subscribe to REAL-TIME updates
   useEffect(() => {
@@ -824,6 +830,49 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
     };
   }, [currentGameId, userId, updateGameState]);
+
+  // v7.12: Handle unviewed completed games (user lost while not in game screen)
+  useEffect(() => {
+    // Check if this is an unviewed completed game
+    if (game?.status === 'completed' && user?.id && !showGameOver && !isUnviewedResult) {
+      const playerNum = game.player1_id === user.id ? 1 : 2;
+      
+      // Check if result has been viewed using the _isUnviewedResult flag from getActiveAndUnviewedGames
+      // or check the result_viewed columns directly if available
+      const hasViewedResult = playerNum === 1 
+        ? game.result_viewed_p1 
+        : game.result_viewed_p2;
+      
+      // If this game came from getActiveAndUnviewedGames, it will have _isUnviewedResult flag
+      const isFromUnviewedList = game._isUnviewedResult === true;
+      
+      if (isFromUnviewedList || hasViewedResult === false) {
+        console.log('[OnlineGameScreen] Unviewed completed game detected');
+        setIsUnviewedResult(true);
+        setShouldPlayFinalAnimation(true);
+        
+        // Mark as viewed in the database
+        gameSyncService.markResultViewed(currentGameId, user.id);
+        
+        // Determine win/loss
+        const iWon = game.winner_id === user.id;
+        setGameResult({
+          isWin: iWon,
+          winnerId: game.winner_id,
+          reason: 'normal'
+        });
+        
+        // 5 second delay gives user time to study the final board
+        // Animation will be triggered in updateGameState
+        setTimeout(() => {
+          if (mountedRef.current) {
+            setShowGameOver(true);
+            soundManager.playSound(iWon ? 'win' : 'lose');
+          }
+        }, 5000);
+      }
+    }
+  }, [game?.status, game?.winner_id, game?._isUnviewedResult, user?.id, currentGameId, showGameOver, isUnviewedResult]);
 
   // Subscribe to chat messages for notification when chat is closed
   // Chat notification subscription - FIXED: Use supabase directly

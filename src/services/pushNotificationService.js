@@ -1,4 +1,5 @@
 // pushNotificationService.js - Client-side push notification management
+// v7.12 - FIXED: Now registers /service-worker.js (consolidated file)
 // Place in src/services/pushNotificationService.js
 //
 // This service handles:
@@ -45,8 +46,8 @@ class PushNotificationService {
     }
 
     try {
-      // Register service worker
-      this.swRegistration = await navigator.serviceWorker.register('/sw.js', {
+      // v7.12: Register the consolidated service-worker.js (not sw.js)
+      this.swRegistration = await navigator.serviceWorker.register('/service-worker.js', {
         scope: '/'
       });
       
@@ -154,27 +155,29 @@ class PushNotificationService {
 
   // Save subscription to Supabase
   async saveSubscription(userId, subscription) {
+    if (!supabase) {
+      console.error('[PushService] Supabase not configured');
+      return false;
+    }
+
     try {
-      const subscriptionJson = subscription.toJSON();
-      
-      // Get device info for identification
-      const deviceInfo = this.getDeviceInfo();
+      const subscriptionJSON = subscription.toJSON();
       
       const { error } = await supabase
         .from('push_subscriptions')
         .upsert({
           user_id: userId,
-          endpoint: subscriptionJson.endpoint,
-          p256dh: subscriptionJson.keys?.p256dh,
-          auth: subscriptionJson.keys?.auth,
-          device_info: deviceInfo,
+          endpoint: subscriptionJSON.endpoint,
+          p256dh: subscriptionJSON.keys.p256dh,
+          auth: subscriptionJSON.keys.auth,
+          device_info: this.getDeviceInfo(),
           updated_at: new Date().toISOString()
         }, {
-          onConflict: 'user_id,endpoint'
+          onConflict: 'endpoint'
         });
 
       if (error) {
-        console.error('[PushService] Failed to save subscription:', error);
+        console.error('[PushService] Error saving subscription:', error);
         return false;
       }
 
@@ -188,22 +191,22 @@ class PushNotificationService {
 
   // Remove subscription from Supabase
   async removeSubscription(userId) {
+    if (!supabase || !this.subscription) {
+      return false;
+    }
+
     try {
-      const endpoint = this.subscription?.endpoint;
+      const endpoint = this.subscription.endpoint;
       
-      if (endpoint) {
-        // Remove specific subscription
-        await supabase
-          .from('push_subscriptions')
-          .delete()
-          .eq('user_id', userId)
-          .eq('endpoint', endpoint);
-      } else {
-        // Remove all subscriptions for user (fallback)
-        await supabase
-          .from('push_subscriptions')
-          .delete()
-          .eq('user_id', userId);
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .delete()
+        .eq('user_id', userId)
+        .eq('endpoint', endpoint);
+
+      if (error) {
+        console.error('[PushService] Error removing subscription:', error);
+        return false;
       }
 
       console.log('[PushService] Subscription removed from Supabase');
