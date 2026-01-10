@@ -1,10 +1,10 @@
 // Online Menu - Hub for online features
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
-// v7.10: Prioritize display_name over username (display_name has proper casing)
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
 // v7.12: Fixed scroll container structure (outer no-scroll, inner scrolls)
-// v7.12: Fixed name display to use display_name (proper casing) over username
+// v7.12: Name display uses display_name (proper casing) with username fallback
+//        Both fields are updated together when user changes their name
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';

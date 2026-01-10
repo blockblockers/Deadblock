@@ -448,6 +448,8 @@
       align-items: center;
       justify-content: center;
       z-index: 9999;
+      /* CLS fix: contain prevents loading screen from affecting layout when removed */
+      contain: layout paint style;
     }
     
     #loading::before {
@@ -472,6 +474,9 @@
       border-radius: 50%;
       filter: blur(60px);
       pointer-events: none;
+      /* CLS fix: contain prevents internal changes from triggering layout recalc */
+      contain: layout paint style;
+      will-change: transform, opacity;
     }
     
     #loading .glow-orb-1 {
@@ -518,6 +523,9 @@
               drop-shadow(0 0 20px rgba(168, 85, 247, 0.6)) 
               drop-shadow(0 0 40px rgba(236, 72, 153, 0.4));
       animation: neon-glow 2s ease-in-out infinite alternate;
+      /* CLS fix: contain prevents filter animation from triggering layout recalc */
+      contain: layout paint;
+      will-change: filter;
     }
 
     @keyframes neon-glow {
@@ -1123,7 +1131,7 @@
   </noscript>
 
   <!-- Static footer - Always visible for Google OAuth verification -->
-  <div id="static-footer" style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 6px 4px; font-size: 10px; background: rgba(2, 6, 23, 0.95); z-index: 1; pointer-events: none;">
+  <div id="static-footer" style="position: fixed; bottom: 0; left: 0; right: 0; text-align: center; padding: 6px 4px; font-size: 10px; background: rgba(2, 6, 23, 0.95); z-index: 1; pointer-events: none; contain: layout paint;">
     <a href="https://deadblock.app/privacy" style="color: #64748b; text-decoration: underline; pointer-events: auto;">Privacy Policy</a>
     <span style="color: #475569; margin: 0 8px;">·</span>
     <a href="https://deadblock.app/terms" style="color: #64748b; text-decoration: underline; pointer-events: auto;">Terms of Service</a>

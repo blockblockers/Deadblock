@@ -2,6 +2,7 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
+// v7.12: Name display uses display_name (proper casing) with username fallback
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -1588,7 +1589,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         <QuickChat
           gameId={currentGameId}
           userId={user?.id}
-          opponentName={opponent?.display_name || opponent?.username}
+          opponentName={opponent?.display_name || opponent?.username || 'Opponent'}
           isOpen={chatOpen}
           onToggle={(open) => {
             setChatOpen(open);
