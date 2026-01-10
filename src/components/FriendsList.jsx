@@ -481,16 +481,12 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                         
                         {/* Action Buttons - v7.7: Always show Challenge, then Remove */}
                         <div className="flex items-center gap-1 ml-2">
-                          {/* Challenge button - always visible */}
+                          {/* Challenge button - always visible, always yellow/amber */}
                           {!hasInviteSent ? (
                             <button
                               onClick={() => sendGameInvite(friend)}
                               disabled={sendingInvite === friend.id}
-                              className={`p-2 rounded-lg transition-colors disabled:opacity-50 ${
-                                friend.is_online 
-                                  ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' 
-                                  : 'bg-slate-600/30 text-slate-400 hover:bg-slate-600/50'
-                              }`}
+                              className="p-2 rounded-lg transition-colors disabled:opacity-50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
                               title={friend.is_online ? "Challenge to a game" : "Send game invite (they'll see it when online)"}
                             >
                               {sendingInvite === friend.id ? (
@@ -505,10 +501,10 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                             </div>
                           )}
                           
-                          {/* Remove friend button */}
+                          {/* Remove friend button - red */}
                           <button
                             onClick={() => removeFriend(friend.friendshipId)}
-                            className="p-2 text-slate-500 hover:text-red-400 transition-colors"
+                            className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors"
                             title="Remove friend"
                           >
                             <UserMinus size={18} />

@@ -4,13 +4,11 @@
 // FIXED: Use achievementService for achievement stats
 // FIXED: Define dbSelect locally instead of importing from non-existent file
 // ADDED: Final Board View button for match history
-// v7.11: Added comprehensive stats (puzzles, AI, speed, weekly) + scroll fixes
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award, LayoutGrid, Bot, Zap, Medal } from 'lucide-react';
+import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award, LayoutGrid } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { friendsService } from '../services/friendsService';
 import achievementService from '../services/achievementService';
-import { weeklyChallengeService } from '../services/weeklyChallengeService';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
 import { soundManager } from '../utils/soundManager';
@@ -128,10 +126,6 @@ const ViewPlayerProfile = ({
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
   const [headToHead, setHeadToHead] = useState(null); // { myWins, theirWins, total }
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null); // Final Board View
-  
-  // v7.11: Comprehensive stats
-  const [playerStats, setPlayerStats] = useState(null);
-  const [weeklyPodiums, setWeeklyPodiums] = useState(null);
 
   // Use calculated stats from actual games (more accurate than profile.games_won)
   const displayWins = calculatedStats.totalGames > 0 ? calculatedStats.wins : (profile?.games_won || 0);
@@ -148,8 +142,6 @@ const ViewPlayerProfile = ({
       setCalculatedStats({ wins: 0, totalGames: 0 });
       setRecentGames([]);
       setHeadToHead(null);
-      setPlayerStats(null);
-      setWeeklyPodiums(null);
       loadPlayerData();
     }
   }, [playerId]);
@@ -161,9 +153,8 @@ const ViewPlayerProfile = ({
       // Load profile if not provided
       let profileData = playerData;
       if (!profileData) {
-        // v7.11: Extended query to include puzzle/AI/speed stats
         const { data } = await dbSelect('profiles', {
-          select: 'id,username,display_name,avatar_url,rating,games_won,games_played,created_at,puzzles_easy_solved,puzzles_easy_attempted,puzzles_medium_solved,puzzles_medium_attempted,puzzles_hard_solved,puzzles_hard_attempted,speed_best_streak,speed_total_puzzles,speed_total_sessions,ai_easy_wins,ai_easy_losses,ai_medium_wins,ai_medium_losses,ai_hard_wins,ai_hard_losses,local_games_played',
+          select: 'id,username,display_name,avatar_url,rating,games_won,games_played,created_at',
           eq: { id: playerId },
           single: true
         });
@@ -172,16 +163,6 @@ const ViewPlayerProfile = ({
       
       if (profileData) {
         setProfile(profileData);
-        // v7.11: Store extended stats
-        setPlayerStats(profileData);
-        
-        // v7.11: Load weekly challenge podium stats
-        try {
-          const podiums = await weeklyChallengeService.getUserPodiumBreakdown(playerId);
-          setWeeklyPodiums(podiums);
-        } catch (e) {
-          console.warn('[ViewPlayerProfile] Could not load weekly podiums:', e);
-        }
       }
 
       // FIXED: Load recent games - simplified query without foreign key joins
@@ -501,15 +482,13 @@ const ViewPlayerProfile = ({
           </div>
         </div>
 
-        {/* Content - v7.11: Android scroll fix + increased height */}
+        {/* Content - Scrollable */}
         <div 
-          className="p-4 overflow-y-auto max-h-[70vh]" 
+          className="p-4 overflow-y-auto overscroll-contain"
           style={{ 
             WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            touchAction: 'pan-y',
-            transform: 'translate3d(0, 0, 0)',
-            willChange: 'scroll-position'
+            maxHeight: 'calc(85vh - 180px)',
+            touchAction: 'pan-y'
           }}
         >
           {/* Stats Grid */}
@@ -590,135 +569,6 @@ const ViewPlayerProfile = ({
                   <div className="text-slate-500 text-[10px]">THEIR WINS</div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* v7.11: Comprehensive Stats Section */}
-          {playerStats && (
-            <div className="space-y-3 mb-4">
-              {/* Puzzle Stats */}
-              {((playerStats.puzzles_easy_solved || 0) + 
-                (playerStats.puzzles_medium_solved || 0) + 
-                (playerStats.puzzles_hard_solved || 0)) > 0 && (
-                <div 
-                  className="rounded-xl p-3"
-                  style={{ 
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                    border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target size={14} className="text-green-400" />
-                    <span className="text-slate-300 text-sm font-medium">Puzzles Solved</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-green-900/20 rounded-lg">
-                      <div className="text-green-400 font-bold text-sm">{playerStats.puzzles_easy_solved || 0}</div>
-                      <div className="text-slate-500 text-[10px]">Easy</div>
-                    </div>
-                    <div className="text-center p-2 bg-amber-900/20 rounded-lg">
-                      <div className="text-amber-400 font-bold text-sm">{playerStats.puzzles_medium_solved || 0}</div>
-                      <div className="text-slate-500 text-[10px]">Medium</div>
-                    </div>
-                    <div className="text-center p-2 bg-red-900/20 rounded-lg">
-                      <div className="text-red-400 font-bold text-sm">{playerStats.puzzles_hard_solved || 0}</div>
-                      <div className="text-slate-500 text-[10px]">Hard</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* AI Stats */}
-              {((playerStats.ai_easy_wins || 0) + (playerStats.ai_medium_wins || 0) + (playerStats.ai_hard_wins || 0)) > 0 && (
-                <div 
-                  className="rounded-xl p-3"
-                  style={{ 
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                    border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Bot size={14} className="text-purple-400" />
-                    <span className="text-slate-300 text-sm font-medium">vs AI</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-green-900/20 rounded-lg">
-                      <div className="text-green-400 font-bold text-sm">
-                        {playerStats.ai_easy_wins || 0}/{(playerStats.ai_easy_wins || 0) + (playerStats.ai_easy_losses || 0)}
-                      </div>
-                      <div className="text-slate-500 text-[10px]">Easy</div>
-                    </div>
-                    <div className="text-center p-2 bg-amber-900/20 rounded-lg">
-                      <div className="text-amber-400 font-bold text-sm">
-                        {playerStats.ai_medium_wins || 0}/{(playerStats.ai_medium_wins || 0) + (playerStats.ai_medium_losses || 0)}
-                      </div>
-                      <div className="text-slate-500 text-[10px]">Medium</div>
-                    </div>
-                    <div className="text-center p-2 bg-red-900/20 rounded-lg">
-                      <div className="text-red-400 font-bold text-sm">
-                        {playerStats.ai_hard_wins || 0}/{(playerStats.ai_hard_wins || 0) + (playerStats.ai_hard_losses || 0)}
-                      </div>
-                      <div className="text-slate-500 text-[10px]">Hard</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Speed Puzzle Stats */}
-              {(playerStats.speed_best_streak || 0) > 0 && (
-                <div 
-                  className="rounded-xl p-3"
-                  style={{ 
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                    border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Zap size={14} className="text-orange-400" />
-                    <span className="text-slate-300 text-sm font-medium">Speed Puzzles</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="text-center p-2 bg-orange-900/20 rounded-lg">
-                      <div className="text-orange-400 font-bold text-lg">{playerStats.speed_best_streak || 0}</div>
-                      <div className="text-slate-500 text-[10px]">Best Streak</div>
-                    </div>
-                    <div className="text-center p-2 bg-slate-700/30 rounded-lg">
-                      <div className="text-slate-300 font-bold text-lg">{playerStats.speed_total_puzzles || 0}</div>
-                      <div className="text-slate-500 text-[10px]">Total Solved</div>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Weekly Challenge Podiums */}
-              {weeklyPodiums && weeklyPodiums.total > 0 && (
-                <div 
-                  className="rounded-xl p-3"
-                  style={{ 
-                    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                    border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Medal size={14} className="text-amber-400" />
-                    <span className="text-slate-300 text-sm font-medium">Weekly Challenge Podiums</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-amber-900/20 rounded-lg">
-                      <div className="text-amber-400 font-bold text-lg">🥇 {weeklyPodiums.first || 0}</div>
-                      <div className="text-slate-500 text-[10px]">1st Place</div>
-                    </div>
-                    <div className="text-center p-2 bg-slate-400/10 rounded-lg">
-                      <div className="text-slate-300 font-bold text-lg">🥈 {weeklyPodiums.second || 0}</div>
-                      <div className="text-slate-500 text-[10px]">2nd Place</div>
-                    </div>
-                    <div className="text-center p-2 bg-orange-900/20 rounded-lg">
-                      <div className="text-orange-400 font-bold text-lg">🥉 {weeklyPodiums.third || 0}</div>
-                      <div className="text-slate-500 text-[10px]">3rd Place</div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
