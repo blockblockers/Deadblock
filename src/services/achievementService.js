@@ -1,172 +1,186 @@
-// Achievements Service - Track and award player achievements
-// UPDATED: Added missing checkAchievements and getAchievementStats methods
-// Uses direct fetch to bypass Supabase client timeout issues
-import { isSupabaseConfigured } from '../utils/supabase';
-import { dbSelect, dbRpc, getCurrentUserId } from './supabaseDirectFetch';
+// achievementService.js - Achievement tracking and display
+// v7.12 - FIXED: Now queries 'achievements' table instead of 'achievement_definitions'
+// Place in src/services/achievementService.js
 
-export const achievementIcons = {
-  Crown: 'Crown', Medal: 'Medal', Calendar: 'Calendar', Flame: 'Flame',
-  Zap: 'Zap', Target: 'Target', Award: 'Award', Trophy: 'Trophy',
-  Bot: 'Bot', Gamepad2: 'Gamepad2', User: 'User',
+import { supabase } from '../utils/supabase';
+
+// Check if Supabase is configured
+const isSupabaseConfigured = () => {
+  return supabase && typeof supabase.from === 'function';
 };
 
-export const ACHIEVEMENTS = {
-  WEEKLY_CHAMPION: 'weekly_champion', WEEKLY_TOP_3: 'weekly_top_3',
-  WEEKLY_FIRST: 'weekly_first', WEEKLY_STREAK_4: 'weekly_streak_4',
-  SPEED_STREAK_5: 'speed_streak_5', SPEED_STREAK_10: 'speed_streak_10',
-  SPEED_STREAK_25: 'speed_streak_25', SPEED_STREAK_50: 'speed_streak_50',
-  PUZZLE_FIRST: 'puzzle_first', PUZZLE_EASY_10: 'puzzle_easy_10',
-  PUZZLE_MEDIUM_10: 'puzzle_medium_10', PUZZLE_HARD_10: 'puzzle_hard_10',
-  PUZZLE_TOTAL_100: 'puzzle_total_100', ONLINE_FIRST_WIN: 'online_first_win',
-  ONLINE_WINS_10: 'online_wins_10', ONLINE_WINS_50: 'online_wins_50',
-  ONLINE_STREAK_5: 'online_streak_5', AI_FIRST_WIN: 'ai_first_win',
-  AI_HARD_WIN: 'ai_hard_win', AI_HARD_WINS_10: 'ai_hard_wins_10',
-  GAMES_PLAYED_100: 'games_played_100', PROFILE_COMPLETE: 'profile_complete',
+// Get current user ID
+const getCurrentUserId = () => {
+  try {
+    const session = supabase?.auth?.session?.();
+    return session?.user?.id || null;
+  } catch {
+    return null;
+  }
 };
 
-class AchievementsService {
+// Direct database select helper
+const dbSelect = async (table, options = {}) => {
+  if (!isSupabaseConfigured()) return { data: null, error: 'Not configured' };
+  
+  try {
+    let query = supabase.from(table).select(options.select || '*');
+    
+    if (options.eq) {
+      Object.entries(options.eq).forEach(([key, value]) => {
+        query = query.eq(key, value);
+      });
+    }
+    
+    if (options.order) {
+      const orders = options.order.split(',');
+      orders.forEach(o => {
+        const [col, dir] = o.trim().split('.');
+        query = query.order(col, { ascending: dir !== 'desc' });
+      });
+    }
+    
+    if (options.limit) {
+      query = query.limit(options.limit);
+    }
+    
+    const { data, error } = await query;
+    return { data, error };
+  } catch (err) {
+    console.error(`[achievementService] dbSelect ${table} error:`, err);
+    return { data: null, error: err.message };
+  }
+};
+
+// RPC helper
+const dbRpc = async (funcName, params = {}) => {
+  if (!isSupabaseConfigured()) return { data: null, error: 'Not configured' };
+  
+  try {
+    const { data, error } = await supabase.rpc(funcName, params);
+    return { data, error };
+  } catch (err) {
+    console.error(`[achievementService] dbRpc ${funcName} error:`, err);
+    return { data: null, error: err.message };
+  }
+};
+
+class AchievementService {
   constructor() {
     this.cache = null;
     this.cacheTimestamp = null;
-    this.CACHE_DURATION = 60000;
+    this.CACHE_DURATION = 30000; // 30 seconds
   }
-  
+
   // ===========================================================================
   // FETCHING ACHIEVEMENTS
   // ===========================================================================
-  
-  async getUserAchievements(forceRefresh = false) {
+
+  /**
+   * Get all achievement definitions
+   * v7.12: Changed from 'achievement_definitions' to 'achievements' table
+   */
+  async getAllAchievements() {
     if (!isSupabaseConfigured()) return { data: [], error: 'Supabase not configured' };
+    
+    try {
+      // v7.12: Query 'achievements' table instead of 'achievement_definitions'
+      const { data, error } = await dbSelect('achievements', {
+        select: '*',
+        order: 'category.asc,points.asc'
+      });
+      
+      if (error) {
+        // Handle table not found gracefully
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.warn('[achievementService] achievements table not found');
+          return { data: [], error: null };
+        }
+        console.error('[achievementService] getAllAchievements error:', error);
+      }
+      
+      return { data: data || [], error: error?.message || null };
+    } catch (err) {
+      console.error('[achievementService] Error getting achievements:', err);
+      return { data: [], error: err.message };
+    }
+  }
+
+  /**
+   * Get user's unlocked achievements
+   */
+  async getUserAchievements(forceRefresh = false) {
+    if (!isSupabaseConfigured()) return { data: [], error: null };
     
     const userId = getCurrentUserId();
     if (!userId) return { data: [], error: 'Not authenticated' };
     
+    // Check cache
     if (!forceRefresh && this.cache && this.cacheTimestamp && 
         Date.now() - this.cacheTimestamp < this.CACHE_DURATION) {
       return { data: this.cache, error: null };
     }
     
     try {
-      const { data, error } = await dbRpc('get_user_achievements', { p_user_id: userId });
-      
-      if (!error && data) {
-        this.cache = data;
-        this.cacheTimestamp = Date.now();
-      }
-      
-      return { data: data || [], error };
-    } catch (err) {
-      console.error('Error getting achievements:', err);
-      return { data: [], error: err.message };
-    }
-  }
-  
-  async getAllAchievements() {
-    if (!isSupabaseConfigured()) return { data: [], error: 'Supabase not configured' };
-    
-    try {
-      const { data, error } = await dbSelect('achievement_definitions', {
-        select: '*',
-        order: 'category.asc,points.asc'
+      // Try RPC first (if it exists)
+      const { data: rpcData, error: rpcError } = await dbRpc('get_user_achievements', { 
+        p_user_id: userId 
       });
       
-      return { data: data || [], error };
+      if (!rpcError && rpcData) {
+        this.cache = rpcData;
+        this.cacheTimestamp = Date.now();
+        return { data: rpcData, error: null };
+      }
+      
+      // Fallback: Direct query
+      const { data, error } = await supabase
+        .from('user_achievements')
+        .select(`
+          id,
+          achievement_id,
+          unlocked_at,
+          game_id,
+          achievement:achievements(*)
+        `)
+        .eq('user_id', userId)
+        .order('unlocked_at', { ascending: false });
+      
+      if (error) {
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          return { data: [], error: null };
+        }
+        console.error('[achievementService] getUserAchievements error:', error);
+        return { data: [], error: error.message };
+      }
+      
+      this.cache = data || [];
+      this.cacheTimestamp = Date.now();
+      
+      return { data: data || [], error: null };
     } catch (err) {
-      console.error('Error getting achievement definitions:', err);
+      console.error('[achievementService] Error getting user achievements:', err);
       return { data: [], error: err.message };
     }
   }
-  
+
+  /**
+   * Check if user has a specific achievement
+   */
   async hasAchievement(achievementId) {
     const { data } = await this.getUserAchievements();
-    return data.some(a => a.achievement_id === achievementId);
+    return data.some(a => 
+      a.achievement_id === achievementId || 
+      a.achievement?.id === achievementId
+    );
   }
-  
+
   // ===========================================================================
-  // AWARDING ACHIEVEMENTS
+  // ACHIEVEMENT STATISTICS
   // ===========================================================================
-  
-  async awardAchievement(achievementId, metadata = {}) {
-    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase not configured' };
-    
-    const userId = getCurrentUserId();
-    if (!userId) return { success: false, error: 'Not authenticated' };
-    
-    try {
-      const { data, error } = await dbRpc('award_achievement', {
-        p_user_id: userId,
-        p_achievement_id: achievementId,
-        p_metadata: metadata
-      });
-      
-      if (data?.success) {
-        this.cache = null;
-        this.cacheTimestamp = null;
-      }
-      
-      return { success: data?.success || false, error: data?.error || error };
-    } catch (err) {
-      console.error('Error awarding achievement:', err);
-      return { success: false, error: err.message };
-    }
-  }
-  
-  // ===========================================================================
-  // CHECK ACHIEVEMENTS AFTER GAME (CRITICAL FOR ONLINE MULTIPLAYER)
-  // ===========================================================================
-  
-  /**
-   * Check and grant achievements after an online game
-   * Called by OnlineGameScreen when a game ends
-   * @param {string} userId - The user ID to check achievements for
-   * @param {string} gameId - The game ID that just ended
-   * @returns {Promise<{data: Array, error: string|null}>} - Newly awarded achievements
-   */
-  async checkAchievements(userId, gameId = null) {
-    if (!isSupabaseConfigured()) {
-      console.log('[achievementService] checkAchievements: Supabase not configured');
-      return { data: [], error: null };
-    }
-    
-    const targetUserId = userId || getCurrentUserId();
-    if (!targetUserId) {
-      console.log('[achievementService] checkAchievements: No user ID');
-      return { data: [], error: 'Not authenticated' };
-    }
-    
-    console.log('[achievementService] checkAchievements: Checking for user', targetUserId, 'game', gameId);
-    
-    try {
-      const { data, error } = await dbRpc('check_achievements', {
-        p_user_id: targetUserId,
-        p_game_id: gameId
-      });
-      
-      console.log('[achievementService] checkAchievements result:', { data, error });
-      
-      if (data?.length > 0) {
-        // Clear cache so next fetch gets updated achievements
-        this.cache = null;
-        this.cacheTimestamp = null;
-      }
-      
-      return { data: data || [], error };
-    } catch (err) {
-      console.error('[achievementService] checkAchievements error:', err);
-      // Don't fail silently - return empty array but log the error
-      return { data: [], error: err.message };
-    }
-  }
-  
-  // ===========================================================================
-  // ACHIEVEMENT STATISTICS (USED BY PLAYER PROFILE CARD)
-  // ===========================================================================
-  
+
   /**
    * Get achievement statistics for a user
-   * Used by PlayerProfileCard to show achievement count
-   * @param {string} userId - The user ID to get stats for
-   * @returns {Promise<{data: Object|null, error: string|null}>}
    */
   async getAchievementStats(userId) {
     if (!isSupabaseConfigured()) {
@@ -179,7 +193,7 @@ class AchievementsService {
     }
     
     try {
-      // Try to get stats from RPC function first (more efficient)
+      // Try RPC first
       const { data: rpcData, error: rpcError } = await dbRpc('get_achievement_stats', {
         p_user_id: targetUserId
       });
@@ -188,23 +202,32 @@ class AchievementsService {
         return { data: rpcData, error: null };
       }
       
-      // Fallback: Calculate manually if RPC doesn't exist
-      console.log('[achievementService] getAchievementStats: RPC failed, calculating manually');
+      // Fallback: Calculate manually
+      console.log('[achievementService] getAchievementStats: RPC not available, calculating manually');
       
-      // Get all achievement definitions
-      const { data: allAchievements } = await dbSelect('achievement_definitions', {
+      // v7.12: Query 'achievements' table
+      const { data: allAchievements } = await dbSelect('achievements', {
         select: 'id,points'
       });
       
       // Get user's unlocked achievements
-      const { data: userAchievements } = await dbRpc('get_user_achievements', {
-        p_user_id: targetUserId
-      });
+      const { data: userAchievements } = await supabase
+        .from('user_achievements')
+        .select('achievement_id, unlocked_at')
+        .eq('user_id', targetUserId);
       
       const totalAchievements = allAchievements?.length || 0;
       const totalPoints = allAchievements?.reduce((sum, a) => sum + (a.points || 0), 0) || 0;
       const unlockedCount = userAchievements?.length || 0;
-      const earnedPoints = userAchievements?.reduce((sum, a) => sum + (a.points || 0), 0) || 0;
+      
+      // Calculate earned points by matching achievement IDs
+      let earnedPoints = 0;
+      if (userAchievements && allAchievements) {
+        const pointsMap = new Map(allAchievements.map(a => [a.id, a.points || 0]));
+        earnedPoints = userAchievements.reduce((sum, ua) => {
+          return sum + (pointsMap.get(ua.achievement_id) || 0);
+        }, 0);
+      }
       
       return {
         data: {
@@ -223,11 +246,9 @@ class AchievementsService {
       return { data: null, error: err.message };
     }
   }
-  
+
   /**
    * Get achievements with unlock status for display
-   * @param {string} userId - The user ID
-   * @returns {Promise<{data: Array, error: string|null}>}
    */
   async getAchievementsWithStatus(userId) {
     if (!isSupabaseConfigured()) return { data: [], error: null };
@@ -238,23 +259,30 @@ class AchievementsService {
     try {
       // Get all achievements
       const { data: allAchievements, error: achError } = await this.getAllAchievements();
-      if (achError) return { data: [], error: achError };
+      if (achError) {
+        console.warn('[achievementService] Error loading all achievements:', achError);
+        return { data: [], error: achError };
+      }
       
       // Get user's unlocked achievements
-      const { data: userAchievements, error: userError } = await this.getUserAchievements(true);
-      if (userError) return { data: [], error: userError };
+      const { data: userAchievements, error: userError } = await supabase
+        .from('user_achievements')
+        .select('achievement_id, unlocked_at')
+        .eq('user_id', targetUserId);
+      
+      // Handle table not found
+      const unlockedData = userError?.code === '42P01' ? [] : (userAchievements || []);
       
       // Create map of unlocked achievement IDs
       const unlockedMap = new Map();
-      userAchievements?.forEach(ua => {
-        const achId = ua.achievement_id || ua.achievement?.id;
-        if (achId) {
-          unlockedMap.set(achId, ua.unlocked_at || ua.earned_at);
+      unlockedData.forEach(ua => {
+        if (ua.achievement_id) {
+          unlockedMap.set(ua.achievement_id, ua.unlocked_at);
         }
       });
       
       // Merge data
-      const achievementsWithStatus = allAchievements.map(a => ({
+      const achievementsWithStatus = (allAchievements || []).map(a => ({
         ...a,
         unlocked: unlockedMap.has(a.id),
         unlockedAt: unlockedMap.get(a.id) || null,
@@ -266,177 +294,72 @@ class AchievementsService {
       return { data: [], error: err.message };
     }
   }
-  
+
   // ===========================================================================
-  // CHECK AND AWARD BASED ON STATS
+  // AWARDING ACHIEVEMENTS
   // ===========================================================================
-  
-  async checkAndAwardAchievements(stats) {
-    if (!isSupabaseConfigured()) return [];
+
+  /**
+   * Award an achievement to a user
+   */
+  async awardAchievement(achievementId, metadata = {}) {
+    if (!isSupabaseConfigured()) return { success: false, error: 'Supabase not configured' };
     
-    const awarded = [];
+    const userId = getCurrentUserId();
+    if (!userId) return { success: false, error: 'Not authenticated' };
     
-    // Speed puzzle achievements
-    if (stats.speed_best_streak >= 5) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_5);
-      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_5);
-    }
-    if (stats.speed_best_streak >= 10) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_10);
-      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_10);
-    }
-    if (stats.speed_best_streak >= 25) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_25);
-      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_25);
-    }
-    if (stats.speed_best_streak >= 50) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.SPEED_STREAK_50);
-      if (result.success) awarded.push(ACHIEVEMENTS.SPEED_STREAK_50);
-    }
-    
-    // Puzzle achievements
-    const puzzleTotal = (stats.puzzles_easy_solved || 0) + 
-                        (stats.puzzles_medium_solved || 0) + 
-                        (stats.puzzles_hard_solved || 0);
-    
-    if (puzzleTotal >= 1) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_FIRST);
-      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_FIRST);
-    }
-    if (stats.puzzles_easy_solved >= 10) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_EASY_10);
-      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_EASY_10);
-    }
-    if (stats.puzzles_medium_solved >= 10) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_MEDIUM_10);
-      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_MEDIUM_10);
-    }
-    if (stats.puzzles_hard_solved >= 10) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_HARD_10);
-      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_HARD_10);
-    }
-    if (puzzleTotal >= 100) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.PUZZLE_TOTAL_100);
-      if (result.success) awarded.push(ACHIEVEMENTS.PUZZLE_TOTAL_100);
-    }
-    
-    // AI achievements
-    const aiTotalWins = (stats.ai_easy_wins || 0) + 
-                        (stats.ai_medium_wins || 0) + 
-                        (stats.ai_hard_wins || 0);
-    
-    if (aiTotalWins >= 1) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.AI_FIRST_WIN);
-      if (result.success) awarded.push(ACHIEVEMENTS.AI_FIRST_WIN);
-    }
-    if (stats.ai_hard_wins >= 1) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.AI_HARD_WIN);
-      if (result.success) awarded.push(ACHIEVEMENTS.AI_HARD_WIN);
-    }
-    if (stats.ai_hard_wins >= 10) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.AI_HARD_WINS_10);
-      if (result.success) awarded.push(ACHIEVEMENTS.AI_HARD_WINS_10);
-    }
-    
-    // Online achievements
-    if (stats.games_won >= 1) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.ONLINE_FIRST_WIN);
-      if (result.success) awarded.push(ACHIEVEMENTS.ONLINE_FIRST_WIN);
-    }
-    if (stats.games_won >= 10) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.ONLINE_WINS_10);
-      if (result.success) awarded.push(ACHIEVEMENTS.ONLINE_WINS_10);
-    }
-    if (stats.games_won >= 50) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.ONLINE_WINS_50);
-      if (result.success) awarded.push(ACHIEVEMENTS.ONLINE_WINS_50);
-    }
-    
-    // Total games achievement
-    const totalGames = (stats.games_played || 0) + 
-                       (stats.local_games_played || 0) + 
-                       puzzleTotal +
-                       (stats.ai_easy_wins || 0) + (stats.ai_easy_losses || 0) +
-                       (stats.ai_medium_wins || 0) + (stats.ai_medium_losses || 0) +
-                       (stats.ai_hard_wins || 0) + (stats.ai_hard_losses || 0);
-    
-    if (totalGames >= 100) {
-      const result = await this.awardAchievement(ACHIEVEMENTS.GAMES_PLAYED_100);
-      if (result.success) awarded.push(ACHIEVEMENTS.GAMES_PLAYED_100);
-    }
-    
-    return awarded;
-  }
-  
-  // ===========================================================================
-  // WEEKLY CHALLENGE ACHIEVEMENTS
-  // ===========================================================================
-  
-  async checkWeeklyAchievements(rank, challengeId) {
-    const awarded = [];
-    
-    // First weekly challenge completion
-    const firstResult = await this.awardAchievement(ACHIEVEMENTS.WEEKLY_FIRST, { 
-      challenge_id: challengeId 
-    });
-    if (firstResult.success) awarded.push(ACHIEVEMENTS.WEEKLY_FIRST);
-    
-    // Top 3 finish
-    if (rank <= 3) {
-      const top3Result = await this.awardAchievement(ACHIEVEMENTS.WEEKLY_TOP_3, { 
-        challenge_id: challengeId, 
-        rank 
+    try {
+      // Try RPC first
+      const { data, error } = await dbRpc('award_achievement', {
+        p_user_id: userId,
+        p_achievement_id: achievementId,
+        p_metadata: metadata
       });
-      if (top3Result.success) awarded.push(ACHIEVEMENTS.WEEKLY_TOP_3);
+      
+      if (!error && data?.success) {
+        // Clear cache
+        this.cache = null;
+        this.cacheTimestamp = null;
+        return { success: true, error: null };
+      }
+      
+      // Fallback: Direct insert
+      const { error: insertError } = await supabase
+        .from('user_achievements')
+        .insert({
+          user_id: userId,
+          achievement_id: achievementId,
+          unlocked_at: new Date().toISOString()
+        });
+      
+      if (insertError) {
+        // Ignore duplicate errors
+        if (insertError.code === '23505') {
+          return { success: true, error: null }; // Already has achievement
+        }
+        return { success: false, error: insertError.message };
+      }
+      
+      // Clear cache
+      this.cache = null;
+      this.cacheTimestamp = null;
+      
+      return { success: true, error: null };
+    } catch (err) {
+      console.error('[achievementService] awardAchievement error:', err);
+      return { success: false, error: err.message };
     }
-    
-    return awarded;
   }
-  
-  // ===========================================================================
-  // PROGRESS TRACKING
-  // ===========================================================================
-  
-  getAchievementProgress(stats) {
-    return {
-      speed: {
-        current: stats.speed_best_streak || 0,
-        milestones: [5, 10, 25, 50],
-        next: this.getNextMilestone(stats.speed_best_streak || 0, [5, 10, 25, 50]),
-      },
-      puzzles: {
-        total: (stats.puzzles_easy_solved || 0) + 
-               (stats.puzzles_medium_solved || 0) + 
-               (stats.puzzles_hard_solved || 0),
-        milestones: [1, 10, 50, 100],
-      },
-      online: { 
-        wins: stats.games_won || 0, 
-        milestones: [1, 10, 50] 
-      },
-      ai: { 
-        hardWins: stats.ai_hard_wins || 0, 
-        milestones: [1, 10] 
-      },
-    };
-  }
-  
-  getNextMilestone(current, milestones) {
-    for (const milestone of milestones) {
-      if (current < milestone) return milestone;
-    }
-    return null;
-  }
-  
-  // ===========================================================================
-  // CACHE MANAGEMENT
-  // ===========================================================================
-  
+
+  /**
+   * Clear the cache
+   */
   clearCache() {
     this.cache = null;
     this.cacheTimestamp = null;
   }
 }
 
-export const achievementsService = new AchievementsService();
-export default achievementsService;
+// Export singleton instance
+const achievementService = new AchievementService();
+export default achievementService;

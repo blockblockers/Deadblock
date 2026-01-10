@@ -232,22 +232,46 @@ class PushNotificationService {
       
       console.log('[PushService] Saving subscription to database...');
       
+      const subscriptionData = {
+        user_id: userId,
+        endpoint: subscriptionJSON.endpoint,
+        p256dh: subscriptionJSON.keys?.p256dh || null,
+        auth: subscriptionJSON.keys?.auth || null,
+        device_info: this.getDeviceInfo(),
+        updated_at: new Date().toISOString()
+      };
+      
+      // Try upsert first
       const { error } = await supabase
         .from('push_subscriptions')
-        .upsert({
-          user_id: userId,
-          endpoint: subscriptionJSON.endpoint,
-          p256dh: subscriptionJSON.keys.p256dh,
-          auth: subscriptionJSON.keys.auth,
-          device_info: this.getDeviceInfo(),
-          updated_at: new Date().toISOString()
-        }, {
+        .upsert(subscriptionData, {
           onConflict: 'endpoint'
         });
 
       if (error) {
-        console.error('[PushService] Error saving subscription:', error);
-        return false;
+        console.warn('[PushService] Upsert failed:', error.message);
+        
+        // Fallback: delete existing and insert new
+        console.log('[PushService] Trying delete + insert fallback...');
+        
+        // Delete any existing subscription with this endpoint
+        await supabase
+          .from('push_subscriptions')
+          .delete()
+          .eq('endpoint', subscriptionJSON.endpoint);
+        
+        // Insert fresh
+        const { error: insertError } = await supabase
+          .from('push_subscriptions')
+          .insert(subscriptionData);
+        
+        if (insertError) {
+          console.error('[PushService] Insert fallback failed:', insertError);
+          return false;
+        }
+        
+        console.log('[PushService] Subscription saved via fallback');
+        return true;
       }
 
       console.log('[PushService] Subscription saved to Supabase');

@@ -1,8 +1,10 @@
 // Online Menu - Hub for online features
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
-// v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
+// v7.10: Prioritize display_name over username (display_name has proper casing)
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
+// v7.12: Fixed scroll container structure (outer no-scroll, inner scrolls)
+// v7.12: Fixed name display to use display_name (proper casing) over username
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,15 +50,15 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || game.player2?.display_name || 'Unknown';
+      return game.player2?.display_name || game.player2?.username || 'Unknown';
     }
-    return game.player1?.username || game.player1?.display_name || 'Unknown';
+    return game.player1?.display_name || game.player1?.username || 'Unknown';
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
-  const displayName = profile?.username || profile?.display_name;
+  const displayName = profile?.display_name || profile?.username;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -406,7 +408,7 @@ const OnlineMenu = ({
           const { data: invites } = await inviteService.getReceivedInvites(profile.id);
           const invite = invites?.find(i => i.id === newInvite.id);
           if (invite?.from_user) {
-            const inviterName = invite.from_user.username || invite.from_user.display_name;
+            const inviterName = invite.from_user.display_name || invite.from_user.username;
             notificationService.notifyGameInvite(inviterName, newInvite.id);
           }
         }
@@ -423,8 +425,8 @@ const OnlineMenu = ({
             const { data: game } = await gameSyncService.getGame(updatedInvite.game_id);
             if (game) {
               const opponentName = game.player1_id === profile.id 
-                ? (game.player2?.username || game.player2?.display_name)
-                : (game.player1?.username || game.player1?.display_name);
+                ? (game.player2?.display_name || game.player2?.username)
+                : (game.player1?.display_name || game.player1?.username);
               notificationService.notifyInviteAccepted(opponentName || 'Opponent', updatedInvite.game_id);
             }
           }
@@ -456,8 +458,8 @@ const OnlineMenu = ({
           const { data: game } = await gameSyncService.getGame(rematchData.game_id);
           if (game) {
             const requesterName = game.player1_id === rematchData.from_user_id 
-              ? (game.player1?.username || game.player1?.display_name)
-              : (game.player2?.username || game.player2?.display_name);
+              ? (game.player1?.display_name || game.player1?.username)
+              : (game.player2?.display_name || game.player2?.username);
             notificationService.notifyRematchRequest(requesterName || 'Opponent', rematchData.game_id, rematchData.id);
           }
         }
@@ -473,8 +475,8 @@ const OnlineMenu = ({
           const { data: newGame } = await gameSyncService.getGame(rematchData.new_game_id);
           if (newGame) {
             const accepterName = newGame.player1_id === profile.id
-              ? (newGame.player2?.username || newGame.player2?.display_name)
-              : (newGame.player1?.username || newGame.player1?.display_name);
+              ? (newGame.player2?.display_name || newGame.player2?.username)
+              : (newGame.player1?.display_name || newGame.player1?.username);
             notificationService.notifyRematchAccepted(accepterName || 'Opponent', rematchData.new_game_id);
           }
         }
@@ -900,7 +902,7 @@ const OnlineMenu = ({
       try {
         await navigator.share({
           title: 'Play Deadblock with me!',
-          text: `${profile?.username || profile?.display_name || 'A friend'} wants to challenge you to Deadblock!`,
+          text: `${profile?.display_name || profile?.username || 'A friend'} wants to challenge you to Deadblock!`,
           url: invite.inviteLink
         });
         soundManager.playClickSound('confirm');
@@ -1001,9 +1003,9 @@ const OnlineMenu = ({
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.username || game.player2?.display_name || 'Unknown';
+      return game.player2?.display_name || game.player2?.username || 'Unknown';
     }
-    return game.player1?.username || game.player1?.display_name || 'Unknown';
+    return game.player1?.display_name || game.player1?.username || 'Unknown';
   };
 
   // Get opponent ID from game
@@ -1022,14 +1024,14 @@ const OnlineMenu = ({
     return { 
       id: game.player2_id,
       username: game.player2?.username || 'Unknown',
-      displayName: game.player2?.username || game.player2?.display_name || 'Unknown',
+      displayName: game.player2?.display_name || game.player2?.username || 'Unknown',
       data: game.player2
     };
   }
   return { 
     id: game.player1_id,
     username: game.player1?.username || 'Unknown',
-    displayName: game.player1?.username || game.player1?.display_name || 'Unknown',
+    displayName: game.player1?.display_name || game.player1?.username || 'Unknown',
     data: game.player1
   };
 };
@@ -1046,14 +1048,21 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // v7.10: Fixed scroll container - only ONE element should have scroll properties
-      className="fixed inset-0 bg-transparent overflow-y-auto overflow-x-hidden"
-      style={{ 
-        WebkitOverflowScrolling: 'touch', 
-        overscrollBehavior: 'contain',
-        // Remove touchAction from outer - let iOS handle naturally
-      }}
+      // v7.12: Outer container - NO scroll, just positioning
+      className="fixed inset-0 bg-transparent"
+      style={{ overflow: 'hidden' }}
     >
+      {/* v7.12: Inner scroll container - THIS is what scrolls */}
+      <div
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        style={{ 
+          WebkitOverflowScrolling: 'touch', 
+          overscrollBehavior: 'contain',
+          touchAction: 'pan-y',
+          transform: 'translateZ(0)',
+          willChange: 'scroll-position'
+        }}
+      >
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
@@ -1143,11 +1152,11 @@ const OnlineMenu = ({
               {/* Top row: Avatar and actions */}
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {(profile?.username || profile?.display_name)?.[0]?.toUpperCase() || '?'}
+                  {(profile?.display_name || profile?.username)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
+                    <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
                       className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
@@ -1483,7 +1492,7 @@ const OnlineMenu = ({
                       }}
                     >                      {searchResults.map(user => {
                         const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
-                        const displayName = user.username || user.display_name;
+                        const displayName = user.display_name || user.username;
                         return (
                           <div
                             key={user.id}
@@ -1758,7 +1767,7 @@ const OnlineMenu = ({
                   }}
                 >
                   {receivedInvites.map(invite => {
-                    const inviterName = invite.from_user?.username || invite.from_user?.display_name || 'Unknown';
+                    const inviterName = invite.from_user?.display_name || invite.from_user?.username || 'Unknown';
                     return (
                     <div
                       key={invite.id}
@@ -2597,8 +2606,8 @@ const OnlineMenu = ({
           boardPieces={selectedGameForFinalView.board_pieces}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
-          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
-          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          player1Name={selectedGameForFinalView.player1?.display_name || selectedGameForFinalView.player1?.username || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.display_name || selectedGameForFinalView.player2?.username || 'Player 2'}
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
         />
       )}
@@ -2613,6 +2622,7 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
+      </div>{/* End inner scroll container */}
     </div>
   );
 };

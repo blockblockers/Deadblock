@@ -102,11 +102,27 @@ const Achievements = ({ userId, playerName, onClose }) => {
   };
 
   // Group achievements by category
-  const categories = ['all', 'weekly', 'speed', 'puzzle', 'online', 'ai', 'general'];
+  // Note: Database may have categories like 'online', 'puzzle', 'ai', 'speed', 'weekly', 'general'
+  // Make sure categories match what's in the database
+  const categories = ['all', 'online', 'puzzle', 'ai', 'speed', 'weekly', 'general'];
+  
+  // Debug: Log available categories in achievements data
+  const availableCategories = [...new Set(achievements.map(a => a.category))];
+  console.log('[Achievements] Available categories in data:', availableCategories);
+  console.log('[Achievements] Selected category:', selectedCategory);
+  console.log('[Achievements] Total achievements:', achievements.length);
   
   const filteredAchievements = selectedCategory === 'all' 
     ? achievements 
-    : achievements.filter(a => a.category === selectedCategory);
+    : achievements.filter(a => {
+        // Case-insensitive category matching
+        const achCategory = (a.category || '').toLowerCase();
+        const selectedCat = selectedCategory.toLowerCase();
+        const matches = achCategory === selectedCat;
+        return matches;
+      });
+  
+  console.log('[Achievements] Filtered count for', selectedCategory, ':', filteredAchievements.length);
 
   // Sort: NEW first, then unlocked, then by rarity
   const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
