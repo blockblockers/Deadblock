@@ -1,10 +1,8 @@
 // Online Menu - Hub for online features
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
+// v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
-// v7.12: Fixed scroll container structure (outer no-scroll, inner scrolls)
-// v7.12: Name display uses display_name (proper casing) with username fallback
-//        Both fields are updated together when user changes their name
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -50,15 +48,15 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.display_name || game.player2?.username || 'Unknown';
+      return game.player2?.username || game.player2?.display_name || 'Unknown';
     }
-    return game.player1?.display_name || game.player1?.username || 'Unknown';
+    return game.player1?.username || game.player1?.display_name || 'Unknown';
   };
 
   const game = myTurnGames[0]; // Show the first game where it's their turn
   if (!game) return null;
 
-  const displayName = profile?.display_name || profile?.username;
+  const displayName = profile?.username || profile?.display_name;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -236,7 +234,6 @@ const OnlineMenu = ({
   
   // Error message state (for in-GUI display instead of alert)
   const [inviteError, setInviteError] = useState(null);
-  const [inviteSuccess, setInviteSuccess] = useState(null);
   
   // Notification state
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
@@ -256,6 +253,70 @@ const OnlineMenu = ({
   
   // Final Board View state
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
+  const [gameMoves, setGameMoves] = useState([]);
+  const [loadingMoves, setLoadingMoves] = useState(false);
+
+  // v7.12: Load game moves for FinalBoardView replay
+  const loadGameMoves = async (gameId) => {
+    if (!gameId) return [];
+    
+    setLoadingMoves(true);
+    try {
+      // Get auth token from localStorage
+      const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+      const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
+      const token = authData?.access_token;
+      
+      if (!token) {
+        console.log('[OnlineMenu] No auth token for loading moves');
+        setLoadingMoves(false);
+        return [];
+      }
+      
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&order=move_number.asc`,
+        {
+          headers: {
+            'apikey': ANON_KEY,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const moves = await response.json();
+        console.log('[OnlineMenu] Loaded', moves.length, 'moves for game', gameId);
+        setGameMoves(moves);
+        return moves;
+      } else {
+        console.error('[OnlineMenu] Failed to load moves:', response.status);
+        setGameMoves([]);
+        return [];
+      }
+    } catch (err) {
+      console.error('[OnlineMenu] Error loading game moves:', err);
+      setGameMoves([]);
+      return [];
+    } finally {
+      setLoadingMoves(false);
+    }
+  };
+
+  // v7.12: Open Final Board View with moves loaded
+  const openFinalBoardView = async (game) => {
+    setSelectedGameForFinalView(game);
+    await loadGameMoves(game.id);
+  };
+
+  // v7.12: Close Final Board View and clear moves
+  const closeFinalBoardView = () => {
+    setSelectedGameForFinalView(null);
+    setGameMoves([]);
+  };
 
   // Initialize notifications
   // Auto-request notification permission on first online visit (mobile only)
@@ -409,7 +470,7 @@ const OnlineMenu = ({
           const { data: invites } = await inviteService.getReceivedInvites(profile.id);
           const invite = invites?.find(i => i.id === newInvite.id);
           if (invite?.from_user) {
-            const inviterName = invite.from_user.display_name || invite.from_user.username;
+            const inviterName = invite.from_user.username || invite.from_user.display_name;
             notificationService.notifyGameInvite(inviterName, newInvite.id);
           }
         }
@@ -426,8 +487,8 @@ const OnlineMenu = ({
             const { data: game } = await gameSyncService.getGame(updatedInvite.game_id);
             if (game) {
               const opponentName = game.player1_id === profile.id 
-                ? (game.player2?.display_name || game.player2?.username)
-                : (game.player1?.display_name || game.player1?.username);
+                ? (game.player2?.username || game.player2?.display_name)
+                : (game.player1?.username || game.player1?.display_name);
               notificationService.notifyInviteAccepted(opponentName || 'Opponent', updatedInvite.game_id);
             }
           }
@@ -459,8 +520,8 @@ const OnlineMenu = ({
           const { data: game } = await gameSyncService.getGame(rematchData.game_id);
           if (game) {
             const requesterName = game.player1_id === rematchData.from_user_id 
-              ? (game.player1?.display_name || game.player1?.username)
-              : (game.player2?.display_name || game.player2?.username);
+              ? (game.player1?.username || game.player1?.display_name)
+              : (game.player2?.username || game.player2?.display_name);
             notificationService.notifyRematchRequest(requesterName || 'Opponent', rematchData.game_id, rematchData.id);
           }
         }
@@ -476,8 +537,8 @@ const OnlineMenu = ({
           const { data: newGame } = await gameSyncService.getGame(rematchData.new_game_id);
           if (newGame) {
             const accepterName = newGame.player1_id === profile.id
-              ? (newGame.player2?.display_name || newGame.player2?.username)
-              : (newGame.player1?.display_name || newGame.player1?.username);
+              ? (newGame.player2?.username || newGame.player2?.display_name)
+              : (newGame.player1?.username || newGame.player1?.display_name);
             notificationService.notifyRematchAccepted(accepterName || 'Opponent', rematchData.new_game_id);
           }
         }
@@ -726,10 +787,6 @@ const OnlineMenu = ({
     setSendingInvite(toUserId);
     soundManager.playButtonClick();
     
-    // Get user info for success message
-    const targetUser = searchResults.find(u => u.id === toUserId);
-    const targetName = targetUser?.display_name || targetUser?.username || 'Player';
-    
     const { data, error } = await inviteService.sendInvite(profile.id, toUserId);
     
     if (error) {
@@ -746,9 +803,6 @@ const OnlineMenu = ({
       // Invite sent successfully
       soundManager.playClickSound('confirm');
       await loadInvites();
-      // Show success message
-      setInviteSuccess(`Challenge sent to ${targetName}!`);
-      setTimeout(() => setInviteSuccess(null), 4000);
       // Remove from search results
       setSearchResults(prev => prev.filter(u => u.id !== toUserId));
     }
@@ -910,7 +964,7 @@ const OnlineMenu = ({
       try {
         await navigator.share({
           title: 'Play Deadblock with me!',
-          text: `${profile?.display_name || profile?.username || 'A friend'} wants to challenge you to Deadblock!`,
+          text: `${profile?.username || profile?.display_name || 'A friend'} wants to challenge you to Deadblock!`,
           url: invite.inviteLink
         });
         soundManager.playClickSound('confirm');
@@ -1011,9 +1065,9 @@ const OnlineMenu = ({
   const getOpponentName = (game) => {
     if (!game) return 'Unknown';
     if (game.player1_id === profile?.id) {
-      return game.player2?.display_name || game.player2?.username || 'Unknown';
+      return game.player2?.username || game.player2?.display_name || 'Unknown';
     }
-    return game.player1?.display_name || game.player1?.username || 'Unknown';
+    return game.player1?.username || game.player1?.display_name || 'Unknown';
   };
 
   // Get opponent ID from game
@@ -1032,14 +1086,14 @@ const OnlineMenu = ({
     return { 
       id: game.player2_id,
       username: game.player2?.username || 'Unknown',
-      displayName: game.player2?.display_name || game.player2?.username || 'Unknown',
+      displayName: game.player2?.username || game.player2?.display_name || 'Unknown',
       data: game.player2
     };
   }
   return { 
     id: game.player1_id,
     username: game.player1?.username || 'Unknown',
-    displayName: game.player1?.display_name || game.player1?.username || 'Unknown',
+    displayName: game.player1?.username || game.player1?.display_name || 'Unknown',
     data: game.player1
   };
 };
@@ -1056,21 +1110,14 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // v7.12: Outer container - NO scroll, just positioning
-      className="fixed inset-0 bg-transparent"
-      style={{ overflow: 'hidden' }}
+      // v7.10: Fixed scroll container - only ONE element should have scroll properties
+      className="fixed inset-0 bg-transparent overflow-y-auto overflow-x-hidden"
+      style={{ 
+        WebkitOverflowScrolling: 'touch', 
+        overscrollBehavior: 'contain',
+        // Remove touchAction from outer - let iOS handle naturally
+      }}
     >
-      {/* v7.12: Inner scroll container - THIS is what scrolls */}
-      <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
-        style={{ 
-          WebkitOverflowScrolling: 'touch', 
-          overscrollBehavior: 'contain',
-          touchAction: 'pan-y',
-          transform: 'translateZ(0)',
-          willChange: 'scroll-position'
-        }}
-      >
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
@@ -1160,14 +1207,14 @@ const OnlineMenu = ({
               {/* Top row: Avatar and actions */}
               <div className="flex items-center gap-4 mb-3">
                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {(profile?.display_name || profile?.username)?.[0]?.toUpperCase() || '?'}
+                  {(profile?.username || profile?.display_name)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.display_name || profile?.username || 'Player'}</h2>
+                    <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
                     <button
                       onClick={handleOpenUsernameEdit}
-                      className="p-1 text-blue-400 hover:text-blue-300 transition-colors"
+                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
                       title="Edit Username"
                     >
                       <Pencil size={14} />
@@ -1296,13 +1343,13 @@ const OnlineMenu = ({
     onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
     className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
     style={{
-      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-      borderColor: 'rgba(245, 158, 11, 0.3)',
-      boxShadow: '0 0 15px rgba(245, 158, 11, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+      borderColor: 'rgba(168, 85, 247, 0.3)',
+      boxShadow: '0 0 15px rgba(168, 85, 247, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
     }}
   >
-    <Award size={14} className="text-amber-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-amber-300 transition-colors">Awards</span>
+    <Award size={14} className="text-purple-400 group-hover:scale-110 transition-transform" />
+    <span className="text-slate-300 group-hover:text-purple-300 transition-colors">Awards</span>
   </button>
   <button
     onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
@@ -1412,26 +1459,6 @@ const OnlineMenu = ({
                 </div>
               </div>
             )}
-            
-            {/* Success Banner - Themed in-GUI message */}
-            {inviteSuccess && (
-              <div className="mb-3 p-3 bg-green-900/40 border border-green-500/50 rounded-xl animate-scaleIn">
-                <div className="flex items-start gap-3">
-                  <div className="p-1.5 bg-green-500/20 rounded-lg shrink-0">
-                    <Check size={16} className="text-green-400" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-green-300 text-sm font-medium">{inviteSuccess}</p>
-                  </div>
-                  <button 
-                    onClick={() => setInviteSuccess(null)}
-                    className="text-green-400/60 hover:text-green-300 transition-colors p-1"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Challenge a Player - Purple Glow Orb Button */}
             <button
@@ -1520,7 +1547,7 @@ const OnlineMenu = ({
                       }}
                     >                      {searchResults.map(user => {
                         const alreadyInvited = sentInvites.some(i => i.to_user_id === user.id);
-                        const displayName = user.display_name || user.username;
+                        const displayName = user.username || user.display_name;
                         return (
                           <div
                             key={user.id}
@@ -1795,7 +1822,7 @@ const OnlineMenu = ({
                   }}
                 >
                   {receivedInvites.map(invite => {
-                    const inviterName = invite.from_user?.display_name || invite.from_user?.username || 'Unknown';
+                    const inviterName = invite.from_user?.username || invite.from_user?.display_name || 'Unknown';
                     return (
                     <div
                       key={invite.id}
@@ -2529,7 +2556,7 @@ const OnlineMenu = ({
         <button
           onClick={() => {
             soundManager.playButtonClick();
-            setSelectedGameForFinalView(game);
+            openFinalBoardView(game);
           }}
           className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-sm"
           title="View final board state"
@@ -2559,13 +2586,8 @@ const OnlineMenu = ({
             setSendingInvite(friend.id);
             const { error } = await inviteService.sendInvite(profile.id, friend.id);
             setSendingInvite(null);
-            if (error) {
-              setInviteError(error.message || 'Failed to send challenge');
-              setTimeout(() => setInviteError(null), 5000);
-            } else {
+            if (!error) {
               soundManager.playSound('success');
-              setInviteSuccess(`Challenge sent to ${friend.display_name || friend.username}!`);
-              setTimeout(() => setInviteSuccess(null), 4000);
               setShowFriendsList(false);
             }
           }}
@@ -2589,15 +2611,8 @@ const OnlineMenu = ({
           currentUserId={profile?.id}
           onInviteToGame={async (player) => {
             const { error } = await inviteService.sendInvite(profile.id, player.id);
-            if (error) {
-              // Show error message
-              setInviteError(error.message || 'Failed to send challenge');
-              setTimeout(() => setInviteError(null), 5000);
-            } else {
+            if (!error) {
               soundManager.playSound('success');
-              // Show success message
-              setInviteSuccess(`Challenge sent to ${player.display_name || player.username}!`);
-              setTimeout(() => setInviteSuccess(null), 4000);
               setViewingPlayerId(null);
               setViewingPlayerData(null);
             }
@@ -2640,15 +2655,21 @@ const OnlineMenu = ({
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
         <FinalBoardView
-          isOpen={true}
-          onClose={() => setSelectedGameForFinalView(null)}
+          onClose={closeFinalBoardView}
           board={selectedGameForFinalView.board}
           boardPieces={selectedGameForFinalView.board_pieces}
+          moveHistory={gameMoves}
+          isLoadingMoves={loadingMoves}
+          player1={selectedGameForFinalView.player1}
+          player2={selectedGameForFinalView.player2}
+          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          player1Rating={selectedGameForFinalView.player1?.rating || selectedGameForFinalView.player1?.elo_rating || 1200}
+          player2Rating={selectedGameForFinalView.player2?.rating || selectedGameForFinalView.player2?.elo_rating || 1200}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
-          player1Name={selectedGameForFinalView.player1?.display_name || selectedGameForFinalView.player1?.username || 'Player 1'}
-          player2Name={selectedGameForFinalView.player2?.display_name || selectedGameForFinalView.player2?.username || 'Player 2'}
-          viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
+          winnerId={selectedGameForFinalView.winner_id}
+          gameDate={selectedGameForFinalView.created_at}
         />
       )}
       
@@ -2662,7 +2683,6 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
-      </div>{/* End inner scroll container */}
     </div>
   );
 };

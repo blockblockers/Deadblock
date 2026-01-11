@@ -6,6 +6,8 @@
 // 4. Enhanced search to include username AND display_name
 // 5. v7.7: Improved getInviteLinks query to filter game_id=null at database level
 // 6. v7.7: Invite links expire after 7 days and are properly removed after accept/deny
+// 7. v7.12: Fixed sendInvite to check expires_at when looking for existing invites
+//           (prevents "already pending" error for expired invites not showing in UI)
 import { isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
@@ -220,8 +222,9 @@ class InviteService {
         }
       }
       
-      // Check existing invites between these users
-      const existingUrl = `${SUPABASE_URL}/rest/v1/game_invites?select=id,status,from_user_id,order_preference&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&limit=1`;
+      // Check existing invites between these users (only non-expired ones)
+      const now = new Date().toISOString();
+      const existingUrl = `${SUPABASE_URL}/rest/v1/game_invites?select=id,status,from_user_id,order_preference&or=(and(from_user_id.eq.${fromUserId},to_user_id.eq.${toUserId}),and(from_user_id.eq.${toUserId},to_user_id.eq.${fromUserId}))&status=eq.pending&expires_at=gt.${now}&limit=1`;
       
       const existingResponse = await fetch(existingUrl, { headers });
       if (existingResponse.ok) {

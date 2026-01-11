@@ -1,72 +1,64 @@
-// Achievements Display - Shows user achievements in profile
+// AchievementsDisplay.jsx - Achievements display for PlayerStatsModal
+// v7.12 - FIXED: Now uses getAchievementsWithStatus for consistency with other screens
+// Place in src/components/AchievementsDisplay.jsx
+
 import { useState, useEffect } from 'react';
-import { Crown, Medal, Calendar, Flame, Zap, Target, Award, Trophy, Bot, Gamepad2, User, Lock, ChevronDown, ChevronUp } from 'lucide-react';
-import achievementService from '../services/achievementService';
+import { Trophy, Lock, ChevronDown, ChevronUp, Award, Star, Zap, Target, Crown, Medal, Flame } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import achievementService from '../services/achievementService';
 import { soundManager } from '../utils/soundManager';
 
-// Icon mapping
-const iconMap = {
-  Crown,
-  Medal,
-  Calendar,
-  Flame,
-  Zap,
-  Target,
-  Award,
-  Trophy,
-  Bot,
-  Gamepad2,
-  User,
+// Rarity colors
+const RARITY_COLORS = {
+  legendary: { bg: 'bg-amber-500/20', border: 'border-amber-500/50', text: 'text-amber-400' },
+  epic: { bg: 'bg-purple-500/20', border: 'border-purple-500/50', text: 'text-purple-400' },
+  rare: { bg: 'bg-blue-500/20', border: 'border-blue-500/50', text: 'text-blue-400' },
+  uncommon: { bg: 'bg-green-500/20', border: 'border-green-500/50', text: 'text-green-400' },
+  common: { bg: 'bg-slate-500/20', border: 'border-slate-500/50', text: 'text-slate-400' }
 };
 
-// Color mapping for Tailwind
-const colorMap = {
-  amber: { bg: 'bg-amber-500/20', border: 'border-amber-500/40', text: 'text-amber-400', glow: 'shadow-amber-500/30' },
-  cyan: { bg: 'bg-cyan-500/20', border: 'border-cyan-500/40', text: 'text-cyan-400', glow: 'shadow-cyan-500/30' },
-  orange: { bg: 'bg-orange-500/20', border: 'border-orange-500/40', text: 'text-orange-400', glow: 'shadow-orange-500/30' },
-  red: { bg: 'bg-red-500/20', border: 'border-red-500/40', text: 'text-red-400', glow: 'shadow-red-500/30' },
-  green: { bg: 'bg-green-500/20', border: 'border-green-500/40', text: 'text-green-400', glow: 'shadow-green-500/30' },
-  purple: { bg: 'bg-purple-500/20', border: 'border-purple-500/40', text: 'text-purple-400', glow: 'shadow-purple-500/30' },
-  blue: { bg: 'bg-blue-500/20', border: 'border-blue-500/40', text: 'text-blue-400', glow: 'shadow-blue-500/30' },
-  pink: { bg: 'bg-pink-500/20', border: 'border-pink-500/40', text: 'text-pink-400', glow: 'shadow-pink-500/30' },
+// Icon components
+const iconComponents = {
+  Trophy, Award, Star, Zap, Target, Crown, Medal, Flame
 };
 
 // Single achievement badge
-const AchievementBadge = ({ achievement, earned = false, showDetails = false }) => {
-  const Icon = iconMap[achievement.icon] || Award;
-  const colors = colorMap[achievement.color] || colorMap.cyan;
+const AchievementBadge = ({ achievement, showDetails = false }) => {
+  const colors = RARITY_COLORS[achievement.rarity] || RARITY_COLORS.common;
+  const IconComponent = iconComponents[achievement.iconName] || Award;
+  const isUnlocked = achievement.unlocked;
   
   return (
-    <div 
-      className={`relative p-3 rounded-xl border transition-all ${
-        earned 
-          ? `${colors.bg} ${colors.border} shadow-lg ${colors.glow}` 
-          : 'bg-slate-800/30 border-slate-700/30 opacity-50'
-      }`}
-    >
-      {/* Lock overlay for unearned */}
-      {!earned && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-slate-900/50">
-          <Lock size={16} className="text-slate-600" />
-        </div>
-      )}
-      
-      <div className="flex items-start gap-3">
+    <div className={`
+      p-3 rounded-lg border transition-all
+      ${isUnlocked 
+        ? `${colors.bg} ${colors.border}` 
+        : 'bg-slate-800/30 border-slate-700/30 opacity-60'}
+    `}>
+      <div className="flex items-center gap-3">
         {/* Icon */}
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-          earned ? colors.bg : 'bg-slate-800/50'
-        }`}>
-          <Icon size={20} className={earned ? colors.text : 'text-slate-600'} />
+        <div className={`
+          w-10 h-10 rounded-lg flex items-center justify-center shrink-0
+          ${isUnlocked ? colors.bg : 'bg-slate-800/50'}
+        `}>
+          {isUnlocked ? (
+            achievement.icon ? (
+              <span className="text-xl">{achievement.icon}</span>
+            ) : (
+              <IconComponent size={20} className={colors.text} />
+            )
+          ) : (
+            <Lock size={16} className="text-slate-600" />
+          )}
         </div>
         
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <div className={`font-bold text-sm ${earned ? 'text-white' : 'text-slate-500'}`}>
+          <div className={`font-bold text-sm ${isUnlocked ? 'text-white' : 'text-slate-500'}`}>
             {achievement.name}
           </div>
           {showDetails && (
-            <div className={`text-xs mt-0.5 ${earned ? 'text-slate-400' : 'text-slate-600'}`}>
+            <div className={`text-xs mt-0.5 ${isUnlocked ? 'text-slate-400' : 'text-slate-600'}`}>
               {achievement.description}
             </div>
           )}
@@ -74,26 +66,26 @@ const AchievementBadge = ({ achievement, earned = false, showDetails = false }) 
         
         {/* Points */}
         <div className={`text-xs font-bold px-2 py-1 rounded ${
-          earned ? `${colors.bg} ${colors.text}` : 'bg-slate-800/50 text-slate-600'
+          isUnlocked ? `${colors.bg} ${colors.text}` : 'bg-slate-800/50 text-slate-600'
         }`}>
           +{achievement.points}
         </div>
       </div>
       
       {/* Earned date */}
-      {earned && achievement.earned_at && (
+      {isUnlocked && (achievement.unlockedAt || achievement.unlocked_at) && (
         <div className="text-xs text-slate-500 mt-2 pl-13">
-          Earned {new Date(achievement.earned_at).toLocaleDateString()}
+          Earned {new Date(achievement.unlockedAt || achievement.unlocked_at).toLocaleDateString()}
         </div>
       )}
     </div>
   );
 };
 
-// Category section
-const AchievementCategory = ({ title, achievements, earnedIds, expanded, onToggle }) => {
-  const earnedCount = achievements.filter(a => earnedIds.has(a.id)).length;
-  const totalPoints = achievements.reduce((sum, a) => earnedIds.has(a.id) ? sum + a.points : sum, 0);
+// Category section with expand/collapse
+const AchievementCategory = ({ title, achievements, expanded, onToggle }) => {
+  const unlockedCount = achievements.filter(a => a.unlocked).length;
+  const totalPoints = achievements.filter(a => a.unlocked).reduce((sum, a) => sum + (a.points || 0), 0);
   
   return (
     <div className="border border-slate-700/50 rounded-xl overflow-hidden">
@@ -104,7 +96,7 @@ const AchievementCategory = ({ title, achievements, earnedIds, expanded, onToggl
         <div className="flex items-center gap-2">
           <span className="text-white font-medium capitalize">{title}</span>
           <span className="text-xs px-2 py-0.5 rounded bg-slate-700/50 text-slate-400">
-            {earnedCount}/{achievements.length}
+            {unlockedCount}/{achievements.length}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -125,7 +117,6 @@ const AchievementCategory = ({ title, achievements, earnedIds, expanded, onToggl
             <AchievementBadge
               key={achievement.id}
               achievement={achievement}
-              earned={earnedIds.has(achievement.id)}
               showDetails={true}
             />
           ))}
@@ -135,11 +126,10 @@ const AchievementCategory = ({ title, achievements, earnedIds, expanded, onToggl
   );
 };
 
-// Main achievements display
+// Main achievements display component
 const AchievementsDisplay = ({ compact = false }) => {
   const { profile } = useAuth();
-  const [userAchievements, setUserAchievements] = useState([]);
-  const [allAchievements, setAllAchievements] = useState([]);
+  const [achievements, setAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedCategory, setExpandedCategory] = useState(null);
   
@@ -154,18 +144,26 @@ const AchievementsDisplay = ({ compact = false }) => {
     
     setLoading(true);
     
-    const [userResult, allResult] = await Promise.all([
-      achievementService.getUserAchievements(profile.id),
-      achievementService.getAllAchievements()
-    ]);
+    try {
+      // Use getAchievementsWithStatus for consistency with other screens
+      if (typeof achievementService?.getAchievementsWithStatus === 'function') {
+        const result = await achievementService.getAchievementsWithStatus(profile.id);
+        console.log('[AchievementsDisplay] Loaded achievements:', result.data?.length || 0);
+        setAchievements(result.data || []);
+      } else {
+        console.warn('[AchievementsDisplay] Achievement service not available');
+        setAchievements([]);
+      }
+    } catch (err) {
+      console.error('[AchievementsDisplay] Error loading achievements:', err);
+      setAchievements([]);
+    }
     
-    setUserAchievements(userResult.data || []);
-    setAllAchievements(allResult.data || []);
     setLoading(false);
   };
   
   const toggleCategory = (category) => {
-    soundManager.playClickSound('select');
+    soundManager.playClickSound?.('select');
     setExpandedCategory(expandedCategory === category ? null : category);
   };
   
@@ -177,26 +175,29 @@ const AchievementsDisplay = ({ compact = false }) => {
     );
   }
   
-  // Create set of earned achievement IDs (old service has nested achievement object)
-  const earnedIds = new Set(userAchievements.map(a => a.achievement?.id).filter(Boolean));
+  // Calculate stats
+  const unlockedAchievements = achievements.filter(a => a.unlocked);
+  const totalPoints = unlockedAchievements.reduce((sum, a) => sum + (a.points || 0), 0);
   
   // Group achievements by category
   const categories = {};
-  allAchievements.forEach(achievement => {
-    if (!categories[achievement.category]) {
-      categories[achievement.category] = [];
+  achievements.forEach(achievement => {
+    const cat = achievement.category || 'general';
+    if (!categories[cat]) {
+      categories[cat] = [];
     }
-    categories[achievement.category].push(achievement);
+    categories[cat].push(achievement);
   });
-  
-  // Calculate total points
-  const totalPoints = userAchievements.reduce((sum, a) => {
-    return sum + (a.achievement?.points || 0);
-  }, 0);
   
   // Compact view - just show summary and recent achievements
   if (compact) {
-    const recentAchievements = userAchievements.slice(0, 3);
+    const recentUnlocked = unlockedAchievements
+      .sort((a, b) => {
+        const dateA = new Date(a.unlockedAt || a.unlocked_at || 0);
+        const dateB = new Date(b.unlockedAt || b.unlocked_at || 0);
+        return dateB - dateA;
+      })
+      .slice(0, 3);
     
     return (
       <div>
@@ -207,27 +208,22 @@ const AchievementsDisplay = ({ compact = false }) => {
             <span className="text-slate-400 text-sm">Achievements</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-white font-bold">{userAchievements.length}</span>
-            <span className="text-slate-500">/ {allAchievements.length}</span>
+            <span className="text-white font-bold">{unlockedAchievements.length}</span>
+            <span className="text-slate-500">/ {achievements.length}</span>
             <span className="text-xs text-amber-400 ml-2">+{totalPoints} pts</span>
           </div>
         </div>
         
         {/* Recent badges */}
-        {recentAchievements.length > 0 ? (
+        {recentUnlocked.length > 0 ? (
           <div className="space-y-2">
-            {recentAchievements.map(ua => {
-              const achievement = ua.achievement;
-              if (!achievement) return null;
-              return (
-                <AchievementBadge
-                  key={achievement.id}
-                  achievement={{ ...achievement, earned_at: ua.unlocked_at }}
-                  earned={true}
-                  showDetails={false}
-                />
-              );
-            })}
+            {recentUnlocked.map(achievement => (
+              <AchievementBadge
+                key={achievement.id}
+                achievement={achievement}
+                showDetails={false}
+              />
+            ))}
           </div>
         ) : (
           <div className="text-center py-4 text-slate-500 text-sm">
@@ -258,7 +254,7 @@ const AchievementsDisplay = ({ compact = false }) => {
           <span className="text-white font-bold">Achievements</span>
         </div>
         <div className="text-right">
-          <div className="text-amber-300 font-bold">{userAchievements.length} / {allAchievements.length}</div>
+          <div className="text-amber-300 font-bold">{unlockedAchievements.length} / {achievements.length}</div>
           <div className="text-xs text-amber-400/70">{totalPoints} points</div>
         </div>
       </div>
@@ -266,19 +262,28 @@ const AchievementsDisplay = ({ compact = false }) => {
       {/* Categories */}
       <div className="space-y-2">
         {categoryOrder.map(category => {
-          if (!categories[category]?.length) return null;
+          const categoryAchievements = categories[category];
+          if (!categoryAchievements?.length) return null;
           return (
             <AchievementCategory
               key={category}
               title={categoryTitles[category] || category}
-              achievements={categories[category]}
-              earnedIds={earnedIds}
+              achievements={categoryAchievements}
               expanded={expandedCategory === category}
               onToggle={() => toggleCategory(category)}
             />
           );
         })}
       </div>
+      
+      {/* Empty state */}
+      {achievements.length === 0 && (
+        <div className="text-center py-8">
+          <Trophy size={40} className="mx-auto text-slate-600 mb-2" />
+          <p className="text-slate-400">No achievements available</p>
+          <p className="text-slate-500 text-sm mt-1">Play games to start earning achievements!</p>
+        </div>
+      )}
     </div>
   );
 };

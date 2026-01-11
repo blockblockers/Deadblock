@@ -23,7 +23,11 @@ import { soundManager } from '../utils/soundManager';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 const fetchGameMoves = async (gameId) => {
-  const token = localStorage.getItem('supabase_access_token');
+  // v7.12: Fixed auth token key - use Supabase auth format
+  const authKey = Object.keys(localStorage).find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
+  const authData = authKey ? JSON.parse(localStorage.getItem(authKey) || 'null') : null;
+  const token = authData?.access_token;
+  
   if (!token || !SUPABASE_URL) return [];
   
   try {
@@ -273,7 +277,13 @@ const UserProfile = ({ onBack }) => {
   const playerDisplayName = profile?.username || profile?.display_name || 'Player';
 
   return (
-    <div className="scroll-page bg-slate-950">
+    <div 
+      className="scroll-page bg-slate-950"
+      style={{
+        paddingTop: 'max(16px, env(safe-area-inset-top))',
+        paddingBottom: 'env(safe-area-inset-bottom)'
+      }}
+    >
       <style>{`
         /* v7.9: Scrollable lists within the page */
         .scroll-list {

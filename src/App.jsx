@@ -20,6 +20,7 @@ import { LazyWrapper, LazyInline, preloadOnlineComponents, preloadPuzzleComponen
 import EntryAuthScreen from './components/EntryAuthScreen';
 import PlayerProfileCard from './components/PlayerProfileCard';
 import WelcomeModal from './components/WelcomeModal';
+import HowToPlayModal from './components/HowToPlayModal';
 
 // =============================================================================
 // LAZY LOADED COMPONENTS
@@ -99,13 +100,16 @@ function AppContent({ onBgThemeChange }) {
   // Weekly challenge state
   const [currentWeeklyChallenge, setCurrentWeeklyChallenge] = useState(null);
   
-  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser } = useAuth();
+  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser, refreshProfile } = useAuth();
   
   // Initialize realtime connection when user logs in (optimized - uses only 2 channels)
   useRealtimeConnection();
   
   // State for welcome modal
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  
+  // v7.12: State for new user tutorial (shown after welcome modal completes)
+  const [showNewUserTutorial, setShowNewUserTutorial] = useState(false);
   
   // v7.8: Track if new user joined via invite link (to show tutorial)
   const [showTutorialOnJoin, setShowTutorialOnJoin] = useState(false);
@@ -583,6 +587,8 @@ function AppContent({ onBgThemeChange }) {
   const handleOnlineGameEnd = (result) => {
     setOnlineGameId(null);
     setGameMode('online-menu');
+    // v7.12: Refresh profile to ensure ELO is updated on return to menu
+    refreshProfile?.();
   };
 
   // Handle resume game
@@ -977,6 +983,7 @@ function AppContent({ onBgThemeChange }) {
           <WelcomeModal
             username={profile.username || profile.display_name || 'Player'}
             onClose={() => {
+              // User skipped - just close without tutorial
               setShowWelcomeModal(false);
               clearNewUser();
             }}
@@ -985,6 +992,20 @@ function AppContent({ onBgThemeChange }) {
               clearNewUser();
               setShowProfileModal(true);
             }}
+            onComplete={() => {
+              // v7.12: User completed welcome - show tutorial next
+              setShowWelcomeModal(false);
+              clearNewUser();
+              setShowNewUserTutorial(true);
+            }}
+          />
+        )}
+        
+        {/* v7.12: Tutorial modal for new users (shown after welcome modal) */}
+        {showNewUserTutorial && (
+          <HowToPlayModal 
+            isOpen={true} 
+            onClose={() => setShowNewUserTutorial(false)} 
           />
         )}
       </>

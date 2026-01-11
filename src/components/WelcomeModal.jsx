@@ -1,9 +1,10 @@
 // Welcome Modal for new users
+// v7.12: Added onComplete callback to chain to HowToPlayModal tutorial
 import React, { useState } from 'react';
 import { X, Sparkles, User, Gamepad2, Trophy, Puzzle, Users, Pencil, ChevronRight, Zap } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
-const WelcomeModal = ({ username, onClose, onEditUsername }) => {
+const WelcomeModal = ({ username, onClose, onEditUsername, onComplete }) => {
   const [currentStep, setCurrentStep] = useState(0);
   
   const steps = [
@@ -53,77 +54,6 @@ const WelcomeModal = ({ username, onClose, onEditUsername }) => {
           </p>
         </div>
       )
-    },
-    {
-      icon: Gamepad2,
-      iconColor: 'text-purple-400',
-      iconBg: 'from-purple-500 to-pink-600',
-      title: 'Game Modes',
-      content: (
-        <div className="space-y-3">
-          <div className="flex items-start gap-3 bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-orange-600 flex items-center justify-center flex-shrink-0">
-              <Zap size={16} className="text-white" />
-            </div>
-            <div>
-              <h4 className="text-white font-bold text-sm">VS AI</h4>
-              <p className="text-slate-400 text-xs">Practice against computer opponents</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-yellow-600 flex items-center justify-center flex-shrink-0">
-              <Users size={16} className="text-white" />
-            </div>
-            <div>
-              <h4 className="text-white font-bold text-sm">Online</h4>
-              <p className="text-slate-400 text-xs">Challenge friends & climb the leaderboard</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3 bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center flex-shrink-0">
-              <Puzzle size={16} className="text-white" />
-            </div>
-            <div>
-              <h4 className="text-white font-bold text-sm">Puzzles</h4>
-              <p className="text-slate-400 text-xs">Solve challenges & test your skills</p>
-            </div>
-          </div>
-        </div>
-      )
-    },
-    {
-      icon: Trophy,
-      iconColor: 'text-amber-400',
-      iconBg: 'from-amber-500 to-yellow-600',
-      title: 'Earn & Progress',
-      content: (
-        <div className="space-y-4">
-          <p className="text-slate-300">
-            Win online matches to <span className="text-amber-400 font-bold">increase your ELO rating</span> and climb through the ranks!
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/50 text-center">
-              <span className="text-slate-500">Novice</span>
-              <div className="text-slate-400 font-bold">0+</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/50 text-center">
-              <span className="text-green-400">Intermediate</span>
-              <div className="text-green-400 font-bold">1400+</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/50 text-center">
-              <span className="text-purple-400">Master</span>
-              <div className="text-purple-400 font-bold">2000+</div>
-            </div>
-            <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700/50 text-center">
-              <span className="text-amber-400">Grandmaster</span>
-              <div className="text-amber-400 font-bold">2200+</div>
-            </div>
-          </div>
-          <p className="text-sm text-slate-500 text-center">
-            Unlock achievements as you progress!
-          </p>
-        </div>
-      )
     }
   ];
   
@@ -134,7 +64,12 @@ const WelcomeModal = ({ username, onClose, onEditUsername }) => {
   const handleNext = () => {
     soundManager.playButtonClick();
     if (isLastStep) {
-      onClose();
+      // v7.12: Call onComplete to chain to tutorial, or fallback to onClose
+      if (onComplete) {
+        onComplete();
+      } else {
+        onClose();
+      }
     } else {
       setCurrentStep(prev => prev + 1);
     }
@@ -142,6 +77,7 @@ const WelcomeModal = ({ username, onClose, onEditUsername }) => {
   
   const handleSkip = () => {
     soundManager.playButtonClick();
+    // Skip just closes without triggering the tutorial
     onClose();
   };
   
@@ -208,10 +144,22 @@ const WelcomeModal = ({ username, onClose, onEditUsername }) => {
                 : 'bg-gradient-to-r from-slate-600 to-slate-700 hover:from-slate-500 hover:to-slate-600'
             }`}
           >
-            {isLastStep ? "Let's Play!" : 'Next'}
+            {isLastStep ? "Learn How to Play" : 'Next'}
             <ChevronRight size={18} />
           </button>
         </div>
+        
+        {/* v7.12: Skip tutorial option on last step */}
+        {isLastStep && (
+          <div className="text-center pb-4">
+            <button
+              onClick={handleSkip}
+              className="text-slate-500 hover:text-slate-300 text-sm transition-colors"
+            >
+              Skip tutorial, I know how to play
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

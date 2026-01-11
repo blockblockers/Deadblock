@@ -2,7 +2,7 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
-// v7.12: Name display uses display_name (proper casing) with username fallback
+// v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -80,9 +80,8 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
   const oppRating = opponent?.rating || 1000;
   const myTier = ratingService.getRatingTier(myRating);
   const oppTier = ratingService.getRatingTier(oppRating);
-  // v7.12: Use display_name first (proper casing), fallback to username (lowercase)
-  const myUsername = profile?.display_name || profile?.username || 'You';
-  const oppUsername = opponent?.display_name || opponent?.username || 'Opponent';
+  const myUsername = profile?.username || profile?.display_name || 'You';
+  const oppUsername = opponent?.username || opponent?.display_name || 'Opponent';
   
   return (
     <div className="mb-3">
@@ -130,7 +129,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
 };
 
 const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
   // Track the current game (can change on rematch)
@@ -647,6 +646,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         turnStartRef.current = Date.now();
         // Play notification sound when it becomes our turn
         soundManager.playSound('notification');
+        
+        // v7.12 FIX: Send push notification if page is hidden (user not actively viewing)
+        if (document.visibilityState === 'hidden' || document.hidden) {
+          const opponentName = gameData.player1_id === currentUserId 
+            ? (gameData.player2?.display_name || gameData.player2?.username)
+            : (gameData.player1?.display_name || gameData.player1?.username);
+          notificationService.notifyYourTurn(opponentName || 'Opponent', currentGameId);
+        }
       }
 
       // FIXED: Game over detection with animation delay
@@ -666,11 +673,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             if (mountedRef.current) {
               setShowGameOver(true);
               soundManager.playSound(iWon ? 'win' : 'lose');
+              // v7.12: Refresh profile to update ELO display
+              refreshProfile?.();
             }
           }, 1200); // Delay to let animation complete
         } else {
           setShowGameOver(true);
           soundManager.playSound(iWon ? 'win' : 'lose');
+          // v7.12: Refresh profile to update ELO display
+          refreshProfile?.();
         }
       }
     }
@@ -1117,6 +1128,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           if (mountedRef.current) {
             setShowGameOver(true);
             soundManager.playSound(isWin ? 'win' : 'lose');
+            // v7.12: Refresh profile to update ELO display
+            refreshProfile?.();
           }
         }, 1200);
         
@@ -1589,7 +1602,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         <QuickChat
           gameId={currentGameId}
           userId={user?.id}
-          opponentName={opponent?.display_name || opponent?.username || 'Opponent'}
+          opponentName={opponent?.display_name || opponent?.username}
           isOpen={chatOpen}
           onToggle={(open) => {
             setChatOpen(open);

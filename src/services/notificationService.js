@@ -1,71 +1,38 @@
-// notificationService.js - Browser notification service for Deadblock
-// Handles permission requests and sending browser notifications
+// notificationService.js - Client-side notification handling
+// v7.12 FIX: notifyYourTurn now accepts gameId and uses game-specific tags
+// - Each game gets its own notification tag to prevent replacement issues
+// - Clicking notification navigates to the correct game
+// - Added debug logging for troubleshooting
 
 class NotificationService {
   constructor() {
     this.permission = 'default';
-    this.initialized = false;
     this.promptDismissed = false;
+    this.initialized = false;
   }
 
   async init() {
     if (this.initialized) return;
     
-    if (!('Notification' in window)) {
-      console.log('[NotificationService] Browser does not support notifications');
-      this.permission = 'denied';
-      this.initialized = true;
-      return;
+    if ('Notification' in window) {
+      this.permission = Notification.permission;
     }
-
-    this.permission = Notification.permission;
-    this.initialized = true;
     
-    // Check if user has dismissed the prompt before
+    // Check if user has previously dismissed the prompt
     try {
       this.promptDismissed = localStorage.getItem('deadblock_notification_prompt_dismissed') === 'true';
     } catch (e) {
-      this.promptDismissed = false;
+      // Ignore storage errors
     }
     
-    console.log('[NotificationService] Initialized with permission:', this.permission);
+    this.initialized = true;
+    console.log('[NotificationService] Initialized, permission:', this.permission);
   }
 
   isEnabled() {
-    return this.permission === 'granted';
+    return 'Notification' in window && this.permission === 'granted';
   }
 
-  isBlocked() {
-    return this.permission === 'denied';
-  }
-
-  // Check if we're on a mobile device (where push notifications are most useful)
-  isMobileDevice() {
-    if (typeof window === 'undefined') return false;
-    
-    // Check user agent for mobile devices
-    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    
-    // Additional checks for touch-based devices
-    const hasTouchScreen = (
-      ('ontouchstart' in window) ||
-      (navigator.maxTouchPoints > 0) ||
-      (navigator.msMaxTouchPoints > 0)
-    );
-    
-    // Only consider it mobile if the UA says mobile OR it's a touch device with small screen
-    // This prevents desktop browsers with small windows from being detected as mobile
-    return isMobileUA || (hasTouchScreen && window.innerWidth <= 768);
-  }
-
-  // Check if we're on a platform that supports useful push notifications
-  // Desktop browsers support notifications but they're less useful since the browser is usually open
-  isDesktopBrowser() {
-    if (typeof window === 'undefined') return false;
-    return !this.isMobileDevice();
-  }
-
-  // Check if push notifications are supported and useful on this platform
   isPushSupported() {
     // Check for Notification API
     if (!('Notification' in window)) return false;
@@ -76,13 +43,11 @@ class NotificationService {
     return true;
   }
 
+  isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
   shouldPrompt() {
-    // Show prompt if:
-    // 1. Notifications are supported
-    // 2. Permission hasn't been granted or denied
-    // 3. User hasn't dismissed the prompt before
-    // 4. We're on a mobile device (notifications are most useful on mobile PWA)
-    //    Desktop notifications only work when browser is open, so less useful
     return (
       this.isPushSupported() &&
       this.permission === 'default' &&
@@ -127,7 +92,6 @@ class NotificationService {
   }
 
   // Vibration patterns for different notification types (Android only)
-  // Pattern: [vibrate, pause, vibrate, pause, ...]
   vibrationPatterns = {
     yourTurn: [100, 50, 100],           // Quick double buzz
     gameInvite: [200, 100, 200, 100, 200], // Triple buzz (attention!)
@@ -138,81 +102,77 @@ class NotificationService {
     default: [100, 50, 100]
   };
 
-  // Get notification icon based on type (main large icon)
   getNotificationIcon(type) {
-    // All types use the main app icon as the large icon
     return '/pwa-192x192.png';
   }
 
-  // Get pentomino-shaped badge for status bar (Android)
-  // Each notification type has a unique pentomino shape:
-  // - T pentomino = Your Turn (you're "T"agged)
-  // - P pentomino = Game Invite (P for Player)
-  // - X pentomino = Rematch (X marks the battle)
-  // - L pentomino = Chat (L for Letter)
-  // - Y pentomino = Victory (Y for Yes!)
-  // - F pentomino = Defeat (F to pay respects)
-  // - I pentomino = Default (simple bar)
   getNotificationBadge(type) {
     const badgeMap = {
-      'your_turn': '/badge-turn.svg',           // T pentomino
-      'game_invite': '/badge-invite.svg',       // P pentomino
-      'invite_accepted': '/badge-invite.svg',   // P pentomino
-      'rematch_request': '/badge-rematch.svg',  // X pentomino
-      'rematch_accepted': '/badge-rematch.svg', // X pentomino
-      'rematch_declined': '/badge-defeat.svg',  // F pentomino
-      'chat_message': '/badge-chat.svg',        // L pentomino
-      'victory': '/badge-victory.svg',          // Y pentomino
-      'defeat': '/badge-defeat.svg'             // F pentomino
+      'your_turn': '/badge-turn.svg',
+      'game_invite': '/badge-invite.svg',
+      'invite_accepted': '/badge-invite.svg',
+      'rematch_request': '/badge-rematch.svg',
+      'rematch_accepted': '/badge-rematch.svg',
+      'rematch_declined': '/badge-defeat.svg',
+      'chat_message': '/badge-chat.svg',
+      'victory': '/badge-victory.svg',
+      'defeat': '/badge-defeat.svg'
     };
-    return badgeMap[type] || '/badge-default.svg'; // I pentomino
+    return badgeMap[type] || '/badge-default.svg';
   }
 
   sendNotification(title, options = {}) {
+    console.log('[NotificationService] sendNotification called:', title, options);
+    
     if (!this.isEnabled()) {
-      console.log('[NotificationService] Notifications not enabled');
+      console.log('[NotificationService] Notifications not enabled, permission:', this.permission);
       return null;
     }
 
-    // Note: We now send notifications even when page is visible for chat messages
-    // The toast banner handles in-app visibility
-    const isPageHidden = document.hidden;
+    // Check notification preferences
+    const prefs = this.getNotificationPrefs();
+    const notificationType = options.data?.type || 'default';
     
-    if (!isPageHidden && options.data?.type !== 'chat_message') {
-      // Skip non-chat notifications if page is visible
-      console.log('[NotificationService] Page is visible, skipping notification');
+    // Map notification types to preference keys
+    const prefKeyMap = {
+      'your_turn': 'yourTurn',
+      'game_invite': 'gameInvites',
+      'friend_request': 'friendRequests',
+      'rematch_request': 'rematchRequests',
+      'rematch_accepted': 'rematchRequests',
+      'chat_message': 'chatMessages',
+      'invite_accepted': 'gameStart',
+      'game_start': 'gameStart'
+    };
+    
+    const prefKey = prefKeyMap[notificationType];
+    if (prefKey && prefs[prefKey] === false) {
+      console.log('[NotificationService] Notification type disabled by user preference:', notificationType);
+      return null;
+    }
+
+    // Check page visibility - send notification even if visible for important events
+    // For your_turn, we want to notify even if they're on a different tab
+    const isPageHidden = document.hidden || document.visibilityState === 'hidden';
+    const alwaysNotify = ['chat_message', 'your_turn', 'game_invite', 'rematch_request'].includes(notificationType);
+    
+    if (!isPageHidden && !alwaysNotify) {
+      console.log('[NotificationService] Page is visible and notification type not priority, skipping');
       return null;
     }
 
     try {
-      const notificationType = options.data?.type || 'default';
-      
-      // Build enhanced notification options
       const enhancedOptions = {
-        // Icon - main notification icon (your logo)
         icon: this.getNotificationIcon(notificationType),
-        
-        // Badge - small pentomino-shaped icon for status bar (Android)
-        // Each notification type gets a different pentomino shape with themed color
         badge: this.getNotificationBadge(notificationType),
-        
-        // Vibration pattern (Android only)
         vibrate: this.vibrationPatterns[notificationType] || this.vibrationPatterns.default,
-        
-        // Keep notification until user interacts (for important ones)
         requireInteraction: options.requireInteraction || false,
-        
-        // Play sound
         silent: options.silent || false,
-        
-        // Timestamp
         timestamp: Date.now(),
-        
-        // Spread any custom options
         ...options
       };
 
-      // Add action buttons for certain notification types (Android/Desktop)
+      // Add action buttons for certain notification types
       if (notificationType === 'game_invite' && options.data?.inviteId) {
         enhancedOptions.actions = [
           { action: 'accept', title: '✓ Accept', icon: '/pwa-192x192.png' },
@@ -227,6 +187,7 @@ class NotificationService {
         enhancedOptions.requireInteraction = true;
       }
 
+      console.log('[NotificationService] Creating notification with options:', enhancedOptions);
       const notification = new Notification(title, enhancedOptions);
 
       // Auto-close after 10 seconds (unless requireInteraction is true)
@@ -241,12 +202,9 @@ class NotificationService {
         notification.close();
         
         const data = options.data || {};
-        
-        // Build the navigation URL based on notification type
         let navigateUrl = '/';
         
         if (data.type === 'chat_message' && data.gameId) {
-          // Navigate to game with chat open
           navigateUrl = `/?navigateTo=online&gameId=${data.gameId}&openChat=true`;
         } else if ((data.type === 'rematch_request' || data.type === 'rematch_accepted') && data.gameId) {
           navigateUrl = `/?navigateTo=online&gameId=${data.gameId}`;
@@ -264,6 +222,7 @@ class NotificationService {
         window.location.href = navigateUrl;
       };
 
+      console.log('[NotificationService] Notification created successfully');
       return notification;
     } catch (err) {
       console.error('[NotificationService] Failed to send notification:', err);
@@ -271,39 +230,64 @@ class NotificationService {
     }
   }
 
+  getNotificationPrefs() {
+    try {
+      const stored = localStorage.getItem('deadblock_notification_prefs');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch (e) {}
+    
+    // Default: all enabled
+    return {
+      yourTurn: true,
+      gameInvites: true,
+      friendRequests: true,
+      rematchRequests: true,
+      chatMessages: true,
+      gameStart: true,
+      weeklyChallenge: true
+    };
+  }
+
   // =====================================================
   // MESSAGE VARIATIONS
-  // Each notification type has 10 variations from boring to themed
   // =====================================================
   
   getRandomMessage(messages) {
     return messages[Math.floor(Math.random() * messages.length)];
   }
 
-  // Convenience methods for specific notification types
-  notifyYourTurn(opponentName) {
+  // v7.12 FIX: Now accepts gameId parameter and uses game-specific tag
+  notifyYourTurn(opponentName, gameId) {
+    console.log('[NotificationService] notifyYourTurn called:', { opponentName, gameId });
+    
     const messages = [
-      // Straightforward (1-3)
       `${opponentName} made a move. It's your turn.`,
       `Your turn to play against ${opponentName}.`,
       `${opponentName} moved. Your turn now.`,
-      // Casual (4-6)
       `${opponentName} just played. You're up!`,
       `Tag, you're it! ${opponentName} made their move.`,
       `${opponentName} is waiting for your move!`,
-      // Energetic (7-8)
       `${opponentName} threw down! Show them what you've got!`,
       `Move incoming from ${opponentName}! Time to strike back!`,
-      // Cyberpunk themed (9-10)
       `ALERT: ${opponentName} deployed their piece. Awaiting your response, operator.`,
       `[GRID UPDATED] ${opponentName} made a power play. Your move, operator.`
     ];
     
+    // v7.12 FIX: Use game-specific tag so each game gets its own notification
+    // This prevents notifications from different games replacing each other
+    const tag = gameId ? `deadblock-turn-${gameId}` : 'deadblock-turn';
+    
     return this.sendNotification('Deadblock - Your Turn!', {
       body: this.getRandomMessage(messages),
-      tag: 'deadblock-turn',
-      renotify: true,
-      data: { type: 'your_turn' }
+      tag: tag,
+      renotify: true,  // Important: re-alert even if tag exists
+      data: { 
+        type: 'your_turn',
+        gameId: gameId,  // v7.12 FIX: Include gameId for navigation
+        url: gameId ? `/?navigateTo=online&gameId=${gameId}` : '/?navigateTo=online'
+      }
     });
   }
 
@@ -322,18 +306,14 @@ class NotificationService {
 
   notifyRematchRequest(opponentName, gameId, rematchId) {
     const messages = [
-      // Straightforward (1-3)
       `${opponentName} wants a rematch.`,
       `${opponentName} requested a rematch.`,
       `Rematch request from ${opponentName}.`,
-      // Casual (4-6)
       `${opponentName} wants another round!`,
       `${opponentName} isn't done yet! Rematch?`,
       `Think you can beat ${opponentName} again? They want a rematch!`,
-      // Energetic (7-8)
       `${opponentName} demands a rematch! Are you ready?!`,
       `Round 2? ${opponentName} is calling you out!`,
-      // Cyberpunk themed (9-10)
       `[INCOMING CHALLENGE] ${opponentName} requests grid re-engagement.`,
       `${opponentName} jacked back in. They want revenge, choom.`
     ];
@@ -349,18 +329,14 @@ class NotificationService {
 
   notifyRematchAccepted(opponentName, newGameId) {
     const messages = [
-      // Straightforward (1-3)
       `${opponentName} accepted. New game starting.`,
       `${opponentName} accepted your rematch.`,
       `Rematch accepted by ${opponentName}. Game ready.`,
-      // Casual (4-6)
       `${opponentName} is ready for round two!`,
       `Game on! ${opponentName} accepted your rematch.`,
       `${opponentName} said yes! Let's go again!`,
-      // Energetic (7-8)
       `${opponentName} accepted! Time to settle the score!`,
       `IT'S ON! ${opponentName} wants that rematch!`,
-      // Cyberpunk themed (9-10)
       `[REMATCH CONFIRMED] ${opponentName} re-entering the grid. Prepare for battle.`,
       `${opponentName} accepted the challenge. Jack in and dominate, operator.`
     ];
@@ -375,18 +351,14 @@ class NotificationService {
 
   notifyRematchDeclined(opponentName) {
     const messages = [
-      // Straightforward (1-3)
       `${opponentName} declined your rematch.`,
       `${opponentName} passed on the rematch.`,
       `Rematch declined by ${opponentName}.`,
-      // Casual (4-6)
       `${opponentName} isn't up for another game right now.`,
       `${opponentName} said not this time.`,
       `Maybe later? ${opponentName} declined the rematch.`,
-      // Neutral (7-8)
       `${opponentName} has other plans. No rematch for now.`,
       `${opponentName} stepped away from the challenge.`,
-      // Cyberpunk themed (9-10)
       `[REQUEST DENIED] ${opponentName} disconnected from rematch protocol.`,
       `${opponentName} flatlined your rematch request. Find a new target.`
     ];
@@ -401,18 +373,14 @@ class NotificationService {
 
   notifyGameInvite(senderName, inviteId) {
     const messages = [
-      // Straightforward (1-3)
       `${senderName} challenged you to a game.`,
       `New game invite from ${senderName}.`,
       `${senderName} wants to play.`,
-      // Casual (4-6)
       `${senderName} is looking for competition. You in?`,
       `${senderName} threw down the gauntlet!`,
       `Ready to play? ${senderName} is waiting!`,
-      // Energetic (7-8)
       `${senderName} just challenged you! Accept and dominate!`,
       `CHALLENGE INCOMING! ${senderName} thinks they can beat you!`,
-      // Cyberpunk themed (9-10)
       `[PRIORITY ALERT] ${senderName} initiated grid challenge. Respond, operator.`,
       `${senderName} is breaking into your schedule. Game invite received, choom.`
     ];
@@ -428,18 +396,14 @@ class NotificationService {
 
   notifyInviteAccepted(opponentName, gameId) {
     const messages = [
-      // Straightforward (1-3)
       `${opponentName} accepted. Game starting.`,
       `${opponentName} accepted your invite.`,
       `Your challenge was accepted by ${opponentName}.`,
-      // Casual (4-6)
       `${opponentName} is ready to play! Let's go!`,
       `Game on! ${opponentName} accepted your challenge.`,
       `${opponentName} joined the game. Show them what you've got!`,
-      // Energetic (7-8)
       `${opponentName} accepted your challenge! Time to battle!`,
       `LET'S GO! ${opponentName} is ready to face you!`,
-      // Cyberpunk themed (9-10)
       `[OPPONENT LOCKED] ${opponentName} connected to the grid. Initiating game sequence.`,
       `${opponentName} jacked in. The digital arena awaits, operator.`
     ];
@@ -454,53 +418,64 @@ class NotificationService {
 
   notifyGameOver(isWin, opponentName) {
     const winMessages = [
-      // Straightforward (1-3)
       `You beat ${opponentName}.`,
       `Victory against ${opponentName}.`,
       `You won the game vs ${opponentName}.`,
-      // Casual (4-6)
       `Nice one! You defeated ${opponentName}!`,
       `${opponentName} couldn't handle it. You win!`,
       `GG! You took down ${opponentName}!`,
-      // Energetic (7-8)
       `CRUSHING VICTORY! ${opponentName} didn't stand a chance!`,
       `DOMINANT WIN! You destroyed ${opponentName}!`,
-      // Cyberpunk themed (9-10)
       `[TARGET ELIMINATED] ${opponentName} has been flatlined. Victory achieved.`,
       `You fried ${opponentName}'s circuits. Another win for the operator.`
     ];
     
     const loseMessages = [
-      // Straightforward (1-3)
       `${opponentName} won the game.`,
       `You lost to ${opponentName}.`,
       `Game over. ${opponentName} wins.`,
-      // Casual (4-6)
       `Tough break. ${opponentName} got you this time.`,
       `${opponentName} was on fire! Better luck next time.`,
       `So close! ${opponentName} edged you out.`,
-      // Supportive (7-8)
-      `${opponentName} won. but you've got next game!`,
-      `Defeat today, victory tomorrow. ${opponentName} wins this round.`,
-      // Cyberpunk themed (9-10)
-      `[SYSTEM FAILURE] ${opponentName} hacked your strategy. Reboot and try again.`,
-      `${opponentName} pulled the plug. Time to upgrade your tactics, choom.`
+      `${opponentName} won, but you'll get them next time!`,
+      `Defeat today, victory tomorrow. ${opponentName} got lucky.`,
+      `[MISSION FAILED] ${opponentName} outmaneuvered you. Recalibrate and retry.`,
+      `${opponentName} flatlined your run. Time to jack back in, operator.`
     ];
     
-    const title = isWin ? 'Deadblock - Victory!' : 'Deadblock - Game Over';
-    const messages = isWin ? winMessages : loseMessages;
-    const notificationType = isWin ? 'victory' : 'defeat';
-      
-    return this.sendNotification(title, {
+    return this.sendNotification(
+      isWin ? 'Deadblock - Victory!' : 'Deadblock - Game Over',
+      {
+        body: this.getRandomMessage(isWin ? winMessages : loseMessages),
+        tag: 'deadblock-game-over',
+        renotify: true,
+        data: { type: isWin ? 'victory' : 'defeat' }
+      }
+    );
+  }
+
+  notifyFriendRequest(senderName) {
+    const messages = [
+      `${senderName} sent you a friend request.`,
+      `New friend request from ${senderName}.`,
+      `${senderName} wants to be friends.`,
+      `${senderName} is reaching out! Friend request received.`,
+      `${senderName} wants to add you as a friend.`,
+      `Connect with ${senderName}? Friend request waiting.`,
+      `${senderName} wants to join your crew!`,
+      `New connection alert! ${senderName} sent a friend request.`,
+      `[SOCIAL PING] ${senderName} requesting connection to your network.`,
+      `${senderName} wants to jack into your friend list, choom.`
+    ];
+    
+    return this.sendNotification('Deadblock - Friend Request', {
       body: this.getRandomMessage(messages),
-      tag: 'deadblock-gameover',
+      tag: 'deadblock-friend-request',
       renotify: true,
-      data: { type: notificationType }
+      data: { type: 'friend_request' }
     });
   }
 }
 
-// Export singleton instance
 export const notificationService = new NotificationService();
-
 export default notificationService;

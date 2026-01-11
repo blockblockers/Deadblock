@@ -233,18 +233,25 @@ const Achievements = ({ userId, playerName, onClose }) => {
           ))}
         </div>
 
-        {/* Achievements List - Scrollable */}
+        {/* Achievements List - Scrollable with iOS/Android fixes */}
         <div 
-          className="flex-1 overflow-y-auto overscroll-contain min-h-0"
+          className="flex-1 min-h-0 relative"
           style={{ 
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            touchAction: 'pan-y',
-            transform: 'translateZ(0)',
-            willChange: 'scroll-position'
+            overflow: 'hidden'
           }}
         >
-          <div className="p-4 space-y-3">
+          <div 
+            className="absolute inset-0 overflow-y-auto"
+            style={{ 
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain',
+              touchAction: 'pan-y',
+              transform: 'translate3d(0, 0, 0)',
+              willChange: 'scroll-position',
+              paddingBottom: '20px'
+            }}
+          >
+          <div className="p-4 space-y-3 pb-8">
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader className="animate-spin text-amber-400" size={32} />
@@ -348,6 +355,7 @@ const Achievements = ({ userId, playerName, onClose }) => {
                 );
               })
             )}
+          </div>
           </div>
         </div>
       </div>
