@@ -780,7 +780,7 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
     console.error('[GameSync] Rematch error:', e);
     return { data: null, error: { message: e.message } };
   }
-}
+  }
 
   // ============================================================================
   // v7.12: Get active games PLUS unviewed losses (so user can see how they lost)

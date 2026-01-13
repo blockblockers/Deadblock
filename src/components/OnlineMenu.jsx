@@ -2085,7 +2085,6 @@ const OnlineMenu = ({
                 willChange: 'scroll-position'
               }}
             >
-            >
               {/* What is ELO explanation */}
               <div className="space-y-2">
                 <p className="text-sm text-slate-300">
