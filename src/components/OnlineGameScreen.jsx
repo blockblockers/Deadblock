@@ -3,6 +3,7 @@
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
+// v7.12 FIX: Unviewed losses - shows opponent's winning move with 5 second delay before game over modal
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -129,7 +130,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
 };
 
 const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
   // Track the current game (can change on rematch)
@@ -171,6 +172,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [chatToast, setChatToast] = useState(null); // { senderName, message, timestamp }
   const [turnStartedAt, setTurnStartedAt] = useState(null);
   const [connected, setConnected] = useState(false); // Track realtime connection
+  
+  // v7.12: Track if viewing an unviewed loss (for 5 second delay before game over modal)
+  const [isUnviewedLoss, setIsUnviewedLoss] = useState(false);
+  const [viewingFinalMove, setViewingFinalMove] = useState(false); // Shows "Viewing opponent's winning move..."
   
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
@@ -565,9 +570,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   // =========================================================================
   // GAME STATE MANAGEMENT - FIXED REAL-TIME UPDATES
+  // v7.12: Added suppressGameOver param for unviewed loss viewing
   // =========================================================================
 
-  const updateGameState = useCallback((gameData, currentUserId) => {
+  const updateGameState = useCallback((gameData, currentUserId, suppressGameOver = false) => {
     if (!gameData || !mountedRef.current) return;
 
     /* updateGameState debug - disabled for production
@@ -595,7 +601,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let animatingOpponentMove = false;
     
     // If there are new cells and it's now our turn (opponent just moved), trigger opponent animation
-    if (currentUserId && newCellKeys.length > 0 && !moveInProgressRef.current) {
+    // But skip animation trigger if suppressGameOver is true (we handle it separately)
+    if (currentUserId && newCellKeys.length > 0 && !moveInProgressRef.current && !suppressGameOver) {
       const playerNum = gameData.player1_id === currentUserId ? 1 : 2;
       const opponentNum = playerNum === 1 ? 2 : 1;
       const isNowMyTurn = gameData.current_player === playerNum && gameData.status === 'active';
@@ -657,7 +664,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      if (gameData.status === 'completed' && !showGameOver) {
+      // v7.12: Skip if suppressGameOver is true (unviewed loss handling does this separately)
+      if (gameData.status === 'completed' && !showGameOver && !suppressGameOver) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -673,15 +681,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             if (mountedRef.current) {
               setShowGameOver(true);
               soundManager.playSound(iWon ? 'win' : 'lose');
-              // v7.12: Refresh profile to update ELO display
-              refreshProfile?.();
             }
           }, 1200); // Delay to let animation complete
         } else {
           setShowGameOver(true);
           soundManager.playSound(iWon ? 'win' : 'lose');
-          // v7.12: Refresh profile to update ELO display
-          refreshProfile?.();
         }
       }
     }
@@ -720,15 +724,99 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           return;
         }
 
-        // Update game state first
+        const playerNum = data.player1_id === userId ? 1 : 2;
+        const hasMovesOnBoard = data.used_pieces && data.used_pieces.length > 0;
+        
+        // =====================================================================
+        // v7.12: UNVIEWED LOSS HANDLING
+        // If game is completed and user LOST, show the final move with delay
+        // =====================================================================
+        const isCompleted = data.status === 'completed';
+        const userLost = isCompleted && data.winner_id && data.winner_id !== userId;
+        
+        if (isCompleted && userLost && hasMovesOnBoard) {
+          // This is an unviewed loss - show final move with 5 second delay
+          setIsUnviewedLoss(true);
+          setViewingFinalMove(true);
+          
+          // Update game state (but don't trigger game over yet)
+          updateGameState(data, userId, true); // Pass flag to suppress game over
+          setLoading(false);
+          
+          // Fetch the last move (opponent's winning move)
+          const { data: lastMove } = await gameSyncService.getLastMove(currentGameId);
+          
+          if (lastMove && lastMove.player_id !== userId) {
+            const opponentNum = playerNum === 1 ? 2 : 1;
+            
+            // Wait for board to render, then trigger animation
+            setTimeout(() => {
+              if (!mountedRef.current || !boardRef.current) return;
+              
+              // Get the piece cells from the move
+              const pieceCoords = pieces[lastMove.piece_type];
+              if (!pieceCoords) return;
+              
+              // Apply rotation and flip to get actual placed cells
+              let coords = [...pieceCoords];
+              const rot = lastMove.rotation || 0;
+              const flip = lastMove.flipped || false;
+              
+              // Rotate
+              for (let r = 0; r < rot; r++) {
+                coords = coords.map(([x, y]) => [-y, x]);
+              }
+              // Flip
+              if (flip) {
+                coords = coords.map(([x, y]) => [-x, y]);
+              }
+              
+              // Calculate actual board positions
+              const placedCells = coords.map(([dx, dy]) => ({
+                row: lastMove.row + dy,
+                col: lastMove.col + dx
+              })).filter(cell => 
+                cell.row >= 0 && cell.row < BOARD_SIZE && 
+                cell.col >= 0 && cell.col < BOARD_SIZE
+              );
+              
+              // Trigger animation for opponent's final move
+              const boardRect = boardRef.current.getBoundingClientRect();
+              const cellSize = boardRect.width / BOARD_SIZE;
+              triggerAnimation(placedCells, opponentNum, boardRef, cellSize);
+              soundManager.playSound('place');
+            }, 800);
+          }
+          
+          // After 5 seconds, show game over modal and mark as viewed
+          setTimeout(() => {
+            if (!mountedRef.current) return;
+            
+            setViewingFinalMove(false);
+            setGameResult({
+              isWin: false,
+              winnerId: data.winner_id,
+              reason: 'normal'
+            });
+            setShowGameOver(true);
+            soundManager.playSound('lose');
+            
+            // Mark game as viewed so it doesn't show again
+            gameSyncService.markGameViewed(currentGameId, userId);
+          }, 5000);
+          
+          return; // Don't continue with normal flow
+        }
+        
+        // =====================================================================
+        // NORMAL FLOW: Update game state
+        // =====================================================================
         updateGameState(data, userId);
         setLoading(false);
         
         // REPLAY LAST MOVE: If there are pieces on the board and it's now our turn,
         // fetch and replay the opponent's last move so user can see what changed
-        const playerNum = data.player1_id === userId ? 1 : 2;
         const isMyTurnNow = data.current_player === playerNum && data.status === 'active';
-        const hasMovesOnBoard = data.used_pieces && data.used_pieces.length > 0;
         
         if (hasMovesOnBoard && isMyTurnNow) {
           // Fetch the last move
@@ -1128,8 +1216,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           if (mountedRef.current) {
             setShowGameOver(true);
             soundManager.playSound(isWin ? 'win' : 'lose');
-            // v7.12: Refresh profile to update ELO display
-            refreshProfile?.();
           }
         }, 1200);
         
@@ -1311,6 +1397,18 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           offset={dragOffset}
           isValidDrop={isValidDrop}
         />
+      )}
+
+      {/* v7.12: Viewing Opponent's Winning Move Overlay */}
+      {viewingFinalMove && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-20 pointer-events-none">
+          <div className="bg-gradient-to-r from-red-900/90 to-rose-900/90 px-6 py-3 rounded-xl border border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.4)] animate-pulse">
+            <div className="text-center">
+              <p className="text-red-200 font-bold text-lg">Viewing Opponent's Winning Move</p>
+              <p className="text-red-300/80 text-sm mt-1">Game ended while you were away...</p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Main content */}

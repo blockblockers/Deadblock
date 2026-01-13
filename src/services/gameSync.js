@@ -3,7 +3,6 @@
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
 // - Subscription handler properly validates callbacks
-// v7.12: Added markResultViewed and getActiveAndUnviewedGames for unviewed loss tracking
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
@@ -487,132 +486,6 @@ class GameSyncService {
     }
   }
 
-  // Mark a game result as viewed by the current user
-  // v7.12: Call this when opening a completed game to clear the "unviewed" status
-  async markResultViewed(gameId, userId) {
-    if (!isSupabaseConfigured() || !gameId || !userId) {
-      return { success: false };
-    }
-
-    const headers = getAuthHeaders();
-    if (!headers) {
-      return { success: false, error: 'Not authenticated' };
-    }
-
-    try {
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/rpc/mark_game_result_viewed`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            p_game_id: gameId,
-            p_user_id: userId
-          })
-        }
-      );
-
-      if (!response.ok) {
-        console.error('[GameSync] Failed to mark result viewed');
-        return { success: false };
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error('[GameSync] Error marking result viewed:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  // Get active games INCLUDING unviewed completed games
-  // v7.12: Shows completed games that user hasn't viewed yet (losses highlighted in red)
-  async getActiveAndUnviewedGames(userId) {
-    if (!isSupabaseConfigured() || !userId) {
-      return { data: [], error: null };
-    }
-
-    const headers = getAuthHeaders();
-    if (!headers) {
-      return { data: [], error: 'Not authenticated' };
-    }
-
-    try {
-      // First get active games
-      const activeResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.active&order=updated_at.desc&select=*`,
-        { headers }
-      );
-
-      let activeGames = [];
-      if (activeResponse.ok) {
-        activeGames = await activeResponse.json();
-      }
-
-      // Then get unviewed completed games using RPC function
-      let unviewedGames = [];
-      try {
-        const unviewedResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/get_unviewed_completed_games`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ p_user_id: userId })
-          }
-        );
-
-        if (unviewedResponse.ok) {
-          const unviewedData = await unviewedResponse.json();
-          if (unviewedData && unviewedData.length > 0) {
-            // Mark these as unviewed results for UI highlighting
-            unviewedGames = unviewedData.map(g => ({
-              ...g,
-              _isUnviewedResult: true,
-              _isLoss: g.is_loss
-            }));
-          }
-        }
-      } catch (e) {
-        // If RPC doesn't exist yet, silently fail - will work after DB migration
-        console.log('[GameSync] get_unviewed_completed_games RPC not available yet');
-      }
-
-      // Combine all games
-      const allGames = [...activeGames, ...unviewedGames];
-
-      // Fetch opponent profiles for all games
-      const opponentIds = allGames.map(g => 
-        g.player1_id === userId ? g.player2_id : g.player1_id
-      ).filter(Boolean);
-
-      if (opponentIds.length > 0) {
-        const uniqueIds = [...new Set(opponentIds)];
-        const profilesResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/profiles?id=in.(${uniqueIds.join(',')})&select=id,username,display_name,rating,elo_rating`,
-          { headers }
-        );
-
-        if (profilesResponse.ok) {
-          const profiles = await profilesResponse.json();
-          const profileMap = {};
-          profiles.forEach(p => { profileMap[p.id] = p; });
-
-          allGames.forEach(game => {
-            game.player1 = profileMap[game.player1_id] || null;
-            game.player2 = profileMap[game.player2_id] || null;
-            const oppId = game.player1_id === userId ? game.player2_id : game.player1_id;
-            game.opponent = profileMap[oppId] || null;
-          });
-        }
-      }
-
-      return { data: allGames, error: null };
-
-    } catch (e) {
-      console.error('[GameSync] getActiveAndUnviewedGames: Exception:', e.message);
-      return { data: [], error: { message: e.message } };
-    }
-  }
-
   // Get player's recent completed games
   async getPlayerGames(userId, limit = 10) {
     if (!supabase || !userId) return { data: [], error: null };
@@ -906,6 +779,145 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
   } catch (e) {
     console.error('[GameSync] Rematch error:', e);
     return { data: null, error: { message: e.message } };
+  }
+}
+
+  // ============================================================================
+  // v7.12: Get active games PLUS unviewed losses (so user can see how they lost)
+  // ============================================================================
+  async getActiveAndUnviewedGames(userId) {
+    if (!supabase || !userId) return { data: [], error: null };
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return { data: [], error: { message: 'Not authenticated' } };
+    }
+
+    try {
+      // 1. Get active games
+      const { data: activeGames, error: activeError } = await this.getActiveGames(userId);
+      if (activeError) {
+        console.error('[GameSync] getActiveAndUnviewedGames: Error getting active games:', activeError);
+      }
+
+      // 2. Get unviewed losses via RPC
+      let unviewedLosses = [];
+      try {
+        const rpcResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/rpc/get_unviewed_completed_games`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ p_user_id: userId })
+          }
+        );
+
+        if (rpcResponse.ok) {
+          unviewedLosses = await rpcResponse.json();
+          // console.log('[GameSync] Unviewed losses:', unviewedLosses?.length || 0);
+        } else {
+          // RPC might not exist yet - that's OK
+          console.log('[GameSync] get_unviewed_completed_games RPC not available');
+        }
+      } catch (rpcErr) {
+        console.log('[GameSync] Unviewed losses RPC error:', rpcErr.message);
+      }
+
+      // 3. Fetch profiles for unviewed losses
+      if (unviewedLosses && unviewedLosses.length > 0) {
+        const playerIds = [...new Set(unviewedLosses.flatMap(g => [g.player1_id, g.player2_id]))];
+        
+        if (playerIds.length > 0) {
+          const profilesResponse = await fetch(
+            `${SUPABASE_URL}/rest/v1/profiles?id=in.(${playerIds.join(',')})&select=id,username,display_name,rating,elo_rating`,
+            { headers }
+          );
+
+          if (profilesResponse.ok) {
+            const profiles = await profilesResponse.json();
+            const profileMap = {};
+            profiles.forEach(p => { profileMap[p.id] = p; });
+
+            unviewedLosses.forEach(game => {
+              game.player1 = profileMap[game.player1_id] || null;
+              game.player2 = profileMap[game.player2_id] || null;
+              const oppId = game.player1_id === userId ? game.player2_id : game.player1_id;
+              game.opponent = profileMap[oppId] || null;
+              // Mark these games specially
+              game._isUnviewedResult = true;
+              game._isUnviewedLoss = true;
+              game._isLoss = true; // User lost this game
+            });
+          }
+        }
+      }
+
+      // 4. Combine: unviewed losses first, then active games
+      const combined = [
+        ...(unviewedLosses || []),
+        ...(activeGames || [])
+      ];
+
+      return { data: combined, error: null };
+
+    } catch (e) {
+      console.error('[GameSync] getActiveAndUnviewedGames: Exception:', e.message);
+      return { data: [], error: { message: e.message } };
+    }
+  }
+
+  // ============================================================================
+  // v7.12: Mark a game as viewed (so it doesn't show in unviewed losses again)
+  // ============================================================================
+  async markGameViewed(gameId, userId) {
+    if (!supabase || !gameId || !userId) return { error: null };
+
+    const headers = getAuthHeaders();
+    if (!headers) return { error: { message: 'Not authenticated' } };
+
+    try {
+      // Try RPC first
+      const rpcResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/rpc/mark_game_viewed`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ p_game_id: gameId, p_user_id: userId })
+        }
+      );
+
+      if (rpcResponse.ok) {
+        // console.log('[GameSync] Game marked as viewed:', gameId);
+        return { error: null };
+      }
+
+      // Fallback: direct insert
+      const insertResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/game_views`,
+        {
+          method: 'POST',
+          headers: { ...headers, 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            game_id: gameId,
+            user_id: userId,
+            viewed_at: new Date().toISOString()
+          })
+        }
+      );
+
+      if (!insertResponse.ok) {
+        // Might be duplicate - that's fine
+        const text = await insertResponse.text();
+        if (!text.includes('duplicate')) {
+          console.warn('[GameSync] markGameViewed insert failed:', text);
+        }
+      }
+
+      return { error: null };
+    } catch (e) {
+      console.warn('[GameSync] markGameViewed error:', e.message);
+      return { error: { message: e.message } };
+    }
   }
 }
 
