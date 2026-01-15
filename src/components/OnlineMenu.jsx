@@ -24,6 +24,7 @@ import Achievements, { AchievementPopup } from './Achievements';
 import { SpectatableGamesList } from './SpectatorView';
 import GameInviteNotification from './GameInviteNotification';
 import FinalBoardView from './FinalBoardView';
+import achievementService from '../services/achievementService';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -250,73 +251,10 @@ const OnlineMenu = ({
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
+  const [achievementStats, setAchievementStats] = useState(null);
   
   // Final Board View state
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
-  const [gameMoves, setGameMoves] = useState([]);
-  const [loadingMoves, setLoadingMoves] = useState(false);
-
-  // v7.12: Load game moves for FinalBoardView replay
-  const loadGameMoves = async (gameId) => {
-    if (!gameId) return [];
-    
-    setLoadingMoves(true);
-    try {
-      // Get auth token from localStorage
-      const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
-      const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
-      const token = authData?.access_token;
-      
-      if (!token) {
-        console.log('[OnlineMenu] No auth token for loading moves');
-        setLoadingMoves(false);
-        return [];
-      }
-      
-      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-      const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-      
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&order=move_number.asc`,
-        {
-          headers: {
-            'apikey': ANON_KEY,
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      if (response.ok) {
-        const moves = await response.json();
-        console.log('[OnlineMenu] Loaded', moves.length, 'moves for game', gameId);
-        setGameMoves(moves);
-        return moves;
-      } else {
-        console.error('[OnlineMenu] Failed to load moves:', response.status);
-        setGameMoves([]);
-        return [];
-      }
-    } catch (err) {
-      console.error('[OnlineMenu] Error loading game moves:', err);
-      setGameMoves([]);
-      return [];
-    } finally {
-      setLoadingMoves(false);
-    }
-  };
-
-  // v7.12: Open Final Board View with moves loaded
-  const openFinalBoardView = async (game) => {
-    setSelectedGameForFinalView(game);
-    await loadGameMoves(game.id);
-  };
-
-  // v7.12: Close Final Board View and clear moves
-  const closeFinalBoardView = () => {
-    setSelectedGameForFinalView(null);
-    setGameMoves([]);
-  };
 
   // Initialize notifications
   // Auto-request notification permission on first online visit (mobile only)
@@ -397,6 +335,25 @@ const OnlineMenu = ({
   useEffect(() => {
     loadFriendRequests();
   }, [sessionReady, profile?.id]);
+
+  // Load achievement stats on mount
+  useEffect(() => {
+    const loadAchievements = async () => {
+      if (!profile?.id) return;
+      try {
+        const { data } = await achievementService.getAchievementStats(profile.id);
+        if (data) {
+          setAchievementStats({
+            unlockedCount: data.unlockedCount || 0,
+            totalAchievements: data.totalAchievements || 24
+          });
+        }
+      } catch (e) {
+        console.log('Achievement stats not available');
+      }
+    };
+    loadAchievements();
+  }, [profile?.id]);
 
   // Load games and invites
   useEffect(() => {
@@ -1210,16 +1167,7 @@ const OnlineMenu = ({
                   {(profile?.username || profile?.display_name)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
-                    <button
-                      onClick={handleOpenUsernameEdit}
-                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
-                      title="Edit Username"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  </div>
+                  <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-slate-500">{profile?.games_played || 0} games</span>
                     <span className="text-green-400">{profile?.games_won || 0} wins</span>
@@ -1341,15 +1289,17 @@ const OnlineMenu = ({
   </button>
   <button
     onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
-    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
+    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group relative"
     style={{
-      background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-      borderColor: 'rgba(168, 85, 247, 0.3)',
-      boxShadow: '0 0 15px rgba(168, 85, 247, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+      background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+      borderColor: 'rgba(251, 191, 36, 0.3)',
+      boxShadow: '0 0 15px rgba(251, 191, 36, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
     }}
   >
-    <Award size={14} className="text-purple-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-purple-300 transition-colors">Awards</span>
+    <Trophy size={14} className="text-amber-400 group-hover:scale-110 transition-transform" />
+    <span className="text-slate-300 group-hover:text-amber-300 transition-colors">
+      {achievementStats ? `${achievementStats.unlockedCount}/${achievementStats.totalAchievements}` : 'Awards'}
+    </span>
   </button>
   <button
     onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
@@ -2085,6 +2035,7 @@ const OnlineMenu = ({
                 willChange: 'scroll-position'
               }}
             >
+            >
               {/* What is ELO explanation */}
               <div className="space-y-2">
                 <p className="text-sm text-slate-300">
@@ -2555,7 +2506,7 @@ const OnlineMenu = ({
         <button
           onClick={() => {
             soundManager.playButtonClick();
-            openFinalBoardView(game);
+            setSelectedGameForFinalView(game);
           }}
           className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-sm"
           title="View final board state"
@@ -2654,21 +2605,15 @@ const OnlineMenu = ({
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
         <FinalBoardView
-          onClose={closeFinalBoardView}
+          isOpen={true}
+          onClose={() => setSelectedGameForFinalView(null)}
           board={selectedGameForFinalView.board}
           boardPieces={selectedGameForFinalView.board_pieces}
-          moveHistory={gameMoves}
-          isLoadingMoves={loadingMoves}
-          player1={selectedGameForFinalView.player1}
-          player2={selectedGameForFinalView.player2}
-          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
-          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          player1Rating={selectedGameForFinalView.player1?.rating || selectedGameForFinalView.player1?.elo_rating || 1200}
-          player2Rating={selectedGameForFinalView.player2?.rating || selectedGameForFinalView.player2?.elo_rating || 1200}
           winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
-          winnerId={selectedGameForFinalView.winner_id}
-          gameDate={selectedGameForFinalView.created_at}
+          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
+          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
+          viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
         />
       )}
       

@@ -3,9 +3,8 @@
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
-// v7.12 FIX: Unviewed losses - shows opponent's winning move with 5 second delay before game over modal
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Flag, MessageCircle, ArrowLeft, Home, RotateCw, FlipHorizontal } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -41,17 +40,20 @@ const theme = {
   accent: 'text-amber-400',
 };
 
-// Glow Orb Button Component - consistent across all game screens
-// Glow Orb Button Component - consistent styling across all game screens
-// UPDATED: Now matches ControlButtons.jsx exactly for consistency
+// Glow Orb Button Component - consistent styling across ALL game screens
+// v7.13: Updated with new color scheme for consistency
 const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
   const colorClasses = {
     cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
     amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
+    orange: 'from-orange-500 to-amber-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]',
     green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
     red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
+    rose: 'from-rose-500 to-red-600 shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:shadow-[0_0_25px_rgba(244,63,94,0.6)]',
     purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
     indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
+    blue: 'from-blue-500 to-indigo-600 shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)]',
+    yellow: 'from-yellow-400 to-amber-500 shadow-[0_0_15px_rgba(250,204,21,0.4)] hover:shadow-[0_0_25px_rgba(250,204,21,0.6)]',
     slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
   };
 
@@ -172,10 +174,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [chatToast, setChatToast] = useState(null); // { senderName, message, timestamp }
   const [turnStartedAt, setTurnStartedAt] = useState(null);
   const [connected, setConnected] = useState(false); // Track realtime connection
-  
-  // v7.12: Track if viewing an unviewed loss (for 5 second delay before game over modal)
-  const [isUnviewedLoss, setIsUnviewedLoss] = useState(false);
-  const [viewingFinalMove, setViewingFinalMove] = useState(false); // Shows "Viewing opponent's winning move..."
   
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
@@ -326,14 +324,17 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag
+  // End drag - FIXED: Always cleanup state even if drag ended off-board
   const endDrag = useCallback(() => {
-    if (!isDragging) return;
+    // Always cleanup regardless of current isDragging state to prevent stuck states
+    const wasDragging = isDragging || hasDragStartedRef.current;
     
-    // v7.22: Set pendingMove from dragPreviewCell when drag ends
-    if (dragPreviewCell && draggedPiece) {
+    // v7.22: Set pendingMove from dragPreviewCell when drag ends (only if valid)
+    if (wasDragging && dragPreviewCell && draggedPiece) {
       setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
     }
     
+    // CRITICAL: Always reset ALL drag state to prevent stuck drags
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
@@ -570,10 +571,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   // =========================================================================
   // GAME STATE MANAGEMENT - FIXED REAL-TIME UPDATES
-  // v7.12: Added suppressGameOver param for unviewed loss viewing
   // =========================================================================
 
-  const updateGameState = useCallback((gameData, currentUserId, suppressGameOver = false) => {
+  const updateGameState = useCallback((gameData, currentUserId) => {
     if (!gameData || !mountedRef.current) return;
 
     /* updateGameState debug - disabled for production
@@ -601,8 +601,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let animatingOpponentMove = false;
     
     // If there are new cells and it's now our turn (opponent just moved), trigger opponent animation
-    // But skip animation trigger if suppressGameOver is true (we handle it separately)
-    if (currentUserId && newCellKeys.length > 0 && !moveInProgressRef.current && !suppressGameOver) {
+    if (currentUserId && newCellKeys.length > 0 && !moveInProgressRef.current) {
       const playerNum = gameData.player1_id === currentUserId ? 1 : 2;
       const opponentNum = playerNum === 1 ? 2 : 1;
       const isNowMyTurn = gameData.current_player === playerNum && gameData.status === 'active';
@@ -664,8 +663,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      // v7.12: Skip if suppressGameOver is true (unviewed loss handling does this separately)
-      if (gameData.status === 'completed' && !showGameOver && !suppressGameOver) {
+      if (gameData.status === 'completed' && !showGameOver) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -724,99 +722,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           return;
         }
 
-        const playerNum = data.player1_id === userId ? 1 : 2;
-        const hasMovesOnBoard = data.used_pieces && data.used_pieces.length > 0;
-        
-        // =====================================================================
-        // v7.12: UNVIEWED LOSS HANDLING
-        // If game is completed and user LOST, show the final move with delay
-        // =====================================================================
-        const isCompleted = data.status === 'completed';
-        const userLost = isCompleted && data.winner_id && data.winner_id !== userId;
-        
-        if (isCompleted && userLost && hasMovesOnBoard) {
-          // This is an unviewed loss - show final move with 5 second delay
-          setIsUnviewedLoss(true);
-          setViewingFinalMove(true);
-          
-          // Update game state (but don't trigger game over yet)
-          updateGameState(data, userId, true); // Pass flag to suppress game over
-          setLoading(false);
-          
-          // Fetch the last move (opponent's winning move)
-          const { data: lastMove } = await gameSyncService.getLastMove(currentGameId);
-          
-          if (lastMove && lastMove.player_id !== userId) {
-            const opponentNum = playerNum === 1 ? 2 : 1;
-            
-            // Wait for board to render, then trigger animation
-            setTimeout(() => {
-              if (!mountedRef.current || !boardRef.current) return;
-              
-              // Get the piece cells from the move
-              const pieceCoords = pieces[lastMove.piece_type];
-              if (!pieceCoords) return;
-              
-              // Apply rotation and flip to get actual placed cells
-              let coords = [...pieceCoords];
-              const rot = lastMove.rotation || 0;
-              const flip = lastMove.flipped || false;
-              
-              // Rotate
-              for (let r = 0; r < rot; r++) {
-                coords = coords.map(([x, y]) => [-y, x]);
-              }
-              // Flip
-              if (flip) {
-                coords = coords.map(([x, y]) => [-x, y]);
-              }
-              
-              // Calculate actual board positions
-              const placedCells = coords.map(([dx, dy]) => ({
-                row: lastMove.row + dy,
-                col: lastMove.col + dx
-              })).filter(cell => 
-                cell.row >= 0 && cell.row < BOARD_SIZE && 
-                cell.col >= 0 && cell.col < BOARD_SIZE
-              );
-              
-              // Trigger animation for opponent's final move
-              const boardRect = boardRef.current.getBoundingClientRect();
-              const cellSize = boardRect.width / BOARD_SIZE;
-              triggerAnimation(placedCells, opponentNum, boardRef, cellSize);
-              soundManager.playSound('place');
-            }, 800);
-          }
-          
-          // After 5 seconds, show game over modal and mark as viewed
-          setTimeout(() => {
-            if (!mountedRef.current) return;
-            
-            setViewingFinalMove(false);
-            setGameResult({
-              isWin: false,
-              winnerId: data.winner_id,
-              reason: 'normal'
-            });
-            setShowGameOver(true);
-            soundManager.playSound('lose');
-            
-            // Mark game as viewed so it doesn't show again
-            gameSyncService.markGameViewed(currentGameId, userId);
-          }, 5000);
-          
-          return; // Don't continue with normal flow
-        }
-        
-        // =====================================================================
-        // NORMAL FLOW: Update game state
-        // =====================================================================
+        // Update game state first
         updateGameState(data, userId);
         setLoading(false);
         
         // REPLAY LAST MOVE: If there are pieces on the board and it's now our turn,
         // fetch and replay the opponent's last move so user can see what changed
+        const playerNum = data.player1_id === userId ? 1 : 2;
         const isMyTurnNow = data.current_player === playerNum && data.status === 'active';
+        const hasMovesOnBoard = data.used_pieces && data.used_pieces.length > 0;
         
         if (hasMovesOnBoard && isMyTurnNow) {
           // Fetch the last move
@@ -1049,11 +963,16 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const handleMovePiece = useCallback((direction) => {
     if (!pendingMove) return;
     
+    // EXTENSION_MARGIN allows pieces to extend outside the board
+    // This matches useGameState.js and allows pieces like 'I' to be placed at edges
+    const EXTENSION_MARGIN = 4;
+    
     const deltas = { up: [-1, 0], down: [1, 0], left: [0, -1], right: [0, 1] };
     const [dRow, dCol] = deltas[direction];
     
-    const newRow = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.row + dRow));
-    const newCol = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.col + dCol));
+    // Allow movement from -EXTENSION_MARGIN to BOARD_SIZE + EXTENSION_MARGIN - 1
+    const newRow = Math.max(-EXTENSION_MARGIN, Math.min(BOARD_SIZE + EXTENSION_MARGIN - 1, pendingMove.row + dRow));
+    const newCol = Math.max(-EXTENSION_MARGIN, Math.min(BOARD_SIZE + EXTENSION_MARGIN - 1, pendingMove.col + dCol));
     
     setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     soundManager.playClickSound('neutral');
@@ -1399,21 +1318,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         />
       )}
 
-      {/* v7.12: Viewing Opponent's Winning Move Overlay */}
-      {viewingFinalMove && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-20 pointer-events-none">
-          <div className="bg-gradient-to-r from-red-900/90 to-rose-900/90 px-6 py-3 rounded-xl border border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.4)] animate-pulse">
-            <div className="text-center">
-              <p className="text-red-200 font-bold text-lg">Viewing Opponent's Winning Move</p>
-              <p className="text-red-300/80 text-sm mt-1">Game ended while you were away...</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main content */}
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
-        <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
+        <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-md mx-auto p-2 sm:p-4`}>
           
           {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
           <div className="flex items-center justify-between mb-2">
@@ -1492,6 +1399,16 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               </div>
             </div>
 
+            {/* Pieces info bar when D-Pad is shown */}
+            {pendingMove && isMyTurn && !isDragging && game?.status === 'active' && (
+              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+                <span className="text-slate-400 text-xs">
+                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
+                </span>
+                <span className="text-amber-400/60 text-xs">Use D-Pad to position</span>
+              </div>
+            )}
+            
             {/* D-Pad with Error Message Layout - matches GameScreen */}
             {pendingMove && isMyTurn && !isDragging && (
               <div className="flex items-start justify-center gap-3 mb-2">
@@ -1509,64 +1426,29 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 {/* D-Pad */}
                 <DPad onMove={handleMovePiece} />
                 
-                {/* Chat button on right */}
-                <div className="flex-shrink-0 w-24 flex justify-center">
-                  {game?.status === 'active' && (
-                    <button
-                      onClick={() => {
-                        setChatOpen(!chatOpen);
-                        if (!chatOpen) setHasUnreadChat(false);
-                      }}
-                      className={`
-                        relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
-                        ${chatOpen 
-                          ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
-                          : hasUnreadChat 
-                            ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
-                            : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
-                        }
-                      `}
-                      style={hasUnreadChat && !chatOpen ? {
-                        animation: 'chatBlink 0.8s ease-in-out infinite',
-                        boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
-                      } : {}}
-                    >
-                      <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
-                      {hasUnreadChat && !chatOpen && (
-                        <>
-                          <span 
-                            className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
-                            style={{
-                              animation: 'bounce 0.5s ease-in-out infinite',
-                              boxShadow: '0 0 15px rgba(239,68,68,1)'
-                            }}
-                          >
-                            !
-                          </span>
-                          <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
+                {/* Spacer for balance (removed chat button from here) */}
+                <div className="flex-shrink-0 w-24" />
               </div>
             )}
             
             {/* Chat button when no pending move */}
             {(!pendingMove || !isMyTurn || isDragging) && game?.status === 'active' && (
-              <div className="flex justify-center mb-3">
+              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+                <span className="text-slate-400 text-xs">
+                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
+                </span>
                 <button
                   onClick={() => {
                     setChatOpen(!chatOpen);
                     if (!chatOpen) setHasUnreadChat(false);
                   }}
                   className={`
-                    relative w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-lg transition-all flex items-center justify-center
+                    relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
                     ${chatOpen 
                       ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
                       : hasUnreadChat 
                         ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
-                        : 'bg-slate-800 text-amber-400 border border-amber-500/30 hover:bg-slate-700'
+                        : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
                     }
                   `}
                   style={hasUnreadChat && !chatOpen ? {
@@ -1574,11 +1456,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                     boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
                   } : {}}
                 >
-                  <MessageCircle size={20} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
+                  <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
                   {hasUnreadChat && !chatOpen && (
                     <>
                       <span 
-                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white"
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
                         style={{
                           animation: 'bounce 0.5s ease-in-out infinite',
                           boxShadow: '0 0 15px rgba(239,68,68,1)'
@@ -1593,15 +1475,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               </div>
             )}
 
-            {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
-            {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
+            {/* Controls - Consistent GlowOrbButton styling */}
+            {/* Row 1: Menu (icon only), Rotate, Flip, Forfeit/Quit */}
             <div className="flex gap-1 mt-3">
               <GlowOrbButton
                 onClick={() => { soundManager.playButtonClick(); onLeave(); }}
-                color="red"
-                className="flex-1"
+                color="orange"
+                title="Back to menu"
               >
-                Menu
+                <Home size={16} />
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleRotate}
@@ -1609,7 +1491,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="cyan"
                 className="flex-1"
               >
-                Rotate
+                <RotateCw size={14} />ROTATE
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleFlip}
@@ -1617,13 +1499,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="purple"
                 className="flex-1"
               >
-                Flip
+                <FlipHorizontal size={14} />FLIP
               </GlowOrbButton>
               {game?.status === 'active' && (
                 <GlowOrbButton
                   onClick={handleQuitOrForfeit}
-                  color="slate"
-                  className="flex items-center gap-1 justify-center flex-1"
+                  color={hasMovesPlayed ? 'red' : 'amber'}
+                  className="flex items-center gap-1 justify-center"
+                  title={hasMovesPlayed ? "Forfeit game (counts as loss)" : "Cancel game (no stats recorded)"}
                 >
                   <Flag size={14} />
                   <span className="hidden sm:inline">{hasMovesPlayed ? 'Forfeit' : 'Quit'}</span>
@@ -1636,10 +1519,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               <div className="flex gap-2 mt-2">
                 <GlowOrbButton
                   onClick={handleCancel}
-                  color="slate"
+                  color="rose"
                   className="flex-1"
                 >
-                  Cancel
+                  CANCEL
                 </GlowOrbButton>
                 <GlowOrbButton
                   onClick={handleConfirm}
@@ -1647,7 +1530,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   color="green"
                   className="flex-1"
                 >
-                  Confirm
+                  CONFIRM
                 </GlowOrbButton>
               </div>
             )}

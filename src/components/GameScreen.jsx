@@ -392,14 +392,17 @@ const GameScreen = ({
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag
+  // End drag - FIXED: Always cleanup state even if drag ended off-board
   const endDrag = useCallback(() => {
-    if (!isDragging) return;
+    // Track if we were actually dragging (for piece placement)
+    const wasDragging = isDragging || hasDragStartedRef.current;
     
-    // v7.22: Set pendingMove from dragPreviewCell when drag ends
-    if (dragPreviewCell && draggedPiece && setPendingMove) {
+    // v7.22: Set pendingMove from dragPreviewCell when drag ends (only if valid drag)
+    if (wasDragging && dragPreviewCell && draggedPiece && setPendingMove) {
       setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
     }
     
+    // CRITICAL: Always reset ALL drag state to prevent stuck drags
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });

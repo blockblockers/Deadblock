@@ -1,5 +1,5 @@
 // Weekly Challenge Service - Handles weekly puzzle challenges
-// v7.11: Added getUserPodiumBreakdown for detailed 1st/2nd/3rd place stats
+// v7.12: Fixed getUserResult function export issue
 // FIXED: Uses direct fetch to bypass Supabase client timeout issues
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
@@ -75,23 +75,41 @@ class WeeklyChallengeService {
         return { data, error: null };
       }
       
-      // Handle errors
-      const errorText = await rpcResponse.text();
-      console.error('[WeeklyChallengeService] RPC error:', rpcResponse.status, errorText);
-      return { data: null, error: `RPC failed: ${rpcResponse.status}` };
+      // RPC failed, try fallback query
+      console.log('[WeeklyChallengeService] RPC failed, trying fallback query...');
+      const now = new Date().toISOString();
+      
+      const fallbackResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/weekly_challenges?starts_at=lte.${now}&ends_at=gte.${now}&order=starts_at.desc&limit=1`,
+        { headers }
+      );
+      
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json();
+        if (fallbackData && fallbackData.length > 0) {
+          console.log('[WeeklyChallengeService] Fallback succeeded:', fallbackData[0].id);
+          return { data: fallbackData[0], error: null };
+        }
+      }
+      
+      const errorData = await rpcResponse.json().catch(() => ({}));
+      console.error('[WeeklyChallengeService] Both RPC and fallback failed');
+      return { data: null, error: errorData?.message || 'Failed to load challenge' };
+      
     } catch (err) {
-      console.error('[WeeklyChallengeService] Exception:', err);
+      console.error('[WeeklyChallengeService] Exception in getCurrentChallenge:', err);
       return { data: null, error: err.message };
     }
   }
   
   // Submit a result for the weekly challenge
-  async submitResult(challengeId, completionTimeMs) {
+  async submitResult(challengeId, completionTimeMs, isFirstAttempt = false) {
     if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
     
     const headers = getAuthHeaders();
     if (!headers) return { data: null, error: 'Not authenticated' };
     
+    // Get user ID from localStorage
     const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
     const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
     const userId = authData?.user?.id;
@@ -99,96 +117,71 @@ class WeeklyChallengeService {
     if (!userId) return { data: null, error: 'Not authenticated' };
     
     try {
-      // Check if user already has a result for this challenge
-      const checkResponse = await fetch(
+      // Check if user has existing result
+      const existingResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/weekly_challenge_results?user_id=eq.${userId}&challenge_id=eq.${challengeId}&select=*`,
         { headers }
       );
       
-      if (!checkResponse.ok) {
-        return { data: null, error: 'Failed to check existing result' };
-      }
+      const existingResults = existingResponse.ok ? await existingResponse.json() : [];
+      const existingResult = existingResults[0];
       
-      const existing = await checkResponse.json();
-      
-      if (existing && existing.length > 0) {
-        // User has existing result - update if this is a better time
-        const existingResult = existing[0];
-        const isImprovement = completionTimeMs < (existingResult.best_time_ms || Infinity);
+      if (existingResult) {
+        // Update best time if improved
+        const currentBest = existingResult.best_time_ms || existingResult.completion_time_ms;
         
-        if (isImprovement) {
+        if (completionTimeMs < currentBest) {
           const updateResponse = await fetch(
             `${SUPABASE_URL}/rest/v1/weekly_challenge_results?id=eq.${existingResult.id}`,
             {
               method: 'PATCH',
-              headers: {
-                ...headers,
-                'Prefer': 'return=representation'
-              },
+              headers: { ...headers, 'Prefer': 'return=representation' },
               body: JSON.stringify({
                 best_time_ms: completionTimeMs,
-                completed_at: new Date().toISOString()
+                completion_time_ms: completionTimeMs
               })
             }
           );
           
-          const updatedData = updateResponse.ok ? (await updateResponse.json())[0] : existingResult;
-          
+          const updatedData = updateResponse.ok ? (await updateResponse.json())[0] : null;
           return { 
-            data: { 
-              ...updatedData, 
-              is_improvement: true,
-              first_attempt_time_ms: existingResult.first_attempt_time_ms,
-              best_time_ms: completionTimeMs,
-              was_first_attempt: false
-            }, 
-            error: null 
+            data: { ...updatedData, is_improvement: true }, 
+            error: updateResponse.ok ? null : 'Failed to update result'
           };
         } else {
-          // Not an improvement
-          return { 
-            data: { 
-              ...existingResult, 
-              is_improvement: false,
-              was_first_attempt: false
-            }, 
-            error: null 
-          };
+          return { data: { ...existingResult, is_improvement: false }, error: null };
         }
-      } else {
-        // First attempt - insert new result
-        const insertResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/weekly_challenge_results`,
-          {
-            method: 'POST',
-            headers: {
-              ...headers,
-              'Prefer': 'return=representation'
-            },
-            body: JSON.stringify({
-              user_id: userId,
-              challenge_id: challengeId,
-              first_attempt_time_ms: completionTimeMs,
-              best_time_ms: completionTimeMs,
-              completion_time_ms: completionTimeMs,
-              completed_at: new Date().toISOString()
-            })
-          }
-        );
-        
-        const insertedData = insertResponse.ok ? (await insertResponse.json())[0] : null;
-        
-        return { 
-          data: { 
-            ...insertedData, 
-            is_improvement: true,
+      }
+      
+      // Insert new result
+      const insertResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/weekly_challenge_results`,
+        {
+          method: 'POST',
+          headers: { ...headers, 'Prefer': 'return=representation' },
+          body: JSON.stringify({
+            user_id: userId,
+            challenge_id: challengeId,
             first_attempt_time_ms: completionTimeMs,
             best_time_ms: completionTimeMs,
-            was_first_attempt: true
-          }, 
-          error: insertResponse.ok ? null : 'Failed to save result'
-        };
-      }
+            completion_time_ms: completionTimeMs,
+            completed_at: new Date().toISOString()
+          })
+        }
+      );
+      
+      const insertedData = insertResponse.ok ? (await insertResponse.json())[0] : null;
+      
+      return { 
+        data: { 
+          ...insertedData, 
+          is_improvement: true,
+          first_attempt_time_ms: completionTimeMs,
+          best_time_ms: completionTimeMs,
+          was_first_attempt: true
+        }, 
+        error: insertResponse.ok ? null : 'Failed to save result'
+      };
     } catch (err) {
       console.error('Error submitting weekly result:', err);
       return { data: null, error: err.message };
@@ -223,54 +216,37 @@ class WeeklyChallengeService {
       
       // Fetch profiles for all users
       const userIds = results.map(r => r.user_id);
-      const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${userIds.map(id => `"${id}"`).join(',')})&select=id,username,display_name,rating`;
+      const profilesUrl = `${SUPABASE_URL}/rest/v1/profiles?id=in.(${userIds.join(',')})&select=id,username,display_name,avatar_url`;
       
       const profilesResponse = await fetch(profilesUrl, { headers });
       
-      let profilesMap = {};
-      if (profilesResponse.ok) {
-        const profiles = await profilesResponse.json();
-        profilesMap = Object.fromEntries(profiles.map(p => [p.id, p]));
-      }
+      const profiles = profilesResponse.ok ? await profilesResponse.json() : [];
+      const profileMap = {};
+      profiles.forEach(p => { profileMap[p.id] = p; });
       
       // Combine results with profiles
-      const leaderboard = results.map((result, index) => ({
-        ...result,
-        rank: index + 1,
-        profile: profilesMap[result.user_id] || { username: 'Unknown', display_name: 'Unknown' }
+      const formattedData = results.map(entry => ({
+        user_id: entry.user_id,
+        first_attempt_time_ms: entry.first_attempt_time_ms || entry.completion_time_ms,
+        best_time_ms: entry.best_time_ms || entry.completion_time_ms,
+        completion_time_ms: entry.completion_time_ms,
+        completed_at: entry.completed_at,
+        username: profileMap[entry.user_id]?.username,
+        display_name: profileMap[entry.user_id]?.display_name,
+        avatar_url: profileMap[entry.user_id]?.avatar_url
       }));
       
-      return { data: leaderboard, error: null };
+      return { data: formattedData, error: null };
     } catch (err) {
-      console.error('Error getting leaderboard:', err);
+      console.error('Error getting weekly leaderboard:', err);
       return { data: [], error: err.message };
     }
   }
   
-  // Get user's rank in a challenge
-  async getUserRank(challengeId) {
-    if (!isSupabaseConfigured()) return { rank: null, error: 'Not configured' };
+  // Get the user's result for a specific challenge
+  async getUserResult(challengeId) {
+    console.log('[WeeklyChallengeService] getUserResult called:', challengeId);
     
-    const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
-    const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
-    const userId = authData?.user?.id;
-    
-    if (!userId) return { rank: null, error: 'Not authenticated' };
-    
-    try {
-      const { data: leaderboard } = await this.getLeaderboard(challengeId, 1000);
-      const userIndex = leaderboard.findIndex(entry => entry.user_id === userId);
-      
-      if (userIndex === -1) return { rank: null, error: null };
-      return { rank: userIndex + 1, error: null };
-    } catch (err) {
-      console.error('Error getting user rank:', err);
-      return { rank: null, error: err.message };
-    }
-  }
-  
-  // Get user's stats for a specific challenge
-  async getUserChallengeStats(challengeId) {
     if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
     
     const headers = getAuthHeaders();
@@ -289,115 +265,95 @@ class WeeklyChallengeService {
       );
       
       if (!response.ok) {
-        return { data: null, error: 'Failed to fetch stats' };
+        return { data: null, error: 'Failed to fetch result' };
       }
       
       const results = await response.json();
-      const result = results[0];
-      
-      if (!result) {
-        return { data: null, error: null };
-      }
-      
-      return { 
-        data: {
-          best_time: result.best_time_ms || result.first_attempt_time_ms || result.completion_time_ms,
-          first_attempt_time: result.first_attempt_time_ms,
-          attempts: result.attempts || 1,
-          completed_at: result.completed_at
-        }, 
-        error: null 
-      };
+      console.log('[WeeklyChallengeService] getUserResult result:', results[0] || null);
+      return { data: results[0] || null, error: null };
     } catch (err) {
-      console.error('Error getting user challenge stats:', err);
+      console.error('Error getting user result:', err);
       return { data: null, error: err.message };
     }
   }
   
-  // Get count of top 3 finishes for a user across all completed weekly challenges
-  async getUserPodiumCount(userId) {
-    if (!isSupabaseConfigured()) return { data: 0, error: 'Not configured' };
+  // Get user's rank in a challenge (based on first_attempt_time)
+  async getUserRank(challengeId) {
+    if (!isSupabaseConfigured()) return { rank: null, error: 'Supabase not configured' };
     
-    const headers = getAuthHeaders();
-    if (!headers) return { data: 0, error: 'Not authenticated' };
+    const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+    const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
+    const userId = authData?.user?.id;
+    
+    if (!userId) return { rank: null, error: 'Not authenticated' };
     
     try {
-      // First, get all completed challenges (ended before now)
-      const now = new Date().toISOString();
-      const challengesResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/weekly_challenges?ends_at=lt.${now}&select=id`,
-        { headers }
-      );
+      const { data: leaderboard } = await this.getLeaderboard(challengeId, 1000);
+      const userIndex = leaderboard.findIndex(entry => entry.user_id === userId);
       
-      if (!challengesResponse.ok) {
-        return { data: 0, error: 'Failed to fetch challenges' };
-      }
-      
-      const challenges = await challengesResponse.json();
-      if (!challenges || challenges.length === 0) {
-        return { data: 0, error: null };
-      }
-      
-      let podiumCount = 0;
-      
-      // For each completed challenge, check user's rank
-      for (const challenge of challenges) {
-        const { data: leaderboard } = await this.getLeaderboard(challenge.id, 10);
-        
-        if (leaderboard && leaderboard.length > 0) {
-          // Find user's position in top 3
-          const userIndex = leaderboard.findIndex(entry => entry.user_id === userId);
-          if (userIndex !== -1 && userIndex < 3) {
-            podiumCount++;
-          }
-        }
-      }
-      
-      return { data: podiumCount, error: null };
+      if (userIndex === -1) return { rank: null, error: null };
+      return { rank: userIndex + 1, error: null };
     } catch (err) {
-      console.error('Error getting user podium count:', err);
-      return { data: 0, error: err.message };
+      return { rank: null, error: err.message };
     }
   }
   
-  // =========================================================================
-  // v7.11: NEW - Get detailed podium breakdown (1st, 2nd, 3rd place counts)
-  // =========================================================================
+  // Get user's stats for a specific challenge
+  async getUserChallengeStats(challengeId) {
+    if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
+    
+    try {
+      const [resultRes, rankRes] = await Promise.all([
+        this.getUserResult(challengeId),
+        this.getUserRank(challengeId)
+      ]);
+      
+      if (resultRes.error || !resultRes.data) {
+        return { data: null, error: resultRes.error };
+      }
+      
+      return {
+        data: {
+          ...resultRes.data,
+          rank: rankRes.rank
+        },
+        error: null
+      };
+    } catch (err) {
+      return { data: null, error: err.message };
+    }
+  }
+  
+  // Get user's total podium finishes across all challenges
   async getUserPodiumBreakdown(userId) {
-    if (!isSupabaseConfigured()) return { data: null, error: 'Not configured' };
+    console.log('[WeeklyChallengeService] getUserPodiumBreakdown called:', userId);
+    
+    if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
     
     const headers = getAuthHeaders();
     if (!headers) return { data: null, error: 'Not authenticated' };
     
     try {
-      // Get all completed challenges (ended before now)
-      const now = new Date().toISOString();
+      // Get all weekly challenges
       const challengesResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/weekly_challenges?ends_at=lt.${now}&select=id`,
+        `${SUPABASE_URL}/rest/v1/weekly_challenges?order=created_at.desc&select=id`,
         { headers }
       );
       
       if (!challengesResponse.ok) {
-        console.log('[WeeklyChallengeService] Failed to fetch completed challenges');
         return { data: null, error: 'Failed to fetch challenges' };
       }
       
       const challenges = await challengesResponse.json();
-      if (!challenges || challenges.length === 0) {
-        console.log('[WeeklyChallengeService] No completed challenges found');
-        return { data: { first: 0, second: 0, third: 0, total: 0 }, error: null };
-      }
-      
-      console.log('[WeeklyChallengeService] Processing', challenges.length, 'completed challenges for podium breakdown');
-      
       let first = 0, second = 0, third = 0;
       
-      // For each completed challenge, check user's rank
+      // Check each challenge
       for (const challenge of challenges) {
-        const { data: leaderboard } = await this.getLeaderboard(challenge.id, 10);
+        const { data: leaderboard } = await this.getLeaderboard(challenge.id, 3);
         
         if (leaderboard && leaderboard.length > 0) {
           const userIndex = leaderboard.findIndex(entry => entry.user_id === userId);
+          
           if (userIndex === 0) {
             first++;
             console.log('[WeeklyChallengeService] Found 1st place in challenge', challenge.id);
@@ -458,5 +414,8 @@ class WeeklyChallengeService {
   }
 }
 
+// Create singleton instance
 export const weeklyChallengeService = new WeeklyChallengeService();
+
+// Export as default as well for backwards compatibility
 export default weeklyChallengeService;

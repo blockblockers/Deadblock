@@ -1,17 +1,26 @@
-import { RotateCw, FlipHorizontal, RefreshCw, Check, X, Loader, RotateCcw, Home, Flag, XCircle } from 'lucide-react';
+// ControlButtons.jsx - Unified control buttons for all game screens
+// v7.13: Updated button styling per user request
+// Standard: Menu (orange, Home icon only), ROTATE (cyan), FLIP (purple), 
+//           CONFIRM (green, no icon), CANCEL (rose, no icon), 
+//           RETRY (yellow, no icon), NEW (blue, no icon), RESET (slate, no icon)
+import { RotateCw, FlipHorizontal, Loader, Home, Flag, XCircle } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
-// Glow Orb Button Component - consistent styling across all game screens
-const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
+// Glow Orb Button Component - consistent styling across ALL game screens
+// Export so other components can use the same style
+export const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
   const colorClasses = {
     cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
     amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
+    orange: 'from-orange-500 to-amber-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]',
     green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
     red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
+    rose: 'from-rose-500 to-red-600 shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:shadow-[0_0_25px_rgba(244,63,94,0.6)]',
     purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
     indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
+    blue: 'from-blue-500 to-indigo-600 shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)]',
+    yellow: 'from-yellow-400 to-amber-500 shadow-[0_0_15px_rgba(250,204,21,0.4)] hover:shadow-[0_0_25px_rgba(250,204,21,0.6)]',
     slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
-    rose: 'from-rose-500 to-pink-600 shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:shadow-[0_0_25px_rgba(244,63,94,0.6)]',
   };
 
   return (
@@ -51,7 +60,7 @@ const ControlButtons = ({
   onRetryPuzzle,
   onMenu,
   onQuitGame,
-  hideResetButtons = false
+  hideResetButtons = false,
 }) => {
   const isPlayerTurn = !((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
   const hasSelection = selectedPiece || pendingMove;
@@ -66,9 +75,7 @@ const ControlButtons = ({
 
   const handleRetry = () => {
     soundManager.playButtonClick();
-    if (onRetryPuzzle) {
-      onRetryPuzzle();
-    }
+    if (onRetryPuzzle) onRetryPuzzle();
   };
 
   const handleMenu = () => {
@@ -83,11 +90,10 @@ const ControlButtons = ({
 
   return (
     <div className="flex gap-2 justify-between mt-2 flex-wrap">
-      {/* Menu Button - Rose/Pink color for visibility */}
+      {/* Menu Button - Orange with Home icon only (no text) */}
       {onMenu && (
-        <GlowOrbButton onClick={handleMenu} color="rose" title="Back to menu">
-          <Home size={14} />
-          <span className="hidden sm:inline">HOME</span>
+        <GlowOrbButton onClick={handleMenu} color="orange" title="Back to menu">
+          <Home size={16} />
         </GlowOrbButton>
       )}
 
@@ -112,7 +118,7 @@ const ControlButtons = ({
         </GlowOrbButton>
       )}
 
-      {/* Rotate Button */}
+      {/* Rotate Button - Cyan with RotateCw icon */}
       <GlowOrbButton
         onClick={onRotate}
         disabled={!hasSelection || gameOver || !isPlayerTurn || isGeneratingPuzzle}
@@ -122,7 +128,7 @@ const ControlButtons = ({
         <RotateCw size={14} />ROTATE
       </GlowOrbButton>
 
-      {/* Flip Button */}
+      {/* Flip Button - Purple with FlipHorizontal icon */}
       <GlowOrbButton
         onClick={onFlip}
         disabled={!hasSelection || gameOver || !isPlayerTurn || isGeneratingPuzzle}
@@ -135,26 +141,25 @@ const ControlButtons = ({
       {/* Confirm/Cancel when pending move is valid */}
       {pendingMove && canConfirm && !isGeneratingPuzzle && (
         <>
+          {/* Cancel - Rose/Red, no icon */}
           <GlowOrbButton
             onClick={onCancel}
-            color="slate"
+            color="rose"
             className="flex-1"
           >
-            <X size={14} />CANCEL
+            CANCEL
           </GlowOrbButton>
+          {/* Confirm - Green, no icon */}
           <GlowOrbButton
             onClick={() => {
-              console.log('[ControlButtons] CONFIRM clicked! onConfirm:', typeof onConfirm);
               if (onConfirm) {
                 onConfirm();
-              } else {
-                console.error('[ControlButtons] onConfirm is not defined!');
               }
             }}
             color="green"
             className="flex-1"
           >
-            <Check size={14} />CONFIRM
+            CONFIRM
           </GlowOrbButton>
         </>
       )}
@@ -163,40 +168,44 @@ const ControlButtons = ({
       {(!pendingMove || !canConfirm) && !isGeneratingPuzzle && (
         <>
           {pendingMove && (
+            /* Cancel - Rose/Red, no icon */
             <GlowOrbButton
               onClick={onCancel}
-              color="slate"
+              color="rose"
               className="flex-1"
             >
-              <X size={14} />CANCEL
+              CANCEL
             </GlowOrbButton>
           )}
           {!pendingMove && !hideResetButtons && (
             <>
               {isPuzzleMode ? (
                 <>
+                  {/* Retry - Yellow, no icon */}
                   {onRetryPuzzle && (
                     <GlowOrbButton
                       onClick={handleRetry}
-                      color="cyan"
+                      color="yellow"
                       className="flex-1"
                       title="Retry this puzzle from the beginning"
                     >
-                      <RotateCcw size={14} />RETRY
+                      RETRY
                     </GlowOrbButton>
                   )}
+                  {/* New - Blue, no icon */}
                   {onReset && (
                     <GlowOrbButton
                       onClick={handleReset}
-                      color="slate"
+                      color="blue"
                       className="flex-1"
                       title="Generate a new puzzle"
                     >
-                      <RefreshCw size={14} />NEW
+                      NEW
                     </GlowOrbButton>
                   )}
                 </>
               ) : (
+                /* Reset - Slate, no icon */
                 onReset && (
                   <GlowOrbButton
                     onClick={handleReset}
@@ -204,7 +213,7 @@ const ControlButtons = ({
                     className="flex-1"
                     title="Reset game"
                   >
-                    <RefreshCw size={14} />RESET
+                    RESET
                   </GlowOrbButton>
                 )
               )}

@@ -1,42 +1,77 @@
+// IOSInstallPrompt.jsx - iOS/Safari PWA install prompt
+// UPDATED: Better iOS 18+ detection, Safari 26+ support, debug logging
+// Place in src/components/IOSInstallPrompt.jsx
+
 import { useState, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 
 const IOSInstallPrompt = () => {
   const [show, setShow] = useState(false);
   const [isSafariBrowser, setIsSafariBrowser] = useState(true);
+  const [debugInfo, setDebugInfo] = useState(null);
 
   useEffect(() => {
-    // Detect iOS/iPadOS (including iPad with desktop mode)
     const ua = navigator.userAgent || '';
     const platform = navigator.platform || '';
     
-    // Check for iOS devices
-    const isIOS = /iPhone|iPad|iPod/.test(ua) || 
-                  (platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPad with desktop UA
+    // =========================================================================
+    // iOS DETECTION - Updated for iOS 18+
+    // =========================================================================
+    // Check for iOS devices (iPhone, iPad, iPod)
+    // Also check for iPad with desktop mode (reports as MacIntel but has touch)
+    const isIPhone = /iPhone/.test(ua);
+    const isIPad = /iPad/.test(ua) || 
+                   (platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isIPod = /iPod/.test(ua);
+    const isIOS = isIPhone || isIPad || isIPod;
     
-    // Check for Safari on Mac (also show for Mac Safari users)
-    const isMacSafari = /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua);
+    // Check for Mac Safari (also supports PWA)
+    const isMacSafari = /Macintosh/.test(ua) && /Safari/.test(ua) && !/Chrome/.test(ua) && !isIPad;
     
-    // Detect if already installed (standalone mode) - multiple detection methods
-    const isStandalone = window.navigator.standalone === true || // iOS Safari
-                         window.matchMedia('(display-mode: standalone)').matches || // Standard PWA
-                         window.matchMedia('(display-mode: fullscreen)').matches || // Fullscreen mode
-                         window.matchMedia('(display-mode: minimal-ui)').matches || // Minimal UI mode
-                         document.referrer.includes('android-app://') || // Android TWA
-                         (window.matchMedia('(display-mode: window-controls-overlay)').matches); // Desktop PWA with overlay
+    // =========================================================================
+    // SAFARI DETECTION - Must be Safari, not Chrome/Firefox/Edge on iOS
+    // =========================================================================
+    // On iOS, ALL browsers use WebKit, but only Safari can install PWAs
+    // Other browsers have identifiers: CriOS (Chrome), FxiOS (Firefox), etc.
+    const isSafari = /Safari/.test(ua) && 
+                     !/CriOS/.test(ua) &&    // Chrome on iOS
+                     !/FxiOS/.test(ua) &&    // Firefox on iOS
+                     !/OPiOS/.test(ua) &&    // Opera on iOS
+                     !/EdgiOS/.test(ua) &&   // Edge on iOS
+                     !/DuckDuckGo/.test(ua) && // DuckDuckGo
+                     !/Ddg/.test(ua) &&      // DuckDuckGo (short form)
+                     !/Chrome/.test(ua) &&   // Chrome (desktop)
+                     !/Chromium/.test(ua) && // Chromium-based
+                     !/Firefox/.test(ua) &&  // Firefox (desktop)
+                     !/Focus/.test(ua);      // Firefox Focus
     
-    // Also check if launched from home screen on desktop (URL will be different)
-    const isLaunchedFromHomeScreen = window.navigator.standalone || 
-                                      (window.location.search.includes('utm_source=homescreen')) ||
-                                      (sessionStorage.getItem('pwa-launched') === 'true');
+    setIsSafariBrowser(isSafari || isMacSafari);
     
-    // Check if previously installed (shared with index.html)
+    // =========================================================================
+    // STANDALONE/INSTALLED DETECTION
+    // =========================================================================
+    const isStandalone = window.navigator.standalone === true || // iOS Safari standalone
+                         window.matchMedia('(display-mode: standalone)').matches ||
+                         window.matchMedia('(display-mode: fullscreen)').matches ||
+                         window.matchMedia('(display-mode: minimal-ui)').matches ||
+                         document.referrer.includes('android-app://');
+    
+    // Check localStorage for previous installation
     let wasInstalled = false;
+    let wasDismissed = false;
     try {
       wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
-    } catch (e) {}
+      
+      const dismissedAt = localStorage.getItem('ios-pwa-dismissed');
+      if (dismissedAt) {
+        const daysSince = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
+        wasDismissed = daysSince < 7; // Only block for 7 days
+      }
+    } catch (e) {
+      console.log('[IOSInstallPrompt] localStorage error:', e);
+    }
     
-    // Mark as launched if standalone
+    // Mark as launched if in standalone mode
     if (isStandalone) {
       try {
         sessionStorage.setItem('pwa-launched', 'true');
@@ -44,57 +79,52 @@ const IOSInstallPrompt = () => {
       } catch (e) {}
     }
     
-    // Detect Safari browser
-    // Safari has "Safari" in UA but Chrome/Firefox/Edge on iOS have their own identifiers
-    const isSafari = /Safari/.test(ua) && 
-                     !/CriOS/.test(ua) &&  // Chrome on iOS
-                     !/FxiOS/.test(ua) &&  // Firefox on iOS
-                     !/OPiOS/.test(ua) &&  // Opera on iOS
-                     !/EdgiOS/.test(ua) && // Edge on iOS
-                     !/Chrome/.test(ua) && // Chrome
-                     !/Chromium/.test(ua); // Chromium-based
-    
-    setIsSafariBrowser(isSafari || isMacSafari);
-    
-    // Check if dismissed recently
-    let wasDismissed = false;
-    try {
-      const dismissedAt = localStorage.getItem('ios-pwa-dismissed');
-      if (dismissedAt) {
-        const daysSince = (Date.now() - parseInt(dismissedAt)) / (1000 * 60 * 60 * 24);
-        wasDismissed = daysSince < 7;
-      }
-    } catch (e) {
-      console.log('localStorage error:', e);
-    }
-
-    // Debug logging
-    console.log('[PWA Install Prompt - iOS/Safari]', {
+    // =========================================================================
+    // DEBUG INFO - Always log for troubleshooting
+    // =========================================================================
+    const debug = {
+      ua: ua.substring(0, 150),
+      platform,
+      maxTouchPoints: navigator.maxTouchPoints,
+      isIPhone,
+      isIPad,
       isIOS,
       isMacSafari,
-      isStandalone,
-      isLaunchedFromHomeScreen,
-      wasInstalled,
       isSafari,
+      isStandalone,
+      wasInstalled,
       wasDismissed,
-      ua: ua.substring(0, 100),
-      platform
-    });
-
+      navigatorStandalone: window.navigator.standalone,
+      displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches
+    };
+    
+    setDebugInfo(debug);
+    console.log('[IOSInstallPrompt] Detection:', debug);
+    
+    // =========================================================================
+    // DECIDE WHETHER TO SHOW
+    // =========================================================================
+    const isAlreadyInstalled = isStandalone || wasInstalled;
+    
     // Show for:
-    // 1. iOS Safari users who haven't installed
-    // 2. iOS non-Safari users (to tell them to use Safari)
-    // 3. Mac Safari users (Safari on Mac also supports PWA)
-    // But NOT if already in standalone/installed mode or previously installed
-    const isAlreadyInstalled = isStandalone || isLaunchedFromHomeScreen || wasInstalled;
-    const shouldShow = ((isIOS || isMacSafari) && !isAlreadyInstalled && !wasDismissed);
+    // 1. iOS Safari users who haven't installed (show install steps)
+    // 2. iOS non-Safari users (tell them to use Safari)
+    // 3. Mac Safari users who haven't installed
+    const shouldShow = (isIOS || isMacSafari) && !isAlreadyInstalled && !wasDismissed;
+    
+    console.log('[IOSInstallPrompt] shouldShow:', shouldShow, {
+      isIOS,
+      isMacSafari,
+      isAlreadyInstalled,
+      wasDismissed
+    });
 
     if (shouldShow) {
       // Delay showing for better UX
       const timer = setTimeout(() => {
-        console.log('[PWA Install Prompt - iOS/Safari] Showing prompt');
+        console.log('[IOSInstallPrompt] Showing prompt now');
         setShow(true);
-      }, 3000); // 3 second delay
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, []);
@@ -102,8 +132,6 @@ const IOSInstallPrompt = () => {
   const dismiss = () => {
     setShow(false);
     try {
-      // Mark as permanently dismissed (treated same as installed)
-      localStorage.setItem('pwa-was-installed', 'true');
       localStorage.setItem('ios-pwa-dismissed', Date.now().toString());
     } catch (e) {}
   };
@@ -111,7 +139,6 @@ const IOSInstallPrompt = () => {
   const dismissForever = () => {
     setShow(false);
     try {
-      // Mark as permanently dismissed
       localStorage.setItem('pwa-was-installed', 'true');
       localStorage.setItem('ios-pwa-dismissed', (Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toString());
     } catch (e) {}
@@ -206,50 +233,68 @@ const IOSInstallPrompt = () => {
                 <span className="text-green-400 font-bold text-sm">3</span>
               </div>
               <p className="text-slate-200 text-sm flex-1">
-                Tap <span className="text-green-400 font-semibold">"Add"</span> in the top right corner
+                Tap <span className="text-green-400 font-semibold">"Add"</span> to install
               </p>
-            </div>
-
-            {/* Arrow indicator pointing down */}
-            <div className="flex items-center justify-center gap-2 text-slate-500 text-xs mb-4">
-              <span>↓</span>
-              <span>Share button is at the bottom of Safari</span>
-              <span>↓</span>
+              <div className="w-9 h-9 bg-slate-700 rounded-lg flex items-center justify-center">
+                <span className="text-green-400 font-bold text-xs">Add</span>
+              </div>
             </div>
           </>
         )}
 
-        {/* Buttons */}
+        {/* Action buttons */}
         <div className="flex gap-2">
           <button
-            onClick={dismissForever}
-            className="flex-1 py-2.5 bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold hover:bg-slate-700 transition-colors"
+            onClick={dismiss}
+            className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
           >
-            Don't show again
+            Maybe Later
           </button>
           <button
-            onClick={dismiss}
-            className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 text-white rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+            onClick={dismissForever}
+            className="flex-1 py-2.5 px-4 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 rounded-xl text-sm font-medium transition-colors border border-cyan-500/30"
           >
-            Got it!
+            Already Installed
           </button>
         </div>
       </div>
 
       <style>{`
         @keyframes slideUp {
-          from { 
-            opacity: 0; 
-            transform: translateY(50px); 
+          from {
+            opacity: 0;
+            transform: translateY(20px);
           }
-          to { 
-            opacity: 1; 
-            transform: translateY(0); 
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
       `}</style>
     </div>
   );
 };
+
+// Debug helper - call from browser console: window.showIOSInstallDebug()
+if (typeof window !== 'undefined') {
+  window.showIOSInstallDebug = () => {
+    const ua = navigator.userAgent;
+    console.log('=== iOS Install Prompt Debug ===');
+    console.log('User Agent:', ua);
+    console.log('Platform:', navigator.platform);
+    console.log('Max Touch Points:', navigator.maxTouchPoints);
+    console.log('navigator.standalone:', window.navigator.standalone);
+    console.log('display-mode standalone:', window.matchMedia('(display-mode: standalone)').matches);
+    console.log('localStorage pwa-was-installed:', localStorage.getItem('pwa-was-installed'));
+    console.log('localStorage ios-pwa-dismissed:', localStorage.getItem('ios-pwa-dismissed'));
+    console.log('================================');
+  };
+  
+  window.resetIOSInstallPrompt = () => {
+    localStorage.removeItem('pwa-was-installed');
+    localStorage.removeItem('ios-pwa-dismissed');
+    console.log('iOS install prompt reset. Refresh the page to see the prompt.');
+  };
+}
 
 export default IOSInstallPrompt;

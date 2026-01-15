@@ -1,19 +1,14 @@
-// ViewPlayerProfile.jsx - View another player's profile
-// FIXED: Removed queries to non-existent tables (player_stats, achievement_stats)
-// FIXED: Fixed games query syntax for PostgREST
-// FIXED: Use achievementService for achievement stats
-// FIXED: Define dbSelect locally instead of importing from non-existent file
-// ADDED: Final Board View button for match history
+// ViewPlayerProfile - View another player's profile
+// v7.12: Added full stats display (AI wins, puzzle stats) for all players
+// v7.12: Added player_stats loading from profiles table
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, TrendingUp, UserPlus, UserCheck, UserMinus, Clock, Swords, Calendar, ChevronRight, Loader, Award, LayoutGrid } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
-import achievementService from '../services/achievementService';
 import { ratingService } from '../services/ratingService';
+import achievementService from '../services/achievementService';
 import TierIcon from './TierIcon';
-import { soundManager } from '../utils/soundManager';
-import Achievements from './Achievements';
 import FinalBoardView from './FinalBoardView';
+import { soundManager } from '../utils/soundManager';
 
 // Supabase config for direct fetch
 const AUTH_KEY = 'sb-oyeibyrednwlolmsjlwk-auth-token';
@@ -37,43 +32,37 @@ const getAuthHeaders = () => {
   }
 };
 
-// Direct fetch wrapper for database operations
+// Direct database select helper
 const dbSelect = async (table, options = {}) => {
   const headers = getAuthHeaders();
   if (!headers) return { data: null, error: 'Not authenticated' };
   
-  let url = `${SUPABASE_URL}/rest/v1/${table}?`;
-  
-  if (options.select) url += `select=${encodeURIComponent(options.select)}&`;
-  if (options.eq) {
-    Object.entries(options.eq).forEach(([key, value]) => {
-      // Properly encode the value
-      url += `${encodeURIComponent(key)}=eq.${encodeURIComponent(value)}&`;
-    });
-  }
-  if (options.order) url += `order=${encodeURIComponent(options.order)}&`;
-  if (options.limit) url += `limit=${options.limit}&`;
-  
-  console.log('[dbSelect] Query:', table, url);
-  
   try {
-    const response = await fetch(url, { 
+    let url = `${SUPABASE_URL}/rest/v1/${table}?`;
+    
+    if (options.select) url += `select=${encodeURIComponent(options.select)}&`;
+    if (options.eq) {
+      Object.entries(options.eq).forEach(([key, value]) => {
+        url += `${key}=eq.${encodeURIComponent(value)}&`;
+      });
+    }
+    if (options.or) url += `or=(${encodeURIComponent(options.or)})&`;
+    if (options.order) url += `order=${options.order}&`;
+    if (options.limit) url += `limit=${options.limit}&`;
+    
+    const response = await fetch(url.slice(0, -1), { 
       headers: options.single 
         ? { ...headers, 'Accept': 'application/vnd.pgrst.object+json' }
         : headers 
     });
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[dbSelect] Error:', response.status, errorText);
       return { data: null, error: response.statusText };
     }
     
     const data = await response.json();
-    console.log('[dbSelect] Result:', table, 'count:', Array.isArray(data) ? data.length : 1);
     return { data, error: null };
   } catch (e) {
-    console.error('[dbSelect] Exception:', e);
     return { data: null, error: e.message };
   }
 };
@@ -118,14 +107,15 @@ const ViewPlayerProfile = ({
   const [loading, setLoading] = useState(!playerData);
   const [recentGames, setRecentGames] = useState([]);
   const [friendStatus, setFriendStatus] = useState(null);
-  const [friendshipId, setFriendshipId] = useState(null); // Store friendship ID for remove friend
+  const [friendshipId, setFriendshipId] = useState(null);
   const [sendingRequest, setSendingRequest] = useState(false);
   const [removingFriend, setRemovingFriend] = useState(false);
   const [achievementStats, setAchievementStats] = useState(null);
-  const [showAchievements, setShowAchievements] = useState(false); // Show achievements modal
+  const [showAchievements, setShowAchievements] = useState(false);
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
-  const [headToHead, setHeadToHead] = useState(null); // { myWins, theirWins, total }
-  const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null); // Final Board View
+  const [headToHead, setHeadToHead] = useState(null);
+  const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
+  const [playerStats, setPlayerStats] = useState(null); // v7.12: Full stats from profiles table
 
   // Use calculated stats from actual games (more accurate than profile.games_won)
   const displayWins = calculatedStats.totalGames > 0 ? calculatedStats.wins : (profile?.games_won || 0);
@@ -142,6 +132,7 @@ const ViewPlayerProfile = ({
       setCalculatedStats({ wins: 0, totalGames: 0 });
       setRecentGames([]);
       setHeadToHead(null);
+      setPlayerStats(null);
       loadPlayerData();
     }
   }, [playerId]);
@@ -150,11 +141,15 @@ const ViewPlayerProfile = ({
     setLoading(true);
     
     try {
-      // Load profile if not provided
+      // Load profile with ALL stats from profiles table (v7.12: expanded select)
       let profileData = playerData;
       if (!profileData) {
         const { data } = await dbSelect('profiles', {
-          select: 'id,username,display_name,avatar_url,rating,games_won,games_played,created_at',
+          select: `id,username,display_name,avatar_url,rating,games_won,games_played,created_at,
+                   puzzles_easy_solved,puzzles_easy_attempted,puzzles_medium_solved,puzzles_medium_attempted,
+                   puzzles_hard_solved,puzzles_hard_attempted,speed_best_streak,speed_total_puzzles,
+                   ai_easy_wins,ai_easy_losses,ai_medium_wins,ai_medium_losses,ai_hard_wins,ai_hard_losses,
+                   local_games_played`,
           eq: { id: playerId },
           single: true
         });
@@ -163,51 +158,49 @@ const ViewPlayerProfile = ({
       
       if (profileData) {
         setProfile(profileData);
+        // v7.12: Set player stats from the profile data
+        setPlayerStats({
+          puzzles_easy_solved: profileData.puzzles_easy_solved || 0,
+          puzzles_medium_solved: profileData.puzzles_medium_solved || 0,
+          puzzles_hard_solved: profileData.puzzles_hard_solved || 0,
+          ai_easy_wins: profileData.ai_easy_wins || 0,
+          ai_medium_wins: profileData.ai_medium_wins || 0,
+          ai_hard_wins: profileData.ai_hard_wins || 0,
+          ai_easy_losses: profileData.ai_easy_losses || 0,
+          ai_medium_losses: profileData.ai_medium_losses || 0,
+          ai_hard_losses: profileData.ai_hard_losses || 0,
+          speed_best_streak: profileData.speed_best_streak || 0,
+          local_games_played: profileData.local_games_played || 0
+        });
       }
 
-      // FIXED: Load recent games - simplified query without foreign key joins
-      // The database doesn't have FK relationships with those names
+      // Load recent games
       try {
-        console.log('[ViewPlayerProfile] Loading games for player:', playerId);
-        
-        // Get games where player is player1 (simple query, no joins)
-        const { data: gamesAsPlayer1, error: err1 } = await dbSelect('games', {
-          select: 'id,player1_id,player2_id,winner_id,status,created_at',
+        // Get games where player is player1
+        const { data: gamesAsPlayer1 } = await dbSelect('games', {
+          select: 'id,player1_id,player2_id,winner_id,status,created_at,board,board_pieces',
           eq: { player1_id: playerId, status: 'completed' },
           order: 'created_at.desc',
           limit: 100
         });
         
-        if (err1) console.warn('[ViewPlayerProfile] Error fetching player1 games:', err1);
-        console.log('[ViewPlayerProfile] Games as player1:', gamesAsPlayer1?.length || 0);
-        
         // Get games where player is player2
-        const { data: gamesAsPlayer2, error: err2 } = await dbSelect('games', {
-          select: 'id,player1_id,player2_id,winner_id,status,created_at',
+        const { data: gamesAsPlayer2 } = await dbSelect('games', {
+          select: 'id,player1_id,player2_id,winner_id,status,created_at,board,board_pieces',
           eq: { player2_id: playerId, status: 'completed' },
           order: 'created_at.desc',
           limit: 100
         });
         
-        if (err2) console.warn('[ViewPlayerProfile] Error fetching player2 games:', err2);
-        console.log('[ViewPlayerProfile] Games as player2:', gamesAsPlayer2?.length || 0);
-        
         // Merge and sort by created_at
         const allGames = [...(gamesAsPlayer1 || []), ...(gamesAsPlayer2 || [])];
         allGames.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
         
-        // Calculate actual wins from games (this is more accurate than profile.games_won)
+        // Calculate actual wins from games
         const wins = allGames.filter(g => g.winner_id === playerId).length;
-        console.log('[ViewPlayerProfile] Calculated stats:', { 
-          playerId, 
-          totalGames: allGames.length, 
-          wins,
-          sampleWinnerIds: allGames.slice(0, 3).map(g => ({ gameId: g.id, winnerId: g.winner_id }))
-        });
-        
         setCalculatedStats({ wins, totalGames: allGames.length });
         
-        // Calculate head-to-head stats if viewer is logged in
+        // Calculate head-to-head stats
         if (currentUserId && currentUserId !== playerId) {
           const h2hGames = allGames.filter(g => 
             (g.player1_id === currentUserId || g.player2_id === currentUserId)
@@ -216,45 +209,26 @@ const ViewPlayerProfile = ({
             const myWins = h2hGames.filter(g => g.winner_id === currentUserId).length;
             const theirWins = h2hGames.filter(g => g.winner_id === playerId).length;
             setHeadToHead({ myWins, theirWins, total: h2hGames.length });
-            console.log('[ViewPlayerProfile] Head-to-head:', { myWins, theirWins, total: h2hGames.length });
-          } else {
-            setHeadToHead(null);
           }
         }
         
-        // For recent games, we need to fetch opponent profiles separately
-        const recentGamesList = allGames.slice(0, 10);
+        // Get opponent profiles for display
+        const opponentIds = [...new Set(allGames.slice(0, 10).map(g => 
+          g.player1_id === playerId ? g.player2_id : g.player1_id
+        ))];
         
-        // Collect unique opponent IDs
-        const opponentIds = new Set();
-        recentGamesList.forEach(game => {
-          if (game.player1_id !== playerId) opponentIds.add(game.player1_id);
-          if (game.player2_id !== playerId) opponentIds.add(game.player2_id);
-        });
-        
-        // Fetch opponent profiles if we have any games
         let opponentProfiles = {};
-        if (opponentIds.size > 0) {
-          try {
-            // Fetch each opponent profile individually (simpler and more reliable)
-            for (const oppId of opponentIds) {
-              const { data: oppProfile } = await dbSelect('profiles', {
-                select: 'id,username,display_name,rating',
-                eq: { id: oppId },
-                single: true
-              });
-              if (oppProfile) {
-                opponentProfiles[oppId] = oppProfile;
-              }
-            }
-            console.log('[ViewPlayerProfile] Fetched opponent profiles:', Object.keys(opponentProfiles).length);
-          } catch (e) {
-            console.warn('[ViewPlayerProfile] Error fetching opponent profiles:', e);
+        if (opponentIds.length > 0) {
+          const { data: opponents } = await dbSelect('profiles', {
+            select: 'id,username,display_name,rating'
+          });
+          if (opponents) {
+            opponents.forEach(p => { opponentProfiles[p.id] = p; });
           }
         }
         
         // Attach opponent data to games
-        const gamesWithOpponents = recentGamesList.map(game => {
+        const gamesWithOpponents = allGames.slice(0, 10).map(game => {
           const isPlayer1 = game.player1_id === playerId;
           const opponentId = isPlayer1 ? game.player2_id : game.player1_id;
           const opponent = opponentProfiles[opponentId] || { id: opponentId, username: 'Unknown' };
@@ -271,7 +245,7 @@ const ViewPlayerProfile = ({
         console.log('Recent games not available:', e);
       }
 
-      // FIXED: Use achievementService instead of querying non-existent table
+      // Load achievement stats
       try {
         if (typeof achievementService?.getAchievementStats === 'function') {
           const { data: achieveData } = await achievementService.getAchievementStats(playerId);
@@ -291,7 +265,6 @@ const ViewPlayerProfile = ({
       if (currentUserId && currentUserId !== playerId) {
         try {
           const result = await friendsService.getFriendshipStatus(currentUserId, playerId);
-          // Handle both old (string) and new (object) return formats
           if (typeof result === 'object' && result !== null) {
             setFriendStatus(result.status);
             setFriendshipId(result.friendshipId);
@@ -314,473 +287,419 @@ const ViewPlayerProfile = ({
     if (!currentUserId || sendingRequest) return;
     
     setSendingRequest(true);
+    soundManager.playButtonClick();
+    
     try {
-      await friendsService.sendFriendRequest(currentUserId, playerId);
-      setFriendStatus('pending_sent');
-      soundManager.playSound('success');
+      const { error } = await friendsService.sendFriendRequest(currentUserId, playerId);
+      if (!error) {
+        setFriendStatus('pending_sent');
+        soundManager.playSound('success');
+      }
     } catch (err) {
       console.error('Error sending friend request:', err);
     }
+    
     setSendingRequest(false);
   };
 
   const handleRemoveFriend = async () => {
-    if (!currentUserId || !friendshipId || removingFriend) return;
+    if (!currentUserId || removingFriend || !friendshipId) return;
     
     setRemovingFriend(true);
+    soundManager.playButtonClick();
+    
     try {
-      await friendsService.removeFriend(friendshipId, currentUserId);
-      setFriendStatus(null);
-      setFriendshipId(null);
-      soundManager.playSound('click');
+      const { error } = await friendsService.removeFriend(friendshipId);
+      if (!error) {
+        setFriendStatus(null);
+        setFriendshipId(null);
+        soundManager.playSound('success');
+      }
     } catch (err) {
       console.error('Error removing friend:', err);
     }
+    
     setRemovingFriend(false);
   };
 
-  const handleInvite = () => {
-    if (onInviteToGame && profile) {
-      soundManager.playButtonClick();
-      onInviteToGame(profile);
-    }
+  const handleInviteToGame = async () => {
+    if (!onInviteToGame || !profile) return;
+    soundManager.playButtonClick();
+    await onInviteToGame(profile);
   };
 
-  // Get opponent info from a game
-  const getOpponentInfo = (game) => {
-    if (game.player1_id === playerId) {
-      return {
-        id: game.player2_id,
-        name: game.player2?.username || game.player2?.display_name || 'Unknown',
-        rating: game.player2?.rating || 1000,
-        data: game.player2
-      };
-    }
-    return {
-      id: game.player1_id,
-      name: game.player1?.username || game.player1?.display_name || 'Unknown',
-      rating: game.player1?.rating || 1000,
-      data: game.player1
-    };
-  };
+  // Calculate derived stats for display
+  const totalAiWins = (playerStats?.ai_easy_wins || 0) + (playerStats?.ai_medium_wins || 0) + (playerStats?.ai_hard_wins || 0);
+  const totalAiGames = totalAiWins + (playerStats?.ai_easy_losses || 0) + (playerStats?.ai_medium_losses || 0) + (playerStats?.ai_hard_losses || 0);
+  const totalPuzzlesSolved = (playerStats?.puzzles_easy_solved || 0) + (playerStats?.puzzles_medium_solved || 0) + (playerStats?.puzzles_hard_solved || 0);
 
-  // Handle viewing opponent profile
-  const handleViewOpponent = (opponent) => {
-    if (onViewPlayer && opponent.id !== currentUserId) {
-      soundManager.playButtonClick();
-      onViewPlayer(opponent.id, opponent.data);
-    }
-  };
-
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div className="bg-slate-900 rounded-xl p-8 border border-cyan-500/30">
-          <Loader size={32} className="animate-spin text-cyan-400 mx-auto" />
-          <p className="text-slate-400 mt-3">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div className="bg-slate-900 rounded-xl p-6 border border-red-500/30 max-w-sm w-full">
-          <p className="text-red-400 text-center mb-4">Player not found</p>
-          <button
-            onClick={onClose}
-            className="w-full py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    );
-  }
+  if (!playerId) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div 
-        className="bg-slate-900 rounded-xl max-w-sm w-full max-h-[85vh] overflow-hidden border shadow-lg"
-        style={{
-          borderColor: hexToRgba(glowColor, 0.4),
-          boxShadow: `0 0 40px ${hexToRgba(glowColor, 0.2)}`
-        }}
-      >
-        {/* Header */}
+    <>
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
         <div 
-          className="p-4 border-b relative"
+          className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border shadow-2xl max-h-[90vh] flex flex-col"
           style={{ 
-            borderColor: hexToRgba(glowColor, 0.2),
-            background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, ${hexToRgba(glowColor, 0.1)} 100%)`
+            borderColor: hexToRgba(glowColor, 0.3),
+            boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`
           }}
         >
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 p-1 text-slate-400 hover:text-white transition-colors z-10"
+          {/* Header */}
+          <div 
+            className="p-4 border-b flex items-center justify-between flex-shrink-0"
+            style={{ borderColor: hexToRgba(glowColor, 0.2) }}
           >
-            <X size={20} />
-          </button>
-          
-          {/* Title - Centered at top - DEADBLOCK style */}
-          <div className="text-center mb-4">
-            <h2 
-              className="text-2xl font-black tracking-widest"
-              style={{ 
-                color: glowColor,
-                textShadow: `0 0 30px ${hexToRgba(glowColor, 0.6)}, 0 0 60px ${hexToRgba(glowColor, 0.3)}`
-              }}
-            >
-              DEADBLOCK
-            </h2>
-            <p className="text-xs text-slate-400 mt-1 tracking-wide">PLAYER PROFILE</p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Avatar with tier glow */}
-            <div 
-              className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
-              style={{
-                background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)}, ${hexToRgba(glowColor, 0.1)})`,
-                border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
-                boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.3)}`,
-                color: glowColor
-              }}
-            >
-              {(profile.username || profile.display_name)?.[0]?.toUpperCase() || '?'}
-            </div>
-            
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-white">
-                {profile.username || profile.display_name || 'Player'}
-              </h3>
-              
-              {/* Tier Badge */}
-              {rankInfo && (
-                <div className="flex items-center gap-2 mt-1">
-                  <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="small" />
-                  <span 
-                    className="text-sm font-medium"
-                    style={{ color: glowColor }}
-                  >
-                    {rankInfo.name}
-                  </span>
-                  <span className="text-slate-500 text-sm">
-                    {profile.rating || 1000} ELO
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Content - Scrollable */}
-        <div 
-          className="p-4 overflow-y-auto overscroll-contain"
-          style={{ 
-            WebkitOverflowScrolling: 'touch',
-            maxHeight: 'calc(85vh - 180px)',
-            touchAction: 'pan-y'
-          }}
-        >
-          {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <div 
-              className="rounded-xl p-3 text-center"
-              style={{ 
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-              }}
-            >
-              <Trophy size={16} className="mx-auto mb-1 text-amber-400" />
-              <div className="text-white font-bold">{displayWins}</div>
-              <div className="text-slate-500 text-xs">Wins</div>
-            </div>
-            
-            <div 
-              className="rounded-xl p-3 text-center"
-              style={{ 
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-              }}
-            >
-              <Target size={16} className="mx-auto mb-1 text-cyan-400" />
-              <div className="text-white font-bold">{displayGames}</div>
-              <div className="text-slate-500 text-xs">Games</div>
-            </div>
-            
-            <div 
-              className="rounded-xl p-3 text-center"
-              style={{ 
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-              }}
-            >
-              <TrendingUp size={16} className="mx-auto mb-1 text-green-400" />
-              <div className="text-white font-bold">{winRate}%</div>
-              <div className="text-slate-500 text-xs">Win Rate</div>
-            </div>
-          </div>
-
-          {/* Head-to-Head Stats - only show if viewer is logged in and has played against this player */}
-          {headToHead && headToHead.total > 0 && (
-            <div 
-              className="rounded-xl p-3 mb-4"
-              style={{ 
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(251, 191, 36, 0.3)',
-                boxShadow: '0 0 15px rgba(251, 191, 36, 0.1)'
-              }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Swords size={16} className="text-amber-400" />
-                  <span className="text-amber-400 text-xs font-bold uppercase tracking-wider">Head-to-Head</span>
-                </div>
-                <span className="text-slate-400 text-xs">{headToHead.total} games</span>
-              </div>
-              
-              <div className="grid grid-cols-3 gap-2">
-                {/* Your Wins */}
-                <div className="text-center">
-                  <div className="text-cyan-400 font-bold text-lg">{headToHead.myWins}</div>
-                  <div className="text-slate-500 text-[10px]">YOUR WINS</div>
-                </div>
-                
-                {/* Win Rate */}
-                <div className="text-center border-x border-slate-700/50">
-                  <div className="text-white font-bold text-lg">
-                    {headToHead.total > 0 ? Math.round((headToHead.myWins / headToHead.total) * 100) : 0}%
-                  </div>
-                  <div className="text-slate-500 text-[10px]">YOUR WIN %</div>
-                </div>
-                
-                {/* Their Wins */}
-                <div className="text-center">
-                  <div className="text-pink-400 font-bold text-lg">{headToHead.theirWins}</div>
-                  <div className="text-slate-500 text-[10px]">THEIR WINS</div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Achievement Stats - Clickable to view all achievements */}
-          {achievementStats && achievementStats.total_achievements > 0 && (
+            <h2 className="text-lg font-bold text-white">Player Profile</h2>
             <button
-              onClick={() => {
-                soundManager.playButtonClick();
-                setShowAchievements(true);
-              }}
-              className="w-full rounded-xl p-3 mb-4 flex items-center justify-between hover:opacity-80 transition-opacity group"
-              style={{ 
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-              }}
+              onClick={onClose}
+              className="p-1 text-slate-400 hover:text-white transition-colors"
             >
-              <div className="flex items-center gap-2">
-                <Award size={16} className="text-amber-400" />
-                <span className="text-slate-400 text-xs">Achievements</span>
-              </div>
-              <div className="text-white font-bold">
-                {achievementStats.unlocked_count || 0}/{achievementStats.total_achievements || 0}
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-amber-400 text-xs">
-                  {achievementStats.earned_points || 0} pts
-                </span>
-                <ChevronRight size={14} className="text-slate-500 group-hover:text-slate-300 transition-colors" />
-              </div>
+              <X size={24} />
             </button>
-          )}
-
-          {/* Match History with Clickable Opponents */}
-          {recentGames.length > 0 && (
-            <div 
-              className="rounded-xl p-3"
-              style={{ 
-                backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <Calendar size={14} style={{ color: glowColor }} />
-                <span className="text-slate-300 text-sm font-medium">Recent Matches</span>
+          </div>
+          
+          {/* Content - Scrollable */}
+          <div 
+            className="p-4 overflow-y-auto flex-1"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            {loading ? (
+              <div className="text-center py-8">
+                <Loader size={32} className="animate-spin mx-auto text-cyan-400 mb-3" />
+                <p className="text-slate-400">Loading profile...</p>
               </div>
-              
-              <div className="space-y-2">
-                {recentGames.slice(0, 5).map(game => {
-                  const won = game.winner_id === playerId;
-                  const opponent = getOpponentInfo(game);
-                  const opponentRankInfo = getRankInfo(opponent.rating);
-                  const isClickable = opponent.id !== currentUserId && onViewPlayer;
-                  
-                  return (
-                    <div
-                      key={game.id}
-                      className={`w-full p-2 rounded-lg transition-all ${
-                        won 
-                          ? 'bg-green-900/20 border border-green-500/30' 
-                          : 'bg-red-900/20 border border-red-500/30'
-                      }`}
-                    >
-                      {/* Clickable row for opponent info */}
-                      <button
-                        onClick={() => isClickable && handleViewOpponent(opponent)}
-                        disabled={!isClickable}
-                        className={`w-full flex items-center justify-between ${isClickable ? 'hover:opacity-80 cursor-pointer' : 'cursor-default'}`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${won ? 'bg-green-400' : 'bg-red-400'}`} />
-                          
-                          {/* Opponent mini avatar */}
-                          <div 
-                            className="w-6 h-6 rounded-full flex items-center justify-center"
-                            style={{
-                              background: getTierBackground(opponentRankInfo?.glowColor || '#64748b'),
-                              border: `1px solid ${hexToRgba(opponentRankInfo?.glowColor || '#64748b', 0.5)}`
-                            }}
-                          >
-                            {opponentRankInfo ? (
-                              <TierIcon 
-                                shape={opponentRankInfo.shape} 
-                                glowColor={opponentRankInfo.glowColor} 
-                                size="tiny" 
-                              />
-                            ) : (
-                              <span className="text-[8px] text-slate-400">
-                                {opponent.name?.[0]?.toUpperCase() || '?'}
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div className="text-left">
-                            <div className="text-white text-sm font-medium">vs {opponent.name}</div>
-                            <div className="text-slate-500 text-xs">{formatDate(game.created_at)}</div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
-                            {won ? 'WIN' : 'LOSS'}
-                          </span>
-                          {isClickable && (
-                            <ChevronRight size={14} className="text-slate-600" />
-                          )}
-                        </div>
-                      </button>
-                      
-                      {/* Final Board View button */}
-                      <div className="mt-1.5 flex justify-end">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            soundManager.playButtonClick();
-                            setSelectedGameForFinalView(game);
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
-                          title="View final board"
-                        >
-                          <LayoutGrid size={12} />
-                          Final
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Member since */}
-          {profile.created_at && (
-            <div className="mt-4 text-center text-slate-500 text-xs">
-              Member since {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        {currentUserId && currentUserId !== playerId && (
-          <div className="p-4 border-t border-slate-800 space-y-2">
-            {/* Friend Button */}
-            {friendStatus === 'friends' ? (
-              <button
-                onClick={handleRemoveFriend}
-                disabled={removingFriend}
-                className="w-full py-2.5 bg-slate-800 hover:bg-red-900/50 text-slate-300 hover:text-red-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-all border border-slate-700 hover:border-red-500/50"
-              >
-                {removingFriend ? (
-                  <Loader size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    <UserCheck size={16} className="text-green-400" />
-                    <span>Friends</span>
-                    <span className="text-slate-500 text-xs ml-1">(tap to remove)</span>
-                  </>
-                )}
-              </button>
-            ) : friendStatus === 'pending_sent' ? (
-              <div className="flex items-center justify-center gap-2 py-2 text-amber-400">
-                <Clock size={18} />
-                <span className="text-sm font-medium">Request Sent</span>
-              </div>
-            ) : friendStatus === 'pending_received' ? (
-              <div className="flex items-center justify-center gap-2 py-2 text-cyan-400">
-                <Clock size={18} />
-                <span className="text-sm font-medium">Pending Request</span>
+            ) : !profile ? (
+              <div className="text-center py-8">
+                <p className="text-slate-400">Player not found</p>
               </div>
             ) : (
-              <button
-                onClick={handleSendFriendRequest}
-                disabled={sendingRequest}
-                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-all border border-slate-700"
-              >
-                {sendingRequest ? (
-                  <Loader size={16} className="animate-spin" />
-                ) : (
-                  <UserPlus size={16} />
-                )}
-                Add Friend
-              </button>
-            )}
+              <>
+                {/* Profile Header */}
+                <div className="flex items-center gap-4 mb-4">
+                  <div 
+                    className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
+                    style={{ 
+                      background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)}, ${hexToRgba(glowColor, 0.1)})`,
+                      border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
+                      color: glowColor
+                    }}
+                  >
+                    {(profile.username || profile.display_name)?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-white">
+                      {profile.username || profile.display_name || 'Unknown'}
+                    </h3>
+                    {rankInfo && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <TierIcon shape={rankInfo.shape} glowColor={glowColor} size="small" />
+                        <span style={{ color: glowColor }} className="font-bold text-sm">
+                          {rankInfo.name}
+                        </span>
+                        <span className="text-slate-500 text-sm">
+                          {profile.rating || 1000} ELO
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-            {/* Invite to Game Button */}
-            {onInviteToGame && (
-              <button
-                onClick={handleInvite}
-                className="w-full py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
-                style={{
-                  background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)}, ${hexToRgba(glowColor, 0.1)})`,
-                  border: `1px solid ${hexToRgba(glowColor, 0.4)}`,
-                  color: glowColor
-                }}
-              >
-                <Swords size={16} />
-                Challenge to Game
-              </button>
+                {/* Online Stats */}
+                <div 
+                  className="rounded-xl p-4 mb-4"
+                  style={{ 
+                    backgroundColor: getTierBackground(glowColor),
+                    border: `1px solid ${hexToRgba(glowColor, 0.3)}`
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Swords size={16} style={{ color: glowColor }} />
+                    <span className="font-bold text-white">Online Stats</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white">{displayGames}</div>
+                      <div className="text-xs text-slate-400">Games</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-green-400">{displayWins}</div>
+                      <div className="text-xs text-slate-400">Wins</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold" style={{ color: glowColor }}>{winRate}%</div>
+                      <div className="text-xs text-slate-400">Win Rate</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* v7.12: Full Stats Section - Always visible */}
+                {playerStats && (totalAiGames > 0 || totalPuzzlesSolved > 0 || playerStats.speed_best_streak > 0) && (
+                  <div 
+                    className="rounded-xl p-4 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target size={16} className="text-cyan-400" />
+                      <span className="font-bold text-white">Player Stats</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* AI Stats */}
+                      {totalAiGames > 0 && (
+                        <div 
+                          className="rounded-lg p-3"
+                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Bot size={14} className="text-purple-400" />
+                            <span className="text-slate-400 text-xs">AI Battles</span>
+                          </div>
+                          <div className="text-white font-bold">{totalAiWins} / {totalAiGames}</div>
+                          <div className="text-slate-500 text-xs">wins</div>
+                        </div>
+                      )}
+                      
+                      {/* Puzzle Stats */}
+                      {totalPuzzlesSolved > 0 && (
+                        <div 
+                          className="rounded-lg p-3"
+                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Zap size={14} className="text-green-400" />
+                            <span className="text-slate-400 text-xs">Puzzles</span>
+                          </div>
+                          <div className="text-white font-bold">{totalPuzzlesSolved}</div>
+                          <div className="text-slate-500 text-xs">solved</div>
+                        </div>
+                      )}
+                      
+                      {/* Speed Streak */}
+                      {playerStats.speed_best_streak > 0 && (
+                        <div 
+                          className="rounded-lg p-3"
+                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Flame size={14} className="text-orange-400" />
+                            <span className="text-slate-400 text-xs">Speed Streak</span>
+                          </div>
+                          <div className="text-white font-bold">{playerStats.speed_best_streak}</div>
+                          <div className="text-slate-500 text-xs">best</div>
+                        </div>
+                      )}
+                      
+                      {/* Local Games */}
+                      {playerStats.local_games_played > 0 && (
+                        <div 
+                          className="rounded-lg p-3"
+                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Gamepad2 size={14} className="text-pink-400" />
+                            <span className="text-slate-400 text-xs">Local Games</span>
+                          </div>
+                          <div className="text-white font-bold">{playerStats.local_games_played}</div>
+                          <div className="text-slate-500 text-xs">played</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Head to Head */}
+                {headToHead && (
+                  <div 
+                    className="rounded-xl p-3 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-sm">Head to Head</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-400 font-bold">{headToHead.myWins}</span>
+                        <span className="text-slate-600">-</span>
+                        <span className="text-red-400 font-bold">{headToHead.theirWins}</span>
+                        <span className="text-slate-500 text-xs">({headToHead.total} games)</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Achievements */}
+                {achievementStats && (
+                  <div 
+                    className="rounded-xl p-3 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Trophy size={14} className="text-amber-400" />
+                      <span className="text-slate-400 text-xs">Achievements</span>
+                    </div>
+                    <div className="text-white font-bold">
+                      {achievementStats.unlocked_count} / {achievementStats.total_achievements}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Games */}
+                {recentGames.length > 0 && (
+                  <div className="mt-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Clock size={14} className="text-slate-400" />
+                      <span className="text-slate-400 text-xs font-medium">Recent Games</span>
+                    </div>
+                    <div className="space-y-2">
+                      {recentGames.slice(0, 5).map((game) => {
+                        const won = game.winner_id === playerId;
+                        const opponent = game.opponent;
+                        const opponentName = opponent?.username || opponent?.display_name || 'Unknown';
+                        const isClickable = !!opponent?.id && onViewPlayer;
+                        
+                        return (
+                          <div key={game.id}>
+                            <button
+                              onClick={() => {
+                                if (isClickable) {
+                                  soundManager.playButtonClick();
+                                  onViewPlayer(opponent.id, opponent);
+                                }
+                              }}
+                              disabled={!isClickable}
+                              className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                                isClickable ? 'hover:bg-slate-800/70 cursor-pointer' : 'cursor-default'
+                              }`}
+                              style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)' }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                                  style={{ 
+                                    backgroundColor: hexToRgba(glowColor, 0.2),
+                                    color: glowColor
+                                  }}
+                                >
+                                  {opponentName[0]?.toUpperCase() || '?'}
+                                </div>
+                                <div className="text-left">
+                                  <div className="text-white text-sm">{opponentName}</div>
+                                  <div className="text-slate-500 text-xs">
+                                    {new Date(game.created_at).toLocaleDateString()}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
+                                  {won ? 'WIN' : 'LOSS'}
+                                </span>
+                                {isClickable && (
+                                  <ChevronRight size={14} className="text-slate-600" />
+                                )}
+                              </div>
+                            </button>
+                            
+                            {/* Final Board View button */}
+                            <div className="mt-1.5 flex justify-end">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  soundManager.playButtonClick();
+                                  setSelectedGameForFinalView(game);
+                                }}
+                                className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
+                                title="View final board"
+                              >
+                                <LayoutGrid size={12} />
+                                Final
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Member since */}
+                {profile.created_at && (
+                  <div className="mt-4 text-center text-slate-500 text-xs">
+                    Member since {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                  </div>
+                )}
+              </>
             )}
           </div>
-        )}
+
+          {/* Actions */}
+          {currentUserId && currentUserId !== playerId && !loading && profile && (
+            <div className="p-4 border-t border-slate-800 space-y-2 flex-shrink-0">
+              {/* Friend Button */}
+              {friendStatus === 'friends' ? (
+                <button
+                  onClick={handleRemoveFriend}
+                  disabled={removingFriend}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-red-900/50 text-slate-300 hover:text-red-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-all border border-slate-700 hover:border-red-500/50"
+                >
+                  {removingFriend ? (
+                    <Loader size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      <UserCheck size={16} className="text-green-400" />
+                      <span>Friends</span>
+                      <span className="text-slate-500 text-xs ml-1">(tap to remove)</span>
+                    </>
+                  )}
+                </button>
+              ) : friendStatus === 'pending_sent' ? (
+                <div className="flex items-center justify-center gap-2 py-2 text-amber-400">
+                  <Clock size={18} />
+                  <span className="text-sm font-medium">Request Sent</span>
+                </div>
+              ) : friendStatus === 'pending_received' ? (
+                <div className="flex items-center justify-center gap-2 py-2 text-cyan-400">
+                  <UserPlus size={18} />
+                  <span className="text-sm font-medium">Wants to be friends</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSendFriendRequest}
+                  disabled={sendingRequest}
+                  className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 transition-all"
+                >
+                  {sendingRequest ? (
+                    <Loader size={16} className="animate-spin" />
+                  ) : (
+                    <>
+                      <UserPlus size={16} />
+                      <span>Add Friend</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Invite to Game */}
+              {onInviteToGame && (
+                <button
+                  onClick={handleInviteToGame}
+                  className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/30"
+                >
+                  <Swords size={16} />
+                  <span>Challenge to Game</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
-      
-      {/* Achievements Modal - View all achievements for this player */}
-      {showAchievements && (
-        <Achievements
-          userId={playerId}
-          onClose={() => setShowAchievements(false)}
-          viewOnly={true}
-          playerName={profile?.username || profile?.display_name || 'Player'}
-        />
-      )}
-      
+
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
         <FinalBoardView
@@ -792,10 +711,10 @@ const ViewPlayerProfile = ({
                   selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
           player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          viewerIsPlayer1={selectedGameForFinalView.player1_id === playerId}
+          viewerIsPlayer1={selectedGameForFinalView.player1_id === currentUserId}
         />
       )}
-    </div>
+    </>
   );
 };
 

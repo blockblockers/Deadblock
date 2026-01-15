@@ -1,17 +1,24 @@
 // pushNotificationService.js - Client-side push notification management
-// v7.12 - FIXES:
-// - Registers /service-worker.js (consolidated file)
-// - Better error handling during init
-// - Waits for service worker to be active before checking subscription
-// - More detailed logging for debugging
 // Place in src/services/pushNotificationService.js
+//
+// This service handles:
+// - Service worker registration
+// - Push subscription management
+// - Storing subscriptions in Supabase
+// - Permission requests
 
 import { supabase } from '../utils/supabase';
 
-// VAPID public key - YOU MUST GENERATE YOUR OWN
+// VAPID public key from environment variable
 // Generate with: npx web-push generate-vapid-keys
-// Store the private key securely (in Supabase secrets/environment variables)
-const VAPID_PUBLIC_KEY = 'BEz7oIWn2ESc7ahvq894zbJNKV9dDYRIRNuAvCpuvTMh4NOAFT-U5UeU4H2Y93JK3NN_IXG03VibeeO3Z4ZXmmY';
+// Store PUBLIC key in .env.local as VITE_VAPID_PUBLIC_KEY
+// Store PRIVATE key in Supabase Edge Function secrets (never client-side!)
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+
+// Validate VAPID key is configured
+if (!VAPID_PUBLIC_KEY) {
+  console.warn('[PushService] VITE_VAPID_PUBLIC_KEY not set in environment. Push notifications will not work.');
+}
 
 class PushNotificationService {
   constructor() {
@@ -19,102 +26,53 @@ class PushNotificationService {
     this.subscription = null;
     this.initialized = false;
     this.supported = false;
-    this.initPromise = null;
   }
 
   // Check if push notifications are supported
   isSupported() {
-    const hasServiceWorker = 'serviceWorker' in navigator;
-    const hasPushManager = 'PushManager' in window;
-    const hasNotification = 'Notification' in window;
-    
-    console.log('[PushService] Support check:', { hasServiceWorker, hasPushManager, hasNotification });
-    
-    return hasServiceWorker && hasPushManager && hasNotification;
+    return (
+      'serviceWorker' in navigator &&
+      'PushManager' in window &&
+      'Notification' in window &&
+      !!VAPID_PUBLIC_KEY // Also require VAPID key to be configured
+    );
   }
 
-  // Initialize the service - returns a promise that resolves when ready
+  // Initialize the service
   async init() {
-    // Return existing promise if already initializing
-    if (this.initPromise) {
-      return this.initPromise;
-    }
-    
-    // Return cached result if already initialized
-    if (this.initialized) {
-      return this.supported;
-    }
+    if (this.initialized) return this.supported;
 
-    this.initPromise = this._doInit();
-    return this.initPromise;
-  }
-  
-  async _doInit() {
     this.supported = this.isSupported();
     
     if (!this.supported) {
-      console.log('[PushService] Push notifications not supported on this browser/device');
+      console.log('[PushService] Push notifications not supported or VAPID key not configured');
       this.initialized = true;
       return false;
     }
 
     try {
-      console.log('[PushService] Registering service worker...');
-      
-      // v7.12: Register the consolidated service-worker.js
-      this.swRegistration = await navigator.serviceWorker.register('/service-worker.js', {
+      // Register service worker
+      this.swRegistration = await navigator.serviceWorker.register('/sw.js', {
         scope: '/'
       });
       
-      console.log('[PushService] Service worker registered:', this.swRegistration.scope);
+      console.log('[PushService] Service worker registered:', this.swRegistration);
 
-      // Wait for the service worker to be ready and active
-      const registration = await navigator.serviceWorker.ready;
-      console.log('[PushService] Service worker ready:', registration.active?.state);
-      
-      // If service worker is not yet active, wait for it
-      if (registration.active?.state !== 'activated') {
-        await new Promise((resolve) => {
-          if (registration.active) {
-            registration.active.addEventListener('statechange', function onStateChange() {
-              if (this.state === 'activated') {
-                this.removeEventListener('statechange', onStateChange);
-                resolve();
-              }
-            });
-          } else if (registration.installing || registration.waiting) {
-            const sw = registration.installing || registration.waiting;
-            sw.addEventListener('statechange', function onStateChange() {
-              if (this.state === 'activated') {
-                this.removeEventListener('statechange', onStateChange);
-                resolve();
-              }
-            });
-          } else {
-            resolve(); // Already active or unknown state
-          }
-          // Timeout after 5 seconds
-          setTimeout(resolve, 5000);
-        });
-      }
+      // Wait for the service worker to be ready
+      await navigator.serviceWorker.ready;
       
       // Check for existing subscription
-      try {
-        this.subscription = await this.swRegistration.pushManager.getSubscription();
-        console.log('[PushService] Existing subscription:', this.subscription ? 'found' : 'none');
-      } catch (subError) {
-        console.warn('[PushService] Error checking subscription:', subError);
-        this.subscription = null;
+      this.subscription = await this.swRegistration.pushManager.getSubscription();
+      
+      if (this.subscription) {
+        console.log('[PushService] Existing subscription found');
       }
 
       this.initialized = true;
-      this.supported = true;
-      console.log('[PushService] Initialization complete');
       return true;
     } catch (error) {
       console.error('[PushService] Initialization failed:', error);
       this.initialized = true;
-      this.supported = false;
       return false;
     }
   }
@@ -122,7 +80,6 @@ class PushNotificationService {
   // Get current permission status
   getPermissionStatus() {
     if (!this.supported) return 'unsupported';
-    if (!('Notification' in window)) return 'unsupported';
     return Notification.permission;
   }
 
@@ -133,36 +90,24 @@ class PushNotificationService {
 
   // Subscribe to push notifications
   async subscribe(userId) {
-    console.log('[PushService] Subscribe called for user:', userId);
-    
+    if (!this.supported || !this.swRegistration) {
+      throw new Error('Push notifications not supported or not initialized');
+    }
+
     if (!userId) {
       throw new Error('User ID required for subscription');
     }
-    
-    // Ensure initialized
-    if (!this.initialized) {
-      await this.init();
-    }
-    
-    if (!this.supported || !this.swRegistration) {
-      console.error('[PushService] Not supported or not initialized');
-      throw new Error('Push notifications not supported or not initialized');
+
+    if (!VAPID_PUBLIC_KEY) {
+      throw new Error('VAPID public key not configured');
     }
 
     try {
       // Request notification permission if not granted
-      console.log('[PushService] Current permission:', Notification.permission);
-      
-      if (Notification.permission === 'denied') {
-        console.log('[PushService] Permission already denied');
-        return { success: false, reason: 'permission_denied' };
-      }
-      
       const permission = await Notification.requestPermission();
-      console.log('[PushService] Permission result:', permission);
       
       if (permission !== 'granted') {
-        console.log('[PushService] Permission not granted');
+        console.log('[PushService] Notification permission denied');
         return { success: false, reason: 'permission_denied' };
       }
 
@@ -170,23 +115,20 @@ class PushNotificationService {
       const applicationServerKey = this.urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
 
       // Subscribe to push manager
-      console.log('[PushService] Creating push subscription...');
       this.subscription = await this.swRegistration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey
       });
 
-      console.log('[PushService] Push subscription created successfully');
+      console.log('[PushService] Push subscription created:', this.subscription);
 
       // Save subscription to Supabase
       const saved = await this.saveSubscription(userId, this.subscription);
       
       if (!saved) {
-        console.error('[PushService] Failed to save subscription to database');
         throw new Error('Failed to save subscription to server');
       }
 
-      console.log('[PushService] Subscription saved to database');
       return { success: true, subscription: this.subscription };
     } catch (error) {
       console.error('[PushService] Subscription failed:', error);
@@ -222,56 +164,28 @@ class PushNotificationService {
 
   // Save subscription to Supabase
   async saveSubscription(userId, subscription) {
-    if (!supabase) {
-      console.error('[PushService] Supabase not configured');
-      return false;
-    }
-
     try {
-      const subscriptionJSON = subscription.toJSON();
+      const subscriptionJson = subscription.toJSON();
       
-      console.log('[PushService] Saving subscription to database...');
+      // Get device info for identification
+      const deviceInfo = this.getDeviceInfo();
       
-      const subscriptionData = {
-        user_id: userId,
-        endpoint: subscriptionJSON.endpoint,
-        p256dh: subscriptionJSON.keys?.p256dh || null,
-        auth: subscriptionJSON.keys?.auth || null,
-        device_info: this.getDeviceInfo(),
-        updated_at: new Date().toISOString()
-      };
-      
-      // Try upsert first
       const { error } = await supabase
         .from('push_subscriptions')
-        .upsert(subscriptionData, {
-          onConflict: 'endpoint'
+        .upsert({
+          user_id: userId,
+          endpoint: subscriptionJson.endpoint,
+          p256dh: subscriptionJson.keys?.p256dh,
+          auth: subscriptionJson.keys?.auth,
+          device_info: deviceInfo,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,endpoint'
         });
 
       if (error) {
-        console.warn('[PushService] Upsert failed:', error.message);
-        
-        // Fallback: delete existing and insert new
-        console.log('[PushService] Trying delete + insert fallback...');
-        
-        // Delete any existing subscription with this endpoint
-        await supabase
-          .from('push_subscriptions')
-          .delete()
-          .eq('endpoint', subscriptionJSON.endpoint);
-        
-        // Insert fresh
-        const { error: insertError } = await supabase
-          .from('push_subscriptions')
-          .insert(subscriptionData);
-        
-        if (insertError) {
-          console.error('[PushService] Insert fallback failed:', insertError);
-          return false;
-        }
-        
-        console.log('[PushService] Subscription saved via fallback');
-        return true;
+        console.error('[PushService] Failed to save subscription:', error);
+        return false;
       }
 
       console.log('[PushService] Subscription saved to Supabase');
@@ -284,22 +198,22 @@ class PushNotificationService {
 
   // Remove subscription from Supabase
   async removeSubscription(userId) {
-    if (!supabase || !this.subscription) {
-      return false;
-    }
-
     try {
-      const endpoint = this.subscription.endpoint;
+      const endpoint = this.subscription?.endpoint;
       
-      const { error } = await supabase
-        .from('push_subscriptions')
-        .delete()
-        .eq('user_id', userId)
-        .eq('endpoint', endpoint);
-
-      if (error) {
-        console.error('[PushService] Error removing subscription:', error);
-        return false;
+      if (endpoint) {
+        // Remove specific subscription
+        await supabase
+          .from('push_subscriptions')
+          .delete()
+          .eq('user_id', userId)
+          .eq('endpoint', endpoint);
+      } else {
+        // Remove all subscriptions for user (fallback)
+        await supabase
+          .from('push_subscriptions')
+          .delete()
+          .eq('user_id', userId);
       }
 
       console.log('[PushService] Subscription removed from Supabase');
@@ -343,7 +257,7 @@ class PushNotificationService {
     return {
       device,
       browser,
-      userAgent: ua.substring(0, 200),
+      userAgent: ua.substring(0, 200), // Truncate for storage
       timestamp: new Date().toISOString()
     };
   }
@@ -373,7 +287,7 @@ class PushNotificationService {
     await this.swRegistration.showNotification('Test Notification', {
       body: 'Push notifications are working!',
       icon: '/pwa-192x192.png',
-      badge: '/badges/badge-default.svg',
+      badge: '/pwa-192x192.png',
       tag: 'test-notification',
       renotify: true
     });
