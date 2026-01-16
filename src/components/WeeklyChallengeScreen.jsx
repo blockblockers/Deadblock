@@ -2,7 +2,7 @@
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, FlipHorizontal } from 'lucide-react';
+import { Clock, Trophy, ArrowLeft, RotateCcw, CheckCircle, X, FlipHorizontal } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
@@ -735,6 +735,17 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     loadWeeklyPuzzle();
   }, [challenge]);
   
+  // Auto-start the game when puzzle is loaded
+  useEffect(() => {
+    if (puzzle && !loading && !loadError && !gameStarted && loadPuzzleOnly) {
+      // Puzzle loaded successfully - start the game automatically
+      loadPuzzleOnly(puzzle);
+      setGameStarted(true);
+      startTimer();
+      soundManager.playClickSound('success');
+    }
+  }, [puzzle, loading, loadError, gameStarted, loadPuzzleOnly, startTimer]);
+  
   // Start the timer
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
@@ -763,24 +774,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setAccumulatedMs(prev => prev + sessionTime);
     return accumulatedMs + sessionTime;
   }, [accumulatedMs]);
-  
-  // Start the game
-  const handleStartGame = useCallback(() => {
-    if (!puzzle) {
-      setLoadError('Puzzle not loaded. Please go back and try again.');
-      return;
-    }
-    
-    if (typeof loadPuzzleOnly !== 'function') {
-      setLoadError('Game initialization error. Please refresh and try again.');
-      return;
-    }
-    
-    loadPuzzleOnly(puzzle);
-    setGameStarted(true);
-    startTimer();
-    soundManager.playClickSound('success');
-  }, [puzzle, loadPuzzleOnly, startTimer]);
   
   // Check for puzzle completion
   useEffect(() => {
@@ -867,12 +860,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center relative z-20">
+        <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
           backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }} />
-        <div className="text-center">
+        <div className="relative z-10 text-center">
           <div className="w-12 h-12 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
           <p className="text-red-300">Loading weekly challenge...</p>
         </div>
@@ -883,12 +876,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Error state
   if (loadError) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative z-20">
+        <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
           backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }} />
-        <div className="bg-slate-900 rounded-xl p-6 max-w-sm w-full border border-red-500/30 text-center">
+        <div className="relative z-10 bg-slate-900 rounded-xl p-6 max-w-sm w-full border border-red-500/30 text-center">
           <X size={48} className="text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-red-300 mb-2">Error</h2>
           <p className="text-slate-400 mb-4">{loadError}</p>
@@ -903,76 +896,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     );
   }
   
-  // Pre-game screen
-  if (!gameStarted) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
-          backgroundSize: '40px 40px'
-        }} />
-        
-        <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full border border-red-500/30 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
-          <div className="text-center mb-6">
-            <Trophy size={48} className="text-red-400 mx-auto mb-3" />
-            <h2 className="text-2xl font-black text-red-300">WEEK {challenge?.week_number || '?'}</h2>
-            <p className="text-slate-400 mt-2">Weekly Challenge</p>
-          </div>
-          
-          {/* Stats */}
-          {(firstAttemptTime || bestTime) && (
-            <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700">
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <div className="text-slate-500 text-xs uppercase mb-1">First Time</div>
-                  <div className="text-lg font-bold text-white">
-                    {weeklyChallengeService.formatTime(firstAttemptTime)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-slate-500 text-xs uppercase mb-1">Best Time</div>
-                  <div className="text-lg font-bold text-amber-400">
-                    {weeklyChallengeService.formatTime(bestTime)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {isFirstAttempt ? (
-            <p className="text-amber-400 text-sm text-center mb-4">
-              ⭐ Your first completion time counts for the leaderboard!
-            </p>
-          ) : (
-            <p className="text-slate-500 text-xs text-center mb-4">
-              Practice mode - try to beat your best time!
-            </p>
-          )}
-          
-          <button
-            onClick={handleStartGame}
-            className="w-full p-4 rounded-xl font-black text-lg bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(239,68,68,0.5)]"
-          >
-            <Play size={24} />
-            {isFirstAttempt ? 'START CHALLENGE' : 'PRACTICE RUN'}
-          </button>
-          
-          <button
-            onClick={() => { soundManager.playButtonClick(); onMenu(); }}
-            className="w-full mt-3 p-3 rounded-xl font-bold text-slate-400 hover:text-slate-300 transition-all flex items-center justify-center gap-2"
-          >
-            <ArrowLeft size={18} />
-            Back
-          </button>
-        </div>
-      </div>
-    );
-  }
-  
   // Game in progress
   return (
     <div 
-      className="min-h-screen bg-slate-950"
+      className="min-h-screen bg-slate-950 relative z-20"
       style={{ 
         overflowY: 'auto', 
         overflowX: 'hidden', 
@@ -982,7 +909,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       }}
     >
       {/* Background */}
-      <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+      <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
         backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
       }} />
@@ -1002,7 +929,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       )}
       
       {/* Content */}
-      <div className="relative min-h-screen flex flex-col items-center px-2 py-4">
+      <div className="relative z-10 min-h-screen flex flex-col items-center px-2 py-4">
         <div className="w-full max-w-lg">
           
           {/* Header with Title and Timer - styled like other game boards */}
