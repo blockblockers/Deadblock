@@ -1003,6 +1003,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   }
   
   // Game in progress
+  // DEBUG: Log board state when rendering the game
+  console.log('[WeeklyChallengeScreen] Rendering game, board state:', {
+    gameStarted,
+    boardLength: board?.length,
+    boardPiecesType: typeof boardPieces,
+    boardFirstRow: board?.[0],
+    usedPiecesCount: usedPieces?.length,
+    hasPuzzle: !!puzzle
+  });
+  
   return (
     <div 
       className="min-h-screen bg-slate-950"
@@ -1167,6 +1177,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           
           {/* Game Board */}
           <div className="flex justify-center mb-3">
+            {/* DEBUG: Show board state info */}
+            <div className="absolute top-2 left-2 bg-black/80 text-white text-xs p-2 rounded z-50">
+              Board rows: {board?.length || 0} | 
+              UsedPieces: {usedPieces?.length || 0} | 
+              Puzzle: {puzzle ? 'loaded' : 'null'}
+            </div>
             <GameBoard
               ref={boardRef}
               board={board}
