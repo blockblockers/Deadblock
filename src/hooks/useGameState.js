@@ -121,28 +121,16 @@ export const useGameState = () => {
 
   // Confirm the pending move
   const confirmMove = useCallback(() => {
-    console.log('[useGameState] confirmMove called:', { 
-      hasPendingMove: !!pendingMove, 
-      pendingMove,
-      rotation, 
-      flipped 
-    });
-    
     if (!pendingMove) {
-      console.log('[useGameState] No pending move - returning early');
       return;
     }
     
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    console.log('[useGameState] Piece coords:', coords);
     
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
-      console.log('[useGameState] Invalid placement - playing invalid sound');
       soundManager.playInvalid();
       return;
     }
-    
-    console.log('[useGameState] Valid placement - animating...');
     
     // Animate player piece placement
     setPlayerAnimatingMove({
@@ -321,11 +309,8 @@ export const useGameState = () => {
   // Internal puzzle loading
   const loadPuzzleInternal = useCallback((puzzle) => {
     if (!puzzle) {
-      console.error('loadPuzzleInternal: No puzzle provided');
       return;
     }
-    
-    console.log('Loading puzzle:', puzzle.name, 'difficulty:', puzzle.difficulty);
     
     // Parse the board state
     const newBoard = createEmptyBoard();
@@ -404,11 +389,8 @@ export const useGameState = () => {
   // This prevents the weekly challenge from being kicked back to regular puzzle mode
   const loadPuzzleOnly = useCallback((puzzle) => {
     if (!puzzle) {
-      console.error('loadPuzzleOnly: No puzzle provided');
       return;
     }
-    
-    console.log('[loadPuzzleOnly] Loading puzzle:', puzzle.name, 'difficulty:', puzzle.difficulty);
     
     // Parse the board state
     const newBoard = createEmptyBoard();
@@ -458,11 +440,8 @@ export const useGameState = () => {
   // Reset current puzzle to original state (retry)
   const resetCurrentPuzzle = useCallback(() => {
     if (!originalPuzzleState) {
-      console.log('No original puzzle state to reset to');
       return;
     }
-    
-    console.log('Resetting puzzle to original state');
     
     setBoard(originalPuzzleState.board.map(r => [...r]));
     setBoardPieces(originalPuzzleState.boardPieces.map(r => [...r]));
@@ -483,10 +462,8 @@ export const useGameState = () => {
   // Reset game - preserves AI goes first preference for VS AI mode
   const resetGame = useCallback(() => {
     if (gameMode === 'puzzle') {
-      console.log('Reset: generating new puzzle with difficulty:', puzzleDifficultyRef.current);
       generateAndLoadPuzzle(puzzleDifficultyRef.current);
     } else if (gameMode === 'ai') {
-      console.log('Reset: starting new AI game, aiGoesFirst:', aiGoesFirstRef.current);
       setBoard(createEmptyBoard());
       setBoardPieces(createEmptyBoard());
       setCurrentPlayer(aiGoesFirstRef.current ? 2 : 1);
@@ -516,8 +493,6 @@ export const useGameState = () => {
 
   // Start new game - CRITICAL: This is called by App.jsx handleStartGame for '2player' mode
   const startNewGame = useCallback((mode, aiGoesFirst = false) => {
-    console.log('startNewGame called:', mode, 'aiGoesFirst:', aiGoesFirst);
-    
     // Store AI goes first preference
     if (mode === 'ai') {
       aiGoesFirstRef.current = aiGoesFirst;

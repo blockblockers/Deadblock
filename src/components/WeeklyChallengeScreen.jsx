@@ -264,23 +264,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     selectPiece,
     rotatePiece,
     flipPiece,
-    loadPuzzleOnly,  // FIXED: Use loadPuzzleOnly instead of loadPuzzle to avoid mode change
+    loadPuzzleOnly,
     resetCurrentPuzzle,
     setPendingMove,
   } = useGameState();
-  
-  // Debug: Log what we got from useGameState
-  useEffect(() => {
-    console.log('[WeeklyChallengeScreen] useGameState values:', {
-      hasBoard: !!board,
-      boardLength: board?.length,
-      hasBoardPieces: !!boardPieces,
-      hasLoadPuzzleOnly: typeof loadPuzzleOnly === 'function',
-      currentPlayer,
-      gameOver,
-      winner
-    });
-  }, [board, boardPieces, loadPuzzleOnly, currentPlayer, gameOver, winner]);
   
   // =========================================================================
   // DRAG AND DROP HANDLERS - FIXED WITH DIAGNOSTIC LOGGING
@@ -722,15 +709,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       
       try {
         const seed = weeklyChallengeService.generatePuzzleSeed(challenge);
-        console.log('[WeeklyChallengeScreen] Loading puzzle with seed:', seed);
         
         const puzzleData = await getSeededPuzzle(seed, PUZZLE_DIFFICULTY.HARD);
         
         if (puzzleData) {
-          console.log('[WeeklyChallengeScreen] Puzzle loaded successfully');
           setPuzzle(puzzleData);
         } else {
-          console.error('[WeeklyChallengeScreen] Puzzle generation returned null');
           setLoadError('Failed to generate puzzle. Please try again.');
         }
         
@@ -782,37 +766,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Start the game
   const handleStartGame = useCallback(() => {
-    console.log('[WeeklyChallengeScreen] handleStartGame called');
-    console.log('[WeeklyChallengeScreen] puzzle:', puzzle);
-    console.log('[WeeklyChallengeScreen] loadPuzzleOnly function exists:', typeof loadPuzzleOnly === 'function');
-    
     if (!puzzle) {
-      console.error('[WeeklyChallengeScreen] Cannot start game - puzzle is null');
       setLoadError('Puzzle not loaded. Please go back and try again.');
       return;
     }
     
     if (typeof loadPuzzleOnly !== 'function') {
-      console.error('[WeeklyChallengeScreen] loadPuzzleOnly is not a function!');
       setLoadError('Game initialization error. Please refresh and try again.');
       return;
     }
     
-    console.log('[WeeklyChallengeScreen] Starting game with puzzle:', puzzle.name);
-    
-    try {
-      loadPuzzleOnly(puzzle);
-      console.log('[WeeklyChallengeScreen] loadPuzzleOnly completed');
-    } catch (err) {
-      console.error('[WeeklyChallengeScreen] Error calling loadPuzzleOnly:', err);
-      setLoadError('Failed to load puzzle: ' + err.message);
-      return;
-    }
-    
+    loadPuzzleOnly(puzzle);
     setGameStarted(true);
     startTimer();
     soundManager.playClickSound('success');
-    console.log('[WeeklyChallengeScreen] Game started successfully');
   }, [puzzle, loadPuzzleOnly, startTimer]);
   
   // Check for puzzle completion
@@ -1003,16 +970,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   }
   
   // Game in progress
-  // DEBUG: Log board state when rendering the game
-  console.log('[WeeklyChallengeScreen] Rendering game, board state:', {
-    gameStarted,
-    boardLength: board?.length,
-    boardPiecesType: typeof boardPieces,
-    boardFirstRow: board?.[0],
-    usedPiecesCount: usedPieces?.length,
-    hasPuzzle: !!puzzle
-  });
-  
   return (
     <div 
       className="min-h-screen bg-slate-950"
@@ -1177,12 +1134,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           
           {/* Game Board */}
           <div className="flex justify-center mb-3">
-            {/* DEBUG: Show board state info */}
-            <div className="absolute top-2 left-2 bg-black/80 text-white text-xs p-2 rounded z-50">
-              Board rows: {board?.length || 0} | 
-              UsedPieces: {usedPieces?.length || 0} | 
-              Puzzle: {puzzle ? 'loaded' : 'null'}
-            </div>
             <GameBoard
               ref={boardRef}
               board={board}
