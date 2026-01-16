@@ -24,7 +24,6 @@ import Achievements, { AchievementPopup } from './Achievements';
 import { SpectatableGamesList } from './SpectatorView';
 import GameInviteNotification from './GameInviteNotification';
 import FinalBoardView from './FinalBoardView';
-import achievementService from '../services/achievementService';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
@@ -251,7 +250,6 @@ const OnlineMenu = ({
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
-  const [achievementStats, setAchievementStats] = useState(null);
   
   // Final Board View state
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
@@ -335,25 +333,6 @@ const OnlineMenu = ({
   useEffect(() => {
     loadFriendRequests();
   }, [sessionReady, profile?.id]);
-
-  // Load achievement stats on mount
-  useEffect(() => {
-    const loadAchievements = async () => {
-      if (!profile?.id) return;
-      try {
-        const { data } = await achievementService.getAchievementStats(profile.id);
-        if (data) {
-          setAchievementStats({
-            unlockedCount: data.unlockedCount || 0,
-            totalAchievements: data.totalAchievements || 24
-          });
-        }
-      } catch (e) {
-        console.log('Achievement stats not available');
-      }
-    };
-    loadAchievements();
-  }, [profile?.id]);
 
   // Load games and invites
   useEffect(() => {
@@ -1167,7 +1146,16 @@ const OnlineMenu = ({
                   {(profile?.username || profile?.display_name)?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1">
-                  <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
+                    <button
+                      onClick={handleOpenUsernameEdit}
+                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
+                      title="Edit Username"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-slate-500">{profile?.games_played || 0} games</span>
                     <span className="text-green-400">{profile?.games_won || 0} wins</span>
@@ -1289,7 +1277,7 @@ const OnlineMenu = ({
   </button>
   <button
     onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
-    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group relative"
+    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
     style={{
       background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
       borderColor: 'rgba(251, 191, 36, 0.3)',
@@ -1297,9 +1285,7 @@ const OnlineMenu = ({
     }}
   >
     <Trophy size={14} className="text-amber-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-amber-300 transition-colors">
-      {achievementStats ? `${achievementStats.unlockedCount}/${achievementStats.totalAchievements}` : 'Awards'}
-    </span>
+    <span className="text-slate-300 group-hover:text-amber-300 transition-colors text-[11px]">Achievements</span>
   </button>
   <button
     onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
