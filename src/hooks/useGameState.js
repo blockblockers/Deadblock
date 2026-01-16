@@ -400,6 +400,61 @@ export const useGameState = () => {
     }
   }, [loadPuzzleInternal, generateAndLoadPuzzle]);
 
+  // Load puzzle WITHOUT changing game mode (for WeeklyChallengeScreen)
+  // This prevents the weekly challenge from being kicked back to regular puzzle mode
+  const loadPuzzleOnly = useCallback((puzzle) => {
+    if (!puzzle) {
+      console.error('loadPuzzleOnly: No puzzle provided');
+      return;
+    }
+    
+    console.log('[loadPuzzleOnly] Loading puzzle:', puzzle.name, 'difficulty:', puzzle.difficulty);
+    
+    // Parse the board state
+    const newBoard = createEmptyBoard();
+    const newBoardPieces = createEmptyBoard();
+    
+    for (let i = 0; i < 64; i++) {
+      const char = puzzle.boardState[i];
+      if (char !== 'G') {
+        const row = Math.floor(i / 8);
+        const col = i % 8;
+        newBoard[row][col] = 1;
+        newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
+      }
+    }
+    
+    // Store original state for retry
+    setOriginalPuzzleState({
+      board: newBoard.map(r => [...r]),
+      boardPieces: newBoardPieces.map(r => [...r]),
+      usedPieces: [...puzzle.usedPieces],
+      puzzle: { ...puzzle }
+    });
+    
+    // Set difficulty from puzzle
+    if (puzzle.difficulty) {
+      setPuzzleDifficulty(puzzle.difficulty);
+    }
+    
+    setBoard(newBoard);
+    setBoardPieces(newBoardPieces);
+    setUsedPieces(puzzle.usedPieces);
+    setCurrentPuzzle(puzzle);
+    // NOTE: We do NOT call setGameMode here - that's the key difference from loadPuzzleInternal!
+    setCurrentPlayer(1);
+    setSelectedPiece(null);
+    setRotation(0);
+    setFlipped(false);
+    setMoveHistory([]);
+    setPendingMove(null);
+    setGameOver(false);
+    setWinner(null);
+    setIsGeneratingPuzzle(false);
+    
+    soundManager.playButtonClick();
+  }, [setPuzzleDifficulty]);
+
   // Reset current puzzle to original state (retry)
   const resetCurrentPuzzle = useCallback(() => {
     if (!originalPuzzleState) {
@@ -547,6 +602,7 @@ export const useGameState = () => {
     startNewGame,
     undoMove,
     loadPuzzle,
+    loadPuzzleOnly,
     resetCurrentPuzzle,
   };
 };

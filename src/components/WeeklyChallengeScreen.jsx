@@ -1,9 +1,8 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
-// v7.13: Updated to use consistent GlowOrbButton styling
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, Trophy, Play, CheckCircle, X, Home, RotateCw, FlipHorizontal } from 'lucide-react';
+import { Clock, Trophy, ArrowLeft, RotateCcw, Play, CheckCircle, X, FlipHorizontal } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
@@ -17,42 +16,6 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
-
-// Glow Orb Button Component - consistent styling across ALL game screens
-const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
-  const colorClasses = {
-    cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
-    amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
-    orange: 'from-orange-500 to-amber-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]',
-    green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
-    red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
-    rose: 'from-rose-500 to-red-600 shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:shadow-[0_0_25px_rgba(244,63,94,0.6)]',
-    purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
-    indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
-    blue: 'from-blue-500 to-indigo-600 shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)]',
-    yellow: 'from-yellow-400 to-amber-500 shadow-[0_0_15px_rgba(250,204,21,0.4)] hover:shadow-[0_0_25px_rgba(250,204,21,0.6)]',
-    slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`
-        bg-gradient-to-r ${colorClasses[color]}
-        text-white font-bold rounded-xl px-3 py-2 text-xs
-        transition-all duration-200
-        hover:scale-105 active:scale-95
-        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
-        flex items-center justify-center gap-1
-        ${className}
-      `}
-    >
-      {children}
-    </button>
-  );
-};
 
 // Timer display component - RED THEME
 const TimerDisplay = ({ elapsedMs, isPaused }) => {
@@ -160,6 +123,7 @@ const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAt
             onClick={onPlayAgain}
             className="w-full p-3 rounded-xl font-bold bg-slate-800 text-red-300 border border-red-500/30 hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
           >
+            <RotateCcw size={18} />
             {wasFirstAttempt ? 'PRACTICE RUN' : 'TRY AGAIN'}
           </button>
           
@@ -167,6 +131,7 @@ const SuccessOverlay = ({ completionTime, firstAttemptTime, bestTime, wasFirstAt
             onClick={onMenu}
             className="w-full p-3 rounded-xl font-bold bg-slate-800/50 text-slate-400 hover:text-slate-300 transition-all flex items-center justify-center gap-2"
           >
+            <ArrowLeft size={18} />
             BACK TO MENU
           </button>
         </div>
@@ -218,6 +183,7 @@ const LoseOverlay = ({ elapsedMs, attemptCount, isFirstAttempt, onRetry, onMenu 
             onClick={onRetry}
             className="w-full p-3 rounded-xl font-bold bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(239,68,68,0.4)]"
           >
+            <RotateCcw size={18} />
             RETRY (TIMER CONTINUES)
           </button>
           
@@ -225,6 +191,7 @@ const LoseOverlay = ({ elapsedMs, attemptCount, isFirstAttempt, onRetry, onMenu 
             onClick={onMenu}
             className="w-full p-3 rounded-xl font-bold bg-slate-800/50 text-slate-400 hover:text-slate-300 transition-all flex items-center justify-center gap-2"
           >
+            <ArrowLeft size={18} />
             GIVE UP
           </button>
         </div>
@@ -260,8 +227,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
-  const [dragPreviewCell, setDragPreviewCell] = useState(null);
-  const [pieceCellOffset, setPieceCellOffset] = useState({ row: 0, col: 0 });
+  const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: For board preview during drag
   
   // Refs
   const timerRef = useRef(null);
@@ -298,13 +264,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     selectPiece,
     rotatePiece,
     flipPiece,
-    loadPuzzle,
+    loadPuzzleOnly,  // FIXED: Use loadPuzzleOnly instead of loadPuzzle to avoid mode change
     resetCurrentPuzzle,
     setPendingMove,
   } = useGameState();
   
   // =========================================================================
-  // DRAG AND DROP HANDLERS
+  // DRAG AND DROP HANDLERS - FIXED WITH DIAGNOSTIC LOGGING
   // =========================================================================
   
   const DRAG_THRESHOLD = 8;
@@ -313,17 +279,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Track which cell of the piece is under the finger
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   
-  // Refs for global touch handlers
+  // Refs for global touch handlers - allows immediate attachment/detachment
   const globalTouchHandlersRef = useRef({ move: null, end: null, cancel: null });
   
-  // Refs to store latest callback functions
+  // Refs to store latest callback functions (avoids stale closure issues)
   const updateDragRef = useRef(null);
   const endDragRef = useRef(null);
   
   // CRITICAL: Use ref for isDragging to avoid stale closure issues
+  // State updates are async, but refs update synchronously
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
-  const dragCellRef = useRef(null);
+  const dragCellRef = useRef(null); // v7.22: Store current cell during drag
   
   // Calculate which cell of the piece was touched
   const calculateTouchedPieceCell = useCallback((piece, touchX, touchY, elementRect, currentRotation, currentFlipped) => {
@@ -361,6 +328,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   }, []);
 
   // Calculate which board cell the drag position is over
+  // Allow positions outside the board for pieces that extend beyond their anchor
   const calculateBoardCell = useCallback((clientX, clientY) => {
     if (!boardBoundsRef.current) return null;
     
@@ -368,18 +336,22 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const cellWidth = width / BOARD_SIZE;
     const cellHeight = height / BOARD_SIZE;
     
+    // Match DragOverlay fingerOffset - piece is shown above finger
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
     const fingerOffset = isMobile ? 40 : 20;
     
     const relX = clientX - left;
     const relY = (clientY - fingerOffset) - top;
     
+    // Raw cell under finger (adjusted for fingerOffset)
     const fingerCol = Math.floor(relX / cellWidth);
     const fingerRow = Math.floor(relY / cellHeight);
     
+    // Adjust by which cell of the piece is under the finger
     const col = fingerCol - pieceCellOffsetRef.current.col;
     const row = fingerRow - pieceCellOffsetRef.current.row;
     
+    // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
     if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
         col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
@@ -392,14 +364,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Detach global touch handlers
   const detachGlobalTouchHandlers = useCallback(() => {
     const { move, end, cancel } = globalTouchHandlersRef.current;
+    // v7.22: Must use same capture option as when adding
     if (move) window.removeEventListener('touchmove', move, { capture: true });
     if (end) window.removeEventListener('touchend', end, { capture: true });
     if (cancel) window.removeEventListener('touchcancel', cancel, { capture: true });
     globalTouchHandlersRef.current = { move: null, end: null, cancel: null };
   }, []);
 
-  // Attach global touch handlers SYNCHRONOUSLY
+  // Attach global touch handlers SYNCHRONOUSLY (must be called during touch event)
   const attachGlobalTouchHandlers = useCallback(() => {
+    // Detach any existing handlers first
     detachGlobalTouchHandlers();
     
     const handleTouchMove = (e) => {
@@ -420,188 +394,218 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     };
 
     globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd, cancel: handleTouchCancel };
+    // v7.22: Use capture: true to catch events before any other handlers
     window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
     window.addEventListener('touchend', handleTouchEnd, { capture: true });
     window.addEventListener('touchcancel', handleTouchCancel, { capture: true });
   }, [detachGlobalTouchHandlers]);
-  
-  // Update drag position
+
+  // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
-    if (!isDraggingRef.current || !draggedPieceRef.current) return;
+    // Use state OR refs for guards - support both patterns
+    if (!isDragging && !isDraggingRef.current) return;
+    if (!draggedPiece && !draggedPieceRef.current) return;
+    
+    const piece = draggedPiece || draggedPieceRef.current;
     
     setDragPosition({ x: clientX, y: clientY });
     
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
-    
     const cell = calculateBoardCell(clientX, clientY);
-    dragCellRef.current = cell;
-    
-    if (cell) {
-      setDragPreviewCell(cell);
-      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
-      const valid = canPlacePiece(board, cell.row, cell.col, coords);
+    if (cell && piece) {
+      // Get piece coordinates to calculate center offset
+      const coords = getPieceCoords(piece, rotation, flipped);
+      
+      // Calculate piece bounds
+      const minX = Math.min(...coords.map(([x]) => x));
+      const maxX = Math.max(...coords.map(([x]) => x));
+      const minY = Math.min(...coords.map(([, y]) => y));
+      const maxY = Math.max(...coords.map(([, y]) => y));
+      
+      // Calculate center offset (piece anchor is at 0,0, we want center under finger)
+      const centerOffsetCol = Math.floor((maxX + minX) / 2);
+      const centerOffsetRow = Math.floor((maxY + minY) / 2);
+      
+      // Offset the cell so piece CENTER is under finger, not anchor
+      const adjustedRow = cell.row - centerOffsetRow;
+      const adjustedCol = cell.col - centerOffsetCol;
+      
+      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+      
+      // v7.22: Update dragPreviewCell for live board preview
+      setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+      
+      const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
+      dragCellRef.current = null;
       setDragPreviewCell(null);
       setIsValidDrop(false);
     }
-  }, [rotation, flipped, board, calculateBoardCell]);
-  
-  // End drag
-  // End drag - FIXED: Always cleanup state even if drag ended off-board
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+
+  // End drag - keep pending move for confirmation
   const endDrag = useCallback(() => {
-    // Track if we were actually dragging (for piece placement)
-    const wasDragging = isDraggingRef.current || hasDragStartedRef.current;
+    // Use state OR refs for guards
+    if (!isDragging && !isDraggingRef.current) return;
     
-    // Always detach handlers
+    // Detach global touch handlers
     detachGlobalTouchHandlers();
     
-    // Only try to place piece if we were actually dragging
-    if (wasDragging) {
-      const cell = dragCellRef.current;
-      const piece = draggedPieceRef.current;
-      
-      if (cell && piece) {
-        const coords = getPieceCoords(piece, rotation, flipped);
-        const valid = canPlacePiece(board, cell.row, cell.col, coords);
-        
-        if (valid || (cell.row >= 0 && cell.col >= 0)) {
-          setPendingMove({ piece, row: cell.row, col: cell.col });
-          if (valid) {
-            soundManager.playSound('place');
-          }
-        }
-      }
+    // v7.22: Set pendingMove from dragCellRef/dragPreviewCell when drag ends
+    const piece = draggedPiece || draggedPieceRef.current;
+    const cell = dragCellRef.current || dragPreviewCell;
+    if (cell && piece) {
+      const coords = getPieceCoords(piece, rotation, flipped);
+      setPendingMove({
+        piece,
+        row: cell.row,
+        col: cell.col,
+        coords
+      });
     }
     
-    // CRITICAL: Always reset ALL drag state to prevent stuck drags
+    // Update refs (synchronous)
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
     dragCellRef.current = null;
+    
+    // Then update state (async, triggers re-render)
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setIsValidDrop(false);
+    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
     
-    setIsDragging(false);
-    setDraggedPiece(null);
-    setDragPosition({ x: 0, y: 0 });
-    setDragOffset({ x: 0, y: 0 });
-    setIsValidDrop(false);
-    setDragPreviewCell(null);
-    setPieceCellOffset({ row: 0, col: 0 });
-    
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [rotation, flipped, board, detachGlobalTouchHandlers, setPendingMove]);
-  
-  // Keep refs updated
-  useEffect(() => {
-    updateDragRef.current = updateDrag;
-    endDragRef.current = endDrag;
-  }, [updateDrag, endDrag]);
-  
-  // Create drag handlers for piece tray
-  const createDragHandlers = useCallback((piece) => {
-    if (gameOver || !gameStarted) return {};
-    if (usedPieces.includes(piece)) return {};
-    
-    const handleTouchStart = (e) => {
-      if (hasDragStartedRef.current) return;
-      if (!e.touches || e.touches.length === 0) return;
-      
-      const touch = e.touches[0];
-      const rect = e.currentTarget.getBoundingClientRect();
-      
-      hasDragStartedRef.current = true;
-      isDraggingRef.current = true;
-      draggedPieceRef.current = piece;
-      
-      attachGlobalTouchHandlers();
-      
-      const touchedCell = calculateTouchedPieceCell(piece, touch.clientX, touch.clientY, rect, rotation, flipped);
-      pieceCellOffsetRef.current = touchedCell;
-      setPieceCellOffset(touchedCell);
-      
-      if (boardRef.current) {
-        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-      }
-      
-      const offsetX = rect ? touch.clientX - (rect.left + rect.width / 2) : 0;
-      const offsetY = rect ? touch.clientY - (rect.top + rect.height / 2) : 0;
-      
-      setDraggedPiece(piece);
-      setDragPosition({ x: touch.clientX, y: touch.clientY });
-      setDragOffset({ x: offsetX, y: offsetY });
-      setIsDragging(true);
-      
-      selectPiece(piece);
-      
-      document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
-    };
-    
-    const handleMouseDown = (e) => {
-      if (hasDragStartedRef.current) return;
-      
-      const rect = e.currentTarget.getBoundingClientRect();
-      
-      hasDragStartedRef.current = true;
-      isDraggingRef.current = true;
-      draggedPieceRef.current = piece;
-      
-      const touchedCell = calculateTouchedPieceCell(piece, e.clientX, e.clientY, rect, rotation, flipped);
-      pieceCellOffsetRef.current = touchedCell;
-      setPieceCellOffset(touchedCell);
-      
-      if (boardRef.current) {
-        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-      }
-      
-      const offsetX = rect ? e.clientX - (rect.left + rect.width / 2) : 0;
-      const offsetY = rect ? e.clientY - (rect.top + rect.height / 2) : 0;
-      
-      setDraggedPiece(piece);
-      setDragPosition({ x: e.clientX, y: e.clientY });
-      setDragOffset({ x: offsetX, y: offsetY });
-      setIsDragging(true);
-      
-      selectPiece(piece);
-      
-      document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
-    };
-    
-    return {
-      onTouchStart: handleTouchStart,
-      onMouseDown: handleMouseDown,
-    };
-  }, [gameOver, gameStarted, usedPieces, rotation, flipped, selectPiece, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
-  
-  // Handle drag from board
-  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+  }, [isDragging, draggedPiece, dragPreviewCell, rotation, flipped, detachGlobalTouchHandlers]);
+
+  // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
+  // This ensures refs are always current when touch handlers fire
+  updateDragRef.current = updateDrag;
+  endDragRef.current = endDrag;
+
+  // Helper function to start drag
+  const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
     if (hasDragStartedRef.current) return;
-    if (gameOver || !gameStarted) return;
-    if (!pendingMove || pendingMove.piece !== piece) return;
+    if (gameOver || usedPieces.includes(piece) || !gameStarted) return;
     
+    // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
     isDraggingRef.current = true;
     draggedPieceRef.current = piece;
     
+    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
+    
+    // Calculate which cell of the piece is under the finger
+    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
+    pieceCellOffsetRef.current = touchedCell;
+    setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
     
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+    
+    // Update state (async, triggers re-render)
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    
+    // Select piece - this plays sound, don't play again
+    selectPiece(piece);
+    if (setPendingMove) setPendingMove(null);
+    
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
+
+  // Create drag handlers for piece tray
+  const createDragHandlers = useCallback((piece) => {
+    if (gameOver || usedPieces.includes(piece) || !gameStarted) {
+      return {};
+    }
+
+    let elementRect = null;
+
+    // Touch start - start drag immediately (touch-action: none prevents scrolling)
+    const handleTouchStart = (e) => {
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
+      // Capture element rect
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
+      
+      // Update board bounds for drop detection
+      if (boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Start drag immediately
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
+    };
+
+    // Touch move/end - global handlers take care of updates when isDragging
+    const handleTouchMove = () => {};
+    const handleTouchEnd = () => {};
+
+    // Mouse handlers for desktop
+    const handleMouseDown = (e) => {
+      if (e.button !== 0) return;
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
+      
+      if (boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      startDrag(piece, e.clientX, e.clientY, elementRect);
+    };
+
+    return {
+      onMouseDown: handleMouseDown,
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
+    };
+  }, [gameOver, usedPieces, gameStarted, startDrag]);
+
+  // Handle dragging from board (moving pending piece)
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
+    if (gameOver || !gameStarted) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    // v7.22: Set ALL refs FIRST (synchronous) - these are checked by handlers
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    
+    // v7.22: CRITICAL - Attach global touch handlers IMMEDIATELY
+    attachGlobalTouchHandlers();
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // v7.22: Calculate which cell of the piece was touched using touch position
     if (pendingMove && boardBoundsRef.current) {
       const { left, top, width, height } = boardBoundsRef.current;
       const cellWidth = width / BOARD_SIZE;
       const cellHeight = height / BOARD_SIZE;
       
+      // Get the board cell directly under the finger
       const fingerCol = Math.floor((clientX - left) / cellWidth);
       const fingerRow = Math.floor((clientY - top) / cellHeight);
       
+      // Calculate offset from piece anchor to touched cell
       const offset = {
         row: fingerRow - pendingMove.row,
         col: fingerCol - pendingMove.col
@@ -613,20 +617,24 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       setPieceCellOffset({ row: 0, col: 0 });
     }
     
+    // v7.22: DON'T clear pending move - keep it in DOM to prevent touch cancel
+    
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
     const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
+    // Update React state (async, triggers re-render)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
     
+    // Select piece - plays sound
     selectPiece(piece);
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
   }, [gameOver, gameStarted, pendingMove, selectPiece, attachGlobalTouchHandlers]);
-  
+
   // Global mouse handlers for desktop drag
   useEffect(() => {
     if (!isDragging) return;
@@ -647,7 +655,32 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       window.removeEventListener('mouseup', handleGlobalEnd);
     };
   }, [isDragging, updateDrag, endDrag]);
-  
+
+  // Global touch handlers (backup for synchronous handlers)
+  useEffect(() => {
+    if (!isDragging) return;
+    
+    const handleTouchMove = (e) => {
+      if (e.touches?.[0]) {
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) e.preventDefault();
+      }
+    };
+    
+    const handleTouchEnd = () => endDrag();
+    const handleTouchCancel = () => endDrag();
+    
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchcancel', handleTouchCancel);
+    
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchCancel);
+    };
+  }, [isDragging, updateDrag, endDrag]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -671,121 +704,133 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         return;
       }
       
+      setLoading(true);
+      setLoadError(null);
+      
       try {
-        // Generate deterministic puzzle from challenge seed
-        const seed = challenge.puzzle_seed || challenge.id;
-        const difficulty = challenge.difficulty || PUZZLE_DIFFICULTY.MEDIUM;
-        const puzzleData = getSeededPuzzle(seed, difficulty);
+        const seed = weeklyChallengeService.generatePuzzleSeed(challenge);
+        console.log('[WeeklyChallengeScreen] Loading puzzle with seed:', seed);
         
-        if (!puzzleData) {
-          throw new Error('Failed to generate puzzle');
+        const puzzleData = await getSeededPuzzle(seed, PUZZLE_DIFFICULTY.HARD);
+        
+        if (puzzleData) {
+          console.log('[WeeklyChallengeScreen] Puzzle loaded successfully');
+          setPuzzle(puzzleData);
+        } else {
+          console.error('[WeeklyChallengeScreen] Puzzle generation returned null');
+          setLoadError('Failed to generate puzzle. Please try again.');
         }
         
-        setPuzzle(puzzleData);
-        
-        // Load puzzle into game state
-        loadPuzzle(puzzleData);
-        
-        // Check user's existing result
-        if (profile?.id) {
-          try {
-            const result = await weeklyChallengeService.getUserResult(challenge.id, profile.id);
-            if (result) {
-              setFirstAttemptTime(result.first_attempt_time_ms);
-              setBestTime(result.best_time_ms);
-              setIsFirstAttempt(false);
-            }
-          } catch (err) {
-            console.log('[WeeklyChallengeScreen] No existing result found');
-          }
+        const { data: existingResult } = await weeklyChallengeService.getUserResult(challenge.id);
+        if (existingResult) {
+          setFirstAttemptTime(existingResult.first_attempt_time_ms);
+          setBestTime(existingResult.best_time_ms || existingResult.completion_time_ms);
+          setIsFirstAttempt(false);
         }
-        
-        setLoading(false);
       } catch (err) {
-        console.error('[WeeklyChallengeScreen] Error loading puzzle:', err);
-        setLoadError('Failed to load weekly challenge. Please try again.');
-        setLoading(false);
+        console.error('Error loading weekly puzzle:', err);
+        setLoadError('Failed to load puzzle: ' + (err.message || 'Unknown error'));
       }
+      
+      setLoading(false);
     };
     
     loadWeeklyPuzzle();
-  }, [challenge, profile?.id, loadPuzzle]);
+  }, [challenge]);
   
-  // Timer logic
+  // Start the timer
   const startTimer = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    
     startTimeRef.current = Date.now();
-    
     timerRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTimeRef.current;
-      setElapsedMs(accumulatedMs + elapsed);
+      setElapsedMs(accumulatedMs + (Date.now() - startTimeRef.current));
     }, 10);
   }, [accumulatedMs]);
   
+  // Stop the timer
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    return elapsedMs;
-  }, [elapsedMs]);
+    const sessionTime = Date.now() - startTimeRef.current;
+    return accumulatedMs + sessionTime;
+  }, [accumulatedMs]);
   
-  // Handle game completion
-  useEffect(() => {
-    if (!gameStarted || gameComplete || gameLost) return;
-    
-    if (gameOver && winner === 1) {
-      // Player won
-      const finalTime = stopTimer();
-      setCompletionTime(finalTime);
-      setWasFirstAttempt(isFirstAttempt);
-      
-      // Submit result
-      if (profile?.id && challenge?.id) {
-        weeklyChallengeService.submitResult(challenge.id, profile.id, finalTime, isFirstAttempt)
-          .then(result => {
-            if (result && result.rank) {
-              setCurrentRank(result.rank);
-            }
-            if (isFirstAttempt) {
-              setFirstAttemptTime(finalTime);
-            }
-            if (!bestTime || finalTime < bestTime) {
-              setBestTime(finalTime);
-            }
-          })
-          .catch(err => console.error('[WeeklyChallengeScreen] Error submitting result:', err));
-      }
-      
-      setIsFirstAttempt(false);
-      setGameComplete(true);
-      soundManager.playSound('win');
-    } else if (gameOver && winner === 2) {
-      // AI won (player lost)
-      setGameLost(true);
-      soundManager.playSound('lose');
+  // Pause the timer
+  const pauseTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-  }, [gameOver, winner, gameStarted, gameComplete, gameLost, stopTimer, isFirstAttempt, profile?.id, challenge?.id, bestTime]);
+    const sessionTime = Date.now() - startTimeRef.current;
+    setAccumulatedMs(prev => prev + sessionTime);
+    return accumulatedMs + sessionTime;
+  }, [accumulatedMs]);
   
-  // Handle start game
-  const handleStartGame = () => {
-    soundManager.playButtonClick();
+  // Start the game
+  const handleStartGame = useCallback(() => {
+    if (!puzzle) {
+      console.error('[WeeklyChallengeScreen] Cannot start game - puzzle is null');
+      setLoadError('Puzzle not loaded. Please go back and try again.');
+      return;
+    }
+    
+    console.log('[WeeklyChallengeScreen] Starting game with puzzle');
+    loadPuzzleOnly(puzzle);  // FIXED: Use loadPuzzleOnly to avoid changing gameMode
     setGameStarted(true);
     startTimer();
+    soundManager.playClickSound('success');
+  }, [puzzle, loadPuzzleOnly, startTimer]);
+  
+  // Check for puzzle completion
+  useEffect(() => {
+    if (gameStarted && gameOver) {
+      if (winner === 1) {
+        const finalTime = stopTimer();
+        setCompletionTime(finalTime);
+        setWasFirstAttempt(isFirstAttempt);
+        setGameComplete(true);
+        soundManager.playPuzzleSolvedSound();
+        submitResult(finalTime);
+      } else if (winner === 2) {
+        pauseTimer();
+        setGameLost(true);
+        setAttemptCount(prev => prev + 1);
+        soundManager.playGameOver();
+      }
+    }
+  }, [gameOver, winner, gameStarted, stopTimer, pauseTimer, isFirstAttempt]);
+  
+  // Submit result
+  const submitResult = async (timeMs) => {
+    try {
+      const { data } = await weeklyChallengeService.submitResult(challenge.id, timeMs, isFirstAttempt);
+      
+      if (data) {
+        if (isFirstAttempt) {
+          setFirstAttemptTime(timeMs);
+          setIsFirstAttempt(false);
+        }
+        
+        if (!bestTime || timeMs < bestTime) {
+          setBestTime(timeMs);
+        }
+        
+        const { rank } = await weeklyChallengeService.getUserRank(challenge.id);
+        setCurrentRank(rank);
+      }
+    } catch (err) {
+      console.error('Error submitting result:', err);
+    }
   };
   
-  // Handle retry after loss
+  // Retry after loss
   const handleRetryAfterLoss = useCallback(() => {
-    soundManager.playButtonClick();
-    setAccumulatedMs(elapsedMs);
-    setAttemptCount(prev => prev + 1);
     resetCurrentPuzzle();
     setGameLost(false);
     startTimer();
-  }, [elapsedMs, resetCurrentPuzzle, startTimer]);
+    soundManager.playClickSound('success');
+  }, [resetCurrentPuzzle, startTimer]);
   
   // Full restart
   const handleRestart = useCallback(() => {
@@ -819,9 +864,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // RENDER
   // =========================================================================
   
-  // Calculate canConfirm for the control buttons
-  const canConfirm = pendingMove ? canPlacePiece(board, pendingMove.row, pendingMove.col, getPieceCoords(pendingMove.piece, rotation, flipped)) : false;
-  
   // Loading state
   if (loading) {
     return (
@@ -846,15 +888,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
           backgroundSize: '40px 40px'
         }} />
-        <div className="bg-slate-900 rounded-2xl p-6 max-w-sm w-full border border-red-500/30 text-center">
-          <X size={48} className="text-red-400 mx-auto mb-3" />
+        <div className="bg-slate-900 rounded-xl p-6 max-w-sm w-full border border-red-500/30 text-center">
+          <X size={48} className="text-red-400 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-red-300 mb-2">Error</h2>
           <p className="text-slate-400 mb-4">{loadError}</p>
           <button
             onClick={() => { soundManager.playButtonClick(); onMenu(); }}
-            className="px-6 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-all"
+            className="px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold transition-colors"
           >
-            Back to Menu
+            Go Back
           </button>
         </div>
       </div>
@@ -919,6 +961,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             onClick={() => { soundManager.playButtonClick(); onMenu(); }}
             className="w-full mt-3 p-3 rounded-xl font-bold text-slate-400 hover:text-slate-300 transition-all flex items-center justify-center gap-2"
           >
+            <ArrowLeft size={18} />
             Back
           </button>
         </div>
@@ -960,11 +1003,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       
       {/* Content */}
       <div className="relative min-h-screen flex flex-col items-center px-2 py-4">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-lg">
           
-          {/* Header with Title and Timer */}
+          {/* Header with Title and Timer - styled like other game boards */}
           <div className="flex items-center justify-between mb-2 px-2">
-            {/* Spacer for symmetry */}
+            {/* Spacer for symmetry (home button moved to controls) */}
             <div className="w-16" />
             
             <div className="text-center flex-1 mx-2">
@@ -974,36 +1017,42 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
               </div>
             </div>
             
-            {/* Compact Timer Display with Dynamic Colors */}
+            {/* Enhanced Compact Timer Display - Cyberpunk Stopwatch with Dynamic Colors */}
             {(() => {
+              // Color ranges based on time (cool to hot)
               const totalSeconds = Math.floor(elapsedMs / 1000);
               let timerColor, timerGlow, borderColor, bgGradient, iconColor;
               
               if (totalSeconds < 30) {
+                // 0-30s: Cyan (cool - great pace)
                 timerColor = '#67e8f9';
                 timerGlow = 'rgba(34,211,238,0.9)';
                 borderColor = 'border-cyan-500/50';
                 bgGradient = 'from-slate-900/95 to-cyan-950/40';
                 iconColor = 'text-cyan-400';
               } else if (totalSeconds < 60) {
+                // 30s-1min: Green (good pace)
                 timerColor = '#86efac';
                 timerGlow = 'rgba(74,222,128,0.9)';
                 borderColor = 'border-green-500/50';
                 bgGradient = 'from-slate-900/95 to-green-950/40';
                 iconColor = 'text-green-400';
               } else if (totalSeconds < 120) {
+                // 1-2min: Yellow (moderate)
                 timerColor = '#fde047';
                 timerGlow = 'rgba(250,204,21,0.9)';
                 borderColor = 'border-yellow-500/50';
                 bgGradient = 'from-slate-900/95 to-yellow-950/40';
                 iconColor = 'text-yellow-400';
               } else if (totalSeconds < 180) {
+                // 2-3min: Orange (getting slow)
                 timerColor = '#fdba74';
                 timerGlow = 'rgba(251,146,60,0.9)';
                 borderColor = 'border-orange-500/50';
                 bgGradient = 'from-slate-900/95 to-orange-950/40';
                 iconColor = 'text-orange-400';
               } else {
+                // 3min+: Red (hot - taking long)
                 timerColor = '#fca5a5';
                 timerGlow = 'rgba(239,68,68,0.9)';
                 borderColor = 'border-red-500/50';
@@ -1013,16 +1062,33 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
               
               return (
                 <div 
-                  className={`relative px-3 py-1.5 rounded-xl border ${borderColor} bg-gradient-to-br ${bgGradient} shadow-lg transition-all duration-500`}
+                  className={`relative px-4 py-2 bg-gradient-to-br ${bgGradient} rounded-xl border ${borderColor} overflow-hidden transition-all duration-500`}
                   style={{ 
-                    boxShadow: `0 0 20px ${timerGlow.replace('0.9', '0.3')}, inset 0 0 15px ${timerGlow.replace('0.9', '0.1')}`
+                    boxShadow: `0 0 25px ${timerGlow.replace('0.9', '0.35')}, inset 0 0 20px ${timerGlow.replace('0.9', '0.15')}, 0 4px 15px rgba(0,0,0,0.4)` 
                   }}
                 >
-                  <div className="flex items-center gap-2">
+                  {/* Animated scan line effect */}
+                  <div 
+                    className="absolute inset-0 pointer-events-none opacity-30"
+                    style={{
+                      background: `linear-gradient(0deg, transparent 50%, ${timerGlow.replace('0.9', '0.1')} 50%)`,
+                      backgroundSize: '100% 4px',
+                      animation: 'scanline 8s linear infinite'
+                    }}
+                  />
+                  
+                  {/* Corner accents with dynamic color */}
+                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  
+                  <div className="relative flex items-center gap-2.5">
+                    {/* Animated clock icon with dynamic color */}
                     <div className="relative">
                       <div 
-                        className="absolute inset-0 rounded-full blur-sm transition-all duration-500"
-                        style={{ background: timerGlow.replace('0.9', '0.4') }}
+                        className="absolute inset-0 rounded-full blur-md animate-pulse transition-colors duration-500" 
+                        style={{ backgroundColor: timerGlow.replace('0.9', '0.3') }}
                       />
                       <Clock size={18} className={`relative ${iconColor} transition-colors duration-500`} />
                       {elapsedMs > 0 && (
@@ -1030,6 +1096,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                       )}
                     </div>
                     
+                    {/* Time display with dynamic glowing digits */}
                     <div className="flex items-baseline gap-0.5">
                       <span 
                         className="text-xl font-mono font-black tracking-tight tabular-nums transition-all duration-500"
@@ -1080,6 +1147,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
               gameOver={gameOver}
               gameMode="puzzle"
               onPendingPieceDragStart={handleBoardDragStart}
+              // v7.22: Drag preview props for board highlighting during drag
               isDragging={isDragging}
               dragPreviewCell={dragPreviewCell}
               draggedPiece={draggedPiece}
@@ -1095,44 +1163,41 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             </div>
           )}
           
-          {/* Control Buttons - Consistent GlowOrbButton styling */}
-          <div className="flex gap-2 justify-between mb-2 flex-wrap">
-            {/* Menu Button - Orange with Home icon only */}
-            <GlowOrbButton
+          {/* Control Buttons - Above Piece Tray with Menu button */}
+          <div className="flex gap-1 justify-between mb-2 flex-wrap">
+            {/* Menu Button - Goes to main game menu */}
+            <button
               onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
-              color="orange"
-              title="Back to menu"
+              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
             >
-              <Home size={16} />
-            </GlowOrbButton>
+              <ArrowLeft size={12} />MENU
+            </button>
             
-            {/* Rotate Button - Cyan */}
-            <GlowOrbButton
+            {/* Rotate Button */}
+            <button
               onClick={rotatePiece}
+              className="flex-1 px-1.5 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
               disabled={!selectedPiece && !pendingMove}
-              color="cyan"
-              className="flex-1"
             >
-              <RotateCw size={14} />ROTATE
-            </GlowOrbButton>
+              <RotateCcw size={12} />ROTATE
+            </button>
 
-            {/* Flip Button - Purple */}
-            <GlowOrbButton
+            {/* Flip Button */}
+            <button
               onClick={flipPiece}
+              className="flex-1 px-1.5 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
               disabled={!selectedPiece && !pendingMove}
-              color="purple"
-              className="flex-1"
             >
-              <FlipHorizontal size={14} />FLIP
-            </GlowOrbButton>
+              <FlipHorizontal size={12} />FLIP
+            </button>
             
-            {/* Retry Button - Yellow, no icon */}
-            <GlowOrbButton
+            {/* Retry Button */}
+            <button
               onClick={handleRestart}
-              color="yellow"
+              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
             >
-              RETRY
-            </GlowOrbButton>
+              <RotateCcw size={12} />RETRY
+            </button>
           </div>
           
           {/* Piece Tray */}
@@ -1152,23 +1217,22 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           {/* Confirm/Cancel Controls - Only show when there's a pending move */}
           {pendingMove && (
             <div className="flex gap-2 justify-center mt-2">
-              {/* Cancel - Rose, no icon */}
-              <GlowOrbButton
-                onClick={cancelMove}
-                color="rose"
-                className="flex-1 max-w-32"
-              >
-                CANCEL
-              </GlowOrbButton>
-              {/* Confirm - Green, no icon */}
-              <GlowOrbButton
+              <button
                 onClick={confirmMove}
-                disabled={!canConfirm}
-                color="green"
-                className="flex-1 max-w-32"
+                disabled={!pendingMove || !(() => {
+                  const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+                  return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+                })()}
+                className="flex-1 max-w-32 px-3 py-2 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)] disabled:opacity-30 disabled:shadow-none"
               >
-                CONFIRM
-              </GlowOrbButton>
+                <CheckCircle size={14} />CONFIRM
+              </button>
+              <button
+                onClick={cancelMove}
+                className="flex-1 max-w-32 px-3 py-2 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              >
+                <X size={14} />CANCEL
+              </button>
             </div>
           )}
         </div>
