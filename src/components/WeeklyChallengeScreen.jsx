@@ -269,6 +269,19 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setPendingMove,
   } = useGameState();
   
+  // Debug: Log what we got from useGameState
+  useEffect(() => {
+    console.log('[WeeklyChallengeScreen] useGameState values:', {
+      hasBoard: !!board,
+      boardLength: board?.length,
+      hasBoardPieces: !!boardPieces,
+      hasLoadPuzzleOnly: typeof loadPuzzleOnly === 'function',
+      currentPlayer,
+      gameOver,
+      winner
+    });
+  }, [board, boardPieces, loadPuzzleOnly, currentPlayer, gameOver, winner]);
+  
   // =========================================================================
   // DRAG AND DROP HANDLERS - FIXED WITH DIAGNOSTIC LOGGING
   // =========================================================================
@@ -769,17 +782,37 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Start the game
   const handleStartGame = useCallback(() => {
+    console.log('[WeeklyChallengeScreen] handleStartGame called');
+    console.log('[WeeklyChallengeScreen] puzzle:', puzzle);
+    console.log('[WeeklyChallengeScreen] loadPuzzleOnly function exists:', typeof loadPuzzleOnly === 'function');
+    
     if (!puzzle) {
       console.error('[WeeklyChallengeScreen] Cannot start game - puzzle is null');
       setLoadError('Puzzle not loaded. Please go back and try again.');
       return;
     }
     
-    console.log('[WeeklyChallengeScreen] Starting game with puzzle');
-    loadPuzzleOnly(puzzle);  // FIXED: Use loadPuzzleOnly to avoid changing gameMode
+    if (typeof loadPuzzleOnly !== 'function') {
+      console.error('[WeeklyChallengeScreen] loadPuzzleOnly is not a function!');
+      setLoadError('Game initialization error. Please refresh and try again.');
+      return;
+    }
+    
+    console.log('[WeeklyChallengeScreen] Starting game with puzzle:', puzzle.name);
+    
+    try {
+      loadPuzzleOnly(puzzle);
+      console.log('[WeeklyChallengeScreen] loadPuzzleOnly completed');
+    } catch (err) {
+      console.error('[WeeklyChallengeScreen] Error calling loadPuzzleOnly:', err);
+      setLoadError('Failed to load puzzle: ' + err.message);
+      return;
+    }
+    
     setGameStarted(true);
     startTimer();
     soundManager.playClickSound('success');
+    console.log('[WeeklyChallengeScreen] Game started successfully');
   }, [puzzle, loadPuzzleOnly, startTimer]);
   
   // Check for puzzle completion
