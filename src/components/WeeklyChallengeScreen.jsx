@@ -737,12 +737,22 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Auto-start the game when puzzle is loaded
   useEffect(() => {
+    console.log('[WeeklyChallengeScreen] Auto-start check:', {
+      hasPuzzle: !!puzzle,
+      loading,
+      loadError,
+      gameStarted,
+      hasLoadPuzzleOnly: typeof loadPuzzleOnly === 'function'
+    });
+    
     if (puzzle && !loading && !loadError && !gameStarted && loadPuzzleOnly) {
+      console.log('[WeeklyChallengeScreen] Auto-starting game...');
       // Puzzle loaded successfully - start the game automatically
       loadPuzzleOnly(puzzle);
       setGameStarted(true);
       startTimer();
       soundManager.playClickSound('success');
+      console.log('[WeeklyChallengeScreen] Game started!');
     }
   }, [puzzle, loading, loadError, gameStarted, loadPuzzleOnly, startTimer]);
   
@@ -859,6 +869,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Loading state
   if (loading) {
+    console.log('[WeeklyChallengeScreen] Showing loading spinner');
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center relative z-20">
         <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
@@ -875,6 +886,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Error state
   if (loadError) {
+    console.log('[WeeklyChallengeScreen] Showing error screen:', loadError);
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative z-20">
         <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
@@ -896,7 +908,25 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     );
   }
   
+  // Waiting for game to start (puzzle loaded, auto-start effect running)
+  if (!gameStarted) {
+    console.log('[WeeklyChallengeScreen] Showing waiting screen - gameStarted:', gameStarted, 'puzzle:', !!puzzle);
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center relative z-20">
+        <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
+          backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
+          backgroundSize: '40px 40px'
+        }} />
+        <div className="relative z-10 text-center">
+          <div className="w-12 h-12 border-4 border-red-500/30 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-red-300">Starting challenge...</p>
+        </div>
+      </div>
+    );
+  }
+  
   // Game in progress
+  console.log('[WeeklyChallengeScreen] Rendering game board');
   return (
     <div 
       className="min-h-screen bg-slate-950 relative z-20"
