@@ -536,6 +536,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
     // Touch start - start drag immediately (touch-action: none prevents scrolling)
     const handleTouchStart = (e) => {
+      if (hasDragStartedRef.current) return; // Guard against double-start
+      
       const touch = e.touches?.[0];
       if (!touch) return;
       
@@ -551,13 +553,27 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
-    // Touch move/end - global handlers take care of updates when isDragging
-    const handleTouchMove = () => {};
-    const handleTouchEnd = () => {};
+    // Touch move - FIXED: Actually call updateDrag
+    const handleTouchMove = (e) => {
+      if (hasDragStartedRef.current && e.touches?.[0]) {
+        e.preventDefault();
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    // Touch end - FIXED: Actually call endDrag
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        endDrag();
+      }
+    };
 
     // Mouse handlers for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
+      if (hasDragStartedRef.current) return;
+      
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
       
       if (boardRef?.current) {
@@ -573,7 +589,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameOver, usedPieces, gameStarted, startDrag]);
+  }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -1075,7 +1091,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           </div>
           
           {/* Game Board */}
-          <div className="flex justify-center mb-3">
+          <div className="flex justify-center pb-1">
             <GameBoard
               ref={boardRef}
               board={board}
@@ -1106,39 +1122,39 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           )}
           
           {/* Control Buttons - Above Piece Tray with Menu button */}
-          <div className="flex gap-1 justify-between mb-2 flex-wrap">
-            {/* Menu Button - Goes to main game menu */}
+          <div className="flex gap-2 justify-between mb-2 flex-wrap">
+            {/* Menu Button - Rose/Pink color for visibility (matches other screens) */}
             <button
               onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
-              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              className="flex-1 px-2 py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(244,63,94,0.4)]"
             >
-              <ArrowLeft size={12} />MENU
+              <ArrowLeft size={14} />MENU
             </button>
             
-            {/* Rotate Button */}
+            {/* Rotate Button - Cyan (matches other screens) */}
             <button
               onClick={rotatePiece}
-              className="flex-1 px-1.5 py-1.5 bg-purple-600/70 hover:bg-purple-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-purple-400/30 shadow-[0_0_10px_rgba(168,85,247,0.4)]"
+              className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:shadow-none"
               disabled={!selectedPiece && !pendingMove}
             >
-              <RotateCcw size={12} />ROTATE
+              <RotateCcw size={14} />ROTATE
             </button>
 
-            {/* Flip Button */}
+            {/* Flip Button - Purple (matches other screens) */}
             <button
               onClick={flipPiece}
-              className="flex-1 px-1.5 py-1.5 bg-indigo-600/70 hover:bg-indigo-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 disabled:opacity-30 border border-indigo-400/30 shadow-[0_0_10px_rgba(99,102,241,0.4)]"
+              className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:shadow-none"
               disabled={!selectedPiece && !pendingMove}
             >
-              <FlipHorizontal size={12} />FLIP
+              <FlipHorizontal size={14} />FLIP
             </button>
             
-            {/* Retry Button */}
+            {/* Retry Button - Slate (matches other screens) */}
             <button
               onClick={handleRestart}
-              className="flex-1 px-1.5 py-1.5 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-xs flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              className="flex-1 px-2 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(100,116,139,0.4)]"
             >
-              <RotateCcw size={12} />RETRY
+              <RotateCcw size={14} />RETRY
             </button>
           </div>
           
@@ -1160,20 +1176,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           {pendingMove && (
             <div className="flex gap-2 justify-center mt-2">
               <button
+                onClick={cancelMove}
+                className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(100,116,139,0.4)]"
+              >
+                <X size={14} />CANCEL
+              </button>
+              <button
                 onClick={confirmMove}
                 disabled={!pendingMove || !(() => {
                   const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
                   return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
                 })()}
-                className="flex-1 max-w-32 px-3 py-2 bg-green-600/70 hover:bg-green-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 font-bold border border-green-400/30 shadow-[0_0_15px_rgba(74,222,128,0.5)] disabled:opacity-30 disabled:shadow-none"
+                className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
               >
                 <CheckCircle size={14} />CONFIRM
-              </button>
-              <button
-                onClick={cancelMove}
-                className="flex-1 max-w-32 px-3 py-2 bg-red-600/70 hover:bg-red-500/70 text-white rounded-lg text-sm flex items-center justify-center gap-1 border border-red-400/30 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
-              >
-                <X size={14} />CANCEL
               </button>
             </div>
           )}

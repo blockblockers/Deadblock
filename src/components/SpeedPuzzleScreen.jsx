@@ -1646,33 +1646,31 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               />
             )}
             
-            <div className="w-full max-w-md flex-shrink-0 flex justify-center relative">
-              <div className="w-[min(85vw,85vh,340px)] aspect-square">
-                <GameBoard
-                  ref={boardRef}
-                  board={board}
-                  boardPieces={boardPieces}
-                  currentPlayer={1}
-                  pendingMove={pendingMove}
-                  playerAnimatingMove={playerAnimatingMove}
-                  onCellClick={handleCellClick}
-                  selectedPiece={selectedPiece}
-                  rotation={rotation}
-                  flipped={flipped}
-                  gameOver={gameState !== GAME_STATES.PLAYING}
-                  onPendingPieceDragStart={handleBoardDragStart}
-                  customColors={{
-                    1: 'bg-gradient-to-br from-cyan-400 to-blue-500',
-                    2: 'bg-gradient-to-br from-rose-400 to-pink-500',
-                  }}
-                  // v7.22: Drag preview props for board highlighting during drag
-                  isDragging={isDragging}
-                  dragPreviewCell={dragPreviewCell}
-                  draggedPiece={draggedPiece}
-                  dragRotation={rotation}
-                  dragFlipped={flipped}
-                />
-              </div>
+            <div className="flex justify-center pb-1 relative">
+              <GameBoard
+                ref={boardRef}
+                board={board}
+                boardPieces={boardPieces}
+                currentPlayer={1}
+                pendingMove={pendingMove}
+                playerAnimatingMove={playerAnimatingMove}
+                onCellClick={handleCellClick}
+                selectedPiece={selectedPiece}
+                rotation={rotation}
+                flipped={flipped}
+                gameOver={gameState !== GAME_STATES.PLAYING}
+                onPendingPieceDragStart={handleBoardDragStart}
+                customColors={{
+                  1: 'bg-gradient-to-br from-cyan-400 to-blue-500',
+                  2: 'bg-gradient-to-br from-rose-400 to-pink-500',
+                }}
+                // Drag preview props for board highlighting during drag
+                isDragging={isDragging}
+                dragPreviewCell={dragPreviewCell}
+                draggedPiece={draggedPiece}
+                dragRotation={rotation}
+                dragFlipped={flipped}
+              />
               
               {/* Wrong move feedback overlay */}
               {showWrongMove && (

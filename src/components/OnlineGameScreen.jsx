@@ -1486,7 +1486,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             />
 
             {/* Game Board - FIXED: Pass ref directly to GameBoard */}
-            <div className="flex justify-center pb-4">
+            <div className="flex justify-center pb-2">
               <div className="relative">
                 <GameBoard
                   ref={boardRef}
@@ -1552,54 +1552,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 <div className="flex-shrink-0 w-24" />
               </div>
             )}
-            
-            {/* Chat button when no pending move */}
-            {(!pendingMove || !isMyTurn || isDragging) && game?.status === 'active' && (
-              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
-                <span className="text-slate-400 text-xs">
-                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
-                </span>
-                <button
-                  onClick={() => {
-                    setChatOpen(!chatOpen);
-                    if (!chatOpen) setHasUnreadChat(false);
-                  }}
-                  className={`
-                    relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
-                    ${chatOpen 
-                      ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
-                      : hasUnreadChat 
-                        ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
-                        : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
-                    }
-                  `}
-                  style={hasUnreadChat && !chatOpen ? {
-                    animation: 'chatBlink 0.8s ease-in-out infinite',
-                    boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
-                  } : {}}
-                >
-                  <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
-                  {hasUnreadChat && !chatOpen && (
-                    <>
-                      <span 
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                        style={{
-                          animation: 'bounce 0.5s ease-in-out infinite',
-                          boxShadow: '0 0 15px rgba(239,68,68,1)'
-                        }}
-                      >
-                        !
-                      </span>
-                      <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
 
             {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
             {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
-            <div className="flex gap-1 mt-3">
+            <div className="flex gap-1 mt-2">
               <GlowOrbButton
                 onClick={() => { soundManager.playButtonClick(); onLeave(); }}
                 color="red"
@@ -1671,6 +1627,30 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             isDragging={isDragging}
             draggedPiece={draggedPiece}
           />
+          
+          {/* Chat notification indicator at bottom of piece tray area */}
+          {game?.status === 'active' && (
+            <div className="flex items-center justify-center gap-2 mt-1">
+              <span className="text-slate-500 text-[10px]">
+                {12 - usedPieces.length} pieces available
+              </span>
+              {hasUnreadChat && !chatOpen && (
+                <button
+                  onClick={() => {
+                    setChatOpen(true);
+                    setHasUnreadChat(false);
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] font-bold animate-pulse"
+                  style={{
+                    boxShadow: '0 0 15px rgba(239,68,68,0.6)'
+                  }}
+                >
+                  <MessageCircle size={10} />
+                  New message
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
