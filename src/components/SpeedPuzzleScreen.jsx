@@ -883,26 +883,30 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag - keep pending move for confirmation
+  // End drag - FIXED: Always cleanup state even if drag ended off-board
   const endDrag = useCallback(() => {
-    // Use state OR refs for guards
-    if (!isDragging && !isDraggingRef.current) return;
+    // Track if we were actually dragging (for piece placement)
+    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
     
-    // Detach global touch handlers
+    // Always detach global touch handlers
     detachGlobalTouchHandlers();
     
-    // v7.22: Set pendingMove from dragCellRef/dragPreviewCell when drag ends
-    const piece = draggedPiece || draggedPieceRef.current;
-    const cell = dragCellRef.current || dragPreviewCell;
-    if (cell && piece) {
-      const coords = getPieceCoords(piece, rotation, flipped);
-      setPendingMove({
-        piece,
-        row: cell.row,
-        col: cell.col,
-        coords
-      });
+    // v7.22: Set pendingMove from dragCellRef/dragPreviewCell when drag ends (only if valid drag)
+    if (wasDragging) {
+      const piece = draggedPiece || draggedPieceRef.current;
+      const cell = dragCellRef.current || dragPreviewCell;
+      if (cell && piece) {
+        const coords = getPieceCoords(piece, rotation, flipped);
+        setPendingMove({
+          piece,
+          row: cell.row,
+          col: cell.col,
+          coords
+        });
+      }
     }
     
+    // CRITICAL: Always reset ALL drag state to prevent stuck drags
     // Update refs (synchronous)
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
@@ -1642,8 +1646,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               />
             )}
             
-            <div className="flex justify-center relative">
-              <GameBoard
+            <div className="w-full max-w-md flex-shrink-0 flex justify-center relative">
+              <div className="w-[min(85vw,85vh,340px)] aspect-square">
+                <GameBoard
                   ref={boardRef}
                   board={board}
                   boardPieces={boardPieces}
@@ -1667,6 +1672,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                   dragRotation={rotation}
                   dragFlipped={flipped}
                 />
+              </div>
               
               {/* Wrong move feedback overlay */}
               {showWrongMove && (

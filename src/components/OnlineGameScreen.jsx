@@ -1486,7 +1486,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             />
 
             {/* Game Board - FIXED: Pass ref directly to GameBoard */}
-            <div className="flex justify-center pb-2">
+            <div className="flex justify-center pb-4">
               <div className="relative">
                 <GameBoard
                   ref={boardRef}
@@ -1520,6 +1520,16 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 )}
               </div>
             </div>
+
+            {/* Pieces info bar when D-Pad is shown */}
+            {pendingMove && isMyTurn && !isDragging && game?.status === 'active' && (
+              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+                <span className="text-slate-400 text-xs">
+                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
+                </span>
+                <span className="text-amber-400/60 text-xs">Use D-Pad to position</span>
+              </div>
+            )}
             
             {/* D-Pad with Error Message Layout - matches GameScreen */}
             {pendingMove && isMyTurn && !isDragging && (
@@ -1538,14 +1548,58 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 {/* D-Pad */}
                 <DPad onMove={handleMovePiece} />
                 
-                {/* Spacer for balance */}
+                {/* Spacer for balance (removed chat button from here) */}
                 <div className="flex-shrink-0 w-24" />
+              </div>
+            )}
+            
+            {/* Chat button when no pending move */}
+            {(!pendingMove || !isMyTurn || isDragging) && game?.status === 'active' && (
+              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+                <span className="text-slate-400 text-xs">
+                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
+                </span>
+                <button
+                  onClick={() => {
+                    setChatOpen(!chatOpen);
+                    if (!chatOpen) setHasUnreadChat(false);
+                  }}
+                  className={`
+                    relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
+                    ${chatOpen 
+                      ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
+                      : hasUnreadChat 
+                        ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
+                        : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
+                    }
+                  `}
+                  style={hasUnreadChat && !chatOpen ? {
+                    animation: 'chatBlink 0.8s ease-in-out infinite',
+                    boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
+                  } : {}}
+                >
+                  <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
+                  {hasUnreadChat && !chatOpen && (
+                    <>
+                      <span 
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                        style={{
+                          animation: 'bounce 0.5s ease-in-out infinite',
+                          boxShadow: '0 0 15px rgba(239,68,68,1)'
+                        }}
+                      >
+                        !
+                      </span>
+                      <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
+                    </>
+                  )}
+                </button>
               </div>
             )}
 
             {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
             {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
-            <div className="flex gap-1 mt-2">
+            <div className="flex gap-1 mt-3">
               <GlowOrbButton
                 onClick={() => { soundManager.playButtonClick(); onLeave(); }}
                 color="red"
@@ -1603,41 +1657,20 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             )}
           </div>
 
-          {/* Piece Tray with Chat Notification */}
-          <div className="relative">
-            <PieceTray
-              usedPieces={usedPieces}
-              selectedPiece={selectedPiece}
-              pendingMove={pendingMove}
-              gameOver={game?.status === 'completed'}
-              gameMode="online"
-              currentPlayer={myPlayerNumber}
-              isMobile={true}
-              onSelectPiece={handleSelectPiece}
-              createDragHandlers={createDragHandlers}
-              isDragging={isDragging}
-              draggedPiece={draggedPiece}
-            />
-            
-            {/* Chat notification at bottom of piece tray */}
-            {game?.status === 'active' && hasUnreadChat && !chatOpen && (
-              <button
-                onClick={() => {
-                  setChatOpen(true);
-                  setHasUnreadChat(false);
-                  setChatToast(null);
-                }}
-                className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-lg"
-                style={{
-                  animation: 'chatBlink 0.8s ease-in-out infinite',
-                  boxShadow: '0 0 15px rgba(239,68,68,0.7)'
-                }}
-              >
-                <MessageCircle size={12} className="animate-bounce" />
-                <span>New message!</span>
-              </button>
-            )}
-          </div>
+          {/* Piece Tray */}
+          <PieceTray
+            usedPieces={usedPieces}
+            selectedPiece={selectedPiece}
+            pendingMove={pendingMove}
+            gameOver={game?.status === 'completed'}
+            gameMode="online"
+            currentPlayer={myPlayerNumber}
+            isMobile={true}
+            onSelectPiece={handleSelectPiece}
+            createDragHandlers={createDragHandlers}
+            isDragging={isDragging}
+            draggedPiece={draggedPiece}
+          />
         </div>
       </div>
 
