@@ -486,47 +486,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   updateDragRef.current = updateDrag;
   endDragRef.current = endDrag;
 
-  // Helper function to start drag
-  const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
-    // Guard against duplicate calls
-    if (hasDragStartedRef.current) return;
-    if (gameOver || usedPieces.includes(piece) || !gameStarted) return;
-    
-    // Set refs FIRST (synchronous) - these are checked by handlers
-    hasDragStartedRef.current = true;
-    isDraggingRef.current = true;
-    draggedPieceRef.current = piece;
-    
-    // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
-    attachGlobalTouchHandlers();
-    
-    // Calculate which cell of the piece is under the finger
-    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
-    pieceCellOffsetRef.current = touchedCell;
-    setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
-    
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
-    
-    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
-    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
-    
-    // Update state (async, triggers re-render)
-    setDraggedPiece(piece);
-    setDragPosition({ x: clientX, y: clientY });
-    setDragOffset({ x: offsetX, y: offsetY });
-    setIsDragging(true);
-    
-    // Select piece - this plays sound, don't play again
-    selectPiece(piece);
-    if (setPendingMove) setPendingMove(null);
-    
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-  }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
-
   // Create drag handlers for piece tray
+  // FIXED: Do all setup inline like SpeedPuzzleScreen to avoid timing issues
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece) || !gameStarted) {
       return {};
@@ -534,21 +495,51 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
     let elementRect = null;
 
-    // Touch start - start drag immediately (touch-action: none prevents scrolling)
+    // Touch start - do all setup INLINE (not via separate startDrag function)
     const handleTouchStart = (e) => {
+      // Guard against duplicate calls
+      if (hasDragStartedRef.current) return;
+      
       const touch = e.touches?.[0];
       if (!touch) return;
+      
+      // Set refs FIRST (synchronous) - these are checked by handlers
+      hasDragStartedRef.current = true;
+      isDraggingRef.current = true;
+      draggedPieceRef.current = piece;
+      
+      // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
+      attachGlobalTouchHandlers();
       
       // Capture element rect
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
       
-      // Update board bounds for drop detection
-      if (boardRef?.current) {
+      // Calculate which cell of the piece is under the finger
+      const touchedCell = calculateTouchedPieceCell(piece, touch.clientX, touch.clientY, elementRect, rotation, flipped);
+      pieceCellOffsetRef.current = touchedCell;
+      setPieceCellOffset(touchedCell);
+      
+      // Calculate offset from piece center
+      const offsetX = elementRect ? touch.clientX - (elementRect.left + elementRect.width / 2) : 0;
+      const offsetY = elementRect ? touch.clientY - (elementRect.top + elementRect.height / 2) : 0;
+      
+      // Update board bounds
+      if (boardRef.current) {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
       
-      // Start drag immediately
-      startDrag(piece, touch.clientX, touch.clientY, elementRect);
+      // Update state (async, triggers re-render)
+      setIsDragging(true);
+      setDraggedPiece(piece);
+      selectPiece(piece);
+      setPendingMove(null);
+      setDragPosition({ x: touch.clientX, y: touch.clientY });
+      setDragOffset({ x: offsetX, y: offsetY });
+      
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      
+      soundManager.playPieceSelect();
     };
 
     // Touch move/end - global handlers take care of updates when isDragging
@@ -558,13 +549,37 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Mouse handlers for desktop
     const handleMouseDown = (e) => {
       if (e.button !== 0) return;
+      if (hasDragStartedRef.current) return;
+      
+      // Set refs FIRST
+      hasDragStartedRef.current = true;
+      isDraggingRef.current = true;
+      draggedPieceRef.current = piece;
+      
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
       
-      if (boardRef?.current) {
+      const touchedCell = calculateTouchedPieceCell(piece, e.clientX, e.clientY, elementRect, rotation, flipped);
+      pieceCellOffsetRef.current = touchedCell;
+      setPieceCellOffset(touchedCell);
+      
+      const offsetX = elementRect ? e.clientX - (elementRect.left + elementRect.width / 2) : 0;
+      const offsetY = elementRect ? e.clientY - (elementRect.top + elementRect.height / 2) : 0;
+      
+      if (boardRef.current) {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
       
-      startDrag(piece, e.clientX, e.clientY, elementRect);
+      setIsDragging(true);
+      setDraggedPiece(piece);
+      selectPiece(piece);
+      setPendingMove(null);
+      setDragPosition({ x: e.clientX, y: e.clientY });
+      setDragOffset({ x: offsetX, y: offsetY });
+      
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      
+      soundManager.playPieceSelect();
     };
 
     return {
@@ -573,7 +588,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameOver, usedPieces, gameStarted, startDrag]);
+  }, [gameOver, usedPieces, gameStarted, rotation, flipped, selectPiece, setPendingMove, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
