@@ -211,9 +211,14 @@ const GameScreen = ({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: Live preview cell during drag
+  const [pieceCellOffset, setPieceCellOffset] = useState({ row: 0, col: 0 }); // Offset from anchor to touched cell
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
   const hasDragStartedRef = useRef(false);
+  // Refs for synchronous access in touch handlers
+  const isDraggingRef = useRef(false);
+  const draggedPieceRef = useRef(null);
+  const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
 
   const theme = getTheme(gameMode, aiDifficulty, puzzleDifficulty);
   const isPuzzle = gameMode === 'puzzle';
@@ -223,14 +228,8 @@ const GameScreen = ({
   const canConfirm = pendingMove && (() => {
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
-    console.log('[GameScreen] canConfirm:', { piece: pendingMove.piece, row: pendingMove.row, col: pendingMove.col, isValid });
     return isValid;
   })();
-
-  // Debug: Log confirm state changes
-  useEffect(() => {
-    console.log('[GameScreen] Confirm state:', { pendingMove: !!pendingMove, canConfirm, gameMode, currentPlayer });
-  }, [pendingMove, canConfirm, gameMode, currentPlayer]);
 
   // Show error when placement is invalid
   useEffect(() => {
@@ -295,19 +294,121 @@ const GameScreen = ({
     return null;
   }, []);
 
+  // Attach global touch handlers synchronously (critical for mobile drag from board)
+  const attachGlobalTouchHandlers = useCallback(() => {
+    const handleGlobalTouchMove = (e) => {
+      if (!isDraggingRef.current) return;
+      
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
+      // Update drag position using state setter directly
+      setDragPosition({ x: touch.clientX, y: touch.clientY });
+      
+      // Update board bounds
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Calculate board cell and preview
+      if (boardBoundsRef.current && draggedPieceRef.current) {
+        const { left, top, width, height } = boardBoundsRef.current;
+        const cellWidth = width / BOARD_SIZE;
+        const cellHeight = height / BOARD_SIZE;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+        const fingerOffset = isMobile ? 40 : 20;
+        
+        const relX = touch.clientX - left;
+        const relY = (touch.clientY - fingerOffset) - top;
+        
+        const col = Math.floor(relX / cellWidth);
+        const row = Math.floor(relY / cellHeight);
+        
+        const EXTENSION_MARGIN = 4;
+        if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+            col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+          // Get piece coordinates to calculate center offset
+          const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
+          
+          const minX = Math.min(...coords.map(([x]) => x));
+          const maxX = Math.max(...coords.map(([x]) => x));
+          const minY = Math.min(...coords.map(([, y]) => y));
+          const maxY = Math.max(...coords.map(([, y]) => y));
+          
+          const centerOffsetCol = Math.floor((maxX + minX) / 2);
+          const centerOffsetRow = Math.floor((maxY + minY) / 2);
+          
+          const adjustedRow = row - centerOffsetRow;
+          const adjustedCol = col - centerOffsetCol;
+          
+          setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+          
+          const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+          setIsValidDrop(valid);
+        } else {
+          setDragPreviewCell(null);
+          setIsValidDrop(false);
+        }
+      }
+      
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleGlobalTouchEnd = () => {
+      if (!isDraggingRef.current) return;
+      
+      // Clear refs
+      isDraggingRef.current = false;
+      hasDragStartedRef.current = false;
+      
+      // Let React state update handle the rest via endDrag effect
+      setIsDragging(false);
+      
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+      
+      // Clean up listeners
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+    
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalTouchEnd);
+    window.addEventListener('touchcancel', handleGlobalTouchEnd);
+  }, [rotation, flipped, board]);
+
   // Start drag from piece tray
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
+    if (hasDragStartedRef.current) return;
     if (gameOver || usedPieces.includes(piece)) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    
+    // Set refs synchronously FIRST
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    // Attach global touch handlers IMMEDIATELY (synchronous)
+    attachGlobalTouchHandlers();
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
     
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
     const offsetY = clientY - (elementRect.top + elementRect.height / 2);
     
+    // Update React state (async)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
-    hasDragStartedRef.current = true;
+    setPieceCellOffset({ row: 0, col: 0 });
     
     // Also select the piece
     onSelectPiece?.(piece);
@@ -316,28 +417,57 @@ const GameScreen = ({
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece]);
+  }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece, attachGlobalTouchHandlers]);
 
   // Handle starting drag from a pending piece on the board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
     if (gameOver) return;
     if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
     
-    // DON'T clear pending move - causes touch cancel on mobile
-    // The piece will be updated during drag via updateDrag
-    // if (setPendingMove) {
-    //   setPendingMove(null);
-    // }
+    // Set refs synchronously FIRST
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
     
-    // Start the drag
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    // Attach global touch handlers IMMEDIATELY (synchronous)
+    attachGlobalTouchHandlers();
     
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // Calculate which cell of the piece was touched
+    if (pendingMove && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const fingerCol = Math.floor((clientX - left) / cellWidth);
+      const fingerRow = Math.floor((clientY - top) / cellHeight);
+      
+      const offset = {
+        row: fingerRow - pendingMove.row,
+        col: fingerCol - pendingMove.col
+      };
+      pieceCellOffsetRef.current = offset;
+      setPieceCellOffset(offset);
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
+    }
+    
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+    
+    // Update React state (async)
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
-    hasDragStartedRef.current = true;
     
     // Piece is already selected, just play sound
     soundManager.playPieceSelect();
@@ -345,7 +475,7 @@ const GameScreen = ({
     // Prevent scroll while dragging
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameMode, currentPlayer]);
+  }, [gameOver, gameMode, currentPlayer, pendingMove, attachGlobalTouchHandlers]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
@@ -392,24 +522,28 @@ const GameScreen = ({
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag
-  // End drag - FIXED: Always cleanup state even if drag ended off-board
   const endDrag = useCallback(() => {
-    // Track if we were actually dragging (for piece placement)
-    const wasDragging = isDragging || hasDragStartedRef.current;
+    if (!isDragging && !isDraggingRef.current) return;
     
-    // v7.22: Set pendingMove from dragPreviewCell when drag ends (only if valid drag)
-    if (wasDragging && dragPreviewCell && draggedPiece && setPendingMove) {
+    // v7.22: Set pendingMove from dragPreviewCell when drag ends
+    if (dragPreviewCell && draggedPiece && setPendingMove) {
       setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
     }
     
-    // CRITICAL: Always reset ALL drag state to prevent stuck drags
+    // Clear refs
+    isDraggingRef.current = false;
+    draggedPieceRef.current = null;
+    hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    // Clear state
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
     setDragPreviewCell(null);
-    hasDragStartedRef.current = false;
+    setPieceCellOffset({ row: 0, col: 0 });
     
     // Re-enable scroll
     document.body.style.overflow = '';

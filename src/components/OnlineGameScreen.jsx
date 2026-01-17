@@ -4,7 +4,7 @@
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, ArrowLeft, Home, RotateCw, FlipHorizontal } from 'lucide-react';
+import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -40,22 +40,18 @@ const theme = {
   accent: 'text-amber-400',
 };
 
-// Glow Orb Button Component - consistent styling across ALL game screens
-// v7.13: Updated with new color scheme for consistency
+// Glow Orb Button Component - consistent across all game screens
+// Glow Orb Button Component - consistent styling across all game screens
+// UPDATED: Now matches ControlButtons.jsx exactly for consistency
 const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
   const colorClasses = {
     cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
     amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
-    orange: 'from-orange-500 to-amber-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]',
     green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
     red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
-    rose: 'from-rose-500 to-red-600 shadow-[0_0_15px_rgba(244,63,94,0.4)] hover:shadow-[0_0_25px_rgba(244,63,94,0.6)]',
     purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
     indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
-    blue: 'from-blue-500 to-indigo-600 shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:shadow-[0_0_25px_rgba(59,130,246,0.6)]',
-    yellow: 'from-yellow-400 to-amber-500 shadow-[0_0_15px_rgba(250,204,21,0.4)] hover:shadow-[0_0_25px_rgba(250,204,21,0.6)]',
     slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
-    white: 'from-slate-200 to-slate-300 text-slate-900 shadow-[0_0_15px_rgba(255,255,255,0.3)] hover:shadow-[0_0_25px_rgba(255,255,255,0.5)]',
   };
 
   return (
@@ -65,7 +61,7 @@ const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className 
       title={title}
       className={`
         bg-gradient-to-r ${colorClasses[color]}
-        ${color === 'white' ? 'text-slate-900' : 'text-white'} font-bold rounded-xl px-3 py-2 text-xs
+        text-white font-bold rounded-xl px-3 py-2 text-xs
         transition-all duration-200
         hover:scale-105 active:scale-95
         disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
@@ -183,6 +179,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: Live preview cell during drag
+  const [pieceCellOffset, setPieceCellOffset] = useState({ row: 0, col: 0 }); // Offset from anchor to touched cell
   
   // Refs
   const boardRef = useRef(null);
@@ -193,6 +190,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
+  // Refs for synchronous access in touch handlers
+  const isDraggingRef = useRef(false);
+  const draggedPieceRef = useRef(null);
+  const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
 
   // Placement animation hook
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
@@ -231,20 +232,112 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     return null;
   }, []);
 
+  // Attach global touch handlers synchronously (critical for mobile drag from board)
+  const attachGlobalTouchHandlers = useCallback(() => {
+    const handleGlobalTouchMove = (e) => {
+      if (!isDraggingRef.current) return;
+      
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
+      setDragPosition({ x: touch.clientX, y: touch.clientY });
+      
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      if (boardBoundsRef.current && draggedPieceRef.current) {
+        const { left, top, width, height } = boardBoundsRef.current;
+        const cellWidth = width / BOARD_SIZE;
+        const cellHeight = height / BOARD_SIZE;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+        const fingerOffset = isMobile ? 40 : 20;
+        
+        const relX = touch.clientX - left;
+        const relY = (touch.clientY - fingerOffset) - top;
+        
+        const col = Math.floor(relX / cellWidth);
+        const row = Math.floor(relY / cellHeight);
+        
+        const EXTENSION_MARGIN = 4;
+        if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+            col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+          const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
+          
+          const minX = Math.min(...coords.map(([x]) => x));
+          const maxX = Math.max(...coords.map(([x]) => x));
+          const minY = Math.min(...coords.map(([, y]) => y));
+          const maxY = Math.max(...coords.map(([, y]) => y));
+          
+          const centerOffsetCol = Math.floor((maxX + minX) / 2);
+          const centerOffsetRow = Math.floor((maxY + minY) / 2);
+          
+          const adjustedRow = row - centerOffsetRow;
+          const adjustedCol = col - centerOffsetCol;
+          
+          setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+          
+          const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+          setIsValidDrop(valid);
+        } else {
+          setDragPreviewCell(null);
+          setIsValidDrop(false);
+        }
+      }
+      
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleGlobalTouchEnd = () => {
+      if (!isDraggingRef.current) return;
+      
+      isDraggingRef.current = false;
+      hasDragStartedRef.current = false;
+      
+      setIsDragging(false);
+      
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+      
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+    
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalTouchEnd);
+    window.addEventListener('touchcancel', handleGlobalTouchEnd);
+  }, [rotation, flipped, board]);
+
   // Start drag from piece tray
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     if (hasDragStartedRef.current) return;
     if (game?.status !== 'active' || usedPieces.includes(piece) || !isMyTurn) return;
     
+    // Set refs synchronously FIRST
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    // Attach global touch handlers IMMEDIATELY
+    attachGlobalTouchHandlers();
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
     const offsetX = clientX - (elementRect.left + elementRect.width / 2);
     const offsetY = clientY - (elementRect.top + elementRect.height / 2);
-    
-    hasDragStartedRef.current = true;
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
+    setPieceCellOffset({ row: 0, col: 0 });
     
     setSelectedPiece(piece);
     setPendingMove(null);
@@ -252,25 +345,49 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [game?.status, usedPieces, isMyTurn]);
+  }, [game?.status, usedPieces, isMyTurn, attachGlobalTouchHandlers]);
 
   // Handle drag from pending piece on board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     if (hasDragStartedRef.current) return;
     if (game?.status !== 'active' || !isMyTurn) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
     
-    // v7.22: DON'T clear pending move - DOM changes during touch cause touch cancel
-    // Instead, isDragging hides the visuals in GameBoard
-    
-    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
-    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
-    
+    // Set refs synchronously FIRST
     hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    
+    // Attach global touch handlers IMMEDIATELY
+    attachGlobalTouchHandlers();
     
     // Update board bounds
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
+    
+    // Calculate which cell of the piece was touched
+    if (pendingMove && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const fingerCol = Math.floor((clientX - left) / cellWidth);
+      const fingerRow = Math.floor((clientY - top) / cellHeight);
+      
+      const offset = {
+        row: fingerRow - pendingMove.row,
+        col: fingerCol - pendingMove.col
+      };
+      pieceCellOffsetRef.current = offset;
+      setPieceCellOffset(offset);
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
+    }
+    
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });
@@ -281,7 +398,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [game?.status, isMyTurn]);
+  }, [game?.status, isMyTurn, pendingMove, attachGlobalTouchHandlers]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
@@ -325,24 +442,28 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
 
   // End drag
-  // End drag - FIXED: Always cleanup state even if drag ended off-board
   const endDrag = useCallback(() => {
-    // Always cleanup regardless of current isDragging state to prevent stuck states
-    const wasDragging = isDragging || hasDragStartedRef.current;
+    if (!isDragging && !isDraggingRef.current) return;
     
-    // v7.22: Set pendingMove from dragPreviewCell when drag ends (only if valid)
-    if (wasDragging && dragPreviewCell && draggedPiece) {
+    // v7.22: Set pendingMove from dragPreviewCell when drag ends
+    if (dragPreviewCell && draggedPiece) {
       setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
     }
     
-    // CRITICAL: Always reset ALL drag state to prevent stuck drags
+    // Clear refs
+    isDraggingRef.current = false;
+    draggedPieceRef.current = null;
+    hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    // Clear state
     setIsDragging(false);
     setDraggedPiece(null);
     setDragPosition({ x: 0, y: 0 });
     setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
     setDragPreviewCell(null);
-    hasDragStartedRef.current = false;
+    setPieceCellOffset({ row: 0, col: 0 });
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
@@ -922,18 +1043,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     }
   }, [currentGameId]);
 
-  // FAILSAFE: Reset moveInProgressRef after 10 seconds to prevent getting stuck
-  useEffect(() => {
-    const failsafeTimer = setInterval(() => {
-      if (moveInProgressRef.current) {
-        console.warn('[OnlineGameScreen] Failsafe: Resetting stuck moveInProgressRef');
-        moveInProgressRef.current = false;
-      }
-    }, 10000);
-    
-    return () => clearInterval(failsafeTimer);
-  }, []);
-
   // Show error message when placement is invalid
   useEffect(() => {
     if (pendingMove) {
@@ -1010,25 +1119,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   // FIXED: handleConfirm with proper game over detection
   const handleConfirm = useCallback(async () => {
-    // DEBUG: Log why we might be returning early
-    console.log('[handleConfirm] Called with:', { 
-      hasPendingMove: !!pendingMove, 
-      canConfirm, 
-      moveInProgress: moveInProgressRef.current,
-      pendingMove: pendingMove ? { piece: pendingMove.piece, row: pendingMove.row, col: pendingMove.col } : null
-    });
-    
-    if (!pendingMove || !canConfirm || moveInProgressRef.current) {
-      console.log('[handleConfirm] Early return - blocked by:', {
-        noPendingMove: !pendingMove,
-        cantConfirm: !canConfirm,
-        moveInProgress: moveInProgressRef.current
-      });
-      return;
-    }
+    if (!pendingMove || !canConfirm || moveInProgressRef.current) return;
     
     moveInProgressRef.current = true;
-    console.log('[handleConfirm] Starting move submission...');
+    // console.log('handleConfirm: Starting...', { pendingMove, rotation, flipped });
 
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
@@ -1107,13 +1201,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     }
 
     soundManager.playPiecePlace();
-    
-    console.log('[handleConfirm] Sending move to server...', {
-      gameId: currentGameId,
-      userId: user?.id,
-      piece: pendingMove.piece,
-      position: { row: pendingMove.row, col: pendingMove.col }
-    });
 
     // Send move to server
     const { data: responseData, error: moveError } = await gameSyncService.makeMove(
@@ -1133,8 +1220,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         winnerId
       }
     );
-    
-    console.log('[handleConfirm] Server response:', { responseData, moveError });
 
     if (moveError) {
       console.error('Move failed:', moveError);
@@ -1357,7 +1442,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
       {/* Main content */}
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
-        <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-md mx-auto p-2 sm:p-4`}>
+        <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
           {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
           <div className="flex items-center justify-between mb-2">
@@ -1512,15 +1597,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               </div>
             )}
 
-            {/* Controls - Consistent GlowOrbButton styling */}
-            {/* Row 1: Menu (icon only), Rotate, Flip, Forfeit/Quit */}
+            {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
+            {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
             <div className="flex gap-1 mt-3">
               <GlowOrbButton
                 onClick={() => { soundManager.playButtonClick(); onLeave(); }}
-                color="orange"
-                title="Back to menu"
+                color="red"
+                className="flex-1"
               >
-                <Home size={16} />
+                Menu
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleRotate}
@@ -1528,7 +1613,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="cyan"
                 className="flex-1"
               >
-                <RotateCw size={14} />ROTATE
+                Rotate
               </GlowOrbButton>
               <GlowOrbButton
                 onClick={handleFlip}
@@ -1536,14 +1621,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 color="purple"
                 className="flex-1"
               >
-                <FlipHorizontal size={14} />FLIP
+                Flip
               </GlowOrbButton>
               {game?.status === 'active' && (
                 <GlowOrbButton
                   onClick={handleQuitOrForfeit}
-                  color="white"
-                  className="flex items-center gap-1 justify-center"
-                  title={hasMovesPlayed ? "Forfeit game (counts as loss)" : "Cancel game (no stats recorded)"}
+                  color="slate"
+                  className="flex items-center gap-1 justify-center flex-1"
                 >
                   <Flag size={14} />
                   <span className="hidden sm:inline">{hasMovesPlayed ? 'Forfeit' : 'Quit'}</span>
@@ -1556,21 +1640,18 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               <div className="flex gap-2 mt-2">
                 <GlowOrbButton
                   onClick={handleCancel}
-                  color="rose"
+                  color="slate"
                   className="flex-1"
                 >
-                  CANCEL
+                  Cancel
                 </GlowOrbButton>
                 <GlowOrbButton
-                  onClick={() => {
-                    console.log('[CONFIRM BUTTON] Clicked!', { pendingMove, canConfirm, disabled: !canConfirm });
-                    handleConfirm();
-                  }}
+                  onClick={handleConfirm}
                   disabled={!canConfirm}
                   color="green"
                   className="flex-1"
                 >
-                  CONFIRM
+                  Confirm
                 </GlowOrbButton>
               </div>
             )}

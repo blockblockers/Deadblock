@@ -735,27 +735,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     loadWeeklyPuzzle();
   }, [challenge]);
   
-  // Auto-start the game when puzzle is loaded
-  useEffect(() => {
-    console.log('[WeeklyChallengeScreen] Auto-start check:', {
-      hasPuzzle: !!puzzle,
-      loading,
-      loadError,
-      gameStarted,
-      hasLoadPuzzleOnly: typeof loadPuzzleOnly === 'function'
-    });
-    
-    if (puzzle && !loading && !loadError && !gameStarted && loadPuzzleOnly) {
-      console.log('[WeeklyChallengeScreen] Auto-starting game...');
-      // Puzzle loaded successfully - start the game automatically
-      loadPuzzleOnly(puzzle);
-      setGameStarted(true);
-      startTimer();
-      soundManager.playClickSound('success');
-      console.log('[WeeklyChallengeScreen] Game started!');
-    }
-  }, [puzzle, loading, loadError, gameStarted, loadPuzzleOnly, startTimer]);
-  
   // Start the timer
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
@@ -784,6 +763,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setAccumulatedMs(prev => prev + sessionTime);
     return accumulatedMs + sessionTime;
   }, [accumulatedMs]);
+  
+  // Auto-start the game when puzzle is loaded
+  useEffect(() => {
+    if (puzzle && !loading && !loadError && !gameStarted && loadPuzzleOnly) {
+      loadPuzzleOnly(puzzle);
+      setGameStarted(true);
+      startTimer();
+      soundManager.playClickSound('success');
+    }
+  }, [puzzle, loading, loadError, gameStarted, loadPuzzleOnly, startTimer]);
   
   // Check for puzzle completion
   useEffect(() => {
@@ -869,7 +858,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Loading state
   if (loading) {
-    console.log('[WeeklyChallengeScreen] Showing loading spinner');
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center relative z-20">
         <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
@@ -886,7 +874,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Error state
   if (loadError) {
-    console.log('[WeeklyChallengeScreen] Showing error screen:', loadError);
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative z-20">
         <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
@@ -910,7 +897,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Waiting for game to start (puzzle loaded, auto-start effect running)
   if (!gameStarted) {
-    console.log('[WeeklyChallengeScreen] Showing waiting screen - gameStarted:', gameStarted, 'puzzle:', !!puzzle);
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center relative z-20">
         <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
@@ -926,7 +912,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   }
   
   // Game in progress
-  console.log('[WeeklyChallengeScreen] Rendering game board');
   return (
     <div 
       className="min-h-screen bg-slate-950 relative z-20"
