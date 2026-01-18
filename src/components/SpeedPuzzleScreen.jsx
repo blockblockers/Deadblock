@@ -13,7 +13,7 @@
 // 10. Improved code organization with logical grouping
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Zap, Trophy, Play, RotateCcw, Timer, Flame, Home } from 'lucide-react';
+import { Zap, Trophy, Play, RotateCcw, Timer, Flame, Home, Move } from 'lucide-react';
 import PropTypes from 'prop-types';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
@@ -683,6 +683,16 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     return canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords);
   }, [pendingMove, board]);
 
+  // Helper to check if pending piece has cells off the grid
+  const isPieceOffGrid = useMemo(() => {
+    if (!pendingMove || !pendingMove.coords) return false;
+    return pendingMove.coords.some(([dx, dy]) => {
+      const cellRow = pendingMove.row + dy;
+      const cellCol = pendingMove.col + dx;
+      return cellRow < 0 || cellRow >= BOARD_SIZE || cellCol < 0 || cellCol >= BOARD_SIZE;
+    });
+  }, [pendingMove]);
+
   // -------------------------------------------------------------------------
   // HELPER: Safe setTimeout with cleanup tracking
   // -------------------------------------------------------------------------
@@ -984,9 +994,21 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       soundManager.playPieceSelect();
     };
 
-    // Touch move/end - global handlers take care of updates when isDragging
-    const handleTouchMove = () => {};
-    const handleTouchEnd = () => {};
+    // Touch move - call updateDrag directly (matching GameScreen pattern)
+    const handleTouchMove = (e) => {
+      if (hasDragStartedRef.current && e.touches?.[0]) {
+        e.preventDefault();
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    // Touch end - call endDrag directly (matching GameScreen pattern)
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        endDrag();
+      }
+    };
 
     // Mouse handlers for desktop
     const handleMouseDown = (e) => {
@@ -1034,7 +1056,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameState, usedPieces, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
+  }, [gameState, usedPieces, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers, updateDrag, endDrag]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -1646,64 +1668,77 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               />
             )}
             
-            <div className="flex justify-center pb-1 relative">
-              <GameBoard
-                ref={boardRef}
-                board={board}
-                boardPieces={boardPieces}
-                currentPlayer={1}
-                pendingMove={pendingMove}
-                playerAnimatingMove={playerAnimatingMove}
-                onCellClick={handleCellClick}
-                selectedPiece={selectedPiece}
-                rotation={rotation}
-                flipped={flipped}
-                gameOver={gameState !== GAME_STATES.PLAYING}
-                onPendingPieceDragStart={handleBoardDragStart}
-                customColors={{
-                  1: 'bg-gradient-to-br from-cyan-400 to-blue-500',
-                  2: 'bg-gradient-to-br from-rose-400 to-pink-500',
-                }}
-                // Drag preview props for board highlighting during drag
-                isDragging={isDragging}
-                dragPreviewCell={dragPreviewCell}
-                draggedPiece={draggedPiece}
-                dragRotation={rotation}
-                dragFlipped={flipped}
-              />
+            {/* Main Game Panel - matches other screens styling */}
+            <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-cyan-500/40 shadow-[0_0_40px_rgba(34,211,238,0.2)]">
               
-              {/* Wrong move feedback overlay */}
-              {showWrongMove && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                  <div className="bg-red-900/90 text-white px-6 py-4 rounded-xl border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.5)] animate-pulse">
-                    <div className="text-center">
-                      <div className="text-2xl font-black mb-1">WRONG MOVE!</div>
-                      <div className="text-sm text-red-200">AI can still play - try again</div>
+              {/* Game Board - simplified wrapper for consistent sizing */}
+              <div className="flex justify-center pb-2 relative">
+                <GameBoard
+                  ref={boardRef}
+                  board={board}
+                  boardPieces={boardPieces}
+                  currentPlayer={1}
+                  pendingMove={pendingMove}
+                  playerAnimatingMove={playerAnimatingMove}
+                  onCellClick={handleCellClick}
+                  selectedPiece={selectedPiece}
+                  rotation={rotation}
+                  flipped={flipped}
+                  gameOver={gameState !== GAME_STATES.PLAYING}
+                  onPendingPieceDragStart={handleBoardDragStart}
+                  customColors={{
+                    1: 'bg-gradient-to-br from-cyan-400 to-blue-500',
+                    2: 'bg-gradient-to-br from-rose-400 to-pink-500',
+                  }}
+                  isDragging={isDragging}
+                  dragPreviewCell={dragPreviewCell}
+                  draggedPiece={draggedPiece}
+                  dragRotation={rotation}
+                  dragFlipped={flipped}
+                />
+                
+                {/* Wrong move feedback overlay */}
+                {showWrongMove && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                    <div className="bg-red-900/90 text-white px-6 py-4 rounded-xl border-2 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.5)] animate-pulse">
+                      <div className="text-center">
+                        <div className="text-2xl font-black mb-1">WRONG MOVE!</div>
+                        <div className="text-sm text-red-200">AI can still play - try again</div>
+                      </div>
                     </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Off-grid indicator - shows when piece extends beyond board */}
+              {isPieceOffGrid && pendingMove && !isDragging && gameState === GAME_STATES.PLAYING && (
+                <div className="flex justify-center mb-2">
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/60 border border-amber-500/50 rounded-lg">
+                    <Move size={14} className="text-amber-400" />
+                    <span className="text-amber-300 text-xs font-bold">Use D-Pad to reposition</span>
                   </div>
                 </div>
               )}
-            </div>
-            
-            {/* D-Pad - matches GameScreen order */}
-            {gameState === GAME_STATES.PLAYING && pendingMove && !isDragging && (
-              <div className="flex justify-center mt-3 flex-shrink-0">
-                <DPad onMove={movePendingPiece} />
-              </div>
-            )}
-            
-            {/* Control Buttons (Rotate/Flip/Confirm/Cancel) - matches GameScreen order */}
-            {gameState === GAME_STATES.PLAYING && (
-              <div className="mt-2 w-full max-w-md flex-shrink-0">
-                <ControlButtons
-                  selectedPiece={selectedPiece}
-                  pendingMove={pendingMove}
-                  canConfirm={canConfirm}
-                  gameOver={false}
-                  gameMode="puzzle"
-                  currentPlayer={1}
-                  isGeneratingPuzzle={false}
-                  onRotate={rotatePiece}
+              
+              {/* D-Pad - matches GameScreen order */}
+              {gameState === GAME_STATES.PLAYING && pendingMove && !isDragging && (
+                <div className="flex justify-center mt-2 flex-shrink-0">
+                  <DPad onMove={movePendingPiece} />
+                </div>
+              )}
+              
+              {/* Control Buttons (Rotate/Flip/Confirm/Cancel) - matches GameScreen order */}
+              {gameState === GAME_STATES.PLAYING && (
+                <div className="mt-2 w-full flex-shrink-0">
+                  <ControlButtons
+                    selectedPiece={selectedPiece}
+                    pendingMove={pendingMove}
+                    canConfirm={canConfirm}
+                    gameOver={false}
+                    gameMode="puzzle"
+                    currentPlayer={1}
+                    isGeneratingPuzzle={false}
+                    onRotate={rotatePiece}
                   onFlip={flipPiece}
                   onConfirm={confirmMove}
                   onCancel={cancelMove}
@@ -1711,8 +1746,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                 />
               </div>
             )}
+            </div>
             
-            {/* Piece tray - at the bottom like GameScreen */}
+            {/* Piece tray - outside panel at the bottom */}
             <div className="mt-2 w-full max-w-md flex-shrink-0">
               <PieceTray
                 usedPieces={usedPieces}

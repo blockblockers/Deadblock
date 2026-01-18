@@ -2,7 +2,7 @@
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Clock, Trophy, ArrowLeft, RotateCcw, CheckCircle, X, FlipHorizontal } from 'lucide-react';
+import { Clock, Trophy, ArrowLeft, RotateCcw, CheckCircle, X, FlipHorizontal, Home, Move } from 'lucide-react';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
@@ -268,6 +268,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     resetCurrentPuzzle,
     setPendingMove,
   } = useGameState();
+  
+  // Helper to check if pending piece has cells off the grid
+  const isPieceOffGrid = pendingMove ? (() => {
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    return coords.some(([dx, dy]) => {
+      const cellRow = pendingMove.row + dy;
+      const cellCol = pendingMove.col + dx;
+      return cellRow < 0 || cellRow >= BOARD_SIZE || cellCol < 0 || cellCol >= BOARD_SIZE;
+    });
+  })() : false;
   
   // =========================================================================
   // DRAG AND DROP HANDLERS - FIXED WITH DIAGNOSTIC LOGGING
@@ -553,7 +563,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
 
-    // Touch move - FIXED: Actually call updateDrag
+    // Touch move - call updateDrag directly (matching GameScreen pattern)
     const handleTouchMove = (e) => {
       if (hasDragStartedRef.current && e.touches?.[0]) {
         e.preventDefault();
@@ -561,7 +571,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       }
     };
 
-    // Touch end - FIXED: Actually call endDrag
+    // Touch end - call endDrag directly (matching GameScreen pattern)
     const handleTouchEnd = (e) => {
       if (hasDragStartedRef.current) {
         e.preventDefault();
@@ -1090,72 +1100,107 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             })()}
           </div>
           
-          {/* Game Board */}
-          <div className="flex justify-center pb-1">
-            <GameBoard
-              ref={boardRef}
-              board={board}
-              boardPieces={boardPieces}
-              selectedPiece={selectedPiece}
-              pendingMove={pendingMove}
-              rotation={rotation}
-              flipped={flipped}
-              onCellClick={handleCellClick}
-              currentPlayer={currentPlayer}
-              gameOver={gameOver}
-              gameMode="puzzle"
-              onPendingPieceDragStart={handleBoardDragStart}
-              // v7.22: Drag preview props for board highlighting during drag
-              isDragging={isDragging}
-              dragPreviewCell={dragPreviewCell}
-              draggedPiece={draggedPiece}
-              dragRotation={rotation}
-              dragFlipped={flipped}
-            />
-          </div>
-          
-          {/* D-Pad for moving pieces */}
-          {pendingMove && !isDragging && (
-            <div className="flex justify-center mb-3">
-              <DPad onMove={movePendingPiece} />
+          {/* Main Game Panel - matches OnlineGameScreen styling */}
+          <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-red-500/40 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
+            
+            {/* Game Board */}
+            <div className="flex justify-center pb-2">
+              <GameBoard
+                ref={boardRef}
+                board={board}
+                boardPieces={boardPieces}
+                selectedPiece={selectedPiece}
+                pendingMove={pendingMove}
+                rotation={rotation}
+                flipped={flipped}
+                onCellClick={handleCellClick}
+                currentPlayer={currentPlayer}
+                gameOver={gameOver}
+                gameMode="puzzle"
+                onPendingPieceDragStart={handleBoardDragStart}
+                isDragging={isDragging}
+                dragPreviewCell={dragPreviewCell}
+                draggedPiece={draggedPiece}
+                dragRotation={rotation}
+                dragFlipped={flipped}
+              />
             </div>
-          )}
-          
-          {/* Control Buttons - Above Piece Tray with Menu button */}
-          <div className="flex gap-2 justify-between mb-2 flex-wrap">
-            {/* Menu Button - Rose/Pink color for visibility (matches other screens) */}
-            <button
-              onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
-              className="flex-1 px-2 py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(244,63,94,0.4)]"
-            >
-              <ArrowLeft size={14} />MENU
-            </button>
             
-            {/* Rotate Button - Cyan (matches other screens) */}
-            <button
-              onClick={rotatePiece}
-              className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:shadow-none"
-              disabled={!selectedPiece && !pendingMove}
-            >
-              <RotateCcw size={14} />ROTATE
-            </button>
+            {/* Off-grid indicator - shows when piece extends beyond board */}
+            {isPieceOffGrid && pendingMove && !isDragging && (
+              <div className="flex justify-center mb-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/60 border border-amber-500/50 rounded-lg">
+                  <Move size={14} className="text-amber-400" />
+                  <span className="text-amber-300 text-xs font-bold">Use D-Pad to reposition</span>
+                </div>
+              </div>
+            )}
+            
+            {/* D-Pad for moving pieces */}
+            {pendingMove && !isDragging && (
+              <div className="flex justify-center mb-3">
+                <DPad onMove={movePendingPiece} />
+              </div>
+            )}
+            
+            {/* Control Buttons - Above Piece Tray */}
+            <div className="flex gap-2 justify-between mb-2 flex-wrap">
+              {/* Menu Button - Orange with Home icon (matches other screens) */}
+              <button
+                onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(251,146,60,0.4)]"
+              >
+                <Home size={14} />
+              </button>
+              
+              {/* Rotate Button - Cyan (matches other screens) */}
+              <button
+                onClick={rotatePiece}
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:shadow-none"
+                disabled={!selectedPiece && !pendingMove}
+              >
+                <RotateCcw size={14} />
+              </button>
 
-            {/* Flip Button - Purple (matches other screens) */}
-            <button
-              onClick={flipPiece}
-              className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:shadow-none"
-              disabled={!selectedPiece && !pendingMove}
-            >
-              <FlipHorizontal size={14} />FLIP
-            </button>
+              {/* Flip Button - Purple (matches other screens) */}
+              <button
+                onClick={flipPiece}
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:shadow-none"
+                disabled={!selectedPiece && !pendingMove}
+              >
+                <FlipHorizontal size={14} />
+              </button>
+              
+              {/* Retry Button - Slate (matches other screens) */}
+              <button
+                onClick={handleRestart}
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(100,116,139,0.4)]"
+              >
+                <RotateCcw size={14} />
+              </button>
+            </div>
             
-            {/* Retry Button - Slate (matches other screens) */}
-            <button
-              onClick={handleRestart}
-              className="flex-1 px-2 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(100,116,139,0.4)]"
-            >
-              <RotateCcw size={14} />RETRY
-            </button>
+            {/* Confirm/Cancel Controls - Above Piece Tray (like other screens) */}
+            {pendingMove && (
+              <div className="flex gap-2 justify-center mb-2">
+                <button
+                  onClick={cancelMove}
+                  className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(100,116,139,0.4)]"
+                >
+                  <X size={14} />CANCEL
+                </button>
+                <button
+                  onClick={confirmMove}
+                  disabled={!pendingMove || !(() => {
+                    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+                    return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+                  })()}
+                  className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
+                >
+                  <CheckCircle size={14} />CONFIRM
+                </button>
+              </div>
+            )}
           </div>
           
           {/* Piece Tray */}
@@ -1171,28 +1216,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             isDragging={isDragging}
             draggedPiece={draggedPiece}
           />
-          
-          {/* Confirm/Cancel Controls - Only show when there's a pending move */}
-          {pendingMove && (
-            <div className="flex gap-2 justify-center mt-2">
-              <button
-                onClick={cancelMove}
-                className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(100,116,139,0.4)]"
-              >
-                <X size={14} />CANCEL
-              </button>
-              <button
-                onClick={confirmMove}
-                disabled={!pendingMove || !(() => {
-                  const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-                  return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
-                })()}
-                className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
-              >
-                <CheckCircle size={14} />CONFIRM
-              </button>
-            </div>
-          )}
         </div>
         
         {/* Bottom padding for scroll */}

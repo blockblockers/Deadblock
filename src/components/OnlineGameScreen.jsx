@@ -4,7 +4,7 @@
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Flag, MessageCircle, Move, Home, RotateCcw, FlipHorizontal } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -41,39 +41,6 @@ const theme = {
 };
 
 // Glow Orb Button Component - consistent across all game screens
-// Glow Orb Button Component - consistent styling across all game screens
-// UPDATED: Now matches ControlButtons.jsx exactly for consistency
-const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
-  const colorClasses = {
-    cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
-    amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
-    green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
-    red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
-    purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
-    indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
-    slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
-  };
-
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={`
-        bg-gradient-to-r ${colorClasses[color]}
-        text-white font-bold rounded-xl px-3 py-2 text-xs
-        transition-all duration-200
-        hover:scale-105 active:scale-95
-        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
-        flex items-center justify-center gap-1
-        ${className}
-      `}
-    >
-      {children}
-    </button>
-  );
-};
-
 // Player indicator bar for online games - with usernames
 const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
   const myRating = profile?.rating || 1000;
@@ -690,6 +657,17 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
   }, [pendingMove, rotation, flipped, board]);
+
+  // Helper to check if pending piece has cells off the grid
+  const isPieceOffGrid = useMemo(() => {
+    if (!pendingMove) return false;
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    return coords.some(([dx, dy]) => {
+      const cellRow = pendingMove.row + dy;
+      const cellCol = pendingMove.col + dx;
+      return cellRow < 0 || cellRow >= BOARD_SIZE || cellCol < 0 || cellCol >= BOARD_SIZE;
+    });
+  }, [pendingMove, rotation, flipped]);
 
   // =========================================================================
   // GAME STATE MANAGEMENT - FIXED REAL-TIME UPDATES
@@ -1444,15 +1422,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
-          {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
+          {/* UPDATED: Header with title centered, NO menu button */}
           <div className="flex items-center justify-between mb-2">
-            <button
-              onClick={handleLeave}
-              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
-            >
-              <ArrowLeft size={16} />
-              Menu
-            </button>
+            {/* Spacer for balance */}
+            <div className="w-16" />
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
@@ -1486,7 +1459,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             />
 
             {/* Game Board - FIXED: Pass ref directly to GameBoard */}
-            <div className="flex justify-center pb-2">
+            <div className="flex justify-center pb-4">
               <div className="relative">
                 <GameBoard
                   ref={boardRef}
@@ -1520,14 +1493,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 )}
               </div>
             </div>
-
-            {/* Pieces info bar when D-Pad is shown */}
-            {pendingMove && isMyTurn && !isDragging && game?.status === 'active' && (
-              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
-                <span className="text-slate-400 text-xs">
-                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
-                </span>
-                <span className="text-amber-400/60 text-xs">Use D-Pad to position</span>
+            
+            {/* Off-grid indicator - shows when piece extends beyond board */}
+            {isPieceOffGrid && pendingMove && isMyTurn && !isDragging && game?.status === 'active' && (
+              <div className="flex justify-center mb-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/60 border border-amber-500/50 rounded-lg">
+                  <Move size={14} className="text-amber-400" />
+                  <span className="text-amber-300 text-xs font-bold">Use D-Pad to reposition</span>
+                </div>
               </div>
             )}
             
@@ -1553,62 +1526,55 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               </div>
             )}
 
-            {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
+            {/* UPDATED: Controls - Icon-only style matching other game boards */}
             {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
-            <div className="flex gap-1 mt-2">
-              <GlowOrbButton
+            <div className="flex gap-2 mt-3">
+              <button
                 onClick={() => { soundManager.playButtonClick(); onLeave(); }}
-                color="red"
-                className="flex-1"
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(251,146,60,0.4)]"
               >
-                Menu
-              </GlowOrbButton>
-              <GlowOrbButton
+                <Home size={16} />
+              </button>
+              <button
                 onClick={handleRotate}
                 disabled={!selectedPiece || !isMyTurn}
-                color="cyan"
-                className="flex-1"
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:opacity-30 disabled:shadow-none"
               >
-                Rotate
-              </GlowOrbButton>
-              <GlowOrbButton
+                <RotateCcw size={16} />
+              </button>
+              <button
                 onClick={handleFlip}
                 disabled={!selectedPiece || !isMyTurn}
-                color="purple"
-                className="flex-1"
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:opacity-30 disabled:shadow-none"
               >
-                Flip
-              </GlowOrbButton>
+                <FlipHorizontal size={16} />
+              </button>
               {game?.status === 'active' && (
-                <GlowOrbButton
+                <button
                   onClick={handleQuitOrForfeit}
-                  color="slate"
-                  className="flex items-center gap-1 justify-center flex-1"
+                  className="flex-1 px-2 py-2 bg-gradient-to-r from-gray-100 to-white hover:from-white hover:to-gray-100 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.3)] border border-gray-200"
                 >
-                  <Flag size={14} />
-                  <span className="hidden sm:inline">{hasMovesPlayed ? 'Forfeit' : 'Quit'}</span>
-                </GlowOrbButton>
+                  <Flag size={16} />
+                </button>
               )}
             </div>
             
             {/* Row 2: Cancel/Confirm when piece is pending */}
             {pendingMove && (
               <div className="flex gap-2 mt-2">
-                <GlowOrbButton
+                <button
                   onClick={handleCancel}
-                  color="slate"
-                  className="flex-1"
+                  className="flex-1 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm font-bold flex items-center justify-center shadow-[0_0_15px_rgba(100,116,139,0.4)]"
                 >
                   Cancel
-                </GlowOrbButton>
-                <GlowOrbButton
+                </button>
+                <button
                   onClick={handleConfirm}
                   disabled={!canConfirm}
-                  color="green"
-                  className="flex-1"
+                  className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
                 >
                   Confirm
-                </GlowOrbButton>
+                </button>
               </div>
             )}
           </div>
@@ -1628,27 +1594,47 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             draggedPiece={draggedPiece}
           />
           
-          {/* Chat notification indicator at bottom of piece tray area */}
+          {/* Pieces counter with Chat button - below piece tray */}
           {game?.status === 'active' && (
-            <div className="flex items-center justify-center gap-2 mt-1">
-              <span className="text-slate-500 text-[10px]">
-                {12 - usedPieces.length} pieces available
+            <div className="flex items-center justify-between px-3 py-2 mt-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+              <span className="text-slate-400 text-xs">
+                Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
               </span>
-              {hasUnreadChat && !chatOpen && (
-                <button
-                  onClick={() => {
-                    setChatOpen(true);
-                    setHasUnreadChat(false);
-                  }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-red-500 to-orange-500 text-white text-[10px] font-bold animate-pulse"
-                  style={{
-                    boxShadow: '0 0 15px rgba(239,68,68,0.6)'
-                  }}
-                >
-                  <MessageCircle size={10} />
-                  New message
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setChatOpen(!chatOpen);
+                  if (!chatOpen) setHasUnreadChat(false);
+                }}
+                className={`
+                  relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
+                  ${chatOpen 
+                    ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
+                    : hasUnreadChat 
+                      ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
+                      : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
+                  }
+                `}
+                style={hasUnreadChat && !chatOpen ? {
+                  animation: 'chatBlink 0.8s ease-in-out infinite',
+                  boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
+                } : {}}
+              >
+                <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
+                {hasUnreadChat && !chatOpen && (
+                  <>
+                    <span 
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                      style={{
+                        animation: 'bounce 0.5s ease-in-out infinite',
+                        boxShadow: '0 0 15px rgba(239,68,68,1)'
+                      }}
+                    >
+                      !
+                    </span>
+                    <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
+                  </>
+                )}
+              </button>
             </div>
           )}
         </div>

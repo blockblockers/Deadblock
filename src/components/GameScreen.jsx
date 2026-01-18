@@ -1,7 +1,7 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
 // UPDATED: Added drag-and-drop for pieces from tray to board
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Flag, XCircle } from 'lucide-react';
+import { Flag, XCircle, Move } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -230,6 +230,16 @@ const GameScreen = ({
     const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
     return isValid;
   })();
+
+  // Helper to check if pending piece has cells off the grid
+  const isPieceOffGrid = pendingMove ? (() => {
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    return coords.some(([dx, dy]) => {
+      const cellRow = pendingMove.row + dy;
+      const cellCol = pendingMove.col + dx;
+      return cellRow < 0 || cellRow >= BOARD_SIZE || cellCol < 0 || cellCol >= BOARD_SIZE;
+    });
+  })() : false;
 
   // Show error when placement is invalid
   useEffect(() => {
@@ -751,6 +761,16 @@ const GameScreen = ({
                 dragFlipped={flipped}
               />
             </div>
+
+            {/* Off-grid indicator - shows when piece extends beyond board */}
+            {isPieceOffGrid && pendingMove && !isGeneratingPuzzle && !isDragging && (
+              <div className="flex justify-center mb-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/60 border border-amber-500/50 rounded-lg">
+                  <Move size={14} className="text-amber-400" />
+                  <span className="text-amber-300 text-xs font-bold">Use D-Pad to reposition</span>
+                </div>
+              </div>
+            )}
 
             {/* D-Pad and Error Message Layout */}
             {pendingMove && !isGeneratingPuzzle && !isDragging && (
