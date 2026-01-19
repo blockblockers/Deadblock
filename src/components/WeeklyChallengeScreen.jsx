@@ -374,10 +374,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Detach global touch handlers
   const detachGlobalTouchHandlers = useCallback(() => {
     const { move, end, cancel } = globalTouchHandlersRef.current;
-    // v7.22: Must use same capture option as when adding
-    if (move) window.removeEventListener('touchmove', move, { capture: true });
-    if (end) window.removeEventListener('touchend', end, { capture: true });
-    if (cancel) window.removeEventListener('touchcancel', cancel, { capture: true });
+    if (move) window.removeEventListener('touchmove', move);
+    if (end) window.removeEventListener('touchend', end);
+    if (cancel) window.removeEventListener('touchcancel', cancel);
     globalTouchHandlersRef.current = { move: null, end: null, cancel: null };
   }, []);
 
@@ -387,28 +386,98 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     detachGlobalTouchHandlers();
     
     const handleTouchMove = (e) => {
-      if (e.touches && e.touches[0]) {
-        updateDragRef.current?.(e.touches[0].clientX, e.touches[0].clientY);
-        if (e.cancelable) {
-          e.preventDefault();
+      if (!isDraggingRef.current) return;
+      
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
+      // Update drag position
+      setDragPosition({ x: touch.clientX, y: touch.clientY });
+      
+      // Update board bounds
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Calculate board cell and preview INLINE (like GameScreen)
+      if (boardBoundsRef.current && draggedPieceRef.current) {
+        const { left, top, width, height } = boardBoundsRef.current;
+        const cellWidth = width / BOARD_SIZE;
+        const cellHeight = height / BOARD_SIZE;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+        const fingerOffset = isMobile ? 40 : 20;
+        
+        const relX = touch.clientX - left;
+        const relY = (touch.clientY - fingerOffset) - top;
+        
+        const col = Math.floor(relX / cellWidth);
+        const row = Math.floor(relY / cellHeight);
+        
+        const EXTENSION_MARGIN = 4;
+        if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+            col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+          // Get piece coordinates to calculate center offset
+          const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
+          
+          const minX = Math.min(...coords.map(([x]) => x));
+          const maxX = Math.max(...coords.map(([x]) => x));
+          const minY = Math.min(...coords.map(([, y]) => y));
+          const maxY = Math.max(...coords.map(([, y]) => y));
+          
+          const centerOffsetCol = Math.floor((maxX + minX) / 2);
+          const centerOffsetRow = Math.floor((maxY + minY) / 2);
+          
+          const adjustedRow = row - centerOffsetRow;
+          const adjustedCol = col - centerOffsetCol;
+          
+          // Store in ref for endDrag to access synchronously
+          dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+          setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+          
+          const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+          setIsValidDrop(valid);
+        } else {
+          dragCellRef.current = null;
+          setDragPreviewCell(null);
+          setIsValidDrop(false);
         }
+      }
+      
+      if (e.cancelable) {
+        e.preventDefault();
       }
     };
 
     const handleTouchEnd = () => {
+      if (!isDraggingRef.current) return;
+      
+      // Call endDrag via ref to properly set pendingMove
       endDragRef.current?.();
+      
+      // Clean up listeners
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchCancel);
+      globalTouchHandlersRef.current = { move: null, end: null, cancel: null };
     };
     
     const handleTouchCancel = () => {
+      if (!isDraggingRef.current) return;
+      
       endDragRef.current?.();
+      
+      // Clean up listeners
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchCancel);
+      globalTouchHandlersRef.current = { move: null, end: null, cancel: null };
     };
 
     globalTouchHandlersRef.current = { move: handleTouchMove, end: handleTouchEnd, cancel: handleTouchCancel };
-    // v7.22: Use capture: true to catch events before any other handlers
-    window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true });
-    window.addEventListener('touchend', handleTouchEnd, { capture: true });
-    window.addEventListener('touchcancel', handleTouchCancel, { capture: true });
-  }, [detachGlobalTouchHandlers]);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchcancel', handleTouchCancel);
+  }, [rotation, flipped, board, detachGlobalTouchHandlers]);
 
   // Update drag position and check validity
   const updateDrag = useCallback((clientX, clientY) => {
@@ -455,15 +524,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
   // End drag - keep pending move for confirmation
   const endDrag = useCallback(() => {
-    // Use state OR refs for guards
-    if (!isDragging && !isDraggingRef.current) return;
+    // Check if we were actually dragging
+    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
+    if (!wasDragging) return;
     
-    // Detach global touch handlers
-    detachGlobalTouchHandlers();
-    
-    // v7.22: Set pendingMove from dragCellRef/dragPreviewCell when drag ends
+    // Set pendingMove from dragCellRef (sync) or dragPreviewCell (state)
+    // dragCellRef is more reliable as it's updated synchronously in global handlers
     const piece = draggedPiece || draggedPieceRef.current;
     const cell = dragCellRef.current || dragPreviewCell;
+    
     if (cell && piece) {
       const coords = getPieceCoords(piece, rotation, flipped);
       setPendingMove({
@@ -474,22 +543,26 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       });
     }
     
-    // Update refs (synchronous)
+    // Clear refs
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
-    dragCellRef.current = null;
-    
-    // Then update state (async, triggers re-render)
-    setIsDragging(false);
-    setDraggedPiece(null);
-    setIsValidDrop(false);
-    setDragPreviewCell(null);
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
+    dragCellRef.current = null;
     
+    // Clear state
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setDragPosition({ x: 0, y: 0 });
+    setDragOffset({ x: 0, y: 0 });
+    setIsValidDrop(false);
+    setDragPreviewCell(null);
+    setPieceCellOffset({ row: 0, col: 0 });
+    
+    // Re-enable scroll
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, draggedPiece, dragPreviewCell, rotation, flipped, detachGlobalTouchHandlers]);
+  }, [isDragging, dragPreviewCell, draggedPiece, rotation, flipped]);
 
   // CRITICAL: Update refs SYNCHRONOUSLY (not in useEffect) to avoid race conditions
   // This ensures refs are always current when touch handlers fire
