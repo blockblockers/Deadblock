@@ -224,6 +224,10 @@ const GameScreen = ({
   const isPuzzle = gameMode === 'puzzle';
   const playerWon = winner === 1;
 
+  // Refs for drag function access in global handlers
+  const endDragRef = useRef(null);
+  const dragCellRef = useRef(null);
+
   // Calculate if confirm should be enabled
   const canConfirm = pendingMove && (() => {
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
@@ -351,11 +355,14 @@ const GameScreen = ({
           const adjustedRow = row - centerOffsetRow;
           const adjustedCol = col - centerOffsetCol;
           
+          // Store in ref for endDrag to access
+          dragCellRef.current = { row: adjustedRow, col: adjustedCol };
           setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
           
           const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
           setIsValidDrop(valid);
         } else {
+          dragCellRef.current = null;
           setDragPreviewCell(null);
           setIsValidDrop(false);
         }
@@ -369,15 +376,8 @@ const GameScreen = ({
     const handleGlobalTouchEnd = () => {
       if (!isDraggingRef.current) return;
       
-      // Clear refs
-      isDraggingRef.current = false;
-      hasDragStartedRef.current = false;
-      
-      // Let React state update handle the rest via endDrag effect
-      setIsDragging(false);
-      
-      document.body.style.overflow = '';
-      document.body.style.touchAction = '';
+      // Call endDrag via ref to properly set pendingMove
+      endDragRef.current?.();
       
       // Clean up listeners
       window.removeEventListener('touchmove', handleGlobalTouchMove);
@@ -519,13 +519,15 @@ const GameScreen = ({
       const adjustedRow = cell.row - centerOffsetRow;
       const adjustedCol = cell.col - centerOffsetCol;
       
-      // v7.22: Update dragPreviewCell for live board preview
+      // Store in ref for endDrag to access (sync) and state for render
+      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
       setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
       
       // Check if valid drop position
       const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
+      dragCellRef.current = null;
       setDragPreviewCell(null);
       setIsValidDrop(false);
     }
@@ -533,11 +535,17 @@ const GameScreen = ({
 
   // End drag
   const endDrag = useCallback(() => {
-    if (!isDragging && !isDraggingRef.current) return;
+    // Check if we were actually dragging
+    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
+    if (!wasDragging) return;
     
-    // v7.22: Set pendingMove from dragPreviewCell when drag ends
-    if (dragPreviewCell && draggedPiece && setPendingMove) {
-      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
+    // Set pendingMove from dragCellRef (sync) or dragPreviewCell (state)
+    // dragCellRef is more reliable as it's updated synchronously in global handlers
+    const piece = draggedPiece || draggedPieceRef.current;
+    const cell = dragCellRef.current || dragPreviewCell;
+    
+    if (cell && piece && setPendingMove) {
+      setPendingMove({ piece, row: cell.row, col: cell.col });
     }
     
     // Clear refs
@@ -545,6 +553,7 @@ const GameScreen = ({
     draggedPieceRef.current = null;
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
+    dragCellRef.current = null;
     
     // Clear state
     setIsDragging(false);
@@ -559,6 +568,9 @@ const GameScreen = ({
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
   }, [isDragging, dragPreviewCell, draggedPiece, setPendingMove]);
+
+  // Keep endDragRef current for global touch handlers
+  endDragRef.current = endDrag;
 
   // Create drag handlers for PieceTray
   // Since pieces have touch-action: none, we start drag immediately on touchstart

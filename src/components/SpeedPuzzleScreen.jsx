@@ -13,12 +13,11 @@
 // 10. Improved code organization with logical grouping
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Zap, Trophy, Play, RotateCcw, Timer, Flame, Home, Move } from 'lucide-react';
+import { Zap, Trophy, Play, RotateCcw, Timer, Flame, Home, Move, FlipHorizontal, X, CheckCircle } from 'lucide-react';
 import PropTypes from 'prop-types';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
-import ControlButtons from './ControlButtons';
 import DragOverlay from './DragOverlay';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, createEmptyBoard, BOARD_SIZE } from '../utils/gameLogic';
@@ -792,13 +791,10 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const relX = clientX - left;
     const relY = (clientY - fingerOffset) - top;
     
-    // Raw cell under finger (adjusted for fingerOffset)
-    const fingerCol = Math.floor(relX / cellWidth);
-    const fingerRow = Math.floor(relY / cellHeight);
-    
-    // Adjust by which cell of the piece is under the finger
-    const col = fingerCol - pieceCellOffsetRef.current.col;
-    const row = fingerRow - pieceCellOffsetRef.current.row;
+    // Raw cell under finger (adjusted for fingerOffset only)
+    // Note: Do NOT adjust by pieceCellOffsetRef here - updateDrag handles centering
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
     
     // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
@@ -966,12 +962,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       // Capture element rect
       elementRect = e.currentTarget?.getBoundingClientRect() || null;
       
-      // Calculate which cell of the piece is under the finger
-      const touchedCell = calculateTouchedPieceCell(piece, touch.clientX, touch.clientY, elementRect, rotation, flipped);
-      pieceCellOffsetRef.current = touchedCell;
-      setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
+      // Set pieceCellOffset to 0,0 for tray drags (updateDrag handles centering)
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
       
-      // Calculate offset from piece center
+      // Calculate offset from piece center for DragOverlay
       const offsetX = elementRect ? touch.clientX - (elementRect.left + elementRect.width / 2) : 0;
       const offsetY = elementRect ? touch.clientY - (elementRect.top + elementRect.height / 2) : 0;
       
@@ -994,19 +989,17 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       soundManager.playPieceSelect();
     };
 
-    // Touch move - call updateDrag directly (matching GameScreen pattern)
+    // Touch move - handled by global handlers
     const handleTouchMove = (e) => {
       if (hasDragStartedRef.current && e.touches?.[0]) {
         e.preventDefault();
-        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
 
-    // Touch end - call endDrag directly (matching GameScreen pattern)
+    // Touch end - handled by global handlers
     const handleTouchEnd = (e) => {
       if (hasDragStartedRef.current) {
         e.preventDefault();
-        endDrag();
       }
     };
 
@@ -1024,10 +1017,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       const { clientX, clientY } = e;
       const rect = e.currentTarget?.getBoundingClientRect() || null;
       
-      // Calculate which cell of the piece is under the finger
-      const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, rect, rotation, flipped);
-      pieceCellOffsetRef.current = touchedCell;
-      setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
+      // Set pieceCellOffset to 0,0 for tray drags (updateDrag handles centering)
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
       
       const offsetX = rect ? clientX - (rect.left + rect.width / 2) : 0;
       const offsetY = rect ? clientY - (rect.top + rect.height / 2) : 0;
@@ -1056,7 +1048,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameState, usedPieces, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers, updateDrag, endDrag]);
+  }, [gameState, usedPieces, attachGlobalTouchHandlers]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -1615,21 +1607,12 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       <div className={`relative ${needsScroll ? 'pb-safe min-h-full' : 'h-full'} flex flex-col items-center px-2 py-2`}>
         {/* Header */}
         <div className="w-full max-w-md mb-2 flex-shrink-0">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={handleMenu}
-              className="px-3 py-1.5 bg-slate-800 text-cyan-300 rounded-lg text-xs sm:text-sm border border-cyan-500/30 hover:bg-slate-700 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
-            >
-              MENU
-            </button>
-            
-            <div className="text-center flex-1">
+          <div className="flex items-center justify-center">
+            <div className="text-center">
               <div className="speed-subtitle font-black tracking-[0.2em] text-base sm:text-lg">
                 ⚡ SPEED MODE ⚡
               </div>
             </div>
-            
-            <div className="w-[52px]" />
           </div>
         </div>
         
@@ -1727,25 +1710,57 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                 </div>
               )}
               
-              {/* Control Buttons (Rotate/Flip/Confirm/Cancel) - matches GameScreen order */}
+              {/* Control Buttons (Home/Rotate/Flip/Confirm/Cancel) - matches other game screens */}
               {gameState === GAME_STATES.PLAYING && (
                 <div className="mt-2 w-full flex-shrink-0">
-                  <ControlButtons
-                    selectedPiece={selectedPiece}
-                    pendingMove={pendingMove}
-                    canConfirm={canConfirm}
-                    gameOver={false}
-                    gameMode="puzzle"
-                    currentPlayer={1}
-                    isGeneratingPuzzle={false}
-                    onRotate={rotatePiece}
-                  onFlip={flipPiece}
-                  onConfirm={confirmMove}
-                  onCancel={cancelMove}
-                  hideResetButtons={true}
-                />
-              </div>
-            )}
+                  <div className="flex gap-2 justify-between mb-2 flex-wrap">
+                    {/* Home Button - Orange (matches WeeklyChallengeScreen) */}
+                    <button
+                      onClick={handleMenu}
+                      className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(251,146,60,0.4)]"
+                    >
+                      <Home size={16} />
+                    </button>
+                    
+                    {/* Rotate Button - Cyan */}
+                    <button
+                      onClick={rotatePiece}
+                      disabled={!selectedPiece && !pendingMove}
+                      className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:shadow-none"
+                    >
+                      <RotateCcw size={14} />ROTATE
+                    </button>
+
+                    {/* Flip Button - Purple */}
+                    <button
+                      onClick={flipPiece}
+                      disabled={!selectedPiece && !pendingMove}
+                      className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:shadow-none"
+                    >
+                      <FlipHorizontal size={14} />FLIP
+                    </button>
+                  </div>
+                  
+                  {/* Confirm/Cancel when pending move */}
+                  {pendingMove && (
+                    <div className="flex gap-2 justify-center">
+                      <button
+                        onClick={cancelMove}
+                        className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(100,116,139,0.4)]"
+                      >
+                        <X size={14} />CANCEL
+                      </button>
+                      <button
+                        onClick={confirmMove}
+                        disabled={!canConfirm}
+                        className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
+                      >
+                        <CheckCircle size={14} />CONFIRM
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             
             {/* Piece tray - outside panel at the bottom */}

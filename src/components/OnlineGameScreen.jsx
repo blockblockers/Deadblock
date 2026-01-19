@@ -4,7 +4,7 @@
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, Move, Home, RotateCcw, FlipHorizontal } from 'lucide-react';
+import { Flag, MessageCircle, Move, Home, RotateCcw, FlipHorizontal, X, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -161,6 +161,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
+  const dragCellRef = useRef(null); // Store current cell during drag for sync access
+  const endDragRef = useRef(null); // Store endDrag function for global touch handlers
 
   // Placement animation hook
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
@@ -242,11 +244,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           const adjustedRow = row - centerOffsetRow;
           const adjustedCol = col - centerOffsetCol;
           
+          // Store in ref for endDrag to access synchronously
+          dragCellRef.current = { row: adjustedRow, col: adjustedCol };
           setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
           
           const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
           setIsValidDrop(valid);
         } else {
+          dragCellRef.current = null;
           setDragPreviewCell(null);
           setIsValidDrop(false);
         }
@@ -260,13 +265,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const handleGlobalTouchEnd = () => {
       if (!isDraggingRef.current) return;
       
-      isDraggingRef.current = false;
-      hasDragStartedRef.current = false;
-      
-      setIsDragging(false);
-      
-      document.body.style.overflow = '';
-      document.body.style.touchAction = '';
+      // Call endDrag via ref to properly set pendingMove
+      endDragRef.current?.();
       
       window.removeEventListener('touchmove', handleGlobalTouchMove);
       window.removeEventListener('touchend', handleGlobalTouchEnd);
@@ -397,12 +397,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       const adjustedRow = cell.row - centerOffsetRow;
       const adjustedCol = cell.col - centerOffsetCol;
       
-      // v7.22: Update dragPreviewCell for live board preview
+      // Store in ref for endDrag to access (sync) and state for render
+      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
       setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
       
       const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
+      dragCellRef.current = null;
       setDragPreviewCell(null);
       setIsValidDrop(false);
     }
@@ -410,11 +412,17 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   // End drag
   const endDrag = useCallback(() => {
-    if (!isDragging && !isDraggingRef.current) return;
+    // Check if we were actually dragging
+    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
+    if (!wasDragging) return;
     
-    // v7.22: Set pendingMove from dragPreviewCell when drag ends
-    if (dragPreviewCell && draggedPiece) {
-      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
+    // Set pendingMove from dragCellRef (sync) or dragPreviewCell (state)
+    // dragCellRef is more reliable as it's updated synchronously in global handlers
+    const piece = draggedPiece || draggedPieceRef.current;
+    const cell = dragCellRef.current || dragPreviewCell;
+    
+    if (cell && piece) {
+      setPendingMove({ piece, row: cell.row, col: cell.col });
     }
     
     // Clear refs
@@ -422,6 +430,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     draggedPieceRef.current = null;
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
+    dragCellRef.current = null;
     
     // Clear state
     setIsDragging(false);
@@ -435,6 +444,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
   }, [isDragging, dragPreviewCell, draggedPiece]);
+
+  // Keep endDragRef current for global touch handlers
+  endDragRef.current = endDrag;
 
   // Create drag handlers for PieceTray
   // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately
@@ -1564,16 +1576,16 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               <div className="flex gap-2 mt-2">
                 <button
                   onClick={handleCancel}
-                  className="flex-1 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm font-bold flex items-center justify-center shadow-[0_0_15px_rgba(100,116,139,0.4)]"
+                  className="flex-1 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(100,116,139,0.4)]"
                 >
-                  Cancel
+                  <X size={14} />CANCEL
                 </button>
                 <button
                   onClick={handleConfirm}
                   disabled={!canConfirm}
-                  className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
+                  className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
                 >
-                  Confirm
+                  <CheckCircle size={14} />CONFIRM
                 </button>
               </div>
             )}

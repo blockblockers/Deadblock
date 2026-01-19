@@ -264,7 +264,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     selectPiece,
     rotatePiece,
     flipPiece,
-    loadPuzzleOnly,
+    loadPuzzle,
     resetCurrentPuzzle,
     setPendingMove,
   } = useGameState();
@@ -501,6 +501,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Guard against duplicate calls
     if (hasDragStartedRef.current) return;
     if (gameOver || usedPieces.includes(piece) || !gameStarted) return;
+    if (currentPlayer === 2) return; // Don't allow drag during AI turn
     
     // Set refs FIRST (synchronous) - these are checked by handlers
     hasDragStartedRef.current = true;
@@ -534,13 +535,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, usedPieces, gameStarted, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
+  }, [gameOver, usedPieces, gameStarted, currentPlayer, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
 
   // Create drag handlers for piece tray
   const createDragHandlers = useCallback((piece) => {
     if (gameOver || usedPieces.includes(piece) || !gameStarted) {
       return {};
     }
+    if (currentPlayer === 2) return {}; // Don't allow drag during AI turn
 
     let elementRect = null;
 
@@ -599,13 +601,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
     };
-  }, [gameOver, usedPieces, gameStarted, startDrag, updateDrag, endDrag]);
+  }, [gameOver, usedPieces, gameStarted, currentPlayer, startDrag, updateDrag, endDrag]);
 
   // Handle dragging from board (moving pending piece)
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     // Guard against duplicate calls
     if (hasDragStartedRef.current) return;
     if (gameOver || !gameStarted) return;
+    if (currentPlayer === 2) return; // Don't allow drag during AI turn
     if (!pendingMove || pendingMove.piece !== piece) return;
     
     // v7.22: Set ALL refs FIRST (synchronous) - these are checked by handlers
@@ -659,7 +662,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, gameStarted, pendingMove, selectPiece, attachGlobalTouchHandlers]);
+  }, [gameOver, gameStarted, currentPlayer, pendingMove, selectPiece, attachGlobalTouchHandlers]);
 
   // Global mouse handlers for desktop drag
   useEffect(() => {
@@ -792,13 +795,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Auto-start the game when puzzle is loaded
   useEffect(() => {
-    if (puzzle && !loading && !loadError && !gameStarted && loadPuzzleOnly) {
-      loadPuzzleOnly(puzzle);
+    if (puzzle && !loading && !loadError && !gameStarted && loadPuzzle) {
+      loadPuzzle(puzzle);
       setGameStarted(true);
       startTimer();
       soundManager.playClickSound('success');
     }
-  }, [puzzle, loading, loadError, gameStarted, loadPuzzleOnly, startTimer]);
+  }, [puzzle, loading, loadError, gameStarted, loadPuzzle, startTimer]);
   
   // Check for puzzle completion
   useEffect(() => {
@@ -949,10 +952,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         touchAction: isDragging ? 'none' : 'pan-y'
       }}
     >
-      {/* Background */}
-      <div className="fixed inset-0 opacity-20 pointer-events-none z-0" style={{
-        backgroundImage: 'linear-gradient(rgba(239,68,68,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.3) 1px, transparent 1px)',
+      {/* Red Background Grid */}
+      <div className="fixed inset-0 opacity-30 pointer-events-none z-0" style={{
+        backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
         backgroundSize: '40px 40px'
+      }} />
+      
+      {/* Red Radial Glow */}
+      <div className="fixed inset-0 pointer-events-none z-0" style={{
+        background: 'radial-gradient(ellipse at center, rgba(239,68,68,0.15) 0%, transparent 70%)'
+      }} />
+      
+      {/* Red Vignette */}
+      <div className="fixed inset-0 pointer-events-none z-0" style={{
+        boxShadow: 'inset 0 0 150px rgba(239,68,68,0.2)'
       }} />
       
       {/* Drag Overlay */}
@@ -1100,8 +1113,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             })()}
           </div>
           
-          {/* Main Game Panel - matches OnlineGameScreen styling */}
-          <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-red-500/40 shadow-[0_0_40px_rgba(239,68,68,0.2)]">
+          {/* Main Game Panel - RED THEME */}
+          <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.3)]">
             
             {/* Game Board */}
             <div className="flex justify-center pb-2">
@@ -1123,6 +1136,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                 draggedPiece={draggedPiece}
                 dragRotation={rotation}
                 dragFlipped={flipped}
+                customColors={{
+                  1: 'bg-gradient-to-br from-red-400 to-rose-500',
+                  2: 'bg-gradient-to-br from-rose-400 to-pink-500',
+                }}
               />
             </div>
             
@@ -1145,38 +1162,38 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             
             {/* Control Buttons - Above Piece Tray */}
             <div className="flex gap-2 justify-between mb-2 flex-wrap">
-              {/* Menu Button - Orange with Home icon (matches other screens) */}
+              {/* Menu Button - Orange with Home icon only */}
               <button
                 onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
-                className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(251,146,60,0.4)]"
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(251,146,60,0.4)]"
               >
-                <Home size={14} />
+                <Home size={16} />
               </button>
               
-              {/* Rotate Button - Cyan (matches other screens) */}
+              {/* Rotate Button - Cyan with text */}
               <button
                 onClick={rotatePiece}
                 className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:shadow-none"
                 disabled={!selectedPiece && !pendingMove}
               >
-                <RotateCcw size={14} />
+                <RotateCcw size={14} />ROTATE
               </button>
 
-              {/* Flip Button - Purple (matches other screens) */}
+              {/* Flip Button - Purple with text */}
               <button
                 onClick={flipPiece}
                 className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:shadow-none"
                 disabled={!selectedPiece && !pendingMove}
               >
-                <FlipHorizontal size={14} />
+                <FlipHorizontal size={14} />FLIP
               </button>
               
-              {/* Retry Button - Slate (matches other screens) */}
+              {/* Retry Button - Red with text */}
               <button
                 onClick={handleRestart}
-                className="flex-1 px-2 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(100,116,139,0.4)]"
+                className="flex-1 px-2 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-400 hover:to-rose-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(239,68,68,0.4)]"
               >
-                <RotateCcw size={14} />
+                <RotateCcw size={14} />RETRY
               </button>
             </div>
             
