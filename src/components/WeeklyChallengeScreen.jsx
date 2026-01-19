@@ -353,13 +353,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const relX = clientX - left;
     const relY = (clientY - fingerOffset) - top;
     
-    // Raw cell under finger (adjusted for fingerOffset)
-    const fingerCol = Math.floor(relX / cellWidth);
-    const fingerRow = Math.floor(relY / cellHeight);
-    
-    // Adjust by which cell of the piece is under the finger
-    const col = fingerCol - pieceCellOffsetRef.current.col;
-    const row = fingerRow - pieceCellOffsetRef.current.row;
+    // Raw cell under finger (adjusted for fingerOffset only)
+    // Note: Do NOT adjust by pieceCellOffsetRef here - updateDrag handles centering
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
     
     // Allow anchor position up to 4 cells outside board for piece extension
     const EXTENSION_MARGIN = 4;
@@ -584,10 +581,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // CRITICAL: Attach global touch handlers SYNCHRONOUSLY
     attachGlobalTouchHandlers();
     
-    // Calculate which cell of the piece is under the finger
-    const touchedCell = calculateTouchedPieceCell(piece, clientX, clientY, elementRect, rotation, flipped);
-    pieceCellOffsetRef.current = touchedCell;
-    setPieceCellOffset(touchedCell); // v7.22: Update state for DragOverlay
+    // Set pieceCellOffset to 0,0 for tray drags (updateDrag handles centering)
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    setPieceCellOffset({ row: 0, col: 0 });
     
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
@@ -608,7 +604,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameOver, usedPieces, gameStarted, currentPlayer, selectPiece, setPendingMove, rotation, flipped, calculateTouchedPieceCell, attachGlobalTouchHandlers]);
+  }, [gameOver, usedPieces, gameStarted, currentPlayer, selectPiece, setPendingMove, attachGlobalTouchHandlers]);
 
   // Create drag handlers for piece tray
   const createDragHandlers = useCallback((piece) => {
