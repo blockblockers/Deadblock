@@ -17,6 +17,7 @@ import { statsService } from '../utils/statsService';
 
 // AI delay in milliseconds for realistic turn-based gameplay
 const AI_MOVE_DELAY = 1500;
+const AI_MOVE_DELAY_FAST = 100; // For modes that need instant AI (e.g., weekly challenge)
 
 export const useGameState = () => {
   // Core game state
@@ -42,6 +43,7 @@ export const useGameState = () => {
   const [isGeneratingPuzzle, setIsGeneratingPuzzle] = useState(false);
   const [aiAnimatingMove, setAiAnimatingMove] = useState(null);
   const [playerAnimatingMove, setPlayerAnimatingMove] = useState(null);
+  const [fastAIMode, setFastAIMode] = useState(false); // For instant AI moves (weekly challenge)
   
   // Puzzle difficulty state
   const puzzleDifficultyRef = useRef(PUZZLE_DIFFICULTY.EASY);
@@ -121,16 +123,28 @@ export const useGameState = () => {
 
   // Confirm the pending move
   const confirmMove = useCallback(() => {
+    console.log('[useGameState] confirmMove called:', { 
+      hasPendingMove: !!pendingMove, 
+      pendingMove,
+      rotation, 
+      flipped 
+    });
+    
     if (!pendingMove) {
+      console.log('[useGameState] No pending move - returning early');
       return;
     }
     
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    console.log('[useGameState] Piece coords:', coords);
     
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
+      console.log('[useGameState] Invalid placement - playing invalid sound');
       soundManager.playInvalid();
       return;
     }
+    
+    console.log('[useGameState] Valid placement - animating...');
     
     // Animate player piece placement
     setPlayerAnimatingMove({
@@ -206,8 +220,9 @@ export const useGameState = () => {
     
     setIsAIThinking(true);
     
-    // Add delay for realistic gameplay
-    await new Promise(resolve => setTimeout(resolve, AI_MOVE_DELAY));
+    // Add delay for realistic gameplay (shorter in fast mode)
+    const moveDelay = fastAIMode ? AI_MOVE_DELAY_FAST : AI_MOVE_DELAY;
+    await new Promise(resolve => setTimeout(resolve, moveDelay));
     
     try {
       const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
@@ -230,7 +245,9 @@ export const useGameState = () => {
         flipped: move.flip,
       });
       
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // Animation delay (shorter in fast mode)
+      const animDelay = fastAIMode ? 100 : 400;
+      await new Promise(resolve => setTimeout(resolve, animDelay));
       
       // Place the piece
       const coords = getPieceCoords(move.pieceType, move.rot, move.flip);
@@ -268,7 +285,7 @@ export const useGameState = () => {
     }
     
     setIsAIThinking(false);
-  }, [board, boardPieces, usedPieces, gameOver, currentPlayer, gameMode, aiDifficulty]);
+  }, [board, boardPieces, usedPieces, gameOver, currentPlayer, gameMode, aiDifficulty, fastAIMode]);
 
   // Trigger AI move when it's AI's turn
   useEffect(() => {
@@ -309,8 +326,11 @@ export const useGameState = () => {
   // Internal puzzle loading
   const loadPuzzleInternal = useCallback((puzzle) => {
     if (!puzzle) {
+      console.error('loadPuzzleInternal: No puzzle provided');
       return;
     }
+    
+    console.log('Loading puzzle:', puzzle.name, 'difficulty:', puzzle.difficulty);
     
     // Parse the board state
     const newBoard = createEmptyBoard();
@@ -385,63 +405,14 @@ export const useGameState = () => {
     }
   }, [loadPuzzleInternal, generateAndLoadPuzzle]);
 
-  // Load puzzle WITHOUT changing game mode (for WeeklyChallengeScreen)
-  // This prevents the weekly challenge from being kicked back to regular puzzle mode
-  const loadPuzzleOnly = useCallback((puzzle) => {
-    if (!puzzle) {
-      return;
-    }
-    
-    // Parse the board state
-    const newBoard = createEmptyBoard();
-    const newBoardPieces = createEmptyBoard();
-    
-    for (let i = 0; i < 64; i++) {
-      const char = puzzle.boardState[i];
-      if (char !== 'G') {
-        const row = Math.floor(i / 8);
-        const col = i % 8;
-        newBoard[row][col] = 1;
-        newBoardPieces[row][col] = char === 'H' ? 'Y' : char;
-      }
-    }
-    
-    // Store original state for retry
-    setOriginalPuzzleState({
-      board: newBoard.map(r => [...r]),
-      boardPieces: newBoardPieces.map(r => [...r]),
-      usedPieces: [...puzzle.usedPieces],
-      puzzle: { ...puzzle }
-    });
-    
-    // Set difficulty from puzzle
-    if (puzzle.difficulty) {
-      setPuzzleDifficulty(puzzle.difficulty);
-    }
-    
-    setBoard(newBoard);
-    setBoardPieces(newBoardPieces);
-    setUsedPieces(puzzle.usedPieces);
-    setCurrentPuzzle(puzzle);
-    // NOTE: We do NOT call setGameMode here - that's the key difference from loadPuzzleInternal!
-    setCurrentPlayer(1);
-    setSelectedPiece(null);
-    setRotation(0);
-    setFlipped(false);
-    setMoveHistory([]);
-    setPendingMove(null);
-    setGameOver(false);
-    setWinner(null);
-    setIsGeneratingPuzzle(false);
-    
-    soundManager.playButtonClick();
-  }, [setPuzzleDifficulty]);
-
   // Reset current puzzle to original state (retry)
   const resetCurrentPuzzle = useCallback(() => {
     if (!originalPuzzleState) {
+      console.log('No original puzzle state to reset to');
       return;
     }
+    
+    console.log('Resetting puzzle to original state');
     
     setBoard(originalPuzzleState.board.map(r => [...r]));
     setBoardPieces(originalPuzzleState.boardPieces.map(r => [...r]));
@@ -462,8 +433,10 @@ export const useGameState = () => {
   // Reset game - preserves AI goes first preference for VS AI mode
   const resetGame = useCallback(() => {
     if (gameMode === 'puzzle') {
+      console.log('Reset: generating new puzzle with difficulty:', puzzleDifficultyRef.current);
       generateAndLoadPuzzle(puzzleDifficultyRef.current);
     } else if (gameMode === 'ai') {
+      console.log('Reset: starting new AI game, aiGoesFirst:', aiGoesFirstRef.current);
       setBoard(createEmptyBoard());
       setBoardPieces(createEmptyBoard());
       setCurrentPlayer(aiGoesFirstRef.current ? 2 : 1);
@@ -493,6 +466,8 @@ export const useGameState = () => {
 
   // Start new game - CRITICAL: This is called by App.jsx handleStartGame for '2player' mode
   const startNewGame = useCallback((mode, aiGoesFirst = false) => {
+    console.log('startNewGame called:', mode, 'aiGoesFirst:', aiGoesFirst);
+    
     // Store AI goes first preference
     if (mode === 'ai') {
       aiGoesFirstRef.current = aiGoesFirst;
@@ -556,6 +531,7 @@ export const useGameState = () => {
     isGeneratingPuzzle,
     aiAnimatingMove,
     playerAnimatingMove,
+    fastAIMode,
     
     // Setters - CRITICAL: These must be exported for App.jsx
     setGameMode,
@@ -564,6 +540,7 @@ export const useGameState = () => {
     setAiDifficulty,
     setPuzzleDifficulty,
     setPendingMove,
+    setFastAIMode,
     
     // Actions - CRITICAL: startNewGame must be exported
     handleCellClick,
@@ -577,7 +554,6 @@ export const useGameState = () => {
     startNewGame,
     undoMove,
     loadPuzzle,
-    loadPuzzleOnly,
     resetCurrentPuzzle,
   };
 };

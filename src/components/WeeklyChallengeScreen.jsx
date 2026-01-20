@@ -228,6 +228,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isValidDrop, setIsValidDrop] = useState(false);
   const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: For board preview during drag
+  const [pieceCellOffset, setPieceCellOffset] = useState({ row: 0, col: 0 }); // Which cell of piece is under finger
   
   // Refs
   const timerRef = useRef(null);
@@ -267,7 +268,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     loadPuzzle,
     resetCurrentPuzzle,
     setPendingMove,
+    setFastAIMode,
   } = useGameState();
+  
+  // Enable fast AI mode for weekly challenge (instant AI moves)
+  useEffect(() => {
+    setFastAIMode(true);
+    return () => setFastAIMode(false); // Reset on unmount
+  }, [setFastAIMode]);
   
   // Helper to check if pending piece has cells off the grid
   const isPieceOffGrid = pendingMove ? (() => {
@@ -485,6 +493,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const piece = draggedPiece || draggedPieceRef.current;
     
     setDragPosition({ x: clientX, y: clientY });
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
     
     const cell = calculateBoardCell(clientX, clientY);
     if (cell && piece) {
