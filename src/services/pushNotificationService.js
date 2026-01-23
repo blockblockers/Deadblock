@@ -52,7 +52,7 @@ class PushNotificationService {
 
     try {
       // Register service worker
-      this.swRegistration = await navigator.serviceWorker.register('/sw.js', {
+      this.swRegistration = await navigator.serviceWorker.register('/service-worker.js', {
         scope: '/'
       });
       

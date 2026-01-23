@@ -1,4 +1,5 @@
 // useGameState.js - Custom hook for managing local game state
+// v7.12: Added play streak update on game completion
 // CRITICAL: This hook must export startNewGame, setGameMode, and all other functions App.jsx needs
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
@@ -14,6 +15,7 @@ import { selectAIMove, getAllPossibleMoves, AI_DIFFICULTY } from '../utils/aiLog
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 import { statsService } from '../utils/statsService';
+import { streakService } from '../services/streakService';
 
 // AI delay in milliseconds for realistic turn-based gameplay
 const AI_MOVE_DELAY = 1500;
@@ -294,7 +296,7 @@ export const useGameState = () => {
     }
   }, [currentPlayer, gameMode, gameOver, isAIThinking, makeAIMove]);
 
-  // Record game stats when game ends
+  // Record game stats and update play streak when game ends
   useEffect(() => {
     if (gameOver && winner !== null) {
       const playerWon = winner === 1;
@@ -307,6 +309,28 @@ export const useGameState = () => {
         };
         const difficultyString = difficultyMap[aiDifficulty] || 'medium';
         statsService.recordAIGameResult(difficultyString, playerWon);
+        
+        // v7.12: Update play streak for AI games (offline mode, needs manual trigger)
+        const updateStreak = async () => {
+          try {
+            // Get user profile from localStorage cache
+            const cachedProfile = localStorage.getItem('deadblock_profile_cache');
+            if (cachedProfile) {
+              const { profile } = JSON.parse(cachedProfile);
+              if (profile?.id) {
+                console.log('[useGameState] Updating play streak for AI game');
+                const { data } = await streakService.updateStreak(profile.id);
+                if (data?.new_achievements?.length > 0) {
+                  console.log('[useGameState] New streak achievements:', data.new_achievements);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('[useGameState] Failed to update streak:', err);
+          }
+        };
+        updateStreak();
+        
       } else if (gameMode === 'puzzle' && currentPuzzle) {
         const difficultyMap = {
           [PUZZLE_DIFFICULTY.EASY]: 'easy',
@@ -319,6 +343,26 @@ export const useGameState = () => {
         if (playerWon) {
           statsService.recordPuzzleSolved(difficultyString);
         }
+        
+        // v7.12: Update play streak for puzzle games (offline mode, needs manual trigger)
+        const updateStreak = async () => {
+          try {
+            const cachedProfile = localStorage.getItem('deadblock_profile_cache');
+            if (cachedProfile) {
+              const { profile } = JSON.parse(cachedProfile);
+              if (profile?.id) {
+                console.log('[useGameState] Updating play streak for puzzle game');
+                const { data } = await streakService.updateStreak(profile.id);
+                if (data?.new_achievements?.length > 0) {
+                  console.log('[useGameState] New streak achievements:', data.new_achievements);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('[useGameState] Failed to update streak:', err);
+          }
+        };
+        updateStreak();
       }
     }
   }, [gameOver, winner, gameMode, aiDifficulty, puzzleDifficulty, currentPuzzle]);

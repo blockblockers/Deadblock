@@ -11,6 +11,7 @@ import NeonTitle from './NeonTitle';
 import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
+import { streakService } from '../services/streakService';
 import { useAuth } from '../contexts/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
@@ -895,6 +896,23 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         setGameComplete(true);
         soundManager.playPuzzleSolvedSound();
         submitResult(finalTime);
+        
+        // v7.12: Update play streak
+        try {
+          const cachedProfile = localStorage.getItem('deadblock_profile_cache');
+          if (cachedProfile) {
+            const { profile } = JSON.parse(cachedProfile);
+            if (profile?.id) {
+              streakService.updateStreak(profile.id).then(({ data }) => {
+                if (data?.new_achievements?.length > 0) {
+                  console.log('[WeeklyChallenge] New streak achievements:', data.new_achievements);
+                }
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[WeeklyChallenge] Failed to update streak:', err);
+        }
       } else if (winner === 2) {
         pauseTimer();
         setGameLost(true);

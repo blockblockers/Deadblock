@@ -8,6 +8,7 @@ import { ratingService } from '../services/ratingService';
 import achievementService from '../services/achievementService';
 import TierIcon from './TierIcon';
 import FinalBoardView from './FinalBoardView';
+import StreakDisplay from './StreakDisplay';
 import { soundManager } from '../utils/soundManager';
 
 // Supabase config for direct fetch
@@ -431,6 +432,11 @@ const ViewPlayerProfile = ({
                       <div className="text-xs text-slate-400">Win Rate</div>
                     </div>
                   </div>
+                </div>
+
+                {/* v7.12: Play Streak */}
+                <div className="mb-4">
+                  <StreakDisplay userId={playerId} variant="badge" />
                 </div>
 
                 {/* v7.12: Full Stats Section - Always visible */}

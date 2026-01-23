@@ -9,6 +9,7 @@ import { getRankInfo } from '../utils/rankUtils';
 import { supabase } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
+import StreakDisplay from './StreakDisplay';
 import achievementService from '../services/achievementService';
 
 // Helper to get cached profile synchronously from localStorage
@@ -466,6 +467,8 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
             <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
               {effectiveProfile.rating || 1000} ELO
             </span>
+            {/* v7.12: Play streak display */}
+            <StreakDisplay userId={effectiveProfile.id} variant="inline" />
           </div>
         </div>
         

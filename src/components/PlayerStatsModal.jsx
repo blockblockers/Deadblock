@@ -14,6 +14,7 @@ import { getRankInfo } from '../utils/rankUtils';
 import { soundManager } from '../utils/soundManager';
 import TierIcon from './TierIcon';
 import AchievementsDisplay from './AchievementsDisplay';
+import StreakDisplay from './StreakDisplay';
 
 // Helper to convert hex to rgba
 const hexToRgba = (hex, alpha) => {
@@ -437,6 +438,11 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     color="purple"
                   />
                 </div>
+              </Section>
+              
+              {/* v7.12: Play Streak Section */}
+              <Section id="playstreak" title="Play Streak" icon={Flame} color="orange">
+                <StreakDisplay userId={profile?.id} variant="full" />
               </Section>
               
               {/* Achievements Section */}

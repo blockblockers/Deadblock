@@ -25,6 +25,7 @@ import { getSpeedPuzzle } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { statsService } from '../utils/statsService';
+import { streakService } from '../services/streakService';
 
 // ============================================================================
 // CONSTANTS - Centralized configuration for easy maintenance
@@ -1565,6 +1566,23 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         // Track in database
         if (!isOfflineMode) {
           statsService.recordSpeedPuzzleComplete();
+          
+          // v7.12: Update play streak
+          try {
+            const cachedProfile = localStorage.getItem('deadblock_profile_cache');
+            if (cachedProfile) {
+              const { profile } = JSON.parse(cachedProfile);
+              if (profile?.id) {
+                streakService.updateStreak(profile.id).then(({ data }) => {
+                  if (data?.new_achievements?.length > 0) {
+                    console.log('[SpeedPuzzle] New streak achievements:', data.new_achievements);
+                  }
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('[SpeedPuzzle] Failed to update streak:', err);
+          }
         }
         
         // Update best streak if needed
