@@ -933,7 +933,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         
         // REPLAY LAST MOVE: If there are pieces on the board and it's now our turn,
         // fetch and replay the opponent's last move so user can see what changed
-        const playerNum = data.player1_id === userId ? 1 : 2;
         const isMyTurnNow = data.current_player === playerNum && data.status === 'active';
         const hasMovesOnBoard = data.used_pieces && data.used_pieces.length > 0;
         

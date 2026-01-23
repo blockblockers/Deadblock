@@ -1179,13 +1179,6 @@ const OnlineMenu = ({
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
-                    <button
-                      onClick={handleOpenUsernameEdit}
-                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
-                      title="Edit Username"
-                    >
-                      <Pencil size={14} />
-                    </button>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-slate-500">{profile?.games_played || 0} games</span>
@@ -2051,7 +2044,6 @@ const OnlineMenu = ({
                 transform: 'translate3d(0, 0, 0)',
                 willChange: 'scroll-position'
               }}
-            >
             >
               {/* What is ELO explanation */}
               <div className="space-y-2">
