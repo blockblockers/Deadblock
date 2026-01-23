@@ -3,13 +3,12 @@
 // Place in src/components/PlayerProfileCard.jsx
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, WifiOff, HelpCircle, Pencil, Trophy, X, Loader, LogIn, Check, AlertCircle } from 'lucide-react';
+import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
 import { supabase } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
-import StreakDisplay from './StreakDisplay';
 import achievementService from '../services/achievementService';
 
 // Helper to get cached profile synchronously from localStorage
@@ -417,22 +416,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
               </span>
             )}
           </button>
-          
-          {/* Edit username button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowUsernameEdit(true);
-            }}
-            className="p-1.5 rounded-lg transition-all hover:scale-110"
-            style={{ 
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(37, 99, 235, 0.1))',
-              border: '1px solid rgba(59, 130, 246, 0.3)'
-            }}
-            title="Edit username"
-          >
-            <Pencil size={14} className="text-blue-400" />
-          </button>
         </div>
         
         {/* Tier icon */}
@@ -467,8 +450,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
             <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
               {effectiveProfile.rating || 1000} ELO
             </span>
-            {/* v7.12: Play streak display */}
-            <StreakDisplay userId={effectiveProfile.id} variant="inline" />
           </div>
         </div>
         

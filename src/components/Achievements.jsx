@@ -1,5 +1,5 @@
 // Achievements Modal - View all achievements with categories and progress
-// v7.12: Fixed scroll getting stuck at bottom on iOS/mobile
+// v7.13: FIXED mobile scroll - removed problematic touch handlers, use CSS grid layout
 // v7.12: Added 'dedication' category for play streak achievements
 import { useState, useEffect, useRef } from 'react';
 import { Trophy, X, Lock, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
@@ -136,38 +136,41 @@ const Achievements = ({ userId, onClose, playerName }) => {
     }
   };
 
-  // Handle scroll touch events to prevent getting stuck
-  const handleTouchMove = (e) => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const touchStartY = parseFloat(container.dataset.touchStartY || '0');
-    const touchCurrentY = e.touches[0].clientY;
-    const isScrollingUp = touchCurrentY > touchStartY;
-    const isScrollingDown = touchCurrentY < touchStartY;
-    
-    const isAtTop = scrollTop <= 1;
-    const isAtBottom = scrollTop + clientHeight >= scrollHeight - 1;
-    
-    // Prevent parent scroll but allow this container to scroll
-    if ((isAtTop && isScrollingUp) || (isAtBottom && isScrollingDown)) {
-      // At boundary, scrolling in blocked direction - prevent but don't get stuck
-      e.stopPropagation();
-    }
-  };
-
   return (
     <div 
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
+      {/* v7.13: Use CSS Grid for reliable layout on all platforms */}
+      <style>{`
+        .achievements-modal {
+          display: grid;
+          grid-template-rows: auto auto 1fr;
+          max-height: 85vh;
+          max-height: 85dvh;
+        }
+        .achievements-scroll {
+          overflow-y: auto;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior: contain;
+          min-height: 0; /* Critical for grid children */
+        }
+        /* iOS-specific scroll fix */
+        @supports (-webkit-touch-callout: none) {
+          .achievements-scroll {
+            -webkit-overflow-scrolling: touch;
+            transform: translateZ(0);
+          }
+        }
+      `}</style>
+
       <div 
-        className="bg-slate-900 rounded-xl max-w-lg w-full max-h-[85vh] overflow-hidden border border-amber-500/30 shadow-xl flex flex-col"
+        className="achievements-modal bg-slate-900 rounded-xl max-w-lg w-full overflow-hidden border border-amber-500/30 shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header - Fixed */}
-        <div className="p-4 border-b border-amber-500/20 flex-shrink-0">
+        <div className="p-4 border-b border-amber-500/20">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Trophy className="text-amber-400" size={24} />
@@ -204,7 +207,7 @@ const Achievements = ({ userId, onClose, playerName }) => {
         </div>
 
         {/* Category Filter - Fixed */}
-        <div className="flex gap-2 p-3 border-b border-amber-500/20 overflow-x-auto flex-shrink-0 scrollbar-hide">
+        <div className="px-4 py-2 overflow-x-auto border-b border-slate-800 flex gap-2">
           {categories.map(cat => (
             <button
               key={cat}
@@ -225,22 +228,11 @@ const Achievements = ({ userId, onClose, playerName }) => {
           ))}
         </div>
 
-        {/* Achievements List - Scrollable with iOS fix */}
+        {/* Achievements List - Scrollable */}
+        {/* v7.13: Removed problematic touch handlers - let browser handle scroll naturally */}
         <div 
           ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto overscroll-contain"
-          style={{ 
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            touchAction: 'pan-y',
-            minHeight: 0,
-          }}
-          onTouchStart={(e) => {
-            if (scrollContainerRef.current) {
-              scrollContainerRef.current.dataset.touchStartY = e.touches[0].clientY;
-            }
-          }}
-          onTouchMove={handleTouchMove}
+          className="achievements-scroll"
         >
           <div className="p-4">
             {error ? (
@@ -293,7 +285,7 @@ const Achievements = ({ userId, onClose, playerName }) => {
                       <div className="flex items-center gap-3 p-3">
                         {/* Icon */}
                         <div className={`
-                          w-12 h-12 rounded-lg flex items-center justify-center text-2xl
+                          w-12 h-12 rounded-lg flex items-center justify-center text-2xl flex-shrink-0
                           ${achievement.unlocked 
                             ? colors.bg 
                             : 'bg-slate-700'
@@ -310,7 +302,7 @@ const Achievements = ({ userId, onClose, playerName }) => {
                             <h3 className={`font-bold truncate ${achievement.unlocked ? colors.text : 'text-slate-500'}`}>
                               {achievement.name}
                             </h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${colors.bg} ${colors.text}`}>
                               {achievement.rarity}
                             </span>
                           </div>
@@ -320,7 +312,7 @@ const Achievements = ({ userId, onClose, playerName }) => {
                         </div>
 
                         {/* Points & expand */}
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-shrink-0">
                           <div className="text-right">
                             <div className={`font-bold ${achievement.unlocked ? 'text-amber-400' : 'text-slate-600'}`}>
                               +{achievement.points}

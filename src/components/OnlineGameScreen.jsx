@@ -1,10 +1,11 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, Move, Home, RotateCcw, FlipHorizontal, X, CheckCircle } from 'lucide-react';
+import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -41,6 +42,39 @@ const theme = {
 };
 
 // Glow Orb Button Component - consistent across all game screens
+// Glow Orb Button Component - consistent styling across all game screens
+// UPDATED: Now matches ControlButtons.jsx exactly for consistency
+const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '', title = '' }) => {
+  const colorClasses = {
+    cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
+    amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
+    green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
+    red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
+    purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
+    indigo: 'from-indigo-500 to-blue-600 shadow-[0_0_15px_rgba(99,102,241,0.4)] hover:shadow-[0_0_25px_rgba(99,102,241,0.6)]',
+    slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`
+        bg-gradient-to-r ${colorClasses[color]}
+        text-white font-bold rounded-xl px-3 py-2 text-xs
+        transition-all duration-200
+        hover:scale-105 active:scale-95
+        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
+        flex items-center justify-center gap-1
+        ${className}
+      `}
+    >
+      {children}
+    </button>
+  );
+};
+
 // Player indicator bar for online games - with usernames
 const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
   const myRating = profile?.rating || 1000;
@@ -161,8 +195,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
-  const dragCellRef = useRef(null); // Store current cell during drag for sync access
-  const endDragRef = useRef(null); // Store endDrag function for global touch handlers
 
   // Placement animation hook
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
@@ -244,14 +276,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           const adjustedRow = row - centerOffsetRow;
           const adjustedCol = col - centerOffsetCol;
           
-          // Store in ref for endDrag to access synchronously
-          dragCellRef.current = { row: adjustedRow, col: adjustedCol };
           setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
           
           const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
           setIsValidDrop(valid);
         } else {
-          dragCellRef.current = null;
           setDragPreviewCell(null);
           setIsValidDrop(false);
         }
@@ -265,8 +294,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const handleGlobalTouchEnd = () => {
       if (!isDraggingRef.current) return;
       
-      // Call endDrag via ref to properly set pendingMove
-      endDragRef.current?.();
+      isDraggingRef.current = false;
+      hasDragStartedRef.current = false;
+      
+      setIsDragging(false);
+      
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
       
       window.removeEventListener('touchmove', handleGlobalTouchMove);
       window.removeEventListener('touchend', handleGlobalTouchEnd);
@@ -397,14 +431,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       const adjustedRow = cell.row - centerOffsetRow;
       const adjustedCol = cell.col - centerOffsetCol;
       
-      // Store in ref for endDrag to access (sync) and state for render
-      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+      // v7.22: Update dragPreviewCell for live board preview
       setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
       
       const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
-      dragCellRef.current = null;
       setDragPreviewCell(null);
       setIsValidDrop(false);
     }
@@ -412,17 +444,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   // End drag
   const endDrag = useCallback(() => {
-    // Check if we were actually dragging
-    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
-    if (!wasDragging) return;
+    if (!isDragging && !isDraggingRef.current) return;
     
-    // Set pendingMove from dragCellRef (sync) or dragPreviewCell (state)
-    // dragCellRef is more reliable as it's updated synchronously in global handlers
-    const piece = draggedPiece || draggedPieceRef.current;
-    const cell = dragCellRef.current || dragPreviewCell;
-    
-    if (cell && piece) {
-      setPendingMove({ piece, row: cell.row, col: cell.col });
+    // v7.22: Set pendingMove from dragPreviewCell when drag ends
+    if (dragPreviewCell && draggedPiece) {
+      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
     }
     
     // Clear refs
@@ -430,7 +456,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     draggedPieceRef.current = null;
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
-    dragCellRef.current = null;
     
     // Clear state
     setIsDragging(false);
@@ -444,9 +469,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
   }, [isDragging, dragPreviewCell, draggedPiece]);
-
-  // Keep endDragRef current for global touch handlers
-  endDragRef.current = endDrag;
 
   // Create drag handlers for PieceTray
   // SIMPLIFIED: Since pieces have touch-action: none, we start drag immediately
@@ -670,17 +692,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
   }, [pendingMove, rotation, flipped, board]);
 
-  // Helper to check if pending piece has cells off the grid
-  const isPieceOffGrid = useMemo(() => {
-    if (!pendingMove) return false;
-    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    return coords.some(([dx, dy]) => {
-      const cellRow = pendingMove.row + dy;
-      const cellCol = pendingMove.col + dx;
-      return cellRow < 0 || cellRow >= BOARD_SIZE || cellCol < 0 || cellCol >= BOARD_SIZE;
-    });
-  }, [pendingMove, rotation, flipped]);
-
   // =========================================================================
   // GAME STATE MANAGEMENT - FIXED REAL-TIME UPDATES
   // =========================================================================
@@ -834,7 +845,89 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           return;
         }
 
-        // Update game state first
+        // v7.13: Check if this is a completed game being viewed (unviewed loss)
+        const isCompletedGame = data.status === 'completed';
+        const playerNum = data.player1_id === userId ? 1 : 2;
+        const iWon = data.winner_id === userId;
+        
+        // For completed games, we want to show the board first, then the modal
+        // So we'll set the game state but NOT trigger game over yet
+        if (isCompletedGame) {
+          // Set game result for later use
+          const result = {
+            isWin: iWon,
+            winnerId: data.winner_id,
+            reason: data.winner_id ? 'normal' : 'draw'
+          };
+          setGameResult(result);
+          
+          // Set up board state WITHOUT showing game over modal
+          const validBoard = data.board && Array.isArray(data.board) && data.board.length === BOARD_SIZE
+            ? data.board.map(row => Array.isArray(row) && row.length === BOARD_SIZE 
+                ? row.map(cell => cell === null || cell === undefined ? 0 : cell)
+                : Array(BOARD_SIZE).fill(0))
+            : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+          
+          setGame(data);
+          setBoard(validBoard);
+          setBoardPieces(data.board_pieces || {});
+          setUsedPieces(Array.isArray(data.used_pieces) ? data.used_pieces : []);
+          setMyPlayerNumber(playerNum);
+          setOpponent(playerNum === 1 ? data.player2 : data.player1);
+          setIsMyTurn(false);
+          setLoading(false);
+          
+          // Fetch and animate the winning move
+          const { data: lastMove } = await gameSyncService.getLastMove(currentGameId);
+          
+          if (lastMove && mountedRef.current && boardRef.current) {
+            const winnerNum = data.winner_id === data.player1_id ? 1 : 2;
+            
+            // Wait for board to render, then trigger animation
+            setTimeout(() => {
+              if (!mountedRef.current || !boardRef.current) return;
+              
+              const pieceCoords = pieces[lastMove.piece_type];
+              if (!pieceCoords) return;
+              
+              let coords = [...pieceCoords];
+              const rot = lastMove.rotation || 0;
+              const flip = lastMove.flipped || false;
+              
+              for (let r = 0; r < rot; r++) {
+                coords = coords.map(([x, y]) => [-y, x]);
+              }
+              if (flip) {
+                coords = coords.map(([x, y]) => [-x, y]);
+              }
+              
+              const placedCells = coords.map(([dx, dy]) => ({
+                row: lastMove.row + dy,
+                col: lastMove.col + dx
+              })).filter(cell => 
+                cell.row >= 0 && cell.row < BOARD_SIZE && 
+                cell.col >= 0 && cell.col < BOARD_SIZE
+              );
+              
+              const boardRect = boardRef.current.getBoundingClientRect();
+              const cellSize = boardRect.width / BOARD_SIZE;
+              triggerAnimation(placedCells, winnerNum, boardRef, cellSize);
+            }, 500);
+          }
+          
+          // v7.13: Show game over modal after 5 second delay for completed games
+          // This gives user time to see the board and the winning move
+          setTimeout(() => {
+            if (mountedRef.current && !showGameOver) {
+              setShowGameOver(true);
+              soundManager.playSound(iWon ? 'win' : 'lose');
+            }
+          }, 5000);
+          
+          return; // Don't continue to regular game state update
+        }
+
+        // Regular game loading (active games)
         updateGameState(data, userId);
         setLoading(false);
         
@@ -1434,10 +1527,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
-          {/* UPDATED: Header with title centered, NO menu button */}
+          {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
           <div className="flex items-center justify-between mb-2">
-            {/* Spacer for balance */}
-            <div className="w-16" />
+            <button
+              onClick={handleLeave}
+              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
+            >
+              <ArrowLeft size={16} />
+              Menu
+            </button>
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
@@ -1505,14 +1603,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 )}
               </div>
             </div>
-            
-            {/* Off-grid indicator - shows when piece extends beyond board */}
-            {isPieceOffGrid && pendingMove && isMyTurn && !isDragging && game?.status === 'active' && (
-              <div className="flex justify-center mb-2">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/60 border border-amber-500/50 rounded-lg">
-                  <Move size={14} className="text-amber-400" />
-                  <span className="text-amber-300 text-xs font-bold">Use D-Pad to reposition</span>
-                </div>
+
+            {/* Pieces info bar when D-Pad is shown */}
+            {pendingMove && isMyTurn && !isDragging && game?.status === 'active' && (
+              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+                <span className="text-slate-400 text-xs">
+                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
+                </span>
+                <span className="text-amber-400/60 text-xs">Use D-Pad to position</span>
               </div>
             )}
             
@@ -1537,56 +1635,107 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 <div className="flex-shrink-0 w-24" />
               </div>
             )}
+            
+            {/* Chat button when no pending move */}
+            {(!pendingMove || !isMyTurn || isDragging) && game?.status === 'active' && (
+              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+                <span className="text-slate-400 text-xs">
+                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
+                </span>
+                <button
+                  onClick={() => {
+                    setChatOpen(!chatOpen);
+                    if (!chatOpen) setHasUnreadChat(false);
+                  }}
+                  className={`
+                    relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
+                    ${chatOpen 
+                      ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
+                      : hasUnreadChat 
+                        ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
+                        : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
+                    }
+                  `}
+                  style={hasUnreadChat && !chatOpen ? {
+                    animation: 'chatBlink 0.8s ease-in-out infinite',
+                    boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
+                  } : {}}
+                >
+                  <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
+                  {hasUnreadChat && !chatOpen && (
+                    <>
+                      <span 
+                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                        style={{
+                          animation: 'bounce 0.5s ease-in-out infinite',
+                          boxShadow: '0 0 15px rgba(239,68,68,1)'
+                        }}
+                      >
+                        !
+                      </span>
+                      <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
 
-            {/* UPDATED: Controls - Icon-only style matching other game boards */}
+            {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
             {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
-            <div className="flex gap-2 mt-3">
-              <button
+            <div className="flex gap-1 mt-3">
+              <GlowOrbButton
                 onClick={() => { soundManager.playButtonClick(); onLeave(); }}
-                className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(251,146,60,0.4)]"
+                color="red"
+                className="flex-1"
               >
-                <Home size={16} />
-              </button>
-              <button
+                Menu
+              </GlowOrbButton>
+              <GlowOrbButton
                 onClick={handleRotate}
                 disabled={!selectedPiece || !isMyTurn}
-                className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:opacity-30 disabled:shadow-none"
+                color="cyan"
+                className="flex-1"
               >
-                <RotateCcw size={16} />
-              </button>
-              <button
+                Rotate
+              </GlowOrbButton>
+              <GlowOrbButton
                 onClick={handleFlip}
                 disabled={!selectedPiece || !isMyTurn}
-                className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:opacity-30 disabled:shadow-none"
+                color="purple"
+                className="flex-1"
               >
-                <FlipHorizontal size={16} />
-              </button>
+                Flip
+              </GlowOrbButton>
               {game?.status === 'active' && (
-                <button
+                <GlowOrbButton
                   onClick={handleQuitOrForfeit}
-                  className="flex-1 px-2 py-2 bg-gradient-to-r from-gray-100 to-white hover:from-white hover:to-gray-100 text-slate-700 rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.3)] border border-gray-200"
+                  color="slate"
+                  className="flex items-center gap-1 justify-center flex-1"
                 >
-                  <Flag size={16} />
-                </button>
+                  <Flag size={14} />
+                  <span className="hidden sm:inline">{hasMovesPlayed ? 'Forfeit' : 'Quit'}</span>
+                </GlowOrbButton>
               )}
             </div>
             
             {/* Row 2: Cancel/Confirm when piece is pending */}
             {pendingMove && (
               <div className="flex gap-2 mt-2">
-                <button
+                <GlowOrbButton
                   onClick={handleCancel}
-                  className="flex-1 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(100,116,139,0.4)]"
+                  color="slate"
+                  className="flex-1"
                 >
-                  <X size={14} />CANCEL
-                </button>
-                <button
+                  Cancel
+                </GlowOrbButton>
+                <GlowOrbButton
                   onClick={handleConfirm}
                   disabled={!canConfirm}
-                  className="flex-1 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-1 shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
+                  color="green"
+                  className="flex-1"
                 >
-                  <CheckCircle size={14} />CONFIRM
-                </button>
+                  Confirm
+                </GlowOrbButton>
               </div>
             )}
           </div>
@@ -1605,50 +1754,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             isDragging={isDragging}
             draggedPiece={draggedPiece}
           />
-          
-          {/* Pieces counter with Chat button - below piece tray */}
-          {game?.status === 'active' && (
-            <div className="flex items-center justify-between px-3 py-2 mt-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
-              <span className="text-slate-400 text-xs">
-                Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
-              </span>
-              <button
-                onClick={() => {
-                  setChatOpen(!chatOpen);
-                  if (!chatOpen) setHasUnreadChat(false);
-                }}
-                className={`
-                  relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
-                  ${chatOpen 
-                    ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
-                    : hasUnreadChat 
-                      ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
-                      : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
-                  }
-                `}
-                style={hasUnreadChat && !chatOpen ? {
-                  animation: 'chatBlink 0.8s ease-in-out infinite',
-                  boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
-                } : {}}
-              >
-                <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
-                {hasUnreadChat && !chatOpen && (
-                  <>
-                    <span 
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                      style={{
-                        animation: 'bounce 0.5s ease-in-out infinite',
-                        boxShadow: '0 0 15px rgba(239,68,68,1)'
-                      }}
-                    >
-                      !
-                    </span>
-                    <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
-                  </>
-                )}
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1759,6 +1864,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               setIsRematchRequester(true);
               setRematchWaiting(true);
               setShowRematchModal(true);
+              
+              // v7.13: Show info toast that request will stay active
+              setRematchMessage('Rematch request sent! Opponent can accept even if you leave this screen.');
+              setTimeout(() => setRematchMessage(null), 4000);
               
               soundManager.playSound('notification');
               

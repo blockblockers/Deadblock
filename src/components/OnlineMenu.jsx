@@ -3,6 +3,7 @@
 // v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
+// v7.13: Real-time game subscription, mark games as viewed, proper loss flow
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,6 +14,7 @@ import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
 import { realtimeManager } from '../services/realtimeManager';
+import { supabase } from '../utils/supabase';
 import { rematchService } from '../services/rematchService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
@@ -485,6 +487,35 @@ const OnlineMenu = ({
       inviteService.unsubscribeFromInvites(subscription);
       if (emailInviteHandler) emailInviteHandler();
       if (rematchHandler) rematchHandler();
+    };
+  }, [sessionReady, profile?.id]);
+
+  // v7.13: Subscribe to game updates for real-time "your turn" status
+  useEffect(() => {
+    if (!sessionReady || !profile?.id) return;
+    
+    // Subscribe to changes in games where user is a player
+    const channel = supabase
+      ?.channel(`games-user-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'games',
+          filter: `or(player1_id.eq.${profile.id},player2_id.eq.${profile.id})`
+        },
+        (payload) => {
+          // Refresh games when any game is updated (turn change, completion, etc.)
+          loadGames();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      if (channel) {
+        supabase?.removeChannel(channel);
+      }
     };
   }, [sessionReady, profile?.id]);
 
@@ -2251,10 +2282,17 @@ const OnlineMenu = ({
                               return (
                                 <button
                                   key={game.id}
-                                  onClick={() => {
+                                  onClick={async () => {
                                     soundManager.playButtonClick();
                                     setShowActiveGames(false);
-                                    onResumeGame(game);
+                                    
+                                    // v7.13: Mark the game as viewed so it moves to recent games
+                                    if (profile?.id) {
+                                      await gameSyncService.markGameViewed(game.id, profile.id);
+                                    }
+                                    
+                                    // Pass special flag to indicate this is an unviewed loss
+                                    onResumeGame({ ...game, _viewingUnviewedLoss: true });
                                   }}
                                   className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
                                     isLoss 

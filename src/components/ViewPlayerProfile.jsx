@@ -1,6 +1,7 @@
 // ViewPlayerProfile - View another player's profile
 // v7.12: Added full stats display (AI wins, puzzle stats) for all players
 // v7.12: Added player_stats loading from profiles table
+// v7.12: Final Board View now fetches moves for full replay functionality
 import { useState, useEffect } from 'react';
 import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
@@ -68,6 +69,27 @@ const dbSelect = async (table, options = {}) => {
   }
 };
 
+// Direct fetch helper for game moves (v7.12)
+const fetchGameMoves = async (gameId) => {
+  const headers = getAuthHeaders();
+  if (!headers) return [];
+  
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&order=move_number.asc`,
+      { headers }
+    );
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    return [];
+  } catch (err) {
+    console.error('Error fetching game moves:', err);
+    return [];
+  }
+};
+
 // Helper to convert hex to rgba
 const hexToRgba = (hex, alpha) => {
   if (!hex || !hex.startsWith('#')) return `rgba(100, 116, 139, ${alpha})`;
@@ -116,6 +138,8 @@ const ViewPlayerProfile = ({
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
   const [headToHead, setHeadToHead] = useState(null);
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
+  const [loadingMoves, setLoadingMoves] = useState(false);
+  const [gameMoves, setGameMoves] = useState([]);
   const [playerStats, setPlayerStats] = useState(null); // v7.12: Full stats from profiles table
 
   // Use calculated stats from actual games (more accurate than profile.games_won)
@@ -282,6 +306,23 @@ const ViewPlayerProfile = ({
     }
     
     setLoading(false);
+  };
+
+  // Handle opening Final Board View - fetch moves first (v7.12)
+  const handleOpenFinalBoardView = async (game) => {
+    soundManager.playButtonClick();
+    setLoadingMoves(true);
+    setSelectedGameForFinalView(game);
+    
+    try {
+      const moves = await fetchGameMoves(game.id);
+      setGameMoves(moves);
+    } catch (err) {
+      console.error('Error fetching moves:', err);
+      setGameMoves([]);
+    }
+    
+    setLoadingMoves(false);
   };
 
   const handleSendFriendRequest = async () => {
@@ -617,8 +658,7 @@ const ViewPlayerProfile = ({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  soundManager.playButtonClick();
-                                  setSelectedGameForFinalView(game);
+                                  handleOpenFinalBoardView(game);
                                 }}
                                 className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
                                 title="View final board"
@@ -709,15 +749,24 @@ const ViewPlayerProfile = ({
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
         <FinalBoardView
-          isOpen={true}
-          onClose={() => setSelectedGameForFinalView(null)}
+          onClose={() => {
+            setSelectedGameForFinalView(null);
+            setGameMoves([]);
+          }}
           board={selectedGameForFinalView.board}
           boardPieces={selectedGameForFinalView.board_pieces}
-          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
-                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          moveHistory={gameMoves}
+          isLoadingMoves={loadingMoves}
+          player1={selectedGameForFinalView.player1}
+          player2={selectedGameForFinalView.player2}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
           player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          viewerIsPlayer1={selectedGameForFinalView.player1_id === currentUserId}
+          player1Rating={selectedGameForFinalView.player1?.rating || selectedGameForFinalView.player1?.elo_rating || 1200}
+          player2Rating={selectedGameForFinalView.player2?.rating || selectedGameForFinalView.player2?.elo_rating || 1200}
+          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
+                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          winnerId={selectedGameForFinalView.winner_id}
+          gameDate={selectedGameForFinalView.updated_at || selectedGameForFinalView.created_at}
         />
       )}
     </>
