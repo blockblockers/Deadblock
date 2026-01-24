@@ -1,5 +1,6 @@
 // Streak Service - Manages play streak tracking
-// v7.12: New service for game play streak feature
+// v7.13: Service for game play streak feature with fixed emoji encoding
+// Place in src/services/streakService.js
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 // Auth key for direct fetch
@@ -220,7 +221,7 @@ export const streakService = {
           color: 'text-amber-400',
           bgColor: 'bg-amber-900/30',
           borderColor: 'border-amber-500/30',
-          icon: '⚠️',
+          icon: '⚠',
           message: 'Play today to keep your streak!'
         };
       case 'broken':

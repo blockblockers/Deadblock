@@ -1,15 +1,16 @@
-// PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, and achievements
-// v7.12: Added NEW achievements indicator badge (similar to friend requests)
+// PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, achievements, and streak
+// v7.13: Added game play streak display with flame icon
 // Place in src/components/PlayerProfileCard.jsx
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle } from 'lucide-react';
+import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle, Flame } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
 import { supabase } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
 import achievementService from '../services/achievementService';
+import streakService from '../services/streakService';
 
 // Helper to get cached profile synchronously from localStorage
 const getCachedProfileSync = () => {
@@ -202,6 +203,55 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
 };
 
 /**
+ * Streak Display Badge - Shows flame icon with streak count
+ */
+const StreakBadge = ({ streak, status }) => {
+  if (!streak || streak <= 0) return null;
+  
+  // Determine color based on streak length
+  const getStreakColor = () => {
+    if (streak >= 30) return { color: '#fbbf24', glow: 'rgba(251, 191, 36, 0.5)' }; // Amber/gold for 30+
+    if (streak >= 7) return { color: '#f97316', glow: 'rgba(249, 115, 22, 0.5)' };  // Orange for 7+
+    if (streak >= 3) return { color: '#ef4444', glow: 'rgba(239, 68, 68, 0.4)' };   // Red for 3+
+    return { color: '#94a3b8', glow: 'none' }; // Slate for 1-2
+  };
+  
+  const { color, glow } = getStreakColor();
+  const isHot = streak >= 3;
+  const isOnFire = streak >= 7;
+  
+  return (
+    <div 
+      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded"
+      style={{
+        background: isHot ? `${color}15` : 'rgba(51, 65, 85, 0.5)',
+        border: `1px solid ${isHot ? `${color}40` : 'rgba(71, 85, 105, 0.5)'}`,
+        boxShadow: isHot ? `0 0 8px ${glow}` : 'none'
+      }}
+      title={`${streak} day streak${status === 'at_risk' ? ' - Play today to keep it!' : ''}`}
+    >
+      <Flame 
+        size={12} 
+        className={isOnFire ? 'animate-pulse' : ''}
+        style={{ 
+          color, 
+          filter: isHot ? `drop-shadow(0 0 3px ${color})` : 'none' 
+        }} 
+      />
+      <span 
+        className="text-xs font-bold tabular-nums"
+        style={{ 
+          color,
+          textShadow: isHot ? `0 0 6px ${glow}` : 'none'
+        }}
+      >
+        {streak}
+      </span>
+    </div>
+  );
+};
+
+/**
  * PlayerProfileCard - Shows player profile in main menu
  */
 const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
@@ -212,6 +262,9 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
   const [newAchievementsCount, setNewAchievementsCount] = useState(0);
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  
+  // Streak state
+  const [streakData, setStreakData] = useState(null);
   
   // Use cached profile as fallback
   const [localCachedProfile] = useState(() => getCachedProfileSync());
@@ -228,6 +281,29 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     const b = parseInt(hex.slice(5, 7), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
+  
+  // Load streak data
+  useEffect(() => {
+    const loadStreak = async () => {
+      if (!effectiveProfile?.id) return;
+      
+      try {
+        console.log('[PlayerProfileCard] Loading streak for:', effectiveProfile.id);
+        const { data, error } = await streakService.getStreak(effectiveProfile.id);
+        
+        if (data && !error) {
+          console.log('[PlayerProfileCard] Streak loaded:', data);
+          setStreakData(data);
+        } else if (error) {
+          console.warn('[PlayerProfileCard] Streak load error:', error);
+        }
+      } catch (err) {
+        console.error('[PlayerProfileCard] Error loading streak:', err);
+      }
+    };
+    
+    loadStreak();
+  }, [effectiveProfile?.id]);
   
   // Load achievement counts and check for new ones
   useEffect(() => {
@@ -438,7 +514,7 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           >
             {displayName}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {rankInfo && (
               <span 
                 className="text-xs font-bold uppercase tracking-wider"
@@ -450,6 +526,13 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
             <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
               {effectiveProfile.rating || 1000} ELO
             </span>
+            {/* Streak badge */}
+            {streakData && streakData.current_streak > 0 && (
+              <StreakBadge 
+                streak={streakData.current_streak} 
+                status={streakData.streak_status}
+              />
+            )}
           </div>
         </div>
         

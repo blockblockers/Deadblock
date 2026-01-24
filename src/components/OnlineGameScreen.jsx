@@ -1,4 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.14: Added streak tracking on game completion
 // v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
@@ -30,6 +31,7 @@ import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { realtimeManager } from '../services/realtimeManager';
+import { streakService } from '../services/streakService';
 
 // Orange/Amber theme for online mode
 const theme = {
@@ -795,6 +797,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         };
         setGameResult(result);
         
+        // v7.14: Update play streak when online game completes
+        if (currentUserId) {
+          streakService.updateStreak(currentUserId).then(({ data }) => {
+            if (data?.new_achievements?.length > 0) {
+              console.log('[OnlineGame] New streak achievements:', data.new_achievements);
+            }
+          }).catch(err => console.warn('[OnlineGame] Failed to update streak:', err));
+        }
+        
         // If we're animating opponent's final move, delay the popup
         // Otherwise show immediately (game was already over when loaded)
         if (animatingOpponentMove) {
@@ -1407,6 +1418,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       
       setGameResult({ isWin, winnerId, reason: gameOverReason || 'normal' });
       setGame(prev => prev ? { ...prev, status: 'completed', winner_id: winnerId } : prev);
+      
+      // v7.14: Update play streak when online game completes
+      if (user?.id) {
+        streakService.updateStreak(user.id).then(({ data }) => {
+          if (data?.new_achievements?.length > 0) {
+            console.log('[OnlineGame] New streak achievements:', data.new_achievements);
+          }
+        }).catch(err => console.warn('[OnlineGame] Failed to update streak:', err));
+      }
       
       // Delay the popup so user can see the final placement animation
       setTimeout(() => {

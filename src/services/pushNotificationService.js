@@ -1,24 +1,12 @@
 // pushNotificationService.js - Client-side push notification management
+// v7.14: Fixed to use existing service worker instead of registering a new one
 // Place in src/services/pushNotificationService.js
-//
-// This service handles:
-// - Service worker registration
-// - Push subscription management
-// - Storing subscriptions in Supabase
-// - Permission requests
 
-import { supabase } from '../utils/supabase';
+import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
-// VAPID public key from environment variable
-// Generate with: npx web-push generate-vapid-keys
-// Store PUBLIC key in .env.local as VITE_VAPID_PUBLIC_KEY
-// Store PRIVATE key in Supabase Edge Function secrets (never client-side!)
+// VAPID public key from environment variables
+// Set VITE_VAPID_PUBLIC_KEY in your .env file
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY;
-
-// Validate VAPID key is configured
-if (!VAPID_PUBLIC_KEY) {
-  console.warn('[PushService] VITE_VAPID_PUBLIC_KEY not set in environment. Push notifications will not work.');
-}
 
 class PushNotificationService {
   constructor() {
@@ -33,39 +21,36 @@ class PushNotificationService {
     return (
       'serviceWorker' in navigator &&
       'PushManager' in window &&
-      'Notification' in window &&
-      !!VAPID_PUBLIC_KEY // Also require VAPID key to be configured
+      'Notification' in window
     );
   }
 
-  // Initialize the service
+  // Initialize the service - uses EXISTING service worker
   async init() {
     if (this.initialized) return this.supported;
 
     this.supported = this.isSupported();
     
     if (!this.supported) {
-      console.log('[PushService] Push notifications not supported or VAPID key not configured');
+      console.log('[PushService] Push notifications not supported');
       this.initialized = true;
       return false;
     }
 
     try {
-      // Register service worker
-      this.swRegistration = await navigator.serviceWorker.register('/service-worker.js', {
-        scope: '/'
-      });
+      // Wait for any existing service worker to be ready
+      // This uses the ALREADY REGISTERED service worker instead of registering a new one
+      this.swRegistration = await navigator.serviceWorker.ready;
       
-      console.log('[PushService] Service worker registered:', this.swRegistration);
+      console.log('[PushService] Using existing service worker:', this.swRegistration);
 
-      // Wait for the service worker to be ready
-      await navigator.serviceWorker.ready;
-      
       // Check for existing subscription
       this.subscription = await this.swRegistration.pushManager.getSubscription();
       
       if (this.subscription) {
-        console.log('[PushService] Existing subscription found');
+        console.log('[PushService] Existing subscription found:', this.subscription.endpoint.substring(0, 50) + '...');
+      } else {
+        console.log('[PushService] No existing subscription');
       }
 
       this.initialized = true;
@@ -90,29 +75,53 @@ class PushNotificationService {
 
   // Subscribe to push notifications
   async subscribe(userId) {
-    if (!this.supported || !this.swRegistration) {
-      throw new Error('Push notifications not supported or not initialized');
+    if (!this.supported) {
+      console.error('[PushService] Push not supported');
+      return { success: false, reason: 'not_supported' };
+    }
+    
+    if (!this.swRegistration) {
+      // Try to initialize if not done
+      await this.init();
+      if (!this.swRegistration) {
+        console.error('[PushService] Service worker not available');
+        return { success: false, reason: 'no_service_worker' };
+      }
     }
 
     if (!userId) {
-      throw new Error('User ID required for subscription');
-    }
-
-    if (!VAPID_PUBLIC_KEY) {
-      throw new Error('VAPID public key not configured');
+      console.error('[PushService] User ID required');
+      return { success: false, reason: 'no_user_id' };
     }
 
     try {
       // Request notification permission if not granted
-      const permission = await Notification.requestPermission();
+      console.log('[PushService] Current permission:', Notification.permission);
       
-      if (permission !== 'granted') {
-        console.log('[PushService] Notification permission denied');
+      if (Notification.permission === 'denied') {
+        console.log('[PushService] Notifications blocked by user');
         return { success: false, reason: 'permission_denied' };
+      }
+      
+      if (Notification.permission !== 'granted') {
+        console.log('[PushService] Requesting notification permission...');
+        const permission = await Notification.requestPermission();
+        console.log('[PushService] Permission result:', permission);
+        
+        if (permission !== 'granted') {
+          return { success: false, reason: 'permission_denied' };
+        }
+      }
+
+      // Validate VAPID key is configured
+      if (!VAPID_PUBLIC_KEY) {
+        console.error('[PushService] VAPID_PUBLIC_KEY not configured. Set VITE_VAPID_PUBLIC_KEY in .env');
+        return { success: false, reason: 'vapid_not_configured' };
       }
 
       // Convert VAPID key to Uint8Array
       const applicationServerKey = this.urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      console.log('[PushService] VAPID key converted, subscribing to push manager...');
 
       // Subscribe to push manager
       this.subscription = await this.swRegistration.pushManager.subscribe({
@@ -120,19 +129,30 @@ class PushNotificationService {
         applicationServerKey: applicationServerKey
       });
 
-      console.log('[PushService] Push subscription created:', this.subscription);
+      console.log('[PushService] Push subscription created');
 
       // Save subscription to Supabase
       const saved = await this.saveSubscription(userId, this.subscription);
       
       if (!saved) {
-        throw new Error('Failed to save subscription to server');
+        console.error('[PushService] Failed to save subscription to database');
+        // Still return success since we have the subscription, just couldn't save it
+        // User can retry saving later
       }
 
       return { success: true, subscription: this.subscription };
     } catch (error) {
       console.error('[PushService] Subscription failed:', error);
-      throw error;
+      
+      // Provide more specific error messages
+      if (error.message?.includes('permission')) {
+        return { success: false, reason: 'permission_denied' };
+      }
+      if (error.message?.includes('applicationServerKey')) {
+        return { success: false, reason: 'invalid_vapid_key' };
+      }
+      
+      return { success: false, reason: 'subscription_failed', error: error.message };
     }
   }
 
@@ -158,17 +178,24 @@ class PushNotificationService {
       return { success: true };
     } catch (error) {
       console.error('[PushService] Unsubscribe failed:', error);
-      throw error;
+      return { success: false, error: error.message };
     }
   }
 
   // Save subscription to Supabase
   async saveSubscription(userId, subscription) {
+    if (!isSupabaseConfigured()) {
+      console.warn('[PushService] Supabase not configured');
+      return false;
+    }
+    
     try {
       const subscriptionJson = subscription.toJSON();
       
       // Get device info for identification
       const deviceInfo = this.getDeviceInfo();
+      
+      console.log('[PushService] Saving subscription to database...');
       
       const { error } = await supabase
         .from('push_subscriptions')
@@ -198,6 +225,10 @@ class PushNotificationService {
 
   // Remove subscription from Supabase
   async removeSubscription(userId) {
+    if (!isSupabaseConfigured()) {
+      return false;
+    }
+    
     try {
       const endpoint = this.subscription?.endpoint;
       
@@ -257,7 +288,7 @@ class PushNotificationService {
     return {
       device,
       browser,
-      userAgent: ua.substring(0, 200), // Truncate for storage
+      userAgent: ua.substring(0, 200),
       timestamp: new Date().toISOString()
     };
   }
@@ -281,16 +312,25 @@ class PushNotificationService {
   // Send a test notification (for debugging)
   async sendTestNotification() {
     if (!this.swRegistration) {
-      throw new Error('Service worker not registered');
+      console.error('[PushService] Service worker not registered');
+      return false;
     }
 
-    await this.swRegistration.showNotification('Test Notification', {
-      body: 'Push notifications are working!',
-      icon: '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
-      tag: 'test-notification',
-      renotify: true
-    });
+    try {
+      await this.swRegistration.showNotification('Deadblock Notifications Enabled! 🎮', {
+        body: 'You\'ll now receive alerts when it\'s your turn.',
+        icon: '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        tag: 'test-notification',
+        renotify: true,
+        vibrate: [100, 50, 100]
+      });
+      console.log('[PushService] Test notification sent');
+      return true;
+    } catch (error) {
+      console.error('[PushService] Failed to send test notification:', error);
+      return false;
+    }
   }
 
   // Listen for messages from service worker
