@@ -1,349 +1,294 @@
-// Achievements Modal - View all achievements with categories and progress
-// v7.13: FIXED mobile scroll - removed problematic touch handlers, use CSS grid layout
-// v7.12: Added 'dedication' category for play streak achievements
+// Achievements.jsx - Modal displaying all achievements with improved scroll and text
+// v7.14: Fixed text truncation - name and description now wrap properly
+// Place in src/components/Achievements.jsx
+
 import { useState, useEffect, useRef } from 'react';
-import { Trophy, X, Lock, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { X, Trophy, Lock, Star, ChevronDown, ChevronUp, Loader } from 'lucide-react';
 import achievementService from '../services/achievementService';
 import { soundManager } from '../utils/soundManager';
 
-// Rarity colors
+// Rarity colors with proper theming
 const RARITY_COLORS = {
   common: {
-    bg: 'bg-slate-700/50',
-    border: 'border-slate-600',
+    bg: 'bg-slate-500/20',
+    border: 'border-slate-500/40',
     text: 'text-slate-300',
     glow: 'rgba(148, 163, 184, 0.3)'
   },
   uncommon: {
-    bg: 'bg-green-900/50',
-    border: 'border-green-600',
-    text: 'text-green-300',
+    bg: 'bg-green-500/20',
+    border: 'border-green-500/40',
+    text: 'text-green-400',
     glow: 'rgba(34, 197, 94, 0.3)'
   },
   rare: {
-    bg: 'bg-blue-900/50',
-    border: 'border-blue-500',
-    text: 'text-blue-300',
-    glow: 'rgba(59, 130, 246, 0.4)'
+    bg: 'bg-blue-500/20',
+    border: 'border-blue-500/40',
+    text: 'text-blue-400',
+    glow: 'rgba(59, 130, 246, 0.3)'
   },
   epic: {
-    bg: 'bg-purple-900/50',
-    border: 'border-purple-500',
-    text: 'text-purple-300',
+    bg: 'bg-purple-500/20',
+    border: 'border-purple-500/40',
+    text: 'text-purple-400',
     glow: 'rgba(168, 85, 247, 0.4)'
   },
   legendary: {
-    bg: 'bg-amber-900/50',
-    border: 'border-amber-500',
-    text: 'text-amber-300',
-    glow: 'rgba(245, 158, 11, 0.5)'
+    bg: 'bg-amber-500/20',
+    border: 'border-amber-500/40',
+    text: 'text-amber-400',
+    glow: 'rgba(251, 191, 36, 0.5)'
   }
 };
 
-const Achievements = ({ userId, onClose, playerName }) => {
+// Category display helpers
+const getCategoryIcon = (category) => {
+  const icons = {
+    victory: '🏆',
+    dedication: '🔥',
+    skill: '⭐',
+    social: '👥',
+    puzzle: '🧩',
+    special: '💎',
+    speed: '⚡',
+    weekly: '📅'
+  };
+  return icons[category] || '🎮';
+};
+
+const Achievements = ({ userId, onClose }) => {
   const [achievements, setAchievements] = useState([]);
-  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [filter, setFilter] = useState('all'); // 'all', 'unlocked', 'locked'
   const [expandedId, setExpandedId] = useState(null);
-  const scrollContainerRef = useRef(null);
-
-  const titleText = playerName ? `${playerName}'s Achievements` : 'Achievements';
+  const scrollRef = useRef(null);
 
   useEffect(() => {
-    loadAchievements();
-  }, [userId]);
-
-  // Reset scroll position when category changes
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 0;
+    if (userId) {
+      loadAchievements();
     }
-  }, [selectedCategory]);
+  }, [userId]);
 
   const loadAchievements = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      if (typeof achievementService?.getAchievementsWithStatus !== 'function') {
-        console.warn('[Achievements] Achievement service method not found');
-        setAchievements([]);
-        setStats({ unlockedCount: 0, totalAchievements: 0, earnedPoints: 0, completionPercentage: 0 });
-        setLoading(false);
-        return;
-      }
-      
-      const achResult = await achievementService.getAchievementsWithStatus(userId);
-      
-      if (achResult.error && achResult.error !== 'Not authenticated') {
-        console.warn('[Achievements] Error loading achievements:', achResult.error);
-      }
-      
-      setAchievements(achResult.data || []);
-      
-      if (typeof achievementService?.getAchievementStats === 'function') {
-        const statsResult = await achievementService.getAchievementStats(userId);
-        if (statsResult.data) {
-          setStats(statsResult.data);
-        } else {
-          const unlockedCount = (achResult.data || []).filter(a => a.unlocked).length;
-          const totalAchievements = (achResult.data || []).length;
-          const earnedPoints = (achResult.data || []).filter(a => a.unlocked).reduce((sum, a) => sum + (a.points || 0), 0);
-          setStats({
-            unlockedCount,
-            totalAchievements,
-            earnedPoints,
-            completionPercentage: totalAchievements > 0 ? Math.round((unlockedCount / totalAchievements) * 100) : 0
-          });
-        }
+      const result = await achievementService.getAchievementsWithStatus(userId);
+
+      if (result.error) {
+        setError(result.error);
+      } else {
+        // Sort: unlocked first, then by rarity
+        const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+        const sorted = [...(result.data || [])].sort((a, b) => {
+          if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;
+          return (rarityOrder[a.rarity] || 5) - (rarityOrder[b.rarity] || 5);
+        });
+        setAchievements(sorted);
       }
     } catch (err) {
-      console.error('Error loading achievements:', err);
-      setAchievements([]);
-      setStats({ unlockedCount: 0, totalAchievements: 0, earnedPoints: 0, completionPercentage: 0 });
+      setError('Failed to load achievements');
+      console.error('[Achievements] Error:', err);
     }
-    
+
     setLoading(false);
   };
 
-  // Group achievements by category - added 'dedication' for streaks
-  const categories = ['all', 'dedication', 'weekly', 'speed', 'puzzle', 'online', 'ai', 'general'];
-  
-  const filteredAchievements = selectedCategory === 'all' 
-    ? achievements 
-    : achievements.filter(a => a.category === selectedCategory);
-
-  // Sort: unlocked first, then by rarity
-  const rarityOrder = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
-  const sortedAchievements = [...filteredAchievements].sort((a, b) => {
-    if (a.unlocked && !b.unlocked) return -1;
-    if (!a.unlocked && b.unlocked) return 1;
-    return rarityOrder[a.rarity] - rarityOrder[b.rarity];
+  // Filter achievements
+  const filteredAchievements = achievements.filter(a => {
+    if (filter === 'unlocked') return a.unlocked;
+    if (filter === 'locked') return !a.unlocked;
+    return true;
   });
 
-  const getCategoryIcon = (cat) => {
-    switch (cat) {
-      case 'dedication': return '🔥';
-      case 'weekly': return '📅';
-      case 'speed': return '⚡';
-      case 'puzzle': return '🧩';
-      case 'online': return '🌐';
-      case 'ai': return '🤖';
-      case 'general': return '🎮';
-      default: return '🏆';
-    }
+  // Stats
+  const unlockedCount = achievements.filter(a => a.unlocked).length;
+  const totalPoints = achievements.filter(a => a.unlocked).reduce((sum, a) => sum + (a.points || 0), 0);
+
+  const handleClose = () => {
+    soundManager.playButtonClick?.();
+    onClose();
   };
 
   return (
     <div 
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+      onClick={handleClose}
     >
-      {/* v7.13: Use CSS Grid for reliable layout on all platforms */}
-      <style>{`
-        .achievements-modal {
-          display: grid;
-          grid-template-rows: auto auto 1fr;
-          max-height: 85vh;
-          max-height: 85dvh;
-        }
-        .achievements-scroll {
-          overflow-y: auto;
-          overflow-x: hidden;
-          -webkit-overflow-scrolling: touch;
-          overscroll-behavior: contain;
-          min-height: 0; /* Critical for grid children */
-        }
-        /* iOS-specific scroll fix */
-        @supports (-webkit-touch-callout: none) {
-          .achievements-scroll {
-            -webkit-overflow-scrolling: touch;
-            transform: translateZ(0);
-          }
-        }
-      `}</style>
-
       <div 
-        className="achievements-modal bg-slate-900 rounded-xl max-w-lg w-full overflow-hidden border border-amber-500/30 shadow-xl"
-        onClick={e => e.stopPropagation()}
+        className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}
-        <div className="p-4 border-b border-amber-500/20">
-          <div className="flex items-center justify-between mb-4">
+        <div className="p-4 border-b border-amber-500/20 flex-shrink-0">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Trophy className="text-amber-400" size={24} />
-              <h2 className="text-lg font-bold text-amber-300">{titleText}</h2>
+              <Trophy size={24} className="text-amber-400" />
+              <h2 className="text-xl font-bold text-amber-300">Achievements</h2>
             </div>
-            <button onClick={onClose} className="text-slate-400 hover:text-white">
+            <button
+              onClick={handleClose}
+              className="p-1 text-slate-400 hover:text-white transition-colors"
+            >
               <X size={24} />
             </button>
           </div>
 
-          {/* Stats */}
-          {stats && (
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-amber-400">
-                  {stats.unlockedCount}/{stats.totalAchievements}
-                </div>
-                <div className="text-xs text-slate-400">Unlocked</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-amber-400">
-                  {stats.earnedPoints}
-                </div>
-                <div className="text-xs text-slate-400">Points</div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-amber-400">
-                  {stats.completionPercentage}%
-                </div>
-                <div className="text-xs text-slate-400">Complete</div>
-              </div>
+          {/* Stats bar */}
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-4">
+              <span className="text-slate-400">
+                <span className="text-amber-400 font-bold">{unlockedCount}</span>/{achievements.length} unlocked
+              </span>
+              <span className="text-slate-400">
+                <Star size={14} className="inline text-amber-400" /> <span className="text-amber-400 font-bold">{totalPoints}</span> pts
+              </span>
             </div>
-          )}
+          </div>
+
+          {/* Filter tabs */}
+          <div className="flex gap-2 mt-3">
+            {['all', 'unlocked', 'locked'].map((f) => (
+              <button
+                key={f}
+                onClick={() => { setFilter(f); soundManager.playClickSound?.('click'); }}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold uppercase transition-all ${
+                  filter === f
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
+                    : 'bg-slate-800/50 text-slate-400 border border-slate-700/50 hover:bg-slate-700/50'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Category Filter - Fixed */}
-        <div className="px-4 py-2 overflow-x-auto border-b border-slate-800 flex gap-2">
-          {categories.map(cat => (
-            <button
-              key={cat}
-              onClick={() => {
-                soundManager.playClickSound('select');
-                setSelectedCategory(cat);
-              }}
-              className={`
-                px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all
-                ${selectedCategory === cat 
-                  ? 'bg-amber-500 text-slate-900' 
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
-                }
-              `}
-            >
-              {getCategoryIcon(cat)} {cat.charAt(0).toUpperCase() + cat.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {/* Achievements List - Scrollable */}
-        {/* v7.13: Removed problematic touch handlers - let browser handle scroll naturally */}
+        {/* Scrollable Content */}
         <div 
-          ref={scrollContainerRef}
-          className="achievements-scroll"
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+            touchAction: 'pan-y',
+            minHeight: 0
+          }}
         >
-          <div className="p-4">
-            {error ? (
-              <div className="text-center py-8">
-                <AlertTriangle className="mx-auto text-amber-400 mb-2" size={40} />
-                <p className="text-amber-300 font-medium mb-2">Feature Not Available</p>
-                <p className="text-slate-400 text-sm">{error}</p>
+          <div className="p-4 space-y-2">
+            {loading ? (
+              <div className="text-center py-12">
+                <Loader className="w-8 h-8 text-amber-400 animate-spin mx-auto mb-3" />
+                <p className="text-slate-400">Loading achievements...</p>
+              </div>
+            ) : error ? (
+              <div className="text-center py-12">
+                <p className="text-red-400">{error}</p>
                 <button
-                  onClick={onClose}
-                  className="mt-4 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+                  onClick={loadAchievements}
+                  className="mt-4 px-4 py-2 bg-amber-500/20 text-amber-400 rounded-lg hover:bg-amber-500/30"
                 >
-                  Close
+                  Retry
                 </button>
               </div>
-            ) : loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full mx-auto mb-2" />
-                <p className="text-slate-400 text-sm">Loading achievements...</p>
-              </div>
-            ) : sortedAchievements.length === 0 ? (
-              <div className="text-center py-8">
-                <Trophy className="mx-auto text-slate-600 mb-2" size={40} />
-                {achievements.length === 0 ? (
-                  <>
-                    <p className="text-slate-400">No achievements available yet</p>
-                    <p className="text-slate-500 text-sm mt-1">Play games to start earning achievements!</p>
-                  </>
-                ) : (
-                  <p className="text-slate-400">No achievements in this category</p>
-                )}
+            ) : filteredAchievements.length === 0 ? (
+              <div className="text-center py-12">
+                <Trophy size={48} className="mx-auto text-slate-600 mb-3" />
+                <p className="text-slate-400">
+                  {filter === 'unlocked' ? 'No achievements unlocked yet' :
+                   filter === 'locked' ? 'All achievements unlocked!' :
+                   'No achievements found'}
+                </p>
               </div>
             ) : (
-              <div className="space-y-2 pb-4">
-                {sortedAchievements.map(achievement => {
-                  const colors = RARITY_COLORS[achievement.rarity] || RARITY_COLORS.common;
-                  const isExpanded = expandedId === achievement.id;
-                  
-                  return (
-                    <div 
-                      key={achievement.id}
-                      className={`
-                        rounded-lg border transition-all cursor-pointer
-                        ${achievement.unlocked 
-                          ? `${colors.bg} ${colors.border}` 
-                          : 'bg-slate-800/30 border-slate-700 opacity-60'
-                        }
-                      `}
-                      onClick={() => setExpandedId(isExpanded ? null : achievement.id)}
-                    >
-                      <div className="flex items-center gap-3 p-3">
-                        {/* Icon */}
-                        <div className={`
-                          w-12 h-12 rounded-lg flex items-center justify-center text-2xl flex-shrink-0
-                          ${achievement.unlocked 
-                            ? colors.bg 
-                            : 'bg-slate-700'
-                          }
+              filteredAchievements.map((achievement) => {
+                const colors = RARITY_COLORS[achievement.rarity] || RARITY_COLORS.common;
+                const isExpanded = expandedId === achievement.id;
+
+                return (
+                  <div
+                    key={achievement.id}
+                    className={`
+                      rounded-xl border transition-all cursor-pointer
+                      ${achievement.unlocked
+                        ? `${colors.bg} ${colors.border}`
+                        : 'bg-slate-800/30 border-slate-700 opacity-60'
+                      }
+                    `}
+                    onClick={() => {
+                      setExpandedId(isExpanded ? null : achievement.id);
+                      soundManager.playClickSound?.('click');
+                    }}
+                  >
+                    <div className="flex items-start gap-3 p-3">
+                      {/* Icon */}
+                      <div
+                        className={`
+                          w-10 h-10 rounded-lg flex items-center justify-center text-xl flex-shrink-0
+                          ${achievement.unlocked ? colors.bg : 'bg-slate-700'}
                         `}
                         style={achievement.unlocked ? { boxShadow: `0 0 15px ${colors.glow}` } : {}}
-                        >
-                          {achievement.unlocked ? achievement.icon : <Lock size={20} className="text-slate-500" />}
-                        </div>
+                      >
+                        {achievement.unlocked ? achievement.icon : <Lock size={18} className="text-slate-500" />}
+                      </div>
 
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className={`font-bold truncate ${achievement.unlocked ? colors.text : 'text-slate-500'}`}>
+                      {/* Info - FIXED: Allow text to wrap */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            {/* Name - wraps instead of truncates */}
+                            <h3 className={`font-bold text-sm leading-tight ${achievement.unlocked ? colors.text : 'text-slate-500'}`}>
                               {achievement.name}
                             </h3>
-                            <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${colors.bg} ${colors.text}`}>
+                            {/* Rarity badge */}
+                            <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded mt-1 ${colors.bg} ${colors.text}`}>
                               {achievement.rarity}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-400 truncate">
-                            {achievement.description}
-                          </p>
-                        </div>
-
-                        {/* Points & expand */}
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <div className="text-right">
-                            <div className={`font-bold ${achievement.unlocked ? 'text-amber-400' : 'text-slate-600'}`}>
-                              +{achievement.points}
+                          
+                          {/* Points */}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <div className="text-right">
+                              <div className={`font-bold text-sm ${achievement.unlocked ? 'text-amber-400' : 'text-slate-600'}`}>
+                                +{achievement.points}
+                              </div>
                             </div>
-                            <div className="text-xs text-slate-500">pts</div>
+                            {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
                           </div>
-                          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </div>
+                        
+                        {/* Description - FIXED: wraps instead of truncates */}
+                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                          {achievement.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Expanded details */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3 pt-0 border-t border-slate-700/50 mt-1">
+                        <div className="flex justify-between items-center mt-2 text-xs">
+                          <span className="text-slate-400">
+                            Category: <span className="text-slate-300">{getCategoryIcon(achievement.category)} {achievement.category}</span>
+                          </span>
+                          {achievement.unlocked && achievement.unlockedAt && (
+                            <span className="text-green-400">
+                              ✓ {new Date(achievement.unlockedAt).toLocaleDateString()}
+                            </span>
+                          )}
                         </div>
                       </div>
-
-                      {/* Expanded details */}
-                      {isExpanded && (
-                        <div className="px-3 pb-3 pt-0 border-t border-slate-700/50">
-                          <div className="flex justify-between items-center mt-2 text-xs">
-                            <span className="text-slate-400">
-                              Category: <span className="text-slate-300">{getCategoryIcon(achievement.category)} {achievement.category}</span>
-                            </span>
-                            {achievement.unlocked && achievement.unlockedAt && (
-                              <span className="text-green-400">
-                                ✓ Unlocked {new Date(achievement.unlockedAt).toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
+          
+          {/* Bottom padding for safe area */}
+          <div className="h-4" />
         </div>
       </div>
     </div>
@@ -357,14 +302,9 @@ export const AchievementPopup = ({ achievement, onClose }) => {
   if (!achievement) return null;
 
   return (
-    <div 
-      className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-achievement-popup"
-    >
-      <div 
-        className={`
-          ${colors.bg} border ${colors.border} rounded-xl p-4 shadow-xl
-          flex items-center gap-4 min-w-[280px]
-        `}
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-achievement-popup">
+      <div
+        className={`${colors.bg} border ${colors.border} rounded-xl p-4 shadow-xl flex items-center gap-4 min-w-[280px] relative`}
         style={{ boxShadow: `0 0 30px ${colors.glow}` }}
       >
         <div className="text-4xl">{achievement.icon}</div>
@@ -375,7 +315,7 @@ export const AchievementPopup = ({ achievement, onClose }) => {
           <div className={`font-bold ${colors.text}`}>{achievement.name}</div>
           <div className="text-xs text-slate-400">{achievement.description}</div>
         </div>
-        <button 
+        <button
           onClick={onClose}
           className="absolute top-2 right-2 text-slate-500 hover:text-white"
         >

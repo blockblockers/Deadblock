@@ -1,8 +1,8 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.14: Added streak tracking on game completion
+// v7.14: Added streak tracking on game completion + real-time rematch subscription
 // v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
-// ADDED: Rematch request system with opponent notification
+// ADDED: Rematch request system with opponent notification + instant rematch detection
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -586,7 +586,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       
       try {
         // Use getRematchRequestByGame to get any status (including accepted)
-        const { data: request } = await rematchService.getRematchRequestByGame(gameId, user.id);
+        const { data: request } = await rematchService.getRematchRequestByGame(currentGameId, user.id);
         
         if (!mounted) return;
         
@@ -663,14 +663,126 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     // Initial check
     checkRematch();
     
-    // Poll every 2 seconds
-    pollInterval = setInterval(checkRematch, 2000);
+    // Poll every 5 seconds (reduced from 2s - real-time subscription handles fast updates)
+    pollInterval = setInterval(checkRematch, 5000);
     
     return () => {
       mounted = false;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [showGameOver, gameId, user?.id, showRematchModal, rematchDeclined, rematchAccepted, isRematchRequester]);
+  }, [showGameOver, currentGameId, user?.id, showRematchModal, rematchDeclined, rematchAccepted, isRematchRequester]);
+
+  // v7.14: Real-time subscription for INSTANT rematch acceptance detection
+  // This supplements the polling and provides immediate response when opponent accepts
+  useEffect(() => {
+    // Only subscribe when game is over and we might be waiting for rematch
+    if (!showGameOver || !currentGameId || !user?.id || !supabase) return;
+    
+    console.log('[OnlineGameScreen] Setting up rematch real-time subscription');
+    
+    const rematchChannel = supabase
+      .channel(`rematch-realtime-${currentGameId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rematch_requests',
+          filter: `game_id=eq.${currentGameId}`
+        },
+        async (payload) => {
+          const request = payload.new;
+          if (!request) return;
+          
+          console.log('[OnlineGameScreen] Rematch update received:', request.status);
+          
+          // Handle ACCEPTED rematch - navigate to new game immediately
+          if (request.status === 'accepted' && request.new_game_id) {
+            console.log('[OnlineGameScreen] ✓ Rematch accepted! New game:', request.new_game_id);
+            
+            soundManager.playSound('notification');
+            setRematchAccepted(true);
+            setRematchWaiting(false);
+            
+            // Fetch new game details
+            const { data: newGame } = await gameSyncService.getGame(request.new_game_id);
+            
+            if (newGame) {
+              const firstPlayerName = newGame.player1_id === user.id
+                ? 'You go'
+                : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
+              
+              setRematchMessage(`Rematch starting! ${firstPlayerName} first.`);
+              setNewGameFromRematch(newGame);
+            }
+            
+            // Navigate after brief delay to show message
+            setTimeout(() => {
+              // Reset all states for new game
+              setShowRematchModal(false);
+              setShowGameOver(false);
+              setRematchRequest(null);
+              setIsRematchRequester(false);
+              setRematchDeclined(false);
+              setRematchAccepted(false);
+              setRematchMessage(null);
+              
+              // Reset board
+              setBoard(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
+              setBoardPieces({});
+              setUsedPieces([]);
+              setSelectedPiece(null);
+              setPendingMove(null);
+              setRotation(0);
+              setFlipped(false);
+              setGame(null);
+              prevBoardPiecesRef.current = {};
+              
+              // Trigger new game load
+              setLoading(true);
+              setCurrentGameId(request.new_game_id);
+            }, 1500);
+          }
+          
+          // Handle DECLINED rematch
+          if (request.status === 'declined') {
+            console.log('[OnlineGameScreen] Rematch declined');
+            setRematchDeclined(true);
+            setRematchWaiting(false);
+            soundManager.playSound('invalid');
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'rematch_requests',
+          filter: `game_id=eq.${currentGameId}`
+        },
+        (payload) => {
+          const request = payload.new;
+          if (!request) return;
+          
+          // Incoming rematch request from opponent
+          if (request.to_user_id === user.id && request.status === 'pending') {
+            console.log('[OnlineGameScreen] Incoming rematch request!');
+            setRematchRequest(request);
+            setIsRematchRequester(false);
+            setShowRematchModal(true);
+            soundManager.playSound('notification');
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[OnlineGameScreen] Rematch channel:', status);
+      });
+    
+    return () => {
+      rematchChannel.unsubscribe();
+    };
+  }, [showGameOver, currentGameId, user?.id, opponent]);
 
   // Cleanup on unmount
   useEffect(() => {

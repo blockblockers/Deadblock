@@ -1,5 +1,5 @@
 // PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, achievements, and streak
-// v7.13: Added game play streak display with flame icon
+// v7.14: Fixed streakService import (named export, not default)
 // Place in src/components/PlayerProfileCard.jsx
 
 import { useState, useEffect, useCallback } from 'react';
@@ -10,7 +10,8 @@ import { supabase } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
 import achievementService from '../services/achievementService';
-import streakService from '../services/streakService';
+// FIXED: streakService is a named export, not default
+import { streakService } from '../services/streakService';
 
 // Helper to get cached profile synchronously from localStorage
 const getCachedProfileSync = () => {
@@ -27,6 +28,63 @@ const getCachedProfileSync = () => {
     console.warn('[PlayerProfileCard] Failed to read cached profile:', e);
   }
   return null;
+};
+
+// Streak Badge Component
+const StreakBadge = ({ streak, status }) => {
+  if (!streak || streak <= 0) return null;
+  
+  // Color progression based on streak length
+  let colors = {
+    bg: 'rgba(100, 116, 139, 0.3)',
+    border: 'rgba(100, 116, 139, 0.5)',
+    text: '#94a3b8',
+    glow: 'none'
+  };
+  
+  if (streak >= 30) {
+    // Gold/Amber for 30+ days
+    colors = {
+      bg: 'rgba(251, 191, 36, 0.2)',
+      border: 'rgba(251, 191, 36, 0.5)',
+      text: '#fbbf24',
+      glow: '0 0 12px rgba(251, 191, 36, 0.4)'
+    };
+  } else if (streak >= 7) {
+    // Orange for 7-29 days
+    colors = {
+      bg: 'rgba(249, 115, 22, 0.2)',
+      border: 'rgba(249, 115, 22, 0.5)',
+      text: '#f97316',
+      glow: '0 0 8px rgba(249, 115, 22, 0.3)'
+    };
+  } else if (streak >= 3) {
+    // Red for 3-6 days
+    colors = {
+      bg: 'rgba(239, 68, 68, 0.2)',
+      border: 'rgba(239, 68, 68, 0.5)',
+      text: '#ef4444',
+      glow: '0 0 6px rgba(239, 68, 68, 0.3)'
+    };
+  }
+  
+  const pulseAnimation = streak >= 7 ? 'animate-pulse' : '';
+  
+  return (
+    <div 
+      className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-bold ${pulseAnimation}`}
+      style={{
+        backgroundColor: colors.bg,
+        border: `1px solid ${colors.border}`,
+        color: colors.text,
+        boxShadow: colors.glow
+      }}
+      title={`${streak} day streak${status === 'played_today' ? ' (played today)' : status === 'at_risk' ? ' (play today to continue!)' : ''}`}
+    >
+      <Flame size={12} style={{ color: colors.text }} />
+      <span>{streak}</span>
+    </div>
+  );
 };
 
 // Rating Info Modal
@@ -56,145 +114,48 @@ const RatingInfoModal = ({ onClose }) => {
           </p>
           
           <div className="space-y-2">
-            {[
-              { name: 'Bronze', range: '0-1199', color: '#CD7F32' },
-              { name: 'Silver', range: '1200-1399', color: '#C0C0C0' },
-              { name: 'Gold', range: '1400-1599', color: '#FFD700' },
-              { name: 'Platinum', range: '1600-1799', color: '#00CED1' },
-              { name: 'Diamond', range: '1800-1999', color: '#B9F2FF' },
-              { name: 'Master', range: '2000+', color: '#FF6B6B' },
-            ].map(tier => (
-              <div key={tier.name} className="flex items-center justify-between p-2 rounded-lg bg-slate-800/50">
-                <span className="font-bold" style={{ color: tier.color }}>{tier.name}</span>
-                <span className="text-slate-400 text-sm">{tier.range}</span>
+            <h3 className="text-sm font-bold text-cyan-400">TIERS</h3>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-amber-400 font-medium">Grandmaster</span>
+                <span className="text-slate-500">1800+</span>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Username Edit Modal
-const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
-  const [newUsername, setNewUsername] = useState(currentUsername || '');
-  const [error, setError] = useState('');
-  const [checking, setChecking] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [isAvailable, setIsAvailable] = useState(null);
-
-  const validateUsername = (name) => {
-    if (!name || name.length < 3) return 'Username must be at least 3 characters';
-    if (name.length > 20) return 'Username must be 20 characters or less';
-    if (!/^[a-zA-Z0-9_]+$/.test(name)) return 'Only letters, numbers, and underscores allowed';
-    return null;
-  };
-
-  const checkAvailability = useCallback(async (name) => {
-    if (name.toLowerCase() === currentUsername?.toLowerCase()) {
-      setIsAvailable(true);
-      return;
-    }
-    
-    const validationError = validateUsername(name);
-    if (validationError) {
-      setError(validationError);
-      setIsAvailable(false);
-      return;
-    }
-
-    setChecking(true);
-    setError('');
-    
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('username')
-        .ilike('username', name)
-        .maybeSingle();
-      
-      if (data) {
-        setError('Username already taken');
-        setIsAvailable(false);
-      } else {
-        setIsAvailable(true);
-      }
-    } catch (err) {
-      console.error('Error checking username:', err);
-    }
-    
-    setChecking(false);
-  }, [currentUsername]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (newUsername && newUsername !== currentUsername) {
-        checkAvailability(newUsername);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [newUsername, currentUsername, checkAvailability]);
-
-  const handleSave = async () => {
-    if (error || !isAvailable || saving) return;
-    
-    setSaving(true);
-    const success = await onSave(newUsername);
-    setSaving(false);
-    
-    if (success) {
-      onClose();
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-      <div className="bg-slate-900 rounded-xl max-w-sm w-full p-6 border border-cyan-500/30">
-        <h2 className="text-xl font-bold text-cyan-300 mb-4">Edit Username</h2>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm text-slate-400 mb-1 block">Username</label>
-            <div className="relative">
-              <input
-                type="text"
-                value={newUsername}
-                onChange={(e) => {
-                  setNewUsername(e.target.value);
-                  setError('');
-                  setIsAvailable(null);
-                }}
-                className="w-full px-4 py-3 bg-slate-800 border border-slate-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none pr-10"
-                placeholder="Enter username"
-                maxLength={20}
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                {checking && <Loader size={18} className="text-slate-400 animate-spin" />}
-                {!checking && isAvailable === true && <Check size={18} className="text-green-400" />}
-                {!checking && isAvailable === false && <AlertCircle size={18} className="text-red-400" />}
+              <div className="flex items-center justify-between">
+                <span className="text-purple-400 font-medium">Master</span>
+                <span className="text-slate-500">1600-1799</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-blue-400 font-medium">Expert</span>
+                <span className="text-slate-500">1400-1599</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-cyan-400 font-medium">Advanced</span>
+                <span className="text-slate-500">1200-1399</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-green-400 font-medium">Intermediate</span>
+                <span className="text-slate-500">1000-1199</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sky-400 font-medium">Beginner</span>
+                <span className="text-slate-500">800-999</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-teal-400 font-medium">Novice</span>
+                <span className="text-slate-500">0-799</span>
               </div>
             </div>
-            {error && <p className="text-red-400 text-sm mt-1">{error}</p>}
-            <p className="text-slate-500 text-xs mt-1">
-              Letters, numbers, and underscores only.
-            </p>
           </div>
           
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-3 rounded-lg font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!!error || checking || saving || !newUsername || newUsername === currentUsername}
-              className="flex-1 py-3 rounded-lg font-bold text-white bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {saving ? <><Loader size={18} className="animate-spin" /> Saving...</> : 'Save'}
-            </button>
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold text-cyan-400">HOW IT WORKS</h3>
+            <ul className="text-sm text-slate-400 space-y-1.5">
+              <li>• Win against higher-rated: +20 to +32 points</li>
+              <li>• Win against similar-rated: +10 to +20 points</li>
+              <li>• Win against lower-rated: +5 to +10 points</li>
+              <li>• Losses subtract similar amounts</li>
+              <li>• New players start at 1000 ELO</li>
+            </ul>
           </div>
         </div>
       </div>
@@ -202,71 +163,19 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
   );
 };
 
-/**
- * Streak Display Badge - Shows flame icon with streak count
- */
-const StreakBadge = ({ streak, status }) => {
-  if (!streak || streak <= 0) return null;
+// Main PlayerProfileCard Component
+const PlayerProfileCard = ({ onClick, onViewStats, isOfflineMode = false }) => {
+  const { profile, isAuthenticated, loading: authLoading, sessionReady } = useAuth();
   
-  // Determine color based on streak length
-  const getStreakColor = () => {
-    if (streak >= 30) return { color: '#fbbf24', glow: 'rgba(251, 191, 36, 0.5)' }; // Amber/gold for 30+
-    if (streak >= 7) return { color: '#f97316', glow: 'rgba(249, 115, 22, 0.5)' };  // Orange for 7+
-    if (streak >= 3) return { color: '#ef4444', glow: 'rgba(239, 68, 68, 0.4)' };   // Red for 3+
-    return { color: '#94a3b8', glow: 'none' }; // Slate for 1-2
-  };
-  
-  const { color, glow } = getStreakColor();
-  const isHot = streak >= 3;
-  const isOnFire = streak >= 7;
-  
-  return (
-    <div 
-      className="flex items-center gap-0.5 px-1.5 py-0.5 rounded"
-      style={{
-        background: isHot ? `${color}15` : 'rgba(51, 65, 85, 0.5)',
-        border: `1px solid ${isHot ? `${color}40` : 'rgba(71, 85, 105, 0.5)'}`,
-        boxShadow: isHot ? `0 0 8px ${glow}` : 'none'
-      }}
-      title={`${streak} day streak${status === 'at_risk' ? ' - Play today to keep it!' : ''}`}
-    >
-      <Flame 
-        size={12} 
-        className={isOnFire ? 'animate-pulse' : ''}
-        style={{ 
-          color, 
-          filter: isHot ? `drop-shadow(0 0 3px ${color})` : 'none' 
-        }} 
-      />
-      <span 
-        className="text-xs font-bold tabular-nums"
-        style={{ 
-          color,
-          textShadow: isHot ? `0 0 6px ${glow}` : 'none'
-        }}
-      >
-        {streak}
-      </span>
-    </div>
-  );
-};
-
-/**
- * PlayerProfileCard - Shows player profile in main menu
- */
-const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
-  const { user, profile, isAuthenticated, updateProfile, refreshProfile, loading: authLoading } = useAuth();
-  const [showRatingInfo, setShowRatingInfo] = useState(false);
-  const [showUsernameEdit, setShowUsernameEdit] = useState(false);
-  const [showAchievements, setShowAchievements] = useState(false);
+  // Achievement state
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
-  const [newAchievementsCount, setNewAchievementsCount] = useState(0);
-  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [showRatingInfo, setShowRatingInfo] = useState(false);
   
   // Streak state
   const [streakData, setStreakData] = useState(null);
   
-  // Use cached profile as fallback
+  // Get locally cached profile for instant display
   const [localCachedProfile] = useState(() => getCachedProfileSync());
   const effectiveProfile = profile || localCachedProfile;
   
@@ -285,17 +194,22 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   // Load streak data
   useEffect(() => {
     const loadStreak = async () => {
-      if (!effectiveProfile?.id) return;
+      if (!effectiveProfile?.id) {
+        console.log('[PlayerProfileCard] No profile ID for streak');
+        return;
+      }
       
       try {
         console.log('[PlayerProfileCard] Loading streak for:', effectiveProfile.id);
-        const { data, error } = await streakService.getStreak(effectiveProfile.id);
+        const result = await streakService.getStreak(effectiveProfile.id);
         
-        if (data && !error) {
-          console.log('[PlayerProfileCard] Streak loaded:', data);
-          setStreakData(data);
-        } else if (error) {
-          console.warn('[PlayerProfileCard] Streak load error:', error);
+        console.log('[PlayerProfileCard] Streak result:', result);
+        
+        if (result.data && !result.error) {
+          console.log('[PlayerProfileCard] Streak loaded:', result.data);
+          setStreakData(result.data);
+        } else if (result.error) {
+          console.warn('[PlayerProfileCard] Streak load error:', result.error);
         }
       } catch (err) {
         console.error('[PlayerProfileCard] Error loading streak:', err);
@@ -305,7 +219,7 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     loadStreak();
   }, [effectiveProfile?.id]);
   
-  // Load achievement counts and check for new ones
+  // Load achievement counts
   useEffect(() => {
     const loadAchievements = async () => {
       if (!effectiveProfile?.id) {
@@ -316,36 +230,14 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
       try {
         console.log('[PlayerProfileCard] Loading achievements for:', effectiveProfile.id);
         
-        // Get all achievements with status
         const result = await achievementService.getAchievementsWithStatus(effectiveProfile.id);
-        console.log('[PlayerProfileCard] Achievement result:', { 
-          dataLength: result.data?.length, 
-          error: result.error 
-        });
+        console.log('[PlayerProfileCard] Achievement result:', result);
         
         if (result.data && result.data.length > 0) {
           const unlocked = result.data.filter(a => a.unlocked);
           const total = result.data.length;
           console.log('[PlayerProfileCard] Achievements loaded:', { unlocked: unlocked.length, total });
           setAchievementCount({ unlocked: unlocked.length, total });
-          
-          // Check for new (unviewed) achievements
-          const lastViewedTime = localStorage.getItem(`deadblock_achievements_viewed_${effectiveProfile.id}`);
-          const lastViewed = lastViewedTime ? new Date(lastViewedTime) : null;
-          
-          if (lastViewed) {
-            // Count achievements unlocked after last view
-            const newCount = unlocked.filter(a => {
-              const unlockedAt = a.unlockedAt || a.unlocked_at;
-              return unlockedAt && new Date(unlockedAt) > lastViewed;
-            }).length;
-            setNewAchievementsCount(newCount);
-          } else if (unlocked.length > 0) {
-            // Never viewed - all unlocked are "new"
-            setNewAchievementsCount(unlocked.length);
-          }
-        } else {
-          console.log('[PlayerProfileCard] No achievements found or error:', result.error);
         }
       } catch (err) {
         console.error('[PlayerProfileCard] Error loading achievements:', err);
@@ -355,151 +247,103 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     loadAchievements();
   }, [effectiveProfile?.id]);
   
-  // Mark achievements as viewed when modal opens
-  const handleOpenAchievements = () => {
-    setShowAchievements(true);
-    
-    // Mark as viewed
-    if (effectiveProfile?.id) {
-      localStorage.setItem(
-        `deadblock_achievements_viewed_${effectiveProfile.id}`,
-        new Date().toISOString()
-      );
-      setNewAchievementsCount(0);
-    }
+  // Pre-compute rgba values for the tier color
+  const glowRgba = {
+    '10': hexToRgba(glowColor, 0.10),
+    '20': hexToRgba(glowColor, 0.20),
+    '30': hexToRgba(glowColor, 0.30),
+    '40': hexToRgba(glowColor, 0.40),
+    '50': hexToRgba(glowColor, 0.50),
   };
   
-  // Handle username save
-  const handleSaveUsername = async (newUsername) => {
-    try {
-      if (updateProfile) {
-        await updateProfile({ username: newUsername.toLowerCase(), display_name: newUsername });
-      }
-      return true;
-    } catch (err) {
-      console.error('Error saving username:', err);
-      return false;
-    }
-  };
-  
-  // Offline mode display
-  if (isOffline && !effectiveProfile) {
+  // Offline mode card
+  if (isOfflineMode) {
     return (
       <button
-        onClick={onClick || onSignIn}
-        className="w-full flex items-center gap-3 p-3 transition-all group"
+        onClick={onClick}
+        className="w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group"
         style={{
-          background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
-          border: '2px solid rgba(34, 211, 238, 0.4)',
-          borderRadius: '12px',
-          boxShadow: '0 0 25px rgba(34, 211, 238, 0.15)'
+          background: 'linear-gradient(135deg, rgba(71, 85, 105, 0.4), rgba(51, 65, 85, 0.3))',
+          border: '1px solid rgba(100, 116, 139, 0.3)',
         }}
       >
-        <div 
-          className="w-12 h-12 rounded-full flex items-center justify-center"
-          style={{
-            background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.2) 0%, rgba(15, 23, 42, 0.95) 100%)',
-            border: '2px solid rgba(34, 211, 238, 0.5)'
-          }}
-        >
-          <LogIn size={20} style={{ color: '#22d3ee' }} />
+        <div className="w-12 h-12 rounded-lg bg-slate-700/50 flex items-center justify-center">
+          <WifiOff size={24} className="text-slate-500" />
         </div>
         <div className="flex-1 text-left">
-          <div style={{ color: '#22d3ee', fontWeight: '900', fontSize: '14px' }}>SIGN IN</div>
-          <div style={{ color: '#94a3b8', fontSize: '12px' }}>Track stats & compete online</div>
+          <div className="font-bold text-slate-300">Offline Mode</div>
+          <div className="text-xs text-slate-500">Tap to sign in</div>
         </div>
-        <ChevronRight size={20} style={{ color: '#22d3ee' }} className="group-hover:translate-x-1 transition-all" />
+        <ChevronRight size={20} className="text-slate-500 group-hover:translate-x-0.5 transition-transform" />
       </button>
     );
   }
   
-  // Loading state
-  if (!effectiveProfile) {
+  // Show login prompt if not authenticated
+  if (!isAuthenticated && sessionReady && !authLoading && !effectiveProfile) {
     return (
-      <button 
-        onClick={() => refreshProfile?.()}
-        className="w-full flex items-center gap-3 p-3"
+      <button
+        onClick={onClick}
+        className="w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group"
         style={{
-          background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',
-          border: '2px solid rgba(34, 211, 238, 0.3)',
-          borderRadius: '12px'
+          background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(34, 211, 238, 0.05))',
+          border: '1px solid rgba(34, 211, 238, 0.3)',
         }}
       >
-        <div className="w-12 h-12 rounded-full bg-slate-700 animate-pulse" />
-        <div className="flex-1 text-left">
-          <div className="h-4 bg-slate-700 rounded w-24 animate-pulse mb-2" />
-          <div className="h-3 bg-slate-700 rounded w-16 animate-pulse" />
+        <div className="w-12 h-12 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+          <LogIn size={24} className="text-cyan-400" />
         </div>
+        <div className="flex-1 text-left">
+          <div className="font-bold text-cyan-300">Sign In</div>
+          <div className="text-xs text-slate-400">Play online & track stats</div>
+        </div>
+        <ChevronRight size={20} className="text-cyan-400/70 group-hover:translate-x-0.5 transition-transform" />
       </button>
     );
   }
   
-  // Authenticated view with profile
-  const displayName = effectiveProfile.display_name || effectiveProfile.username || 'Player';
-  const glowRgba = {
-    '15': hexToRgba(glowColor, 0.15),
-    '30': hexToRgba(glowColor, 0.3),
-    '40': hexToRgba(glowColor, 0.4),
-    '50': hexToRgba(glowColor, 0.5),
-  };
+  // Show loading state only if no cached profile
+  if ((authLoading || !sessionReady) && !effectiveProfile) {
+    return (
+      <div 
+        className="w-full flex items-center gap-3 p-3 rounded-xl"
+        style={{
+          background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.1), rgba(34, 211, 238, 0.05))',
+          border: '1px solid rgba(34, 211, 238, 0.2)',
+        }}
+      >
+        <div className="w-12 h-12 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+          <Loader size={24} className="text-cyan-400 animate-spin" />
+        </div>
+        <div className="flex-1 text-left">
+          <div className="font-bold text-slate-400">Loading...</div>
+          <div className="text-xs text-slate-500">Please wait</div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Use effective profile (cached or fresh)
+  const displayName = effectiveProfile?.username || effectiveProfile?.display_name || 'Player';
   
   return (
     <>
+      {/* Main Profile Card */}
       <button
-        onClick={onClick}
-        className="w-full flex items-center gap-3 p-3 transition-all group relative"
+        onClick={onViewStats || onClick}
+        className="w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 group relative overflow-hidden"
         style={{
-          background: `linear-gradient(135deg, ${glowRgba['15']} 0%, rgba(15, 23, 42, 0.95) 100%)`,
-          border: `2px solid ${glowRgba['40']}`,
-          borderRadius: '12px',
-          boxShadow: `0 0 25px ${glowRgba['15']}, 0 4px 15px rgba(0,0,0,0.3)`
+          background: `linear-gradient(135deg, ${glowRgba['20']}, ${glowRgba['10']})`,
+          border: `1px solid ${glowRgba['30']}`,
+          boxShadow: `0 4px 20px ${glowRgba['20']}, inset 0 1px 0 ${glowRgba['20']}`,
         }}
       >
-        {/* Action buttons (achievements, edit) */}
-        <div className="absolute top-2 right-2 flex gap-1 z-10">
-          {/* Achievements button with NEW indicator */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenAchievements();
-            }}
-            className="relative p-1.5 rounded-lg transition-all hover:scale-110"
-            style={{ 
-              background: newAchievementsCount > 0 
-                ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.2))'
-                : 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
-              border: newAchievementsCount > 0 
-                ? '1px solid rgba(251, 191, 36, 0.5)'
-                : '1px solid rgba(251, 191, 36, 0.3)'
-            }}
-            title={`Achievements (${achievementCount.unlocked}/${achievementCount.total})`}
-          >
-            <Trophy 
-              size={14} 
-              className="text-amber-400" 
-            />
-            {/* NEW badge */}
-            {newAchievementsCount > 0 && (
-              <span 
-                className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[10px] font-bold rounded-full animate-pulse"
-                style={{
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  color: 'white',
-                  boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)'
-                }}
-              >
-                {newAchievementsCount > 9 ? '9+' : newAchievementsCount}
-              </span>
-            )}
-          </button>
-        </div>
-        
-        {/* Tier icon */}
+        {/* Tier Icon */}
         <div 
-          className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+          className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0"
           style={{
-            background: `linear-gradient(135deg, ${glowRgba['30']} 0%, rgba(15, 23, 42, 0.95) 100%)`,
-            border: `2px solid ${glowRgba['50']}`,
+            background: `linear-gradient(135deg, ${glowRgba['30']}, ${glowRgba['10']})`,
+            border: `1px solid ${glowRgba['40']}`,
             boxShadow: `0 0 15px ${glowRgba['30']}`
           }}
         >
@@ -544,18 +388,44 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
         />
       </button>
       
-      {/* Modals */}
-      {showRatingInfo && <RatingInfoModal onClose={() => setShowRatingInfo(false)} />}
+      {/* Rating Info & Achievements Row */}
+      <div className="flex items-center gap-2 mt-2">
+        {/* Rating Info Button */}
+        <button
+          onClick={() => setShowRatingInfo(true)}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all"
+          style={{
+            background: `linear-gradient(135deg, ${glowRgba['10']}, transparent)`,
+            border: `1px solid ${glowRgba['20']}`,
+          }}
+        >
+          <HelpCircle size={14} style={{ color: glowColor, opacity: 0.7 }} />
+          <span className="text-xs" style={{ color: glowColor, opacity: 0.8 }}>Rating Info</span>
+        </button>
+        
+        {/* Achievements Button */}
+        <button
+          onClick={() => setShowAchievements(true)}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg transition-all"
+          style={{
+            background: `linear-gradient(135deg, rgba(251, 191, 36, 0.1), transparent)`,
+            border: '1px solid rgba(251, 191, 36, 0.2)',
+          }}
+        >
+          <Trophy size={14} className="text-amber-400/70" />
+          <span className="text-xs text-amber-400/80">
+            {achievementCount.unlocked}/{achievementCount.total} Achievements
+          </span>
+        </button>
+      </div>
       
-      {showUsernameEdit && (
-        <UsernameEditModal
-          currentUsername={effectiveProfile.username}
-          onSave={handleSaveUsername}
-          onClose={() => setShowUsernameEdit(false)}
-        />
+      {/* Rating Info Modal */}
+      {showRatingInfo && (
+        <RatingInfoModal onClose={() => setShowRatingInfo(false)} />
       )}
       
-      {showAchievements && (
+      {/* Achievements Modal */}
+      {showAchievements && effectiveProfile?.id && (
         <Achievements
           userId={effectiveProfile.id}
           onClose={() => setShowAchievements(false)}

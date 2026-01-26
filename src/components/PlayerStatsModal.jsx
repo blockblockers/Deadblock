@@ -1,20 +1,18 @@
-// Player Stats Modal - Comprehensive stats display
-// v7.8 ENHANCEMENTS:
-// 1. Uses username priority (same as PlayerProfileCard)
-// 2. Enhanced tier-based theming
-// 3. Scroll behavior on mobile
-// 4. Weekly Challenge podium breakdown (1st, 2nd, 3rd place counts)
+// PlayerStatsModal.jsx - Comprehensive stats display
+// v7.14: Added play streak display, leaderboard rank, fixed scroll
+// Place in src/components/PlayerStatsModal.jsx
 
 import { useState, useEffect, useRef } from 'react';
-import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal } from 'lucide-react';
+import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal, Hash } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { statsService } from '../utils/statsService';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
+import { streakService } from '../services/streakService';
 import { getRankInfo } from '../utils/rankUtils';
 import { soundManager } from '../utils/soundManager';
+import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import AchievementsDisplay from './AchievementsDisplay';
-import StreakDisplay from './StreakDisplay';
 
 // Helper to convert hex to rgba
 const hexToRgba = (hex, alpha) => {
@@ -28,15 +26,79 @@ const hexToRgba = (hex, alpha) => {
 // Get contrasting background for tier
 const getTierBackground = (glowColor) => {
   const backgrounds = {
-    '#f59e0b': 'rgba(30, 20, 60, 0.95)',   // Grandmaster
-    '#a855f7': 'rgba(20, 40, 40, 0.95)',   // Master
-    '#3b82f6': 'rgba(40, 25, 20, 0.95)',   // Expert
-    '#22d3ee': 'rgba(40, 20, 40, 0.95)',   // Advanced
-    '#22c55e': 'rgba(40, 20, 35, 0.95)',   // Intermediate
-    '#38bdf8': 'rgba(35, 25, 45, 0.95)',   // Beginner
-    '#2dd4bf': 'rgba(40, 25, 50, 0.95)',   // Novice
+    '#f59e0b': 'rgba(30, 20, 60, 0.95)',
+    '#a855f7': 'rgba(20, 40, 40, 0.95)',
+    '#3b82f6': 'rgba(40, 25, 20, 0.95)',
+    '#22d3ee': 'rgba(40, 20, 40, 0.95)',
+    '#22c55e': 'rgba(40, 20, 35, 0.95)',
+    '#38bdf8': 'rgba(35, 25, 45, 0.95)',
+    '#2dd4bf': 'rgba(40, 25, 50, 0.95)',
   };
   return backgrounds[glowColor] || 'rgba(15, 23, 42, 0.95)';
+};
+
+// Stat Card Component
+const StatCard = ({ icon: Icon, label, value, subValue, color = 'cyan' }) => {
+  const colors = {
+    cyan: { bg: 'rgba(34, 211, 238, 0.1)', border: 'rgba(34, 211, 238, 0.2)', text: '#22d3ee' },
+    amber: { bg: 'rgba(251, 191, 36, 0.1)', border: 'rgba(251, 191, 36, 0.2)', text: '#fbbf24' },
+    green: { bg: 'rgba(34, 197, 94, 0.1)', border: 'rgba(34, 197, 94, 0.2)', text: '#22c55e' },
+    purple: { bg: 'rgba(168, 85, 247, 0.1)', border: 'rgba(168, 85, 247, 0.2)', text: '#a855f7' },
+    orange: { bg: 'rgba(249, 115, 22, 0.1)', border: 'rgba(249, 115, 22, 0.2)', text: '#f97316' },
+    red: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.2)', text: '#ef4444' },
+  };
+  const c = colors[color] || colors.cyan;
+  
+  return (
+    <div 
+      className="p-3 rounded-lg"
+      style={{ backgroundColor: c.bg, border: `1px solid ${c.border}` }}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <Icon size={14} style={{ color: c.text }} />
+        <span className="text-slate-400 text-xs">{label}</span>
+      </div>
+      <div className="text-xl font-bold text-white">{value}</div>
+      {subValue && <div className="text-xs text-slate-500">{subValue}</div>}
+    </div>
+  );
+};
+
+// Collapsible Section Component
+const Section = ({ id, title, icon: Icon, color, children, expanded, onToggle }) => {
+  const colors = {
+    cyan: '#22d3ee',
+    amber: '#fbbf24',
+    green: '#22c55e',
+    purple: '#a855f7',
+    orange: '#f97316',
+  };
+  const c = colors[color] || colors.cyan;
+  
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${c}30` }}>
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full flex items-center justify-between p-3"
+        style={{ backgroundColor: `${c}10` }}
+      >
+        <div className="flex items-center gap-2">
+          <Icon size={16} style={{ color: c }} />
+          <span className="font-bold text-sm" style={{ color: c }}>{title}</span>
+        </div>
+        {expanded ? (
+          <ChevronUp size={16} style={{ color: c }} />
+        ) : (
+          <ChevronDown size={16} style={{ color: c }} />
+        )}
+      </button>
+      {expanded && (
+        <div className="p-3 space-y-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
@@ -48,9 +110,16 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const [savingUsername, setSavingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [expandedSection, setExpandedSection] = useState('overview');
-  // v7.8: Enhanced weekly challenge stats with podium breakdown
-  const [weeklyPodiums, setWeeklyPodiums] = useState(0); // Total top 3 finishes
+  
+  // Play streak (daily streak)
+  const [playStreak, setPlayStreak] = useState({ current: 0, longest: 0, status: 'none' });
+  
+  // Leaderboard rank
+  const [leaderboardRank, setLeaderboardRank] = useState(null);
+  
+  // Weekly challenge stats
   const [weeklyStats, setWeeklyStats] = useState({ first: 0, second: 0, third: 0, total: 0 });
+  
   const scrollContainerRef = useRef(null);
   
   // Get tier info for theming
@@ -60,12 +129,13 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   useEffect(() => {
     if (isOpen && !isOffline) {
       loadStats();
+      loadPlayStreak();
+      loadLeaderboardRank();
     }
   }, [isOpen, isOffline]);
   
   useEffect(() => {
     if (profile) {
-      // FIX: Use username priority (same as PlayerProfileCard)
       setNewUsername(profile.username || profile.display_name || '');
     }
   }, [profile]);
@@ -84,44 +154,70 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       setStats(statsService.calculateDerivedStats(data));
     }
     
-    // v7.8: Load detailed weekly challenge podium stats (1st, 2nd, 3rd)
+    // Load weekly challenge stats
     if (profile?.id) {
       try {
-        console.log('[PlayerStatsModal] Loading weekly podium breakdown for:', profile.id);
-        
-        // Try to get detailed breakdown first
         const detailedResult = await weeklyChallengeService.getUserPodiumBreakdown?.(profile.id);
         if (detailedResult?.data) {
-          console.log('[PlayerStatsModal] Weekly podium breakdown:', detailedResult.data);
-          setWeeklyStats({
-            first: detailedResult.data.first || 0,
-            second: detailedResult.data.second || 0,
-            third: detailedResult.data.third || 0,
-            total: detailedResult.data.total || 0
-          });
-          setWeeklyPodiums(detailedResult.data.total || 0);
+          setWeeklyStats(detailedResult.data);
         } else {
-          // Fallback to simple count
-          const result = await weeklyChallengeService.getUserPodiumCount(profile.id);
-          console.log('[PlayerStatsModal] Weekly podium result:', result);
-          if (result?.data !== null && result?.data !== undefined) {
-            setWeeklyPodiums(result.data);
-            setWeeklyStats({ first: 0, second: 0, third: 0, total: result.data });
-          }
+          const { data: podiumCount } = await weeklyChallengeService.getUserPodiumCount(profile.id);
+          setWeeklyStats({ first: 0, second: 0, third: 0, total: podiumCount || 0 });
         }
       } catch (err) {
-        console.log('[PlayerStatsModal] Weekly podium count error:', err);
+        console.warn('[PlayerStatsModal] Error loading weekly stats:', err);
       }
     }
     
     setLoading(false);
   };
   
-  const handleSaveUsername = async () => {
-    if (!newUsername.trim()) return;
+  const loadPlayStreak = async () => {
+    if (!profile?.id) return;
     
-    // Validate
-    if (newUsername.length < 3) {
+    try {
+      console.log('[PlayerStatsModal] Loading play streak for:', profile.id);
+      const result = await streakService.getStreak(profile.id);
+      
+      if (result.data && !result.error) {
+        console.log('[PlayerStatsModal] Play streak loaded:', result.data);
+        setPlayStreak({
+          current: result.data.current_streak || 0,
+          longest: result.data.longest_streak || 0,
+          status: result.data.streak_status || 'none'
+        });
+      }
+    } catch (err) {
+      console.error('[PlayerStatsModal] Error loading play streak:', err);
+    }
+  };
+  
+  const loadLeaderboardRank = async () => {
+    if (!profile?.id || !isSupabaseConfigured()) return;
+    
+    try {
+      // Count how many players have higher rating
+      const { count, error } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .gt('rating', profile.rating || 1000)
+        .gt('games_played', 0);
+      
+      if (!error) {
+        setLeaderboardRank((count || 0) + 1);
+      }
+    } catch (err) {
+      console.warn('[PlayerStatsModal] Error loading leaderboard rank:', err);
+    }
+  };
+  
+  const handleSectionToggle = (sectionId) => {
+    setExpandedSection(expandedSection === sectionId ? null : sectionId);
+    soundManager.playClickSound?.('click');
+  };
+  
+  const handleSaveUsername = async () => {
+    if (!newUsername.trim() || newUsername.length < 3) {
       setUsernameError('Username must be at least 3 characters');
       return;
     }
@@ -129,253 +225,147 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       setUsernameError('Username must be 20 characters or less');
       return;
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
-      setUsernameError('Only letters, numbers, and underscores allowed');
-      return;
-    }
     
     setSavingUsername(true);
     setUsernameError('');
     
-    // Update both username and display_name
-    const { error } = await updateProfile({ 
-      username: newUsername.toLowerCase(),
-      display_name: newUsername 
-    });
+    try {
+      const { error } = await updateProfile({ username: newUsername.trim() });
+      if (error) {
+        setUsernameError(error.message || 'Failed to update username');
+      } else {
+        setEditingName(false);
+        soundManager.playClickSound?.('success');
+      }
+    } catch (err) {
+      setUsernameError('An error occurred');
+    }
     
     setSavingUsername(false);
-    
-    if (error) {
-      setUsernameError(error.message || 'Failed to update username');
-    } else {
-      soundManager.playClickSound('success');
-      setEditingName(false);
-    }
   };
   
-  const toggleSection = (section) => {
-    soundManager.playClickSound('select');
-    setExpandedSection(expandedSection === section ? null : section);
-  };
-  
-  if (!isOpen) return null;
-  
-  // FIX: Use username priority (same as PlayerProfileCard button)
-  const displayName = profile?.username || profile?.display_name || 'Player';
-  
-  // Stat card component - Tier themed
-  const StatCard = ({ icon: Icon, label, value, subValue, color = 'cyan' }) => (
-    <div 
-      className="rounded-lg p-3"
-      style={{
-        backgroundColor: 'rgba(15, 23, 42, 0.6)',
-        border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-      }}
-    >
-      <div className="flex items-center gap-2 mb-1">
-        <Icon size={14} className={`text-${color}-400`} />
-        <span className="text-slate-400 text-xs">{label}</span>
-      </div>
-      <div className="text-white font-bold text-lg">{value}</div>
-      {subValue && <div className="text-slate-500 text-xs">{subValue}</div>}
-    </div>
-  );
-  
-  // Collapsible section component - Tier themed
-  const Section = ({ id, title, icon: Icon, color, children }) => {
-    const isExpanded = expandedSection === id;
-    return (
-      <div 
-        className="rounded-xl overflow-hidden"
-        style={{ border: `1px solid ${hexToRgba(glowColor, 0.2)}` }}
-      >
-        <button
-          onClick={() => toggleSection(id)}
-          className="w-full flex items-center justify-between p-3 transition-colors"
-          style={{ 
-            backgroundColor: isExpanded ? hexToRgba(glowColor, 0.1) : 'rgba(30, 41, 59, 0.5)',
-            borderBottom: isExpanded ? `1px solid ${hexToRgba(glowColor, 0.2)}` : 'none'
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <Icon size={16} className={`text-${color}-400`} />
-            <span className="text-white font-medium">{title}</span>
-          </div>
-          {isExpanded ? (
-            <ChevronUp size={16} className="text-slate-400" />
-          ) : (
-            <ChevronDown size={16} className="text-slate-400" />
-          )}
-        </button>
-        {isExpanded && (
-          <div className="p-3 bg-slate-900/50">
-            {children}
-          </div>
-        )}
-      </div>
-    );
-  };
-  
-  // Win rate bar component
-  const WinRateBar = ({ wins, total, label }) => {
-    const rate = total > 0 ? Math.round((wins / total) * 100) : 0;
-    return (
-      <div className="mb-2">
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-slate-400">{label}</span>
-          <span className="text-slate-300">{wins}/{total} ({rate}%)</span>
-        </div>
-        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-          <div 
-            className="h-full rounded-full transition-all"
-            style={{ 
-              width: `${rate}%`,
-              background: `linear-gradient(90deg, ${glowColor}, ${hexToRgba(glowColor, 0.6)})`
-            }}
-          />
-        </div>
-      </div>
-    );
-  };
-  
-  // Handle touch events to prevent modal close on scroll
+  // Touch handling for better scroll
   const handleTouchMove = (e) => {
     e.stopPropagation();
   };
   
+  if (!isOpen) return null;
+  
+  const displayName = profile?.username || profile?.display_name || 'Player';
+  const tierBg = getTierBackground(glowColor);
+  
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
       <div 
-        className="w-full max-w-md max-h-[85vh] rounded-2xl flex flex-col"
-        onClick={e => e.stopPropagation()}
+        className="w-full max-w-md max-h-[90vh] rounded-2xl overflow-hidden flex flex-col"
         style={{ 
-          minHeight: 0,
-          background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, rgba(15, 23, 42, 0.98) 50%, ${hexToRgba(glowColor, 0.05)} 100%)`,
-          border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
-          boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}, inset 0 0 40px ${hexToRgba(glowColor, 0.05)}`
+          backgroundColor: tierBg,
+          border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
+          boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}`
         }}
       >
-        {/* Header - Fixed, Tier themed */}
+        {/* Header */}
         <div 
-          className="p-4 flex-shrink-0 rounded-t-2xl"
-          style={{ 
-            background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.15)} 0%, rgba(15, 23, 42, 0.9) 100%)`,
-            borderBottom: `1px solid ${hexToRgba(glowColor, 0.3)}`
-          }}
+          className="p-4 flex items-center gap-4 flex-shrink-0"
+          style={{ borderBottom: `1px solid ${hexToRgba(glowColor, 0.2)}` }}
         >
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              {/* Avatar with Tier Icon */}
-              <div 
-                className="w-16 h-16 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0"
-                style={{ 
-                  background: `radial-gradient(circle at 30% 30%, ${getTierBackground(glowColor)}, rgba(10, 15, 25, 0.98))`,
-                  border: `3px solid ${hexToRgba(glowColor, 0.6)}`,
-                  boxShadow: `0 0 25px ${hexToRgba(glowColor, 0.4)}`
-                }}
-              >
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : rankInfo ? (
-                  <TierIcon shape={rankInfo.shape} glowColor={rankInfo.glowColor} size="large" />
-                ) : (
-                  <User size={28} className="text-white/60" />
-                )}
-              </div>
-              
-              {/* Name and rank */}
-              <div className="min-w-0 flex-1">
-                {editingName ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={newUsername}
-                        onChange={(e) => {
-                          setNewUsername(e.target.value);
-                          setUsernameError('');
-                        }}
-                        className="bg-slate-800 rounded px-2 py-1 text-white text-sm w-32 focus:outline-none"
-                        style={{ border: `1px solid ${hexToRgba(glowColor, 0.5)}` }}
-                        autoFocus
-                        maxLength={20}
-                      />
-                      <button 
-                        onClick={handleSaveUsername} 
-                        disabled={savingUsername}
-                        className="text-green-400 hover:text-green-300 disabled:opacity-50"
-                      >
-                        {savingUsername ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setEditingName(false);
-                          setNewUsername(profile?.username || profile?.display_name || '');
-                          setUsernameError('');
-                        }}
-                        className="text-slate-500 hover:text-slate-300"
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                    {usernameError && (
-                      <p className="text-red-400 text-xs">{usernameError}</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="font-bold text-lg truncate"
-                      style={{ color: '#f1f5f9', textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
-                    >
-                      {displayName}
-                    </span>
-                    {!isOffline && (
-                      <button 
-                        onClick={() => setEditingName(true)} 
-                        className="flex-shrink-0 transition-colors"
-                        style={{ color: hexToRgba(glowColor, 0.6) }}
-                      >
-                        <Edit2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                )}
-                
-                {rankInfo && !isOffline && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <span 
-                      className="text-sm font-bold uppercase tracking-wider"
-                      style={{ color: glowColor, textShadow: `0 0 8px ${hexToRgba(glowColor, 0.5)}` }}
-                    >
-                      {rankInfo.name}
-                    </span>
-                    <span className="text-slate-500 text-sm">
-                      {profile?.rating || 1000} ELO
-                    </span>
-                  </div>
-                )}
-                
-                {isOffline && (
-                  <div className="text-slate-400 text-sm mt-1">
-                    Offline Mode - Stats not tracked
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <button 
-              onClick={onClose}
-              className="transition-colors flex-shrink-0"
-              style={{ color: hexToRgba(glowColor, 0.6) }}
-            >
-              <X size={20} />
-            </button>
+          {/* Avatar/Tier Icon */}
+          <div 
+            className="w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{
+              background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)}, ${hexToRgba(glowColor, 0.1)})`,
+              border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
+              boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.4)}`
+            }}
+          >
+            {rankInfo && <TierIcon shape={rankInfo.shape} glowColor={glowColor} size="large" />}
           </div>
+          
+          {/* Name & Rank */}
+          <div className="flex-1 min-w-0">
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  className="flex-1 bg-slate-800/80 border border-slate-600 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-cyan-500"
+                  maxLength={20}
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveUsername}
+                  disabled={savingUsername}
+                  className="p-1.5 rounded-lg bg-green-600/20 text-green-400 hover:bg-green-600/30"
+                >
+                  {savingUsername ? <Loader size={16} className="animate-spin" /> : <Check size={16} />}
+                </button>
+                <button
+                  onClick={() => { setEditingName(false); setUsernameError(''); }}
+                  className="p-1.5 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span 
+                  className="font-bold text-lg truncate"
+                  style={{ color: '#f1f5f9', textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
+                >
+                  {displayName}
+                </span>
+                {!isOffline && (
+                  <button 
+                    onClick={() => setEditingName(true)} 
+                    className="flex-shrink-0 transition-colors"
+                    style={{ color: hexToRgba(glowColor, 0.6) }}
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+            
+            {usernameError && (
+              <p className="text-red-400 text-xs mt-1">{usernameError}</p>
+            )}
+            
+            {rankInfo && !isOffline && (
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span 
+                  className="text-sm font-bold uppercase tracking-wider"
+                  style={{ color: glowColor, textShadow: `0 0 8px ${hexToRgba(glowColor, 0.5)}` }}
+                >
+                  {rankInfo.name}
+                </span>
+                <span className="text-slate-500 text-sm">
+                  {profile?.rating || 1000} ELO
+                </span>
+                {/* Leaderboard Rank */}
+                {leaderboardRank && (
+                  <span className="flex items-center gap-1 text-amber-400 text-xs">
+                    <Hash size={12} />
+                    #{leaderboardRank} Global
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {isOffline && (
+              <div className="text-slate-400 text-sm mt-1">
+                Offline Mode - Stats not tracked
+              </div>
+            )}
+          </div>
+          
+          <button 
+            onClick={onClose}
+            className="transition-colors flex-shrink-0"
+            style={{ color: hexToRgba(glowColor, 0.6) }}
+          >
+            <X size={20} />
+          </button>
         </div>
         
         {/* Stats Content - Scrollable */}
@@ -408,7 +398,14 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
           ) : (
             <>
               {/* Overview Section */}
-              <Section id="overview" title="Overview" icon={TrendingUp} color="cyan">
+              <Section 
+                id="overview" 
+                title="Overview" 
+                icon={TrendingUp} 
+                color="cyan"
+                expanded={expandedSection === 'overview'}
+                onToggle={handleSectionToggle}
+              >
                 <div className="grid grid-cols-2 gap-2">
                   <StatCard 
                     icon={Trophy} 
@@ -424,189 +421,148 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     color="green"
                   />
                   <StatCard 
-                    icon={Flame} 
-                    label="Best Streak" 
-                    value={stats?.speed_best_streak || 0}
-                    subValue="Speed Puzzle"
-                    color="orange"
-                  />
-                  <StatCard 
                     icon={Bot} 
                     label="AI Wins" 
                     value={stats?.aiTotalWins || 0}
                     subValue={`of ${stats?.aiTotalGames || 0} games`}
                     color="purple"
                   />
+                  <StatCard 
+                    icon={Zap} 
+                    label="Speed Best" 
+                    value={stats?.speed_best_streak || 0}
+                    subValue="puzzles in a row"
+                    color="orange"
+                  />
                 </div>
               </Section>
               
-              {/* v7.12: Play Streak Section */}
-              <Section id="playstreak" title="Play Streak" icon={Flame} color="orange">
-                <StreakDisplay userId={profile?.id} variant="full" />
+              {/* Play Streak Section - NEW */}
+              <Section 
+                id="streak" 
+                title="Play Streak" 
+                icon={Flame} 
+                color="orange"
+                expanded={expandedSection === 'streak'}
+                onToggle={handleSectionToggle}
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard 
+                    icon={Flame} 
+                    label="Current Streak" 
+                    value={playStreak.current}
+                    subValue={
+                      playStreak.status === 'played_today' ? 'Played today ✓' :
+                      playStreak.status === 'at_risk' ? 'Play today!' :
+                      playStreak.status === 'broken' ? 'Streak broken' :
+                      'Start playing!'
+                    }
+                    color={playStreak.current >= 7 ? 'orange' : playStreak.current >= 3 ? 'red' : 'cyan'}
+                  />
+                  <StatCard 
+                    icon={Award} 
+                    label="Longest Streak" 
+                    value={playStreak.longest}
+                    subValue="days"
+                    color="amber"
+                  />
+                </div>
+                
+                {playStreak.status === 'at_risk' && (
+                  <div className="mt-2 p-2 bg-orange-500/10 border border-orange-500/30 rounded-lg text-center">
+                    <span className="text-orange-400 text-sm font-medium">
+                      ⚠️ Play today to keep your {playStreak.current}-day streak!
+                    </span>
+                  </div>
+                )}
+                
+                {playStreak.current >= playStreak.longest && playStreak.current > 0 && (
+                  <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-center">
+                    <span className="text-amber-400 text-sm font-medium">
+                      🏆 You're on your best streak ever!
+                    </span>
+                  </div>
+                )}
               </Section>
               
               {/* Achievements Section */}
-              <Section id="achievements" title="Achievements" icon={Award} color="amber">
-                <AchievementsDisplay compact={false} />
+              <Section 
+                id="achievements" 
+                title="Achievements" 
+                icon={Award} 
+                color="amber"
+                expanded={expandedSection === 'achievements'}
+                onToggle={handleSectionToggle}
+              >
+                <AchievementsDisplay userId={profile?.id} compact />
               </Section>
               
-              {/* Online Stats */}
-              <Section id="online" title="Online Matches" icon={Globe} color="blue">
-                <div className="space-y-3">
-                  <WinRateBar 
-                    wins={stats?.games_won || 0} 
-                    total={stats?.games_played || 0} 
-                    label="Overall"
+              {/* Weekly Challenge Section */}
+              <Section 
+                id="weekly" 
+                title="Weekly Challenge" 
+                icon={Clock} 
+                color="purple"
+                expanded={expandedSection === 'weekly'}
+                onToggle={handleSectionToggle}
+              >
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                    <div className="text-amber-400 text-lg font-bold">{weeklyStats.first || 0}</div>
+                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                      <Medal size={10} className="text-amber-400" /> 1st
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-400/10 border border-slate-400/20 text-center">
+                    <div className="text-slate-300 text-lg font-bold">{weeklyStats.second || 0}</div>
+                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                      <Medal size={10} className="text-slate-300" /> 2nd
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-amber-600/10 border border-amber-600/20 text-center">
+                    <div className="text-amber-600 text-lg font-bold">{weeklyStats.third || 0}</div>
+                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                      <Medal size={10} className="text-amber-600" /> 3rd
+                    </div>
+                  </div>
+                </div>
+                {weeklyStats.total > 0 && (
+                  <div className="mt-2 text-center text-sm text-slate-400">
+                    {weeklyStats.total} podium finish{weeklyStats.total !== 1 ? 'es' : ''} total
+                  </div>
+                )}
+              </Section>
+              
+              {/* Online Stats Section */}
+              <Section 
+                id="online" 
+                title="Online Games" 
+                icon={Globe} 
+                color="green"
+                expanded={expandedSection === 'online'}
+                onToggle={handleSectionToggle}
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard 
+                    icon={Gamepad2} 
+                    label="Games Played" 
+                    value={stats?.games_played || 0}
+                    color="cyan"
                   />
-                  <div className="grid grid-cols-2 gap-2">
-                    <StatCard 
-                      icon={Trophy} 
-                      label="Wins" 
-                      value={stats?.games_won || 0}
-                      color="green"
-                    />
-                    <StatCard 
-                      icon={Target} 
-                      label="Games" 
-                      value={stats?.games_played || 0}
-                      color="blue"
-                    />
-                  </div>
-                  {(stats?.highest_rating || 0) > 0 && (
-                    <div 
-                      className="text-center p-2 rounded-lg"
-                      style={{ 
-                        backgroundColor: hexToRgba(glowColor, 0.1),
-                        border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                      }}
-                    >
-                      <span className="text-slate-400 text-sm">Highest Rating: </span>
-                      <span style={{ color: glowColor }} className="font-bold">{stats?.highest_rating}</span>
-                    </div>
-                  )}
-                </div>
-              </Section>
-              
-              {/* AI Stats */}
-              <Section id="ai" title="AI Battles" icon={Bot} color="purple">
-                <div className="space-y-3">
-                  <WinRateBar 
-                    wins={stats?.aiTotalWins || 0} 
-                    total={stats?.aiTotalGames || 0} 
-                    label="Overall vs AI"
+                  <StatCard 
+                    icon={Trophy} 
+                    label="Win Rate" 
+                    value={`${stats?.onlineWinRate || 0}%`}
+                    subValue={`${stats?.games_won || 0}W / ${(stats?.games_played || 0) - (stats?.games_won || 0)}L`}
+                    color="amber"
                   />
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/20">
-                      <div className="text-green-400 font-bold">
-                        {stats?.ai_easy_wins || 0}/{(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)}
-                      </div>
-                      <div className="text-slate-500 text-xs">Easy</div>
-                    </div>
-                    <div className="text-center p-2 bg-amber-900/20 rounded-lg border border-amber-500/20">
-                      <div className="text-amber-400 font-bold">
-                        {stats?.ai_medium_wins || 0}/{(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)}
-                      </div>
-                      <div className="text-slate-500 text-xs">Medium</div>
-                    </div>
-                    <div className="text-center p-2 bg-red-900/20 rounded-lg border border-red-500/20">
-                      <div className="text-red-400 font-bold">
-                        {stats?.ai_hard_wins || 0}/{(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)}
-                      </div>
-                      <div className="text-slate-500 text-xs">Hard</div>
-                    </div>
-                  </div>
                 </div>
-              </Section>
-              
-              {/* Puzzle Stats */}
-              <Section id="puzzles" title="Puzzles" icon={Target} color="green">
-                <div className="space-y-3">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="text-center p-2 bg-green-900/20 rounded-lg border border-green-500/20">
-                      <div className="text-green-400 font-bold">
-                        {stats?.puzzles_easy_solved || 0}/{stats?.puzzles_easy_attempted || 0}
-                      </div>
-                      <div className="text-slate-500 text-xs">Easy</div>
-                    </div>
-                    <div className="text-center p-2 bg-amber-900/20 rounded-lg border border-amber-500/20">
-                      <div className="text-amber-400 font-bold">
-                        {stats?.puzzles_medium_solved || 0}/{stats?.puzzles_medium_attempted || 0}
-                      </div>
-                      <div className="text-slate-500 text-xs">Medium</div>
-                    </div>
-                    <div className="text-center p-2 bg-red-900/20 rounded-lg border border-red-500/20">
-                      <div className="text-red-400 font-bold">
-                        {stats?.puzzles_hard_solved || 0}/{stats?.puzzles_hard_attempted || 0}
-                      </div>
-                      <div className="text-slate-500 text-xs">Hard</div>
-                    </div>
+                {leaderboardRank && (
+                  <div className="mt-2 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center justify-center gap-2">
+                    <Hash size={16} className="text-cyan-400" />
+                    <span className="text-cyan-300 font-medium">Global Rank: #{leaderboardRank}</span>
                   </div>
-                  
-                  {/* Weekly Challenge Stats - v7.8: Enhanced with podium breakdown */}
-                  <div 
-                    className="p-3 rounded-lg"
-                    style={{ 
-                      backgroundColor: 'rgba(234, 179, 8, 0.1)',
-                      border: '1px solid rgba(234, 179, 8, 0.3)'
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Medal size={14} className="text-amber-400" />
-                      <span className="text-slate-300 text-sm font-medium">Weekly Challenge</span>
-                    </div>
-                    
-                    {weeklyPodiums > 0 ? (
-                      <div className="space-y-2">
-                        {/* Podium breakdown */}
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="text-center p-2 bg-amber-900/30 rounded-lg border border-amber-500/30">
-                            <div className="text-lg">🥇</div>
-                            <div className="text-amber-300 font-bold text-lg">{weeklyStats.first || 0}</div>
-                            <div className="text-slate-500 text-[10px]">1st Place</div>
-                          </div>
-                          <div className="text-center p-2 bg-slate-700/30 rounded-lg border border-slate-500/30">
-                            <div className="text-lg">🥈</div>
-                            <div className="text-slate-300 font-bold text-lg">{weeklyStats.second || 0}</div>
-                            <div className="text-slate-500 text-[10px]">2nd Place</div>
-                          </div>
-                          <div className="text-center p-2 bg-orange-900/30 rounded-lg border border-orange-500/30">
-                            <div className="text-lg">🥉</div>
-                            <div className="text-orange-300 font-bold text-lg">{weeklyStats.third || 0}</div>
-                            <div className="text-slate-500 text-[10px]">3rd Place</div>
-                          </div>
-                        </div>
-                        
-                        {/* Total podiums */}
-                        <div className="text-center text-sm">
-                          <span className="text-slate-500">Total Top 3 Finishes: </span>
-                          <span className="text-amber-400 font-bold">{weeklyPodiums}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-slate-500 text-center py-2">
-                        No top 3 finishes yet. Keep competing!
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Speed Puzzle Stats */}
-                  <div 
-                    className="p-3 rounded-lg"
-                    style={{ 
-                      backgroundColor: hexToRgba(glowColor, 0.05),
-                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <Zap size={14} style={{ color: glowColor }} />
-                      <span className="text-slate-300 text-sm font-medium">Speed Puzzles</span>
-                    </div>
-                    <div className="text-sm">
-                      <span className="text-slate-500">Best Streak: </span>
-                      <span className="text-amber-400 font-bold">{stats?.speed_best_streak || 0}</span>
-                    </div>
-                  </div>
-                </div>
+                )}
               </Section>
             </>
           )}
@@ -614,7 +570,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         
         {/* Footer */}
         <div 
-          className="p-3 text-center flex-shrink-0 rounded-b-2xl"
+          className="p-3 text-center flex-shrink-0"
           style={{ borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}` }}
         >
           <p className="text-slate-600 text-xs">
