@@ -1,8 +1,9 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.14: Added streak tracking on game completion + real-time rematch subscription
+// v7.15: Fixed unviewed loss flash - prevents real-time + rematch polling from interrupting 5s delay
+// v7.14: Added streak tracking on game completion
 // v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
-// ADDED: Rematch request system with opponent notification + instant rematch detection
+// ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -174,6 +175,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [chatToast, setChatToast] = useState(null); // { senderName, message, timestamp }
   const [turnStartedAt, setTurnStartedAt] = useState(null);
   const [connected, setConnected] = useState(false); // Track realtime connection
+  // v7.15: Track when viewing a pre-completed game (unviewed loss) - skip rematch polling for these
+  const [isViewingHistoricalGame, setIsViewingHistoricalGame] = useState(false);
   
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
@@ -193,6 +196,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
+  // v7.15: Track when viewing a completed game to prevent real-time interference
+  const viewingCompletedGameRef = useRef(false);
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
@@ -575,8 +580,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [isDragging, updateDrag, endDrag]);
 
   // Poll for rematch requests when game is over
+  // v7.15: Skip for historical games (unviewed losses) - old rematch requests shouldn't affect the view
   useEffect(() => {
-    if (!showGameOver || !gameId || !user?.id) return;
+    if (!showGameOver || !gameId || !user?.id || isViewingHistoricalGame) return;
     
     let pollInterval;
     let mounted = true;
@@ -586,7 +592,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       
       try {
         // Use getRematchRequestByGame to get any status (including accepted)
-        const { data: request } = await rematchService.getRematchRequestByGame(currentGameId, user.id);
+        const { data: request } = await rematchService.getRematchRequestByGame(gameId, user.id);
         
         if (!mounted) return;
         
@@ -663,126 +669,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     // Initial check
     checkRematch();
     
-    // Poll every 5 seconds (reduced from 2s - real-time subscription handles fast updates)
-    pollInterval = setInterval(checkRematch, 5000);
+    // Poll every 2 seconds
+    pollInterval = setInterval(checkRematch, 2000);
     
     return () => {
       mounted = false;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [showGameOver, currentGameId, user?.id, showRematchModal, rematchDeclined, rematchAccepted, isRematchRequester]);
-
-  // v7.14: Real-time subscription for INSTANT rematch acceptance detection
-  // This supplements the polling and provides immediate response when opponent accepts
-  useEffect(() => {
-    // Only subscribe when game is over and we might be waiting for rematch
-    if (!showGameOver || !currentGameId || !user?.id || !supabase) return;
-    
-    console.log('[OnlineGameScreen] Setting up rematch real-time subscription');
-    
-    const rematchChannel = supabase
-      .channel(`rematch-realtime-${currentGameId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'rematch_requests',
-          filter: `game_id=eq.${currentGameId}`
-        },
-        async (payload) => {
-          const request = payload.new;
-          if (!request) return;
-          
-          console.log('[OnlineGameScreen] Rematch update received:', request.status);
-          
-          // Handle ACCEPTED rematch - navigate to new game immediately
-          if (request.status === 'accepted' && request.new_game_id) {
-            console.log('[OnlineGameScreen] ✓ Rematch accepted! New game:', request.new_game_id);
-            
-            soundManager.playSound('notification');
-            setRematchAccepted(true);
-            setRematchWaiting(false);
-            
-            // Fetch new game details
-            const { data: newGame } = await gameSyncService.getGame(request.new_game_id);
-            
-            if (newGame) {
-              const firstPlayerName = newGame.player1_id === user.id
-                ? 'You go'
-                : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
-              
-              setRematchMessage(`Rematch starting! ${firstPlayerName} first.`);
-              setNewGameFromRematch(newGame);
-            }
-            
-            // Navigate after brief delay to show message
-            setTimeout(() => {
-              // Reset all states for new game
-              setShowRematchModal(false);
-              setShowGameOver(false);
-              setRematchRequest(null);
-              setIsRematchRequester(false);
-              setRematchDeclined(false);
-              setRematchAccepted(false);
-              setRematchMessage(null);
-              
-              // Reset board
-              setBoard(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
-              setBoardPieces({});
-              setUsedPieces([]);
-              setSelectedPiece(null);
-              setPendingMove(null);
-              setRotation(0);
-              setFlipped(false);
-              setGame(null);
-              prevBoardPiecesRef.current = {};
-              
-              // Trigger new game load
-              setLoading(true);
-              setCurrentGameId(request.new_game_id);
-            }, 1500);
-          }
-          
-          // Handle DECLINED rematch
-          if (request.status === 'declined') {
-            console.log('[OnlineGameScreen] Rematch declined');
-            setRematchDeclined(true);
-            setRematchWaiting(false);
-            soundManager.playSound('invalid');
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'rematch_requests',
-          filter: `game_id=eq.${currentGameId}`
-        },
-        (payload) => {
-          const request = payload.new;
-          if (!request) return;
-          
-          // Incoming rematch request from opponent
-          if (request.to_user_id === user.id && request.status === 'pending') {
-            console.log('[OnlineGameScreen] Incoming rematch request!');
-            setRematchRequest(request);
-            setIsRematchRequester(false);
-            setShowRematchModal(true);
-            soundManager.playSound('notification');
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[OnlineGameScreen] Rematch channel:', status);
-      });
-    
-    return () => {
-      rematchChannel.unsubscribe();
-    };
-  }, [showGameOver, currentGameId, user?.id, opponent]);
+  }, [showGameOver, gameId, user?.id, showRematchModal, rematchDeclined, rematchAccepted, isRematchRequester, isViewingHistoricalGame]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -900,7 +794,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      if (gameData.status === 'completed' && !showGameOver) {
+      // v7.15: Skip if we're in "viewing completed game" mode (5s delay is active)
+      if (gameData.status === 'completed' && !showGameOver && !viewingCompletedGameRef.current) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -976,6 +871,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         // For completed games, we want to show the board first, then the modal
         // So we'll set the game state but NOT trigger game over yet
         if (isCompletedGame) {
+          // v7.15: Set flag to prevent real-time subscription from interrupting the 5s delay
+          viewingCompletedGameRef.current = true;
+          // v7.15: Mark this as a historical game to skip rematch polling
+          setIsViewingHistoricalGame(true);
+          
           // Set game result for later use
           const result = {
             isWin: iWon,
@@ -985,11 +885,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           setGameResult(result);
           
           // Set up board state WITHOUT showing game over modal
+          // v7.15 FIX: Properly convert board - keep player values, convert 0/undefined to null
           const validBoard = data.board && Array.isArray(data.board) && data.board.length === BOARD_SIZE
             ? data.board.map(row => Array.isArray(row) && row.length === BOARD_SIZE 
-                ? row.map(cell => cell === null || cell === undefined ? 0 : cell)
-                : Array(BOARD_SIZE).fill(0))
-            : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
+                ? row.map(cell => (cell === 0 || cell === undefined) ? null : cell)
+                : Array(BOARD_SIZE).fill(null))
+            : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
           
           setGame(data);
           setBoard(validBoard);
@@ -1042,6 +943,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           // This gives user time to see the board and the winning move
           setTimeout(() => {
             if (mountedRef.current && !showGameOver) {
+              viewingCompletedGameRef.current = false; // Clear flag when showing modal
               setShowGameOver(true);
               soundManager.playSound(iWon ? 'win' : 'lose');
             }
@@ -1160,6 +1062,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     return () => {
       mountedRef.current = false;
+      viewingCompletedGameRef.current = false; // v7.15: Clear on unmount
       clearTimeout(loadingTimeout);
       if (subscription) {
         subscription.unsubscribe();

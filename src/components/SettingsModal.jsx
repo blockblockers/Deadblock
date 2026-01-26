@@ -1,4 +1,5 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.14: Fixed push notification toggle - properly checks subscription state after init
 // UPDATED: Added push notification subscription management
 // v7.10: Added iOS scroll fixes for modal content
 // v7.11: Added granular notification preferences
@@ -97,13 +98,42 @@ const SettingsModal = ({ isOpen, onClose }) => {
   // Initialize push notifications and other states
   useEffect(() => {
     const initPushNotifications = async () => {
-      // Initialize push service
-      const supported = await pushNotificationService.init();
-      setPushSupported(supported);
+      // v7.14: Fixed initialization to properly detect subscription state
       
-      if (supported) {
+      // First check if push is even supported
+      if (!pushNotificationService.isSupported()) {
+        console.log('[SettingsModal] Push notifications not supported');
+        setPushSupported(false);
+        return;
+      }
+      
+      setPushSupported(true);
+      
+      // Initialize the service (this fetches existing subscription)
+      const initialized = await pushNotificationService.initialize();
+      console.log('[SettingsModal] Push service initialized:', initialized);
+      
+      if (initialized) {
+        // Get permission status
         setPushPermission(pushNotificationService.getPermissionStatus());
-        setPushSubscribed(pushNotificationService.isSubscribed());
+        
+        // CRITICAL FIX: Check subscription directly from push manager
+        // This ensures we get the true state, not stale internal state
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const currentSubscription = await registration.pushManager.getSubscription();
+          const isSubscribed = currentSubscription !== null;
+          console.log('[SettingsModal] Push subscription state:', isSubscribed, currentSubscription?.endpoint?.slice(-20));
+          setPushSubscribed(isSubscribed);
+        } catch (err) {
+          console.error('[SettingsModal] Error checking subscription:', err);
+          // Fallback to service's internal state
+          setPushSubscribed(pushNotificationService.isSubscribed());
+        }
+      } else {
+        console.warn('[SettingsModal] Push initialization failed');
+        setPushPermission(pushNotificationService.getPermissionStatus());
+        setPushSubscribed(false);
       }
     };
     
@@ -156,7 +186,10 @@ const SettingsModal = ({ isOpen, onClose }) => {
 
   // Handle push notification subscription toggle
   const handlePushToggle = async () => {
-    if (!pushSupported || !user?.id) return;
+    if (!pushSupported || !user?.id) {
+      console.log('[SettingsModal] Toggle blocked:', { pushSupported, userId: user?.id });
+      return;
+    }
     
     setPushLoading(true);
     setPushError(null);
@@ -164,12 +197,22 @@ const SettingsModal = ({ isOpen, onClose }) => {
     try {
       if (pushSubscribed) {
         // Unsubscribe
-        await pushNotificationService.unsubscribe(user.id);
-        setPushSubscribed(false);
-        soundManager.playClickSound?.('click');
+        console.log('[SettingsModal] Attempting to unsubscribe...');
+        const result = await pushNotificationService.unsubscribe(user.id);
+        console.log('[SettingsModal] Unsubscribe result:', result);
+        
+        if (result.success) {
+          setPushSubscribed(false);
+          soundManager.playClickSound?.('click');
+        } else {
+          console.error('[SettingsModal] Unsubscribe failed:', result.reason);
+          setPushError('Failed to disable notifications: ' + (result.reason || 'Unknown error'));
+        }
       } else {
         // Subscribe
+        console.log('[SettingsModal] Attempting to subscribe...');
         const result = await pushNotificationService.subscribe(user.id);
+        console.log('[SettingsModal] Subscribe result:', result);
         
         if (result.success) {
           setPushSubscribed(true);
@@ -185,13 +228,13 @@ const SettingsModal = ({ isOpen, onClose }) => {
             setPushPermission('denied');
             setPushError('Notification permission was denied. Please enable in browser settings.');
           } else {
-            setPushError('Failed to enable notifications. Please try again.');
+            setPushError('Failed to enable notifications: ' + (result.reason || 'Please try again.'));
           }
         }
       }
     } catch (error) {
       console.error('[SettingsModal] Push toggle error:', error);
-      setPushError('An error occurred. Please try again.');
+      setPushError('An error occurred: ' + error.message);
     } finally {
       setPushLoading(false);
     }

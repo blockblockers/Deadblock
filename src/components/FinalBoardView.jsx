@@ -1,26 +1,21 @@
 // FinalBoardView.jsx - Game replay with move order display
-// v7.14 - COMPACT LAYOUT: Reduced padding, consistent spacing
+// v7.14 - COMPLETE REWRITE
 // 
 // FIXES:
-// ✅ Minimal padding between header/board/controls
-// ✅ Last move highlighted with golden glow and pulsing border
-// ✅ Consistent layout across all views (recent games, match history, etc)
+// ✅ Proper piece colors - uses pieceColors from pieces.js (same as GameBoard)
+// ✅ Larger board - matches GameBoard cell sizing (w-9 h-9 sm:w-12 sm:h-12)
+// ✅ Move numbers displayed on pieces in final view
+// ✅ Replay works correctly - pieces appear when pressing play
+// ✅ Minimal padding - board fills screen properly
+// ✅ Player indicators with tier icons
 
-import { useState, useEffect, useMemo } from 'react';
-import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause, Loader, Trophy } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause, Loader, Film, Trophy } from 'lucide-react';
 import { BOARD_SIZE, getPieceCoords } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
-
-const hexToRgba = (hex, alpha) => {
-  if (!hex || !hex.startsWith('#')) return `rgba(100, 116, 139, ${alpha})`;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
 
 const FinalBoardView = ({ 
   board, 
@@ -40,7 +35,7 @@ const FinalBoardView = ({
 }) => {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1); // -1 = show final with numbers
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(800);
+  const [playbackSpeed, setPlaybackSpeed] = useState(500);
 
   // Extract player info
   const p1Name = player1?.username || player1?.display_name || player1Name;
@@ -56,334 +51,482 @@ const FinalBoardView = ({
   const p1Tier = ratingService.getRatingTier(p1Rating);
   const p2Tier = ratingService.getRatingTier(p2Rating);
 
-  // Validate board
+  // Helper to get piece name from boardPieces (handles both object and array formats)
+  const getPieceName = useCallback((rowIdx, colIdx, piecesData) => {
+    if (!piecesData) return null;
+    // Object format: { "row,col": "T", ... }
+    if (typeof piecesData === 'object' && !Array.isArray(piecesData)) {
+      return piecesData[`${rowIdx},${colIdx}`] || null;
+    }
+    // Array format: [[null, "T", ...], ...]
+    if (Array.isArray(piecesData) && piecesData[rowIdx]) {
+      return piecesData[rowIdx][colIdx] || null;
+    }
+    return null;
+  }, []);
+
+  // Validate board - convert 0 to null for consistency
   const safeBoard = useMemo(() => {
     if (Array.isArray(board) && board.length === BOARD_SIZE) {
-      return board.map(row => row.map(cell => cell === 0 ? null : cell));
+      return board.map(row => 
+        Array.isArray(row) ? row.map(cell => (cell === 0 ? null : cell)) : Array(BOARD_SIZE).fill(null)
+      );
     }
     return Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
   }, [board]);
 
+  // Normalize boardPieces to object format
   const safeBoardPieces = useMemo(() => {
-    return boardPieces && typeof boardPieces === 'object' ? boardPieces : {};
+    if (!boardPieces) return {};
+    if (typeof boardPieces === 'object' && !Array.isArray(boardPieces)) {
+      return boardPieces;
+    }
+    // Convert array format to object format
+    if (Array.isArray(boardPieces)) {
+      const obj = {};
+      boardPieces.forEach((row, ri) => {
+        if (Array.isArray(row)) {
+          row.forEach((piece, ci) => {
+            if (piece) obj[`${ri},${ci}`] = piece;
+          });
+        }
+      });
+      return obj;
+    }
+    return {};
   }, [boardPieces]);
 
-  // Build move info map from moveHistory
-  const moveInfoMap = useMemo(() => {
+  // Build cell info map from moveHistory for final view numbers
+  const cellInfoMap = useMemo(() => {
     const map = {};
-    if (!moveHistory || moveHistory.length === 0) return map;
     
-    moveHistory.forEach((move, idx) => {
-      const moveNum = idx + 1;
-      const player = (idx % 2 === 0) ? 1 : 2;
-      
-      if (move.cells && Array.isArray(move.cells)) {
-        move.cells.forEach(cell => {
-          const key = `${cell.row},${cell.col}`;
-          map[key] = { moveNumber: moveNum, player, pieceType: move.piece_type, isLastMove: idx === moveHistory.length - 1 };
-        });
-      } else if (move.position) {
-        try {
-          const coords = getPieceCoords(move.piece_type, move.position.row, move.position.col, move.rotation || 0, move.flipped || false);
-          coords.forEach(([r, c]) => {
-            const key = `${r},${c}`;
-            map[key] = { moveNumber: moveNum, player, pieceType: move.piece_type, isLastMove: idx === moveHistory.length - 1 };
-          });
-        } catch (e) {}
+    if (!moveHistory || moveHistory.length === 0) {
+      // No move history - use boardPieces to estimate move numbers
+      let moveNum = 1;
+      Object.entries(safeBoardPieces).forEach(([key, pieceType]) => {
+        map[key] = {
+          moveNumber: moveNum,
+          pieceType,
+          isLastMove: false
+        };
+        moveNum++;
+      });
+      // Mark last one
+      const keys = Object.keys(map);
+      if (keys.length > 0) {
+        map[keys[keys.length - 1]].isLastMove = true;
       }
-    });
-    return map;
-  }, [moveHistory]);
+      return map;
+    }
 
-  // State for replay
-  const [state, setState] = useState({ board: safeBoard });
-  
-  useEffect(() => {
-    if (currentMoveIndex === -1) {
-      setState({ board: safeBoard });
-    } else {
-      const newBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
-      for (let i = 0; i <= currentMoveIndex && i < moveHistory.length; i++) {
-        const move = moveHistory[i];
-        const player = (i % 2 === 0) ? 1 : 2;
-        
-        if (move.cells && Array.isArray(move.cells)) {
-          move.cells.forEach(cell => {
-            if (cell.row >= 0 && cell.row < BOARD_SIZE && cell.col >= 0 && cell.col < BOARD_SIZE) {
-              newBoard[cell.row][cell.col] = player;
+    moveHistory.forEach((move, idx) => {
+      const moveNum = move.move_number || (idx + 1);
+      const piece = move.piece_type;
+      const row = move.row;
+      const col = move.col;
+      const rot = move.rotation || 0;
+      const flip = move.flipped || false;
+
+      if (piece === undefined || row === undefined || col === undefined) return;
+
+      try {
+        const coords = getPieceCoords(piece, rot, flip);
+        if (coords) {
+          coords.forEach(([dx, dy]) => {
+            const r = row + dy;
+            const c = col + dx;
+            if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+              map[`${r},${c}`] = {
+                moveNumber: moveNum,
+                pieceType: piece,
+                isLastMove: idx === moveHistory.length - 1
+              };
             }
           });
-        } else if (move.position) {
-          try {
-            const coords = getPieceCoords(move.piece_type, move.position.row, move.position.col, move.rotation || 0, move.flipped || false);
-            coords.forEach(([r, c]) => {
-              if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
-                newBoard[r][c] = player;
-              }
-            });
-          } catch (e) {}
         }
+      } catch (e) {
+        console.error('[FinalBoardView] Error processing move:', e);
       }
-      setState({ board: newBoard });
-    }
-  }, [currentMoveIndex, moveHistory, safeBoard]);
+    });
 
-  // Playback
+    return map;
+  }, [moveHistory, safeBoardPieces]);
+
+  // Build board states for step-by-step replay
+  const boardStates = useMemo(() => {
+    // State 0: empty board
+    const emptyBoard = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+    const states = [{ board: emptyBoard, pieces: {} }];
+
+    if (!moveHistory || moveHistory.length === 0) {
+      // No move history - just show final state
+      return [{ board: safeBoard, pieces: safeBoardPieces }];
+    }
+
+    let curBoard = emptyBoard.map(row => [...row]);
+    let curPieces = {};
+
+    moveHistory.forEach((move, idx) => {
+      const piece = move.piece_type;
+      const row = move.row;
+      const col = move.col;
+      const rot = move.rotation || 0;
+      const flip = move.flipped || false;
+      const player = (idx % 2) + 1;
+
+      if (piece === undefined || row === undefined || col === undefined) {
+        states.push({ board: curBoard.map(r => [...r]), pieces: { ...curPieces } });
+        return;
+      }
+
+      try {
+        const coords = getPieceCoords(piece, rot, flip);
+        if (coords) {
+          // Create new board/pieces objects (immutable update)
+          curBoard = curBoard.map(r => [...r]);
+          curPieces = { ...curPieces };
+          
+          coords.forEach(([dx, dy]) => {
+            const r = row + dy;
+            const c = col + dx;
+            if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+              curBoard[r][c] = player;
+              curPieces[`${r},${c}`] = piece; // Store piece type!
+            }
+          });
+        }
+      } catch (e) {
+        console.error('[FinalBoardView] Error building state:', e);
+      }
+
+      states.push({ board: curBoard.map(r => [...r]), pieces: { ...curPieces } });
+    });
+
+    return states;
+  }, [moveHistory, safeBoard, safeBoardPieces]);
+
+  // Playback timer
   useEffect(() => {
-    if (!isPlaying || moveHistory.length === 0) return;
+    if (!isPlaying) return;
+    if (moveHistory.length === 0 && Object.keys(safeBoardPieces).length === 0) return;
+    
+    const maxMoves = moveHistory.length > 0 ? moveHistory.length : Object.keys(safeBoardPieces).length;
+    
     const timer = setInterval(() => {
       setCurrentMoveIndex(prev => {
-        if (prev >= moveHistory.length - 1) {
+        if (prev >= maxMoves - 1) {
           setIsPlaying(false);
-          return -1;
+          return -1; // Back to final view with numbers
         }
+        soundManager.playClickSound?.('click');
         return prev + 1;
       });
     }, playbackSpeed);
+    
     return () => clearInterval(timer);
-  }, [isPlaying, playbackSpeed, moveHistory.length]);
+  }, [isPlaying, moveHistory.length, safeBoardPieces, playbackSpeed]);
 
-  const first = () => { setCurrentMoveIndex(-1); setIsPlaying(false); soundManager.playClickSound?.('click'); };
-  const prev = () => { setCurrentMoveIndex(p => Math.max(-1, p - 1)); soundManager.playClickSound?.('click'); };
-  const next = () => { setCurrentMoveIndex(p => Math.min(moveHistory.length - 1, p + 1)); soundManager.playClickSound?.('click'); };
-  const last = () => { setCurrentMoveIndex(-1); setIsPlaying(false); soundManager.playClickSound?.('click'); };
-  const play = () => { if (currentMoveIndex === -1) setCurrentMoveIndex(-1); setIsPlaying(true); };
-  const pause = () => setIsPlaying(false);
+  // Get total moves count
+  const totalMoves = moveHistory.length > 0 ? moveHistory.length : Object.keys(safeBoardPieces).length;
 
-  const showFinal = currentMoveIndex === -1;
-
-  const getInfo = (r, c) => moveInfoMap[`${r},${c}`];
-  const getPiece = (r, c) => {
-    const key = `${r},${c}`;
-    for (const [pieceKey, data] of Object.entries(safeBoardPieces)) {
-      if (data.cells?.some(cell => `${cell.row},${cell.col}` === key)) {
-        return data.piece_type || pieceKey.split('_')[0];
-      }
+  // Controls
+  const play = useCallback(() => {
+    soundManager.playButtonClick?.();
+    if (currentMoveIndex === -1 || currentMoveIndex >= totalMoves - 1) {
+      setCurrentMoveIndex(0);
     }
-    return null;
-  };
+    setIsPlaying(true);
+  }, [currentMoveIndex, totalMoves]);
+
+  const pause = useCallback(() => {
+    setIsPlaying(false);
+    soundManager.playButtonClick?.();
+  }, []);
+
+  const prev = useCallback(() => {
+    setIsPlaying(false);
+    soundManager.playButtonClick?.();
+    setCurrentMoveIndex(i => i === -1 ? totalMoves - 1 : i === 0 ? -1 : i - 1);
+  }, [totalMoves]);
+
+  const next = useCallback(() => {
+    setIsPlaying(false);
+    soundManager.playButtonClick?.();
+    setCurrentMoveIndex(i => i === -1 ? 0 : i >= totalMoves - 1 ? -1 : i + 1);
+  }, [totalMoves]);
+
+  const first = useCallback(() => {
+    setIsPlaying(false);
+    soundManager.playButtonClick?.();
+    setCurrentMoveIndex(0);
+  }, []);
+
+  const last = useCallback(() => {
+    setIsPlaying(false);
+    soundManager.playButtonClick?.();
+    setCurrentMoveIndex(-1);
+  }, []);
+
+  // Current display state
+  const showFinal = currentMoveIndex === -1;
+  const stateIdx = showFinal ? boardStates.length - 1 : Math.min(currentMoveIndex + 1, boardStates.length - 1);
+  const currentState = boardStates[stateIdx] || { board: safeBoard, pieces: safeBoardPieces };
+
+  const dateStr = gameDate ? new Date(gameDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : null;
 
   return (
-    <div 
-      className="fixed inset-0 bg-black/90 z-50 flex flex-col"
-      onClick={onClose}
-    >
-      <div 
-        className="flex-1 flex flex-col max-w-lg mx-auto w-full"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* HEADER - Compact */}
-        <div className="flex items-center justify-between px-3 py-2 bg-slate-900/95 border-b border-slate-700">
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white">
-            <X size={20} />
-          </button>
-          <span className="text-slate-400 text-xs">
-            {gameDate ? new Date(gameDate).toLocaleDateString() : 'Game Replay'}
-          </span>
-          <div className="w-8" />
+    <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+      {/* HEADER - Minimal */}
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-900/90 border-b border-purple-500/30 flex-shrink-0">
+        <button 
+          onClick={onClose} 
+          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
+        >
+          <X size={22} />
+        </button>
+        <div className="flex items-center gap-2">
+          <Film size={16} className="text-purple-400" />
+          <span className="text-purple-400 font-medium">Replay</span>
+          {dateStr && <span className="text-slate-500 text-sm">• {dateStr}</span>}
         </div>
+        <div className="w-9" />
+      </div>
 
-        {/* PLAYERS - Compact row */}
-        <div className="flex items-center justify-center gap-3 px-3 py-1.5 bg-slate-800/50 text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className="relative w-5 h-5 rounded flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${hexToRgba(p1Tier.glowColor, 0.3)}, transparent)` }}>
+      {/* PLAYERS BAR - Compact */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800/60 flex-shrink-0">
+        {/* Player 1 */}
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <div 
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ 
+                background: `linear-gradient(135deg, ${p1Tier.glowColor}40, transparent)`,
+                boxShadow: isP1Winner ? `0 0 10px ${p1Tier.glowColor}` : 'none'
+              }}
+            >
               <TierIcon shape={p1Tier.shape} glowColor={p1Tier.glowColor} size="small" />
-              {isP1Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
             </div>
-            <div className="text-left">
-              <div className={`font-medium text-xs ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
-              <div className="text-slate-500 text-[10px]">{p1Rating}</div>
-            </div>
+            {isP1Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400" />}
           </div>
-          <span className="text-slate-600 font-bold text-[10px]">VS</span>
-          <div className="flex items-center gap-1.5">
-            <div className="text-right">
-              <div className={`font-medium text-xs ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
-              <div className="text-slate-500 text-[10px]">{p2Rating}</div>
-            </div>
-            <div className="relative w-5 h-5 rounded flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${hexToRgba(p2Tier.glowColor, 0.3)}, transparent)` }}>
+          <div>
+            <div className={`font-bold text-xs ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
+            <div className="text-slate-500 text-[10px]">{p1Rating}</div>
+          </div>
+        </div>
+
+        <span className="text-slate-600 font-black text-xs">VS</span>
+
+        {/* Player 2 */}
+        <div className="flex items-center gap-2">
+          <div className="text-right">
+            <div className={`font-bold text-xs ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
+            <div className="text-slate-500 text-[10px]">{p2Rating}</div>
+          </div>
+          <div className="relative">
+            <div 
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
+              style={{ 
+                background: `linear-gradient(135deg, ${p2Tier.glowColor}40, transparent)`,
+                boxShadow: isP2Winner ? `0 0 10px ${p2Tier.glowColor}` : 'none'
+              }}
+            >
               <TierIcon shape={p2Tier.shape} glowColor={p2Tier.glowColor} size="small" />
-              {isP2Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
             </div>
+            {isP2Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400" />}
           </div>
         </div>
+      </div>
 
-        {/* STATUS - Single line, minimal height */}
-        <div className="text-center py-1 text-[10px] bg-slate-800/30">
-          {showFinal ? (
-            <span className="text-amber-400 font-medium">
-              {(isP1Winner || isP2Winner) ? `🏆 ${isP1Winner ? p1Name : p2Name} wins!` : 'Final'} • {moveHistory.length} moves
-            </span>
-          ) : (
-            <span className="text-slate-300">
-              Move <span className="text-white font-bold">{currentMoveIndex + 1}</span>/{moveHistory.length}
-            </span>
-          )}
-        </div>
+      {/* STATUS LINE */}
+      <div className="text-center py-1 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
+        {showFinal ? (
+          <span className="text-amber-400 font-medium text-xs">
+            {(isP1Winner || isP2Winner) ? `🏆 ${isP1Winner ? p1Name : p2Name} wins!` : 'Final'} 
+            <span className="text-slate-400 ml-2">• {totalMoves} moves</span>
+          </span>
+        ) : (
+          <span className="text-slate-300 text-xs">
+            Move <span className="text-white font-bold">{currentMoveIndex + 1}</span>
+            <span className="text-slate-500">/{totalMoves}</span>
+          </span>
+        )}
+      </div>
 
-        {/* BOARD - Centered, minimal padding */}
-        <div className="flex-1 flex items-center justify-center p-2 min-h-0">
-          {isLoadingMoves ? (
-            <div className="text-center">
-              <Loader size={24} className="text-purple-400 animate-spin mx-auto mb-1" />
-              <p className="text-slate-400 text-xs">Loading...</p>
-            </div>
-          ) : (
-            <div className="w-full" style={{ maxWidth: 'min(80vw, 300px)' }}>
-              {/* Grid */}
-              <div 
-                className="grid grid-cols-8 gap-[1px] p-0.5 rounded-lg bg-slate-800/80 border border-slate-700/50 mx-auto"
-                style={{ aspectRatio: '1' }}
-              >
-                {state.board.map((row, ri) =>
-                  row.map((cell, ci) => {
-                    const key = `${ri},${ci}`;
-                    const info = showFinal ? getInfo(ri, ci) : null;
-                    const occupied = cell !== null && cell !== 0;
-                    const showNum = showFinal && info && moveHistory.length > 0;
-                    const isLast = info?.isLastMove;
-                    const player = info?.player || cell;
-                    const piece = info?.pieceType || getPiece(ri, ci);
-                    
-                    // Cell background
-                    let bg = 'bg-slate-700/40';
-                    if (occupied && piece && pieceColors[piece]) {
-                      bg = pieceColors[piece];
-                    } else if (occupied) {
-                      bg = cell === 1 ? 'bg-cyan-500' : 'bg-pink-500';
-                    }
-
-                    return (
-                      <div
-                        key={key}
-                        className={`relative ${bg} rounded-[2px] flex items-center justify-center ${
-                          isLast ? 'ring-2 ring-amber-400 animate-pulse' : ''
-                        }`}
-                        style={isLast ? { boxShadow: '0 0 8px rgba(251, 191, 36, 0.8)' } : {}}
-                      >
-                        {showNum && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            {/* Player dot */}
-                            <div 
-                              className={`w-1.5 h-1.5 rounded-full ${player === 1 ? 'bg-cyan-300' : 'bg-pink-300'}`}
-                              style={{ 
-                                boxShadow: player === 1 ? '0 0 3px #22d3ee' : '0 0 3px #ec4899',
-                                marginBottom: '1px'
-                              }}
-                            />
-                            {/* Move number */}
-                            <span 
-                              className="font-black leading-none"
-                              style={{ 
-                                fontSize: '9px',
-                                color: isLast ? '#fef3c7' : '#ffffff',
-                                textShadow: '0 0 2px #000, 0 1px 1px #000'
-                              }}
-                            >
-                              {info.moveNumber}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {/* LAST move indicator */}
-                        {isLast && showNum && (
-                          <div 
-                            className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-900 font-black rounded px-0.5 whitespace-nowrap"
-                            style={{ fontSize: '5px', lineHeight: '8px' }}
-                          >
-                            LAST
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* LEGEND - Compact */}
-              <div className="flex justify-center gap-3 mt-1 text-[9px]">
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-cyan-400" style={{ boxShadow: '0 0 3px #22d3ee' }} />
-                  <span className="text-cyan-400 font-medium">{p1Name}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-pink-400" style={{ boxShadow: '0 0 3px #ec4899' }} />
-                  <span className="text-pink-400 font-medium">{p2Name}</span>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* CONTROLS - Compact */}
-        {moveHistory.length > 0 && !isLoadingMoves && (
-          <div className="bg-slate-900 border-t border-slate-700 px-3 py-2">
-            <div className="max-w-xs mx-auto space-y-1.5">
-              {/* Progress */}
-              <div className="flex items-center gap-1.5">
-                <span className="text-[8px] text-slate-500 w-3 font-mono text-center">
-                  {showFinal ? '●' : currentMoveIndex + 1}
-                </span>
-                <div className="flex-1 h-1 bg-slate-800 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
-                    style={{ width: showFinal ? '100%' : `${((currentMoveIndex + 1) / moveHistory.length) * 100}%` }}
-                  />
-                </div>
-                <span className="text-[8px] text-slate-500 w-3 font-mono text-center">{moveHistory.length}</span>
-              </div>
-
-              {/* Buttons */}
-              <div className="flex items-center justify-center gap-1">
-                <button onClick={first} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                  <SkipBack size={12} />
-                </button>
-                <button onClick={prev} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                  <ChevronLeft size={12} />
-                </button>
-                <button 
-                  onClick={isPlaying ? pause : play}
-                  className="p-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg"
-                >
-                  {isPlaying ? <Pause size={16} /> : <Play size={16} />}
-                </button>
-                <button onClick={next} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                  <ChevronRight size={12} />
-                </button>
-                <button onClick={last} className="p-1 rounded bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700">
-                  <SkipForward size={12} />
-                </button>
-              </div>
-
-              {/* Speed */}
-              <div className="flex items-center justify-center gap-1 text-[7px]">
-                {[{ ms: 1600, lbl: '0.5x' }, { ms: 800, lbl: '1x' }, { ms: 400, lbl: '2x' }, { ms: 200, lbl: '4x' }].map(({ ms, lbl }) => (
-                  <button
-                    key={ms}
-                    onClick={() => setPlaybackSpeed(ms)}
-                    className={`px-1 py-0.5 rounded transition-colors ${
-                      playbackSpeed === ms ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
-                    }`}
+      {/* BOARD AREA - Takes all remaining space */}
+      <div className="flex-1 flex items-center justify-center p-2 min-h-0 overflow-hidden">
+        {isLoadingMoves ? (
+          <div className="text-center">
+            <Loader size={32} className="text-purple-400 animate-spin mx-auto mb-2" />
+            <p className="text-slate-400 text-sm">Loading game...</p>
+          </div>
+        ) : (
+          /* Board Grid - Matches GameBoard sizing exactly */
+          <div 
+            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
+            style={{
+              boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)',
+              maxWidth: 'calc(100vh - 200px)',
+              maxHeight: 'calc(100vh - 200px)',
+            }}
+          >
+            {currentState.board.map((row, rowIdx) =>
+              row.map((cellValue, colIdx) => {
+                const key = `${rowIdx}-${colIdx}`;
+                const isOccupied = cellValue !== null && cellValue !== 0;
+                
+                // Get piece name from current state's pieces
+                const pieceName = getPieceName(rowIdx, colIdx, currentState.pieces);
+                
+                // Get piece-specific color or fallback to player color
+                const pieceColor = pieceName ? pieceColors[pieceName] : null;
+                
+                // Get cell info for move numbers (only in final view)
+                const cellInfo = showFinal ? cellInfoMap[`${rowIdx},${colIdx}`] : null;
+                const isLastMove = cellInfo?.isLastMove;
+                
+                return (
+                  <div
+                    key={key}
+                    className={`
+                      w-9 h-9 sm:w-12 sm:h-12 rounded-md sm:rounded-lg relative
+                      transition-all duration-150 overflow-hidden
+                      ${isOccupied 
+                        ? `${pieceColor || (cellValue === 1 
+                            ? 'bg-gradient-to-br from-cyan-400 via-cyan-500 to-blue-600' 
+                            : 'bg-gradient-to-br from-pink-400 via-pink-500 to-rose-600'
+                          )} shadow-lg` 
+                        : 'bg-slate-700/50'
+                      }
+                      ${isLastMove ? 'ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]' : ''}
+                    `}
                   >
-                    {lbl}
-                  </button>
-                ))}
-              </div>
+                    {/* Scan line effect for placed pieces */}
+                    {isOccupied && (
+                      <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.1)_2px,rgba(255,255,255,0.1)_4px)]" />
+                    )}
+                    
+                    {/* Move number overlay - only in final view */}
+                    {showFinal && cellInfo && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span 
+                          className={`
+                            font-black text-white drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]
+                            ${cellInfo.moveNumber > 9 ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-sm'}
+                          `}
+                          style={{
+                            textShadow: '0 0 6px rgba(0,0,0,1), 0 2px 4px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,1)'
+                          }}
+                        >
+                          {cellInfo.moveNumber}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Last move indicator */}
+                    {isLastMove && (
+                      <div className="absolute top-0 right-0 bg-amber-500 text-[5px] sm:text-[6px] font-bold px-0.5 rounded-bl text-black">
+                        LAST
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* CONTROLS - Fixed at bottom */}
+      <div className="bg-slate-900/90 border-t border-slate-700/50 px-3 py-2 flex-shrink-0">
+        {/* Progress bar */}
+        {totalMoves > 0 && (
+          <div className="mb-2">
+            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
+                style={{ 
+                  width: showFinal 
+                    ? '100%' 
+                    : `${((currentMoveIndex + 1) / totalMoves) * 100}%` 
+                }}
+              />
             </div>
           </div>
         )}
-
-        {/* Close button fallback */}
-        {(isLoadingMoves || moveHistory.length === 0) && (
-          <div className="bg-slate-900 border-t border-slate-700 p-2">
-            <button 
-              onClick={onClose} 
-              className="w-full max-w-xs mx-auto block py-2 bg-slate-800 text-slate-300 rounded font-medium hover:bg-slate-700"
-            >
-              Close
-            </button>
+        
+        {/* Control buttons */}
+        <div className="flex items-center justify-center gap-1 sm:gap-2">
+          <button
+            onClick={first}
+            disabled={totalMoves === 0}
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+          >
+            <SkipBack size={16} />
+          </button>
+          
+          <button
+            onClick={prev}
+            disabled={totalMoves === 0}
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          
+          <button
+            onClick={isPlaying ? pause : play}
+            disabled={totalMoves === 0}
+            className={`
+              p-2.5 sm:p-3 rounded-full transition-all
+              ${isPlaying 
+                ? 'bg-pink-600 text-white shadow-[0_0_15px_rgba(236,72,153,0.5)]' 
+                : 'bg-purple-600 text-white shadow-[0_0_15px_rgba(147,51,234,0.5)]'
+              }
+              hover:scale-105 disabled:opacity-30 disabled:hover:scale-100
+            `}
+          >
+            {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
+          </button>
+          
+          <button
+            onClick={next}
+            disabled={totalMoves === 0}
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+          >
+            <ChevronRight size={20} />
+          </button>
+          
+          <button
+            onClick={last}
+            disabled={totalMoves === 0}
+            className="p-1.5 sm:p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+          >
+            <SkipForward size={16} />
+          </button>
+        </div>
+        
+        {/* Speed control */}
+        {totalMoves > 0 && (
+          <div className="flex items-center justify-center gap-2 mt-1.5">
+            <span className="text-slate-500 text-[10px]">Speed:</span>
+            {[
+              { label: '0.5x', value: 1000 },
+              { label: '1x', value: 500 },
+              { label: '2x', value: 250 },
+            ].map(({ label, value }) => (
+              <button
+                key={value}
+                onClick={() => setPlaybackSpeed(value)}
+                className={`
+                  px-2 py-0.5 text-[10px] rounded transition-all
+                  ${playbackSpeed === value 
+                    ? 'bg-purple-600 text-white' 
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                  }
+                `}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         )}
       </div>

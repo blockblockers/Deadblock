@@ -1,12 +1,13 @@
 // Online Menu - Hub for online features
+// v7.14: Real-time "Your turn" updates - no more waiting for refresh!
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
 // v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
-// v7.13: Real-time game subscription, mark games as viewed, proper loss flow
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../utils/supabase';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
 import { notificationService } from '../services/notificationService';
@@ -14,7 +15,6 @@ import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
 import { realtimeManager } from '../services/realtimeManager';
-import { supabase } from '../utils/supabase';
 import { rematchService } from '../services/rematchService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
@@ -490,32 +490,98 @@ const OnlineMenu = ({
     };
   }, [sessionReady, profile?.id]);
 
-  // v7.13: Subscribe to game updates for real-time "your turn" status
+  // v7.14: Real-time subscription for active games updates
+  // This makes "Your turn" indicators update instantly when opponent makes a move
   useEffect(() => {
-    if (!sessionReady || !profile?.id) return;
+    if (!sessionReady || !profile?.id || !supabase) return;
     
-    // Subscribe to changes in games where user is a player
-    const channel = supabase
-      ?.channel(`games-user-${profile.id}`)
+    console.log('[OnlineMenu] Setting up real-time game updates subscription');
+    
+    // Subscribe to games where user is player1
+    const player1Channel = supabase
+      .channel(`menu-games-p1-${profile.id}`)
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'games',
-          filter: `or(player1_id.eq.${profile.id},player2_id.eq.${profile.id})`
+          filter: `player1_id=eq.${profile.id}`
         },
         (payload) => {
-          // Refresh games when any game is updated (turn change, completion, etc.)
+          const game = payload.new;
+          const oldGame = payload.old;
+          
+          // Refresh on turn change or status change
+          if (game?.current_player !== oldGame?.current_player || 
+              game?.status !== oldGame?.status) {
+            console.log('[OnlineMenu] Game update (p1): turn/status changed, refreshing');
+            loadGames();
+          }
+        }
+      )
+      .subscribe();
+    
+    // Subscribe to games where user is player2
+    const player2Channel = supabase
+      .channel(`menu-games-p2-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'games',
+          filter: `player2_id=eq.${profile.id}`
+        },
+        (payload) => {
+          const game = payload.new;
+          const oldGame = payload.old;
+          
+          // Refresh on turn change or status change
+          if (game?.current_player !== oldGame?.current_player || 
+              game?.status !== oldGame?.status) {
+            console.log('[OnlineMenu] Game update (p2): turn/status changed, refreshing');
+            loadGames();
+          }
+        }
+      )
+      .subscribe();
+    
+    // Also subscribe to new games being created (INSERT)
+    const newGamesChannel = supabase
+      .channel(`menu-new-games-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'games',
+          filter: `player1_id=eq.${profile.id}`
+        },
+        () => {
+          console.log('[OnlineMenu] New game created (p1), refreshing');
+          loadGames();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'games',
+          filter: `player2_id=eq.${profile.id}`
+        },
+        () => {
+          console.log('[OnlineMenu] New game created (p2), refreshing');
           loadGames();
         }
       )
       .subscribe();
     
     return () => {
-      if (channel) {
-        supabase?.removeChannel(channel);
-      }
+      player1Channel.unsubscribe();
+      player2Channel.unsubscribe();
+      newGamesChannel.unsubscribe();
     };
   }, [sessionReady, profile?.id]);
 
@@ -1179,6 +1245,13 @@ const OnlineMenu = ({
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
+                    <button
+                      onClick={handleOpenUsernameEdit}
+                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
+                      title="Edit Username"
+                    >
+                      <Pencil size={14} />
+                    </button>
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="text-slate-500">{profile?.games_played || 0} games</span>
@@ -2045,6 +2118,7 @@ const OnlineMenu = ({
                 willChange: 'scroll-position'
               }}
             >
+            >
               {/* What is ELO explanation */}
               <div className="space-y-2">
                 <p className="text-sm text-slate-300">
@@ -2274,17 +2348,10 @@ const OnlineMenu = ({
                               return (
                                 <button
                                   key={game.id}
-                                  onClick={async () => {
+                                  onClick={() => {
                                     soundManager.playButtonClick();
                                     setShowActiveGames(false);
-                                    
-                                    // v7.13: Mark the game as viewed so it moves to recent games
-                                    if (profile?.id) {
-                                      await gameSyncService.markGameViewed(game.id, profile.id);
-                                    }
-                                    
-                                    // Pass special flag to indicate this is an unviewed loss
-                                    onResumeGame({ ...game, _viewingUnviewedLoss: true });
+                                    onResumeGame(game);
                                   }}
                                   className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
                                     isLoss 

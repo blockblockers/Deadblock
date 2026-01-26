@@ -1,4 +1,5 @@
 // pushNotificationService.js - Push Notification Service
+// v7.14: Added init() alias for backwards compatibility with SettingsModal
 // v7.14: Fixed unsubscribe functionality, uses existing service worker
 // Place in src/services/pushNotificationService.js
 
@@ -32,6 +33,11 @@ class PushNotificationService {
   // Check if currently subscribed
   isSubscribed() {
     return this.subscription !== null;
+  }
+
+  // Alias for initialize() - for backwards compatibility with SettingsModal
+  async init() {
+    return this.initialize();
   }
 
   // Initialize the service
