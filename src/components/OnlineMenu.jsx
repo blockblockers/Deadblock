@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.15: FIXES - Completed games disappear from Active immediately, rematch acceptance updates in real-time
 // v7.14: Real-time "Your turn" updates - no more waiting for refresh!
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
 // v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
@@ -467,7 +468,14 @@ const OnlineMenu = ({
       
       // If rematch was accepted, navigate to the new game
       if (rematchData?.status === 'accepted' && rematchData?.new_game_id) {
-        await loadGames();
+        console.log('[OnlineMenu] Rematch accepted! New game:', rematchData.new_game_id);
+        
+        // v7.15: Refresh BOTH games AND invites to clear pending rematch
+        await Promise.all([loadGames(), loadInvites()]);
+        
+        // v7.15: Also clear from local state immediately for instant UI update
+        setPendingRematches(prev => prev.filter(r => r.id !== rematchData.id));
+        
         soundManager.playSound('notification');
         
         // Send notification to the requester that rematch was accepted
@@ -517,6 +525,11 @@ const OnlineMenu = ({
               game?.status !== oldGame?.status) {
             console.log('[OnlineMenu] Game update (p1): turn/status changed, refreshing');
             loadGames();
+            
+            // v7.15: If game just completed, also refresh invites to clear related rematches
+            if (game?.status === 'completed' && oldGame?.status !== 'completed') {
+              loadInvites();
+            }
           }
         }
       )
@@ -542,6 +555,11 @@ const OnlineMenu = ({
               game?.status !== oldGame?.status) {
             console.log('[OnlineMenu] Game update (p2): turn/status changed, refreshing');
             loadGames();
+            
+            // v7.15: If game just completed, also refresh invites to clear related rematches
+            if (game?.status === 'completed' && oldGame?.status !== 'completed') {
+              loadInvites();
+            }
           }
         }
       )
@@ -639,7 +657,19 @@ const OnlineMenu = ({
       
       // Get active games + unviewed completed games (v7.12)
       const { data: active } = await gameSyncService.getActiveAndUnviewedGames(profile.id);
-      setActiveGames(active || []);
+      
+      // v7.15: Safety filter - ensure no fully-viewed completed games slip through
+      // A game should only appear in activeGames if:
+      // 1. It's status === 'active', OR
+      // 2. It's completed but has unviewed_by_loser === true (loser hasn't seen final board yet)
+      const filteredActive = (active || []).filter(g => {
+        if (g.status === 'active') return true;
+        // For completed games, only include if unviewed by loser
+        if (g.status === 'completed' && g.unviewed_by_loser === true) return true;
+        return false;
+      });
+      
+      setActiveGames(filteredActive);
 
       // Get recent completed games - UPDATED: Increased from 5 to 10
       const { data: recent } = await gameSyncService.getPlayerGames(profile.id, 10);

@@ -1,19 +1,21 @@
-// EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// EntryAuthScreen.jsx - Enhanced Entry Screen with Account Management
+// v7.15: Added subtle "Delete Account" link for account deletion (App Store/Play Store requirement)
 // Features:
 // - Clear separation between Google sign-in and local account
 // - Benefits of online vs offline clearly shown
 // - Improved cyberpunk color scheme
 // - Terms/Privacy links and copyright
 // - Invite link support
-// - In-app policy/terms modal (no white flash)
+// - Account management (password reset, account deletion)
 // ============================================
 
 import { useState, useEffect } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star, ChevronRight, X } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star, ChevronRight, X, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import AccountDeletionModal from './AccountDeletionModal';
 
 const EntryAuthScreen = ({ 
   onComplete, 
@@ -45,6 +47,20 @@ const EntryAuthScreen = ({
   // Resend confirmation states
   const [showResendOption, setShowResendOption] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
+  
+  // v7.15: Account deletion modal state
+  const [showAccountDeletion, setShowAccountDeletion] = useState(false);
+
+  // Get friendly name for the destination
+  const getDestinationName = () => {
+    switch (intendedDestination) {
+      case 'weekly-menu':
+        return 'Weekly Challenge';
+      case 'online-menu':
+      default:
+        return 'Online Multiplayer';
+    }
+  };
 
   const clearMessages = () => {
     setError('');
@@ -83,6 +99,32 @@ const EntryAuthScreen = ({
     setLoading(false);
   };
 
+  // Handle resend confirmation email
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      setError('Please enter your email address');
+      return;
+    }
+    
+    setResendingEmail(true);
+    setError('');
+    
+    try {
+      const { error } = await resendConfirmationEmail(email);
+      
+      if (error) {
+        setError(error.message || 'Failed to resend confirmation email');
+      } else {
+        setSuccess('Confirmation email sent! Check your inbox and spam folder, then click the link to verify.');
+        setShowResendOption(false);
+      }
+    } catch (err) {
+      setError('Failed to resend confirmation email');
+    }
+    
+    setResendingEmail(false);
+  };
+
   // Handle email/password sign up
   const handleSignUp = async (e) => {
     e.preventDefault();
@@ -92,6 +134,16 @@ const EntryAuthScreen = ({
 
     if (!username || username.length < 3) {
       setError('Username must be at least 3 characters');
+      setLoading(false);
+      return;
+    }
+    if (username.length > 20) {
+      setError('Username must be 20 characters or less');
+      setLoading(false);
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      setError('Username can only contain letters, numbers, and underscores');
       setLoading(false);
       return;
     }
@@ -186,9 +238,11 @@ const EntryAuthScreen = ({
     clearMessages();
     soundManager.playButtonClick?.();
     setLoading(true);
+    console.log('[EntryAuthScreen] Starting Google Sign In...');
     
     try {
       const { data, error } = await signInWithGoogle();
+      console.log('[EntryAuthScreen] Google Sign In result:', { data, error });
       
       if (error) {
         setError(error.message);
@@ -196,48 +250,25 @@ const EntryAuthScreen = ({
         return;
       }
       
+      // If no error but we're still here after 3 seconds, redirect probably failed
       setTimeout(() => {
         if (document.visibilityState === 'visible') {
+          console.log('[EntryAuthScreen] Google redirect may have failed');
           setError('Could not redirect to Google. Please try again or use another sign-in method.');
           setLoading(false);
         }
       }, 3000);
       
     } catch (err) {
+      console.error('[EntryAuthScreen] Google Sign In exception:', err);
       setError('Failed to start Google Sign In. Please try again.');
       setLoading(false);
     }
   };
 
-  const handleResendConfirmation = async () => {
-    if (!email || resendingEmail) return;
-    
-    setResendingEmail(true);
-    soundManager.playButtonClick?.();
-    
-    try {
-      const { error } = await resendConfirmationEmail(email);
-      if (error) {
-        setError('Could not resend email: ' + error.message);
-      } else {
-        setSuccess('Confirmation email sent! Check your inbox (and junk/spam folder).');
-        setShowResendOption(false);
-      }
-    } catch (err) {
-      setError('Failed to resend confirmation email');
-    }
-    
-    setResendingEmail(false);
-  };
-
   const handleOfflineMode = () => {
     soundManager.playButtonClick?.();
     onOfflineMode?.();
-  };
-
-  const handleCancelInvite = () => {
-    soundManager.playButtonClick?.();
-    onCancelInvite?.();
   };
 
   // Scroll styles for mobile/iPad
@@ -247,348 +278,159 @@ const EntryAuthScreen = ({
     touchAction: 'pan-y pinch-zoom',
     overscrollBehavior: 'contain',
     height: '100%',
+    minHeight: '100vh',
     minHeight: '100dvh',
   } : {};
 
-  // ============================================
-  // INVITE BANNER COMPONENT
-  // ============================================
-  const InviteBanner = () => {
-    if (inviteLoading) {
-      return (
-        <div className="mb-4 p-4 bg-gradient-to-r from-amber-900/40 to-orange-900/40 border border-amber-500/50 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.2)]">
-          <div className="flex items-center gap-3">
-            <Loader size={20} className="text-amber-400 animate-spin" />
-            <span className="text-amber-300 text-sm font-medium">Loading game invite...</span>
-          </div>
-        </div>
-      );
-    }
-    
-    if (inviteError) {
-      return (
-        <div className="mb-4 p-4 bg-red-900/30 border border-red-500/50 rounded-xl">
-          <div className="flex items-center gap-3">
-            <XCircle size={20} className="text-red-400" />
-            <div className="flex-1">
-              <span className="text-red-300 text-sm">{inviteError}</span>
-            </div>
-            {onCancelInvite && (
-              <button
-                onClick={handleCancelInvite}
-                className="text-red-400 hover:text-red-300 text-xs underline"
-              >
-                Dismiss
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-    
-    if (!inviteInfo) return null;
-    
-    return (
-      <div className="mb-4 p-4 bg-gradient-to-r from-amber-900/40 to-orange-900/40 border border-amber-500/50 rounded-xl shadow-[0_0_25px_rgba(251,191,36,0.25)]">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 bg-amber-500/20 rounded-lg border border-amber-400/30">
-            <Swords size={24} className="text-amber-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-amber-300 font-bold text-sm mb-1 flex items-center gap-2">
-              🎮 Game Invitation
-            </h3>
-            <p className="text-slate-200 text-sm">
-              <span className="text-amber-200 font-bold">
-                {inviteInfo.from_username || inviteInfo.from_display_name || 'A player'}
-              </span>
-              {' '}has challenged you to a game!
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 pt-3 border-t border-amber-500/20">
-          <p className="text-amber-200/80 text-xs">
-            ✨ Sign in or create an account to accept the challenge
-          </p>
-        </div>
-        {onCancelInvite && (
-          <button
-            onClick={handleCancelInvite}
-            className="mt-2 text-slate-400 hover:text-slate-300 text-xs underline"
-          >
-            Cancel and go to main menu
-          </button>
-        )}
-      </div>
-    );
+  // Theme based on invite flow
+  const activeTheme = isInviteFlow ? {
+    cardBg: 'bg-slate-900/80',
+    cardBorder: 'border-amber-500/30',
+    cardShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.15)]',
+    accent: 'amber',
+  } : {
+    cardBg: 'bg-slate-900/80',
+    cardBorder: 'border-cyan-500/30',
+    cardShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.15)]',
+    accent: 'cyan',
   };
 
   // ============================================
-  // BENEFITS INFO COMPONENT
+  // SELECT MODE - Choose auth method
   // ============================================
-  const BenefitsInfo = () => (
-    <div className="mb-5 grid grid-cols-2 gap-3">
-      {/* Online Benefits */}
-      <div className="p-3 bg-gradient-to-br from-cyan-900/30 to-blue-900/30 border border-cyan-500/30 rounded-xl">
-        <div className="flex items-center gap-2 mb-2">
-          <Wifi size={14} className="text-cyan-400" />
-          <span className="text-cyan-300 text-xs font-bold uppercase tracking-wider">Online</span>
+  const renderSelectMode = () => (
+    <div className="space-y-3">
+      {/* Invite Info Banner */}
+      {isInviteFlow && (
+        <div className="p-3 bg-amber-900/30 border border-amber-500/30 rounded-xl mb-2">
+          {inviteLoading ? (
+            <div className="flex items-center justify-center gap-2 text-amber-300">
+              <Loader size={16} className="animate-spin" />
+              <span className="text-sm">Loading invite...</span>
+            </div>
+          ) : inviteError ? (
+            <div className="flex items-center gap-2 text-red-300">
+              <XCircle size={16} />
+              <span className="text-sm">{inviteError}</span>
+            </div>
+          ) : inviteInfo ? (
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-2 text-amber-300 mb-1">
+                <Swords size={16} />
+                <span className="font-bold text-sm">Game Invite</span>
+              </div>
+              <p className="text-amber-200/80 text-xs">
+                <span className="font-semibold">{inviteInfo.inviterName}</span> challenged you!
+              </p>
+            </div>
+          ) : null}
         </div>
-        <ul className="space-y-1.5 text-xs text-slate-300">
-          <li className="flex items-center gap-1.5">
-            <Trophy size={10} className="text-amber-400" />
-            <span>Compete globally</span>
-          </li>
-          <li className="flex items-center gap-1.5">
-            <Star size={10} className="text-purple-400" />
-            <span>Track stats & rank</span>
-          </li>
-          <li className="flex items-center gap-1.5">
-            <Users size={10} className="text-green-400" />
-            <span>Challenge friends</span>
-          </li>
-        </ul>
-      </div>
+      )}
       
-      {/* Offline Info */}
-      <div className="p-3 bg-gradient-to-br from-slate-800/50 to-slate-900/50 border border-slate-600/30 rounded-xl">
-        <div className="flex items-center gap-2 mb-2">
-          <WifiOff size={14} className="text-slate-400" />
-          <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Offline</span>
+      {/* Error Message */}
+      {error && (
+        <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-xl text-red-300 text-sm">
+          {error}
         </div>
-        <ul className="space-y-1.5 text-xs text-slate-400">
-          <li className="flex items-center gap-1.5">
-            <Zap size={10} className="text-slate-500" />
-            <span>Play vs AI</span>
-          </li>
-          <li className="flex items-center gap-1.5">
-            <Shield size={10} className="text-slate-500" />
-            <span>No account needed</span>
-          </li>
-          <li className="flex items-center gap-1.5">
-            <Globe size={10} className="text-slate-500" />
-            <span>Play anywhere</span>
-          </li>
-        </ul>
+      )}
+      
+      {/* Sign In Options */}
+      <div className="space-y-2">
+        {/* Google Sign In */}
+        <button
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+          className="w-full py-3 bg-white text-gray-800 font-semibold rounded-xl hover:bg-gray-100 transition-all flex items-center justify-center gap-3 shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait"
+        >
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg viewBox="0 0 24 24" className="w-5 h-5">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+            </svg>
+          )}
+          <span>Continue with Google</span>
+        </button>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3 py-1">
+          <div className="flex-1 h-px bg-slate-700" />
+          <span className="text-slate-500 text-xs">or</span>
+          <div className="flex-1 h-px bg-slate-700" />
+        </div>
+
+        {/* Email Sign In */}
+        <button
+          onClick={() => switchMode('login')}
+          className="w-full py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(34,197,94,0.2)] active:scale-[0.98]"
+        >
+          <LogIn size={18} />
+          <span>Sign in with Email</span>
+        </button>
+
+        {/* Create Account */}
+        <button
+          onClick={() => switchMode('signup')}
+          className="w-full py-3 bg-slate-800/80 hover:bg-slate-700/80 text-white font-semibold rounded-xl border border-slate-600 hover:border-amber-500/50 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+        >
+          <UserPlus2 size={18} />
+          <span>Create Account</span>
+        </button>
       </div>
+
+      {/* Offline Mode Option */}
+      {!forceOnlineOnly && (
+        <>
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px bg-slate-700" />
+            <span className="text-slate-500 text-xs">or continue without account</span>
+            <div className="flex-1 h-px bg-slate-700" />
+          </div>
+          
+          <button
+            onClick={handleOfflineMode}
+            className="w-full py-2.5 text-slate-400 hover:text-cyan-300 text-sm transition-colors flex items-center justify-center gap-2"
+          >
+            <WifiOff size={14} />
+            <span>Play Offline</span>
+          </button>
+        </>
+      )}
+      
+      {/* Cancel Invite */}
+      {isInviteFlow && onCancelInvite && (
+        <button
+          onClick={onCancelInvite}
+          className="w-full py-2 text-slate-500 hover:text-slate-300 text-xs transition-colors"
+        >
+          Cancel and go to main menu
+        </button>
+      )}
     </div>
   );
 
   // ============================================
-  // SELECT MODE - Main entry screen
-  // ============================================
-  const renderSelectMode = () => {
-    // Auth options with themed colors matching puzzle difficulty order (green, orange, purple, red)
-    const authOptions = [
-      {
-        id: 'login',
-        name: 'SIGN IN',
-        subtitle: 'Existing Account',
-        description: 'Access your profile and continue your progress',
-        icon: LogIn,
-        colors: {
-          gradient: 'from-green-600 to-emerald-600',
-          glow: 'rgba(34,197,94,0.6)',
-          text: 'text-green-300',
-          ring: 'ring-green-500/50',
-          bg: 'bg-green-900/30',
-          border: 'border-green-500/40',
-        }
-      },
-      {
-        id: 'signup',
-        name: 'CREATE ACCOUNT',
-        subtitle: 'New Player',
-        description: 'Join and start tracking your stats',
-        icon: UserPlus2,
-        colors: {
-          gradient: 'from-amber-500 to-orange-600',
-          glow: 'rgba(251,191,36,0.6)',
-          text: 'text-amber-300',
-          ring: 'ring-amber-500/50',
-          bg: 'bg-amber-900/30',
-          border: 'border-amber-500/40',
-        }
-      },
-      {
-        id: 'google',
-        name: 'GOOGLE',
-        subtitle: 'Quick Sign-In',
-        description: 'Use your Google account for instant access',
-        icon: Globe,
-        colors: {
-          gradient: 'from-purple-500 to-pink-600',
-          glow: 'rgba(168,85,247,0.6)',
-          text: 'text-purple-300',
-          ring: 'ring-purple-500/50',
-          bg: 'bg-purple-900/30',
-          border: 'border-purple-500/40',
-        }
-      }
-    ];
-
-    // Add offline option if not forced online and no invite
-    if (!forceOnlineOnly && !isInviteFlow) {
-      authOptions.push({
-        id: 'offline',
-        name: 'PLAY OFFLINE',
-        subtitle: 'No Account',
-        description: 'Jump right in - stats won\'t be saved',
-        icon: WifiOff,
-        colors: {
-          gradient: 'from-red-600 to-rose-600',
-          glow: 'rgba(239,68,68,0.5)',
-          text: 'text-red-300',
-          ring: 'ring-red-500/50',
-          bg: 'bg-red-900/30',
-          border: 'border-red-500/40',
-        }
-      });
-    }
-
-    const handleOptionClick = (optionId) => {
-      soundManager.playButtonClick?.();
-      if (optionId === 'login') {
-        switchMode('login');
-      } else if (optionId === 'signup') {
-        switchMode('signup');
-      } else if (optionId === 'google') {
-        handleGoogleSignIn();
-      } else if (optionId === 'offline') {
-        handleOfflineMode();
-      }
-    };
-
-    return (
-      <div className="space-y-3">
-        {/* Invite Banner */}
-        <InviteBanner />
-        
-        {/* Benefits Info - only show if not in invite flow */}
-        {!isInviteFlow && <BenefitsInfo />}
-        
-        {/* Error Message */}
-        {error && (
-          <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-xl text-red-300 text-sm shadow-[0_0_15px_rgba(239,68,68,0.2)]">
-            {error}
-          </div>
-        )}
-        
-        {/* Auth Options - Glowing Orb Style */}
-        <div className="space-y-2">
-          {authOptions.map((option) => {
-            const Icon = option.icon;
-            const isGoogle = option.id === 'google';
-            const isLoading = loading && isGoogle;
-            
-            // Get gradient colors for hover effect (matching puzzle difficulty order)
-            const gradientColors = {
-              login: { from: '#16a34a', to: '#059669' },      // green
-              signup: { from: '#f59e0b', to: '#ea580c' },     // orange
-              google: { from: '#a855f7', to: '#db2777' },     // purple
-              offline: { from: '#dc2626', to: '#e11d48' }     // red
-            };
-            const gradient = gradientColors[option.id];
-            
-            return (
-              <button
-                key={option.id}
-                onClick={() => handleOptionClick(option.id)}
-                disabled={isLoading}
-                className={`w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
-                  ${option.colors.bg} ${option.colors.border} border-2
-                  hover:border-white/40 hover:ring-4 ${option.colors.ring}
-                  active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait`}
-                style={{ 
-                  boxShadow: `0 0 20px ${option.colors.glow.replace('0.6', '0.2')}`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = `0 0 35px ${option.colors.glow}`;
-                  e.currentTarget.style.background = `linear-gradient(to right, ${gradient.from}, ${gradient.to})`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = `0 0 20px ${option.colors.glow.replace('0.6', '0.2')}`;
-                  e.currentTarget.style.background = '';
-                }}
-              >
-                {/* Animated shine effect on hover */}
-                <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
-                </div>
-                
-                <div className="relative flex items-center gap-3">
-                  {/* Icon Circle with Glow */}
-                  <div 
-                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
-                      bg-gradient-to-br ${option.colors.gradient} group-hover:scale-110`}
-                    style={{ boxShadow: `0 0 15px ${option.colors.glow}` }}
-                  >
-                    {isLoading ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : isGoogle ? (
-                      <svg viewBox="0 0 24 24" className="w-5 h-5">
-                        <path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                        <path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                        <path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                        <path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                      </svg>
-                    ) : (
-                      <Icon size={20} className="text-white" />
-                    )}
-                  </div>
-                  
-                  {/* Text Content */}
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className={`font-black tracking-wide text-sm group-hover:text-white transition-colors ${option.colors.text}`}>
-                        {option.name}
-                      </h3>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                        {option.subtitle}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 group-hover:text-white/80 transition-colors">
-                      {option.description}
-                    </p>
-                  </div>
-                  
-                  {/* Arrow indicator */}
-                  <ChevronRight 
-                    size={20} 
-                    className={`flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white ${option.colors.text}`} 
-                  />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  // ============================================
-  // LOGIN MODE - For existing email accounts
+  // LOGIN MODE
   // ============================================
   const renderLoginMode = () => (
     <div className="space-y-4">
-      {/* Invite Banner */}
-      <InviteBanner />
-      
       <button
-        type="button"
         onClick={() => switchMode('select')}
         className="flex items-center gap-2 text-slate-400 hover:text-green-300 text-sm transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
-        Back to options
+        Back
       </button>
       
       <div className="text-center mb-2">
         <div className="w-14 h-14 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-green-400/30">
-          <KeyRound size={28} className="text-green-400" />
+          <LogIn size={28} className="text-green-400" />
         </div>
-        <h3 className="text-white font-bold text-lg">Sign In</h3>
-        <p className="text-slate-400 text-sm">Welcome back! Enter your credentials</p>
+        <h3 className="text-white font-bold text-lg">Welcome Back</h3>
+        <p className="text-slate-400 text-sm">Sign in to your account</p>
       </div>
       
       {error && (
@@ -603,15 +445,17 @@ const EntryAuthScreen = ({
           <span>{success}</span>
         </div>
       )}
-      
-      {/* Resend Confirmation */}
+
+      {/* Resend confirmation option */}
       {showResendOption && (
-        <div className="p-3 bg-amber-900/30 border border-amber-500/50 rounded-xl">
-          <p className="text-amber-200 text-sm mb-2">Haven't verified your email yet?</p>
+        <div className="p-3 bg-amber-900/30 border border-amber-500/30 rounded-xl">
+          <p className="text-amber-200 text-sm mb-2">
+            Your email hasn't been verified yet.
+          </p>
           <button
             onClick={handleResendConfirmation}
             disabled={resendingEmail}
-            className="text-amber-300 hover:text-amber-200 text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            className="w-full py-2 bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
           >
             {resendingEmail ? (
               <><RefreshCw size={14} className="animate-spin" /> Sending...</>
@@ -657,99 +501,53 @@ const EntryAuthScreen = ({
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
             >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </div>
-        
+
         <button
           type="submit"
           disabled={loading}
-          className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
-            bg-green-900/30 border-2 border-green-500/40
-            hover:border-white/40 hover:ring-4 ring-green-500/50
-            active:scale-[0.98] disabled:opacity-50"
-          style={{ 
-            boxShadow: '0 0 20px rgba(34,197,94,0.2)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 35px rgba(34,197,94,0.6)';
-            e.currentTarget.style.background = 'linear-gradient(to right, #16a34a, #059669)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 20px rgba(34,197,94,0.2)';
-            e.currentTarget.style.background = '';
-          }}
+          className="w-full py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          {/* Animated shine effect on hover */}
-          <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
-          </div>
-          
-          <div className="relative flex items-center justify-center gap-3">
-            {/* Icon Circle with Glow */}
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
-                bg-gradient-to-br from-green-600 to-emerald-600 group-hover:scale-110"
-              style={{ boxShadow: '0 0 15px rgba(34,197,94,0.6)' }}
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <LogIn size={20} className="text-white" />
-              )}
-            </div>
-            
-            {/* Text Content */}
-            <span className="font-black tracking-wide text-sm text-green-300 group-hover:text-white transition-colors">
-              SIGN IN
-            </span>
-            
-            {/* Arrow indicator */}
-            <ChevronRight 
-              size={20} 
-              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-green-300" 
-            />
-          </div>
+          {loading ? (
+            <><Loader size={18} className="animate-spin" /> Signing in...</>
+          ) : (
+            <><LogIn size={18} /> Sign In</>
+          )}
         </button>
       </form>
       
-      {/* Account recovery options - only for existing accounts */}
-      <div className="flex items-center justify-center gap-4 pt-2">
-        <button
-          onClick={() => switchMode('forgot-password')}
-          className="text-slate-400 hover:text-amber-400 text-xs transition-colors flex items-center gap-1"
+      <div className="flex items-center justify-between text-xs">
+        <button 
+          onClick={() => switchMode('forgot-password')} 
+          className="text-slate-400 hover:text-green-300 transition-colors"
         >
-          <Key size={12} />
-          Forgot Password?
+          Forgot password?
         </button>
-        <span className="text-slate-600">|</span>
-        <button
-          onClick={() => switchMode('magic-link')}
-          className="text-slate-400 hover:text-purple-400 text-xs transition-colors flex items-center gap-1"
+        <button 
+          onClick={() => switchMode('magic-link')} 
+          className="text-slate-400 hover:text-purple-300 transition-colors flex items-center gap-1"
         >
           <Wand2 size={12} />
-          Magic Link
+          Magic link
         </button>
       </div>
     </div>
   );
 
   // ============================================
-  // SIGNUP MODE - Create new account
+  // SIGNUP MODE
   // ============================================
   const renderSignupMode = () => (
     <div className="space-y-4">
-      {/* Invite Banner */}
-      <InviteBanner />
-      
       <button
-        type="button"
         onClick={() => switchMode('select')}
         className="flex items-center gap-2 text-slate-400 hover:text-amber-300 text-sm transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
-        Back to options
+        Back
       </button>
       
       <div className="text-center mb-2">
@@ -757,7 +555,7 @@ const EntryAuthScreen = ({
           <UserPlus2 size={28} className="text-amber-400" />
         </div>
         <h3 className="text-white font-bold text-lg">Create Account</h3>
-        <p className="text-slate-400 text-sm">Join Deadblock with email & password</p>
+        <p className="text-slate-400 text-sm">Join the competition</p>
       </div>
       
       {error && (
@@ -786,9 +584,11 @@ const EntryAuthScreen = ({
               placeholder="Choose a username"
               required
               minLength={3}
+              maxLength={20}
               autoComplete="username"
             />
           </div>
+          <p className="text-slate-500 text-xs mt-1">3-20 characters, letters, numbers, underscores</p>
         </div>
         
         <div>
@@ -826,60 +626,21 @@ const EntryAuthScreen = ({
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
             >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
         </div>
-        
+
         <button
           type="submit"
           disabled={loading}
-          className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
-            bg-amber-900/30 border-2 border-amber-500/40
-            hover:border-white/40 hover:ring-4 ring-amber-500/50
-            active:scale-[0.98] disabled:opacity-50"
-          style={{ 
-            boxShadow: '0 0 20px rgba(251,191,36,0.2)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 35px rgba(251,191,36,0.6)';
-            e.currentTarget.style.background = 'linear-gradient(to right, #f59e0b, #ea580c)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = '0 0 20px rgba(251,191,36,0.2)';
-            e.currentTarget.style.background = '';
-          }}
+          className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          {/* Animated shine effect on hover */}
-          <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
-          </div>
-          
-          <div className="relative flex items-center justify-center gap-3">
-            {/* Icon Circle with Glow */}
-            <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
-                bg-gradient-to-br from-amber-500 to-orange-600 group-hover:scale-110"
-              style={{ boxShadow: '0 0 15px rgba(251,191,36,0.6)' }}
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <UserPlus2 size={20} className="text-white" />
-              )}
-            </div>
-            
-            {/* Text Content */}
-            <span className="font-black tracking-wide text-sm text-amber-300 group-hover:text-white transition-colors">
-              {isInviteFlow ? 'CREATE & JOIN' : 'CREATE ACCOUNT'}
-            </span>
-            
-            {/* Arrow indicator */}
-            <ChevronRight 
-              size={20} 
-              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-amber-300" 
-            />
-          </div>
+          {loading ? (
+            <><Loader size={18} className="animate-spin" /> Creating account...</>
+          ) : (
+            <><UserPlus2 size={18} /> Create Account</>
+          )}
         </button>
       </form>
       
@@ -898,17 +659,16 @@ const EntryAuthScreen = ({
   const renderForgotPasswordMode = () => (
     <div className="space-y-4">
       <button
-        type="button"
         onClick={() => switchMode('login')}
-        className="flex items-center gap-2 text-slate-400 hover:text-amber-300 text-sm transition-colors group"
+        className="flex items-center gap-2 text-slate-400 hover:text-cyan-300 text-sm transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
         Back to sign in
       </button>
       
       <div className="text-center mb-2">
-        <div className="w-14 h-14 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-amber-400/30">
-          <KeyRound size={28} className="text-amber-400" />
+        <div className="w-14 h-14 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-3 border border-cyan-400/30">
+          <KeyRound size={28} className="text-cyan-400" />
         </div>
         <h3 className="text-white font-bold text-lg">Reset Password</h3>
         <p className="text-slate-400 text-sm">Enter your email to receive a reset link</p>
@@ -934,7 +694,7 @@ const EntryAuthScreen = ({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
+            className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 focus:outline-none transition-all"
             placeholder="your@email.com"
             required
             autoComplete="email"
@@ -943,16 +703,13 @@ const EntryAuthScreen = ({
         
         <button
           type="submit"
-          disabled={loading || !!success}
-          className="w-full py-3 bg-gradient-to-r from-amber-600 to-orange-600 text-white font-bold rounded-xl hover:from-amber-500 hover:to-orange-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(251,191,36,0.25)] disabled:opacity-50 border border-amber-400/30"
+          disabled={loading || !email}
+          className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <><Loader size={18} className="animate-spin" /> Sending...</>
           ) : (
-            <>
-              <Mail size={18} />
-              <span>Send Reset Link</span>
-            </>
+            <><Mail size={18} /> Send Reset Link</>
           )}
         </button>
       </form>
@@ -965,9 +722,8 @@ const EntryAuthScreen = ({
   const renderMagicLinkMode = () => (
     <div className="space-y-4">
       <button
-        type="button"
         onClick={() => switchMode('login')}
-        className="flex items-center gap-2 text-slate-400 hover:text-green-300 text-sm transition-colors group"
+        className="flex items-center gap-2 text-slate-400 hover:text-purple-300 text-sm transition-colors group"
       >
         <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
         Back to sign in
@@ -1010,125 +766,87 @@ const EntryAuthScreen = ({
         
         <button
           type="submit"
-          disabled={loading || !!success}
-          className="w-full py-3 bg-gradient-to-r from-purple-600 to-violet-600 text-white font-bold rounded-xl hover:from-purple-500 hover:to-violet-500 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(139,92,246,0.25)] disabled:opacity-50 border border-purple-400/30"
+          disabled={loading || !email}
+          className="w-full py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {loading ? (
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <><Loader size={18} className="animate-spin" /> Sending...</>
           ) : (
-            <>
-              <Wand2 size={18} />
-              <span>Send Magic Link</span>
-            </>
+            <><Wand2 size={18} /> Send Magic Link</>
           )}
         </button>
       </form>
       
       <p className="text-slate-500 text-xs text-center">
-        📧 We'll send a link to your email that signs you in instantly
+        📧 The link will expire in 1 hour
       </p>
     </div>
   );
 
-  // ============================================
-  // MAIN RENDER
-  // ============================================
-  
-  // Theme configuration - matching PuzzleSelect style
-  const theme = {
-    gridColor: 'rgba(34,211,238,0.4)',
-    glow1: { color: 'bg-cyan-500/35', pos: 'top-20 left-10' },
-    glow2: { color: 'bg-blue-500/30', pos: 'bottom-32 right-10' },
-    glow3: { color: 'bg-purple-500/20', pos: 'top-1/2 left-1/2' },
-    cardBg: 'bg-gradient-to-br from-slate-900/95 via-cyan-950/40 to-slate-900/95',
-    cardBorder: 'border-cyan-500/40',
-    cardShadow: 'shadow-[0_0_50px_rgba(34,211,238,0.3),inset_0_0_20px_rgba(34,211,238,0.05)]',
-  };
-  
-  // Invite theme - amber glow when invite is present
-  const inviteTheme = isInviteFlow ? {
-    gridColor: 'rgba(251,191,36,0.4)',
-    glow1: { color: 'bg-amber-500/35', pos: 'top-20 left-10' },
-    glow2: { color: 'bg-orange-500/30', pos: 'bottom-32 right-10' },
-    glow3: { color: 'bg-yellow-500/20', pos: 'top-1/2 left-1/2' },
-    cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/40 to-slate-900/95',
-    cardBorder: 'border-amber-500/40',
-    cardShadow: 'shadow-[0_0_50px_rgba(251,191,36,0.3),inset_0_0_20px_rgba(251,191,36,0.05)]',
-  } : theme;
-  
-  const activeTheme = isInviteFlow ? inviteTheme : theme;
-
   return (
     <div 
-      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      className="min-h-screen bg-transparent flex flex-col"
+      className="min-h-screen bg-slate-950 flex flex-col"
       style={scrollStyles}
     >
-      {/* Multiple themed glow orbs - matching PuzzleSelect */}
-      <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      {/* Grid Background */}
+      <div className="fixed inset-0 opacity-20 pointer-events-none" style={{
+        backgroundImage: 'linear-gradient(rgba(34,211,238,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.3) 1px, transparent 1px)',
+        backgroundSize: '40px 40px'
+      }} />
       
-      {/* Content - Grouped title+subtitle+card together, positioned in upper-center area */}
-      <div className="relative z-10 flex-1 flex flex-col items-center p-4 pt-12 sm:pt-16"
-        style={{
-          paddingTop: 'max(48px, env(safe-area-inset-top))',
-          paddingBottom: 'max(80px, env(safe-area-inset-bottom))',
-        }}
-      >
-        {/* Spacer to push content to ~35% from top on larger screens */}
-        <div className="flex-shrink-0 h-8 sm:h-16 md:h-24" />
-        
-        {/* Main content group - title, subtitle, and card together */}
-        <div className="flex flex-col items-center">
-          {/* Title - Large size matching PuzzleSelect */}
-          <div className="text-center mb-3">
-            <NeonTitle size="large" />
-          </div>
-          
-          {/* Subtitle - Positioned close to the card below */}
-          <p className="text-slate-400 text-sm mb-4 text-center max-w-xs px-2">
-            {isInviteFlow 
-              ? '🎮 Sign in to accept your game challenge!'
-              : 'Strategic pentomino puzzle battles. Challenge the AI, solve puzzles, or compete online!'
-            }
-          </p>
-          
-          {/* Auth Card - with dramatic PuzzleSelect-style theme */}
-          <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
-            {mode === 'select' && renderSelectMode()}
-            {mode === 'login' && renderLoginMode()}
-            {mode === 'signup' && renderSignupMode()}
-            {mode === 'forgot-password' && renderForgotPasswordMode()}
-            {mode === 'magic-link' && renderMagicLinkMode()}
-          </div>
+      {/* Content */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4">
+        {/* Title */}
+        <div className="mb-6">
+          <NeonTitle size="medium" />
         </div>
         
-        {/* Flexible spacer */}
-        <div className="flex-1" />
+        {/* Subtitle showing intended destination */}
+        <p className="text-slate-400 text-sm mb-6 text-center">
+          {isInviteFlow 
+            ? '🎮 Sign in to accept your game challenge!'
+            : <>Sign in to access <span className="text-cyan-400">{getDestinationName()}</span></>
+          }
+        </p>
+        
+        {/* Auth Card */}
+        <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow}`}>
+          {mode === 'select' && renderSelectMode()}
+          {mode === 'login' && renderLoginMode()}
+          {mode === 'signup' && renderSignupMode()}
+          {mode === 'forgot-password' && renderForgotPasswordMode()}
+          {mode === 'magic-link' && renderMagicLinkMode()}
+        </div>
       </div>
 
-      {/* Footer - Fixed at bottom (Privacy/Terms links now in index.html footer) */}
-      <div className="relative z-10 text-center pb-5 px-4"
-        style={{
-          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
-        }}
+      {/* Footer - v7.15: Added account management link */}
+      <div 
+        className="relative z-10 text-center pb-5 px-4"
+        style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}
       >
+        {/* Subtle account deletion link */}
+        <button
+          onClick={() => {
+            soundManager.playClickSound?.('select');
+            setShowAccountDeletion(true);
+          }}
+          className="text-slate-600 hover:text-red-400/70 text-xs transition-colors mb-2 flex items-center justify-center gap-1 mx-auto"
+        >
+          <Trash2 size={10} />
+          <span>Delete Account</span>
+        </button>
+        
         <p className="text-slate-600 text-xs">
           © 2025 Deadblock. All rights reserved.
         </p>
       </div>
       
-      {/* Shine animation for glowing orb buttons */}
-      <style>{`
-        @keyframes shine {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
-        .group:hover .group-hover\\:animate-shine {
-          animation: shine 1.5s ease-in-out;
-        }
-      `}</style>
+      {/* Account Deletion Modal */}
+      {showAccountDeletion && (
+        <AccountDeletionModal 
+          onClose={() => setShowAccountDeletion(false)} 
+        />
+      )}
     </div>
   );
 };
