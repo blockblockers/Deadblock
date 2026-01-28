@@ -1,5 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.15: Fixed unviewed loss flash - prevents real-time + rematch polling from interrupting 5s delay
+// v7.15: Moved pieces count and chat button to below piece tray, removed duplicate pieces display
 // v7.14: Added streak tracking on game completion
 // v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
@@ -175,8 +175,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [chatToast, setChatToast] = useState(null); // { senderName, message, timestamp }
   const [turnStartedAt, setTurnStartedAt] = useState(null);
   const [connected, setConnected] = useState(false); // Track realtime connection
-  // v7.15: Track when viewing a pre-completed game (unviewed loss) - skip rematch polling for these
-  const [isViewingHistoricalGame, setIsViewingHistoricalGame] = useState(false);
   
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
@@ -196,8 +194,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
-  // v7.15: Track when viewing a completed game to prevent real-time interference
-  const viewingCompletedGameRef = useRef(false);
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
@@ -580,9 +576,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [isDragging, updateDrag, endDrag]);
 
   // Poll for rematch requests when game is over
-  // v7.15: Skip for historical games (unviewed losses) - old rematch requests shouldn't affect the view
   useEffect(() => {
-    if (!showGameOver || !gameId || !user?.id || isViewingHistoricalGame) return;
+    if (!showGameOver || !gameId || !user?.id) return;
     
     let pollInterval;
     let mounted = true;
@@ -676,7 +671,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       mounted = false;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [showGameOver, gameId, user?.id, showRematchModal, rematchDeclined, rematchAccepted, isRematchRequester, isViewingHistoricalGame]);
+  }, [showGameOver, gameId, user?.id, showRematchModal, rematchDeclined, rematchAccepted, isRematchRequester]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -794,8 +789,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      // v7.15: Skip if we're in "viewing completed game" mode (5s delay is active)
-      if (gameData.status === 'completed' && !showGameOver && !viewingCompletedGameRef.current) {
+      if (gameData.status === 'completed' && !showGameOver) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -871,11 +865,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         // For completed games, we want to show the board first, then the modal
         // So we'll set the game state but NOT trigger game over yet
         if (isCompletedGame) {
-          // v7.15: Set flag to prevent real-time subscription from interrupting the 5s delay
-          viewingCompletedGameRef.current = true;
-          // v7.15: Mark this as a historical game to skip rematch polling
-          setIsViewingHistoricalGame(true);
-          
           // Set game result for later use
           const result = {
             isWin: iWon,
@@ -885,12 +874,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           setGameResult(result);
           
           // Set up board state WITHOUT showing game over modal
-          // v7.15 FIX: Properly convert board - keep player values, convert 0/undefined to null
           const validBoard = data.board && Array.isArray(data.board) && data.board.length === BOARD_SIZE
             ? data.board.map(row => Array.isArray(row) && row.length === BOARD_SIZE 
-                ? row.map(cell => (cell === 0 || cell === undefined) ? null : cell)
-                : Array(BOARD_SIZE).fill(null))
-            : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+                ? row.map(cell => cell === null || cell === undefined ? 0 : cell)
+                : Array(BOARD_SIZE).fill(0))
+            : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0));
           
           setGame(data);
           setBoard(validBoard);
@@ -943,7 +931,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           // This gives user time to see the board and the winning move
           setTimeout(() => {
             if (mountedRef.current && !showGameOver) {
-              viewingCompletedGameRef.current = false; // Clear flag when showing modal
               setShowGameOver(true);
               soundManager.playSound(iWon ? 'win' : 'lose');
             }
@@ -1062,7 +1049,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     return () => {
       mountedRef.current = false;
-      viewingCompletedGameRef.current = false; // v7.15: Clear on unmount
       clearTimeout(loadingTimeout);
       if (subscription) {
         subscription.unsubscribe();
@@ -1638,16 +1624,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               </div>
             </div>
 
-            {/* Pieces info bar when D-Pad is shown */}
-            {pendingMove && isMyTurn && !isDragging && game?.status === 'active' && (
-              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
-                <span className="text-slate-400 text-xs">
-                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
-                </span>
-                <span className="text-amber-400/60 text-xs">Use D-Pad to position</span>
-              </div>
-            )}
-            
             {/* D-Pad with Error Message Layout - matches GameScreen */}
             {pendingMove && isMyTurn && !isDragging && (
               <div className="flex items-start justify-center gap-3 mb-2">
@@ -1670,50 +1646,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               </div>
             )}
             
-            {/* Chat button when no pending move */}
-            {(!pendingMove || !isMyTurn || isDragging) && game?.status === 'active' && (
-              <div className="flex items-center justify-between px-2 py-1.5 mb-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
-                <span className="text-slate-400 text-xs">
-                  Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
-                </span>
-                <button
-                  onClick={() => {
-                    setChatOpen(!chatOpen);
-                    if (!chatOpen) setHasUnreadChat(false);
-                  }}
-                  className={`
-                    relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
-                    ${chatOpen 
-                      ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
-                      : hasUnreadChat 
-                        ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
-                        : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
-                    }
-                  `}
-                  style={hasUnreadChat && !chatOpen ? {
-                    animation: 'chatBlink 0.8s ease-in-out infinite',
-                    boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
-                  } : {}}
-                >
-                  <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
-                  {hasUnreadChat && !chatOpen && (
-                    <>
-                      <span 
-                        className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
-                        style={{
-                          animation: 'bounce 0.5s ease-in-out infinite',
-                          boxShadow: '0 0 15px rgba(239,68,68,1)'
-                        }}
-                      >
-                        !
-                      </span>
-                      <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
             {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
             {/* Row 1: Menu, Rotate, Flip, Forfeit/Quit */}
             <div className="flex gap-1 mt-3">
@@ -1788,6 +1720,50 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             isDragging={isDragging}
             draggedPiece={draggedPiece}
           />
+          
+          {/* Pieces count and Chat button - below piece tray */}
+          {game?.status === 'active' && (
+            <div className="flex items-center justify-between px-2 py-1.5 mt-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
+              <span className="text-slate-400 text-xs">
+                Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
+              </span>
+              <button
+                onClick={() => {
+                  setChatOpen(!chatOpen);
+                  if (!chatOpen) setHasUnreadChat(false);
+                }}
+                className={`
+                  relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
+                  ${chatOpen 
+                    ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
+                    : hasUnreadChat 
+                      ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
+                      : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
+                  }
+                `}
+                style={hasUnreadChat && !chatOpen ? {
+                  animation: 'chatBlink 0.8s ease-in-out infinite',
+                  boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
+                } : {}}
+              >
+                <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
+                {hasUnreadChat && !chatOpen && (
+                  <>
+                    <span 
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-[8px] font-bold text-white"
+                      style={{
+                        animation: 'bounce 0.5s ease-in-out infinite',
+                        boxShadow: '0 0 15px rgba(239,68,68,1)'
+                      }}
+                    >
+                      !
+                    </span>
+                    <span className="absolute inset-0 rounded-full bg-red-400/50 animate-ping" />
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

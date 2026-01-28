@@ -1,17 +1,16 @@
-// PlayerProfileCard.jsx - Enhanced display for main menu with rating info, achievements, and play streak
-// v7.15: Combined all stats into single button - streak flame, achievements trophy, rating
+// PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, and achievements
+// v7.15: Enhanced achievement button - shows count inline, NEW badge doesn't overlap
 // v7.12: Added NEW achievements indicator badge (similar to friend requests)
 // Place in src/components/PlayerProfileCard.jsx
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle, Flame, Award } from 'lucide-react';
+import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
 import { supabase } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import Achievements from './Achievements';
 import achievementService from '../services/achievementService';
-import { streakService } from '../services/streakService';
 
 // Helper to get cached profile synchronously from localStorage
 const getCachedProfileSync = () => {
@@ -204,7 +203,7 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
 };
 
 /**
- * PlayerProfileCard - Shows player profile in main menu with integrated stats
+ * PlayerProfileCard - Shows player profile in main menu
  */
 const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   const { user, profile, isAuthenticated, updateProfile, refreshProfile, loading: authLoading } = useAuth();
@@ -214,9 +213,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
   const [newAchievementsCount, setNewAchievementsCount] = useState(0);
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
-  
-  // v7.15: Play streak state
-  const [streakData, setStreakData] = useState({ current_streak: 0, longest_streak: 0, streak_status: 'none' });
   
   // Use cached profile as fallback
   const [localCachedProfile] = useState(() => getCachedProfileSync());
@@ -233,28 +229,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     const b = parseInt(hex.slice(5, 7), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
-  
-  // v7.15: Load play streak
-  useEffect(() => {
-    const loadStreak = async () => {
-      if (!effectiveProfile?.id) return;
-      
-      try {
-        console.log('[PlayerProfileCard] Loading streak for:', effectiveProfile.id);
-        const result = await streakService.getStreak(effectiveProfile.id);
-        console.log('[PlayerProfileCard] Streak result:', result);
-        
-        if (result.data) {
-          console.log('[PlayerProfileCard] Streak loaded:', result.data);
-          setStreakData(result.data);
-        }
-      } catch (err) {
-        console.error('[PlayerProfileCard] Error loading streak:', err);
-      }
-    };
-    
-    loadStreak();
-  }, [effectiveProfile?.id]);
   
   // Load achievement counts and check for new ones
   useEffect(() => {
@@ -385,23 +359,13 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     );
   }
   
-  // Authenticated view with profile - v7.15: Integrated stats display
+  // Authenticated view with profile
   const displayName = effectiveProfile.display_name || effectiveProfile.username || 'Player';
   const glowRgba = {
     '15': hexToRgba(glowColor, 0.15),
-    '25': hexToRgba(glowColor, 0.25),
     '30': hexToRgba(glowColor, 0.3),
     '40': hexToRgba(glowColor, 0.4),
     '50': hexToRgba(glowColor, 0.5),
-  };
-  
-  // Get streak color based on status
-  const getStreakColor = () => {
-    const streak = streakData.current_streak || 0;
-    if (streak >= 30) return '#f59e0b'; // Amber for legendary
-    if (streak >= 7) return '#ef4444'; // Red for hot
-    if (streak >= 3) return '#f97316'; // Orange for warm
-    return '#94a3b8'; // Slate for cold/none
   };
   
   return (
@@ -416,6 +380,49 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           boxShadow: `0 0 25px ${glowRgba['15']}, 0 4px 15px rgba(0,0,0,0.3)`
         }}
       >
+        {/* Action buttons (achievements, edit) */}
+        <div className="absolute top-2 right-2 flex gap-1 z-10">
+          {/* Achievements button with count and NEW indicator */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenAchievements();
+            }}
+            className="relative flex items-center gap-1 px-2 py-1 rounded-lg transition-all hover:scale-105"
+            style={{ 
+              background: newAchievementsCount > 0 
+                ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.2))'
+                : 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
+              border: newAchievementsCount > 0 
+                ? '1px solid rgba(251, 191, 36, 0.5)'
+                : '1px solid rgba(251, 191, 36, 0.3)'
+            }}
+            title={`Achievements (${achievementCount.unlocked}/${achievementCount.total})`}
+          >
+            <Trophy 
+              size={12} 
+              className="text-amber-400" 
+            />
+            <span className="text-amber-300 text-[10px] font-bold">
+              {achievementCount.unlocked}/{achievementCount.total}
+            </span>
+            {/* NEW badge - positioned to the right, not overlapping */}
+            {newAchievementsCount > 0 && (
+              <span 
+                className="ml-0.5 min-w-[14px] h-[14px] px-1 flex items-center justify-center text-[9px] font-bold rounded-full"
+                style={{
+                  background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                  color: 'white',
+                  boxShadow: '0 0 6px rgba(239, 68, 68, 0.6)',
+                  animation: 'pulse 1.5s ease-in-out infinite'
+                }}
+              >
+                {newAchievementsCount > 9 ? '9+' : `+${newAchievementsCount}`}
+              </span>
+            )}
+          </button>
+        </div>
+        
         {/* Tier icon */}
         <div 
           className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
@@ -428,19 +435,15 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           {rankInfo && <TierIcon shape={rankInfo.shape} glowColor={glowColor} size="medium" />}
         </div>
         
-        {/* Player info - main content */}
-        <div className="flex-1 text-left min-w-0">
-          {/* Name row */}
+        {/* Player info */}
+        <div className="flex-1 text-left min-w-0 pr-16">
           <div 
             className="font-black text-base tracking-wide truncate"
             style={{ color: '#f1f5f9', textShadow: `0 0 12px ${glowRgba['40']}` }}
           >
             {displayName}
           </div>
-          
-          {/* Stats row: Rank | ELO | Achievements | Streak */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Rank name */}
+          <div className="flex items-center gap-2">
             {rankInfo && (
               <span 
                 className="text-xs font-bold uppercase tracking-wider"
@@ -449,66 +452,9 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
                 {rankInfo.name}
               </span>
             )}
-            
-            {/* ELO */}
-            <span style={{ color: '#94a3b8', fontSize: '11px', fontWeight: '500' }}>
-              {effectiveProfile.rating || 1000}
+            <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
+              {effectiveProfile.rating || 1000} ELO
             </span>
-            
-            {/* Divider */}
-            <span className="text-slate-600">•</span>
-            
-            {/* Achievements with badge */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenAchievements();
-              }}
-              className="flex items-center gap-1 hover:scale-105 transition-transform relative"
-              title={`Achievements: ${achievementCount.unlocked}/${achievementCount.total}`}
-            >
-              <Trophy size={12} className="text-amber-400" />
-              <span className="text-amber-300 text-xs font-bold">
-                {achievementCount.unlocked}
-              </span>
-              {/* NEW badge for new achievements */}
-              {newAchievementsCount > 0 && (
-                <span 
-                  className="absolute -top-1 -right-2 min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[9px] font-bold rounded-full animate-pulse"
-                  style={{
-                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                    color: 'white',
-                    boxShadow: '0 0 6px rgba(245, 158, 11, 0.6)'
-                  }}
-                >
-                  {newAchievementsCount > 9 ? '9+' : newAchievementsCount}
-                </span>
-              )}
-            </button>
-            
-            {/* Divider */}
-            <span className="text-slate-600">•</span>
-            
-            {/* Play Streak */}
-            <div 
-              className="flex items-center gap-1"
-              title={`Play Streak: ${streakData.current_streak || 0} days`}
-            >
-              <Flame 
-                size={12} 
-                style={{ 
-                  color: getStreakColor(),
-                  filter: streakData.current_streak >= 3 ? `drop-shadow(0 0 3px ${getStreakColor()})` : 'none'
-                }}
-                className={streakData.current_streak >= 7 ? 'animate-pulse' : ''}
-              />
-              <span 
-                className="text-xs font-bold"
-                style={{ color: getStreakColor() }}
-              >
-                {streakData.current_streak || 0}
-              </span>
-            </div>
           </div>
         </div>
         
