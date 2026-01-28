@@ -1,5 +1,5 @@
 // pushNotificationService.js - Client-side push notification management
-// v7.15: FIXED - Handles service worker conflicts, proper timeouts
+// v7.15: FIXED - Handles service worker conflicts, proper timeouts, state persistence
 // Place in src/services/pushNotificationService.js
 //
 // CRITICAL FIXES:
@@ -7,6 +7,7 @@
 // - 10 second timeout on ALL async operations
 // - No more infinite spinning
 // - Better error recovery
+// - NEW: checkSubscription() async method for accurate state on modal reopen
 
 import { supabase } from '../utils/supabase';
 
@@ -184,7 +185,7 @@ class PushNotificationService {
         const worker = registration.installing || registration.waiting;
         if (worker) {
           worker.addEventListener('statechange', () => {
-            if (worker.state === 'activated') {
+            if (registration.active) {
               clearTimeout(timeout);
               resolve();
             }
@@ -210,8 +211,36 @@ class PushNotificationService {
     return Notification.permission;
   }
 
+  // Synchronous check based on cached value - fast but may be stale
   isSubscribed() {
     return !!this.subscription;
+  }
+
+  // v7.15: Async check that queries the browser directly
+  // Use this when opening settings modal to get accurate state
+  async checkSubscription() {
+    console.log('[PushService] checkSubscription called');
+    
+    // Make sure we're initialized
+    if (!this.initialized) {
+      await this.init();
+    }
+    
+    if (!this.swRegistration?.pushManager) {
+      console.log('[PushService] No pushManager available, returning false');
+      return false;
+    }
+    
+    try {
+      // Query the browser directly for current subscription state
+      this.subscription = await this.swRegistration.pushManager.getSubscription();
+      const isSubbed = !!this.subscription;
+      console.log('[PushService] checkSubscription result:', isSubbed);
+      return isSubbed;
+    } catch (e) {
+      console.warn('[PushService] checkSubscription error:', e.message);
+      return false;
+    }
   }
 
   async subscribe(userId) {
@@ -281,108 +310,110 @@ class PushNotificationService {
   async unsubscribe(userId) {
     console.log('[PushService] Unsubscribe called');
     
-    if (!this.subscription) {
-      return { success: true };
-    }
-
     try {
-      await withTimeout(this.subscription.unsubscribe(), 10000, 'Unsubscribe timed out');
+      if (this.subscription) {
+        await this.subscription.unsubscribe();
+        console.log('[PushService] Browser subscription removed');
+      }
       
+      // Remove from database
       if (userId) {
         try {
           await this.removeSubscription(userId);
         } catch (e) {
-          console.warn('[PushService] Remove from DB failed:', e.message);
+          console.warn('[PushService] DB removal failed:', e.message);
         }
       }
-
+      
       this.subscription = null;
-      console.log('[PushService] Unsubscribed');
       return { success: true };
+      
     } catch (error) {
       console.error('[PushService] Unsubscribe failed:', error.message);
-      throw error;
+      this.subscription = null;
+      return { success: false, error: error.message };
     }
   }
 
   async saveSubscription(userId, subscription) {
-    const json = subscription.toJSON();
-    const deviceInfo = this.getDeviceInfo();
+    const subscriptionJson = subscription.toJSON();
+    
+    console.log('[PushService] Saving subscription to database...');
     
     const { error } = await supabase
       .from('push_subscriptions')
       .upsert({
         user_id: userId,
-        endpoint: json.endpoint,
-        p256dh: json.keys?.p256dh,
-        auth: json.keys?.auth,
-        device_info: deviceInfo,
+        endpoint: subscriptionJson.endpoint,
+        p256dh: subscriptionJson.keys.p256dh,
+        auth: subscriptionJson.keys.auth,
         updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,endpoint' });
+      }, {
+        onConflict: 'user_id,endpoint'
+      });
 
-    if (error) throw error;
-    console.log('[PushService] Saved to database');
-    return true;
+    if (error) {
+      console.error('[PushService] Save error:', error);
+      throw error;
+    }
+    
+    console.log('[PushService] Subscription saved');
   }
 
   async removeSubscription(userId) {
-    const endpoint = this.subscription?.endpoint;
-    const query = supabase.from('push_subscriptions').delete().eq('user_id', userId);
-    if (endpoint) query.eq('endpoint', endpoint);
-    await query;
-    console.log('[PushService] Removed from database');
-  }
+    console.log('[PushService] Removing subscription from database...');
+    
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('user_id', userId);
 
-  getDeviceInfo() {
-    const ua = navigator.userAgent;
-    let device = 'Unknown', browser = 'Unknown';
+    if (error && error.code !== 'PGRST116') {
+      console.error('[PushService] Remove error:', error);
+      throw error;
+    }
     
-    if (/iPhone|iPad|iPod/.test(ua)) device = 'iOS';
-    else if (/Android/.test(ua)) device = 'Android';
-    else if (/Windows/.test(ua)) device = 'Windows';
-    else if (/Mac/.test(ua)) device = 'Mac';
-    else if (/Linux/.test(ua)) device = 'Linux';
-    
-    if (/Chrome/.test(ua) && !/Edge/.test(ua)) browser = 'Chrome';
-    else if (/Firefox/.test(ua)) browser = 'Firefox';
-    else if (/Safari/.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
-    else if (/Edge/.test(ua)) browser = 'Edge';
-    
-    return { device, browser, userAgent: ua.substring(0, 200), timestamp: new Date().toISOString() };
+    console.log('[PushService] Subscription removed from database');
   }
 
   urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const base64 = (base64String + padding)
+      .replace(/-/g, '+')
+      .replace(/_/g, '/');
+
     const rawData = window.atob(base64);
-    return Uint8Array.from(rawData, char => char.charCodeAt(0));
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
   }
 
+  // Send a test notification via the service worker
   async sendTestNotification() {
+    console.log('[PushService] Sending test notification...');
+    
     if (!this.swRegistration) {
-      console.warn('[PushService] No service worker for test');
+      console.warn('[PushService] No service worker for test notification');
       return;
     }
+    
     try {
-      await this.swRegistration.showNotification('Deadblock', {
-        body: 'Push notifications are working! 🎮',
+      await this.swRegistration.showNotification('🎮 Notifications Enabled!', {
+        body: 'You\'ll be notified when it\'s your turn in online games.',
         icon: '/pwa-192x192.png',
         badge: '/pwa-192x192.png',
-        tag: 'test',
-        vibrate: [100, 50, 100]
+        vibrate: [200, 100, 200],
+        tag: 'test-notification',
+        requireInteraction: false
       });
+      console.log('[PushService] Test notification sent');
     } catch (e) {
       console.error('[PushService] Test notification failed:', e.message);
     }
   }
-
-  setupMessageListener(callback) {
-    if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      if (callback) callback(event.data);
-    });
-  }
 }
 
 export const pushNotificationService = new PushNotificationService();
-export default pushNotificationService;

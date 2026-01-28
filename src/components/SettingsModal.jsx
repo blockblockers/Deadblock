@@ -1,4 +1,5 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.15: Fixed push notification toggle state persistence when modal reopens
 // v7.14: Fixed push notification toggle - properly checks subscription state after init
 // UPDATED: Added push notification subscription management
 // v7.10: Added iOS scroll fixes for modal content
@@ -96,10 +97,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
                        user?.identities?.some(i => i.provider === 'google');
   
   // Initialize push notifications and other states
+  // v7.15: Re-check subscription state when modal opens
   useEffect(() => {
     const initPushNotifications = async () => {
-      // v7.14: Fixed initialization to properly detect subscription state
-      
       // First check if push is even supported
       if (!pushNotificationService.isSupported()) {
         console.log('[SettingsModal] Push notifications not supported');
@@ -109,26 +109,23 @@ const SettingsModal = ({ isOpen, onClose }) => {
       
       setPushSupported(true);
       
-      // Initialize the service (this fetches existing subscription)
-      const initialized = await pushNotificationService.initialize();
+      // Initialize the service
+      const initialized = await pushNotificationService.init();
       console.log('[SettingsModal] Push service initialized:', initialized);
       
       if (initialized) {
         // Get permission status
         setPushPermission(pushNotificationService.getPermissionStatus());
         
-        // CRITICAL FIX: Check subscription directly from push manager
-        // This ensures we get the true state, not stale internal state
+        // v7.15: Use async checkSubscription() to query browser directly
+        // This ensures accurate state every time the modal opens
         try {
-          const registration = await navigator.serviceWorker.ready;
-          const currentSubscription = await registration.pushManager.getSubscription();
-          const isSubscribed = currentSubscription !== null;
-          console.log('[SettingsModal] Push subscription state:', isSubscribed, currentSubscription?.endpoint?.slice(-20));
+          const isSubscribed = await pushNotificationService.checkSubscription();
+          console.log('[SettingsModal] Push subscription state:', isSubscribed);
           setPushSubscribed(isSubscribed);
         } catch (err) {
           console.error('[SettingsModal] Error checking subscription:', err);
-          // Fallback to service's internal state
-          setPushSubscribed(pushNotificationService.isSubscribed());
+          setPushSubscribed(false);
         }
       } else {
         console.warn('[SettingsModal] Push initialization failed');
@@ -137,7 +134,10 @@ const SettingsModal = ({ isOpen, onClose }) => {
       }
     };
     
-    initPushNotifications();
+    // v7.15: Only run when modal is open
+    if (isOpen) {
+      initPushNotifications();
+    }
     
     // Check basic notification permission
     if ('Notification' in window) {
@@ -174,7 +174,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [isOpen]);  // v7.15: Added isOpen dependency to re-check when modal opens
   
   // Auto-open password reset if this is a recovery session
   useEffect(() => {
