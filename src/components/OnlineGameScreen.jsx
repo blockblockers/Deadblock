@@ -1,5 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.15: Moved pieces count and chat button to below piece tray, removed duplicate pieces display
+// v7.15: Removed duplicate pieces bars, chat icon now overlays bottom-right of piece tray
 // v7.14: Added streak tracking on game completion
 // v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
@@ -1706,39 +1706,35 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             )}
           </div>
 
-          {/* Piece Tray */}
-          <PieceTray
-            usedPieces={usedPieces}
-            selectedPiece={selectedPiece}
-            pendingMove={pendingMove}
-            gameOver={game?.status === 'completed'}
-            gameMode="online"
-            currentPlayer={myPlayerNumber}
-            isMobile={true}
-            onSelectPiece={handleSelectPiece}
-            createDragHandlers={createDragHandlers}
-            isDragging={isDragging}
-            draggedPiece={draggedPiece}
-          />
-          
-          {/* Pieces count and Chat button - below piece tray */}
-          {game?.status === 'active' && (
-            <div className="flex items-center justify-between px-2 py-1.5 mt-2 bg-slate-800/50 rounded-lg border border-amber-500/20">
-              <span className="text-slate-400 text-xs">
-                Pieces: <span className="text-amber-300 font-bold">{usedPieces.length}/12</span> Used
-              </span>
+          {/* Piece Tray with Chat Icon */}
+          <div className="relative">
+            <PieceTray
+              usedPieces={usedPieces}
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              gameOver={game?.status === 'completed'}
+              gameMode="online"
+              currentPlayer={myPlayerNumber}
+              isMobile={true}
+              onSelectPiece={handleSelectPiece}
+              createDragHandlers={createDragHandlers}
+              isDragging={isDragging}
+              draggedPiece={draggedPiece}
+            />
+            {/* Chat button - bottom right corner of piece tray */}
+            {game?.status === 'active' && (
               <button
                 onClick={() => {
                   setChatOpen(!chatOpen);
                   if (!chatOpen) setHasUnreadChat(false);
                 }}
                 className={`
-                  relative w-8 h-8 rounded-full shadow-lg transition-all flex items-center justify-center
+                  absolute bottom-2 right-2 w-9 h-9 rounded-full shadow-lg transition-all flex items-center justify-center z-10
                   ${chatOpen 
                     ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(251,191,36,0.5)]' 
                     : hasUnreadChat 
                       ? 'bg-gradient-to-br from-red-500 to-orange-500 text-white' 
-                      : 'bg-slate-700 text-amber-400 border border-amber-500/30 hover:bg-slate-600'
+                      : 'bg-slate-800/90 text-amber-400 border border-amber-500/40 hover:bg-slate-700'
                   }
                 `}
                 style={hasUnreadChat && !chatOpen ? {
@@ -1746,7 +1742,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   boxShadow: '0 0 30px rgba(239,68,68,0.9), 0 0 60px rgba(239,68,68,0.4)'
                 } : {}}
               >
-                <MessageCircle size={16} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
+                <MessageCircle size={18} className={hasUnreadChat && !chatOpen ? 'animate-bounce' : ''} />
                 {hasUnreadChat && !chatOpen && (
                   <>
                     <span 
@@ -1762,8 +1758,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   </>
                 )}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

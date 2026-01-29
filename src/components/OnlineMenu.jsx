@@ -1,12 +1,12 @@
 // Online Menu - Hub for online features
-// v7.15: FIXES - Completed games disappear from Active immediately, rematch acceptance updates in real-time
+// v7.15: Compact player profile card matching main menu, removed sign out/refresh buttons, replaced achievements button with leaderboard
 // v7.14: Real-time "Your turn" updates - no more waiting for refresh!
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
 // v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import { gameSyncService } from '../services/gameSync';
@@ -253,6 +253,8 @@ const OnlineMenu = ({
   const [showRatingInfo, setShowRatingInfo] = useState(false);
   const [pendingFriendRequests, setPendingFriendRequests] = useState(0);
   const [unlockedAchievement, setUnlockedAchievement] = useState(null);
+  const [leaderboardRank, setLeaderboardRank] = useState(null);
+  const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
   
   // Final Board View state
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
@@ -336,6 +338,57 @@ const OnlineMenu = ({
   useEffect(() => {
     loadFriendRequests();
   }, [sessionReady, profile?.id]);
+
+  // Load leaderboard rank
+  useEffect(() => {
+    const loadLeaderboardRank = async () => {
+      if (!profile?.id) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .order('rating', { ascending: false });
+        
+        if (!error && data) {
+          const rank = data.findIndex(p => p.id === profile.id) + 1;
+          if (rank > 0) setLeaderboardRank(rank);
+        }
+      } catch (err) {
+        console.error('[OnlineMenu] Error loading leaderboard rank:', err);
+      }
+    };
+    
+    loadLeaderboardRank();
+  }, [profile?.id]);
+
+  // Load achievement count
+  useEffect(() => {
+    const loadAchievementCount = async () => {
+      if (!profile?.id) return;
+      
+      try {
+        // Get achievement definitions
+        const { data: definitions } = await supabase
+          .from('achievements')
+          .select('id');
+        
+        // Get user's unlocked achievements
+        const { data: userAchievements } = await supabase
+          .from('user_achievements')
+          .select('achievement_id')
+          .eq('user_id', profile.id);
+        
+        const total = definitions?.length || 0;
+        const unlocked = userAchievements?.length || 0;
+        setAchievementCount({ unlocked, total });
+      } catch (err) {
+        console.error('[OnlineMenu] Error loading achievement count:', err);
+      }
+    };
+    
+    loadAchievementCount();
+  }, [profile?.id]);
 
   // Load games and invites
   useEffect(() => {
@@ -468,14 +521,7 @@ const OnlineMenu = ({
       
       // If rematch was accepted, navigate to the new game
       if (rematchData?.status === 'accepted' && rematchData?.new_game_id) {
-        console.log('[OnlineMenu] Rematch accepted! New game:', rematchData.new_game_id);
-        
-        // v7.15: Refresh BOTH games AND invites to clear pending rematch
-        await Promise.all([loadGames(), loadInvites()]);
-        
-        // v7.15: Also clear from local state immediately for instant UI update
-        setPendingRematches(prev => prev.filter(r => r.id !== rematchData.id));
-        
+        await loadGames();
         soundManager.playSound('notification');
         
         // Send notification to the requester that rematch was accepted
@@ -525,11 +571,6 @@ const OnlineMenu = ({
               game?.status !== oldGame?.status) {
             console.log('[OnlineMenu] Game update (p1): turn/status changed, refreshing');
             loadGames();
-            
-            // v7.15: If game just completed, also refresh invites to clear related rematches
-            if (game?.status === 'completed' && oldGame?.status !== 'completed') {
-              loadInvites();
-            }
           }
         }
       )
@@ -555,11 +596,6 @@ const OnlineMenu = ({
               game?.status !== oldGame?.status) {
             console.log('[OnlineMenu] Game update (p2): turn/status changed, refreshing');
             loadGames();
-            
-            // v7.15: If game just completed, also refresh invites to clear related rematches
-            if (game?.status === 'completed' && oldGame?.status !== 'completed') {
-              loadInvites();
-            }
           }
         }
       )
@@ -657,19 +693,7 @@ const OnlineMenu = ({
       
       // Get active games + unviewed completed games (v7.12)
       const { data: active } = await gameSyncService.getActiveAndUnviewedGames(profile.id);
-      
-      // v7.15: Safety filter - ensure no fully-viewed completed games slip through
-      // A game should only appear in activeGames if:
-      // 1. It's status === 'active', OR
-      // 2. It's completed but has unviewed_by_loser === true (loser hasn't seen final board yet)
-      const filteredActive = (active || []).filter(g => {
-        if (g.status === 'active') return true;
-        // For completed games, only include if unviewed by loser
-        if (g.status === 'completed' && g.unviewed_by_loser === true) return true;
-        return false;
-      });
-      
-      setActiveGames(filteredActive);
+      setActiveGames(active || []);
 
       // Get recent completed games - UPDATED: Increased from 5 to 10
       const { data: recent } = await gameSyncService.getPlayerGames(profile.id, 10);
@@ -1265,207 +1289,134 @@ const OnlineMenu = ({
           {profile && (
             <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}>
             
-            {/* User Stats Card with Tier Info */}
-            <div className="bg-slate-800/50 rounded-xl p-4 mb-4 border border-slate-700/50">
-              {/* Top row: Avatar and actions */}
-              <div className="flex items-center gap-4 mb-3">
-                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-amber-500/30">
-                  {(profile?.username || profile?.display_name)?.[0]?.toUpperCase() || '?'}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-white font-bold text-lg">{profile?.username || profile?.display_name || 'Player'}</h2>
-                    <button
-                      onClick={handleOpenUsernameEdit}
-                      className="p-1 text-slate-500 hover:text-amber-400 transition-colors"
-                      title="Edit Username"
-                    >
-                      <Pencil size={14} />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <span className="text-slate-500">{profile?.games_played || 0} games</span>
-                    <span className="text-green-400">{profile?.games_won || 0} wins</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={handleRefresh}
-                    disabled={refreshing}
-                    className={`p-2 text-slate-500 hover:text-amber-400 transition-colors ${refreshing ? 'animate-spin' : ''}`}
-                    title="Refresh"
-                  >
-                    <RefreshCw size={18} />
-                  </button>
-                  <button
-                    onClick={handleSignOut}
-                    className="p-2 text-slate-500 hover:text-red-400 transition-colors"
-                    title="Sign Out"
-                  >
-                    <LogOut size={20} />
-                  </button>
-                </div>
-              </div>
+            {/* User Stats Card - Compact Style matching main menu */}
+            {(() => {
+              const tier = ratingService.getRatingTier(profile?.rating || 1000);
+              const glowColor = tier?.glowColor || '#22d3ee';
               
-              {/* Rating/Tier display */}
-         {(() => {
-   const tier = ratingService.getRatingTier(profile?.rating || 1000);
-  const glowColor = tier?.glowColor || '#22d3ee';
-  
-  const hexToRgba = (hex, alpha) => {
-    if (!hex?.startsWith('#')) return `rgba(100, 116, 139, ${alpha})`;
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-  
-  const getTierBackground = () => {
-    const backgrounds = {
-      '#f59e0b': 'rgba(30, 20, 60, 0.95)',
-      '#a855f7': 'rgba(20, 40, 40, 0.95)',
-      '#3b82f6': 'rgba(40, 25, 20, 0.95)',
-      '#22d3ee': 'rgba(40, 20, 40, 0.95)',
-      '#22c55e': 'rgba(40, 20, 35, 0.95)',
-      '#38bdf8': 'rgba(35, 25, 45, 0.95)',
-      '#2dd4bf': 'rgba(40, 25, 50, 0.95)',
-    };
-    return backgrounds[glowColor] || 'rgba(15, 23, 42, 0.95)';
-  };
-  
-  return (
-    <div 
-      className="flex items-center justify-between rounded-lg px-3 py-3"
-      style={{
-        background: `linear-gradient(135deg, ${getTierBackground()} 0%, ${hexToRgba(glowColor, 0.15)} 100%)`,
-        border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
-        boxShadow: `0 0 20px ${hexToRgba(glowColor, 0.2)}, inset 0 0 30px ${hexToRgba(glowColor, 0.05)}`
-      }}
-    >
-      <div className="flex items-center gap-3">
-        <div 
-          className="w-11 h-11 rounded-full flex items-center justify-center"
-          style={{
-            background: `radial-gradient(circle at 30% 30%, ${getTierBackground()}, rgba(10, 15, 25, 0.98))`,
-            border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
-            boxShadow: `0 0 15px ${hexToRgba(glowColor, 0.35)}, inset 0 0 10px ${hexToRgba(glowColor, 0.1)}`
-          }}
-        >
-          <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="medium" />
-        </div>
-        <div>
-          <div 
-            className="font-bold text-base"
-            style={{ color: glowColor, textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
-          >
-            {tier.name}
-          </div>
-          <div className="text-xs text-slate-500">Rating Tier</div>
-        </div>
-      </div>
-      <div className="text-right">
-        <div 
-          className="text-2xl font-black"
-          style={{ color: glowColor, textShadow: `0 0 12px ${hexToRgba(glowColor, 0.5)}` }}
-        >
-          {profile?.rating || 1000}
-        </div>
-        <div className="text-xs text-slate-500">ELO</div>
-      </div>
-      <button
-        onClick={() => {
-          soundManager.playButtonClick();
-          setShowRatingInfo(true);
-        }}
-        className="p-2 rounded-lg transition-all hover:bg-slate-800/50"
-        style={{ color: hexToRgba(glowColor, 0.6) }}
-        title="How Ratings Work"
-      >
-        <HelpCircle size={18} />
-      </button>
-    </div>
-  );
-})()}
-            </div>
+              const hexToRgba = (hex, alpha) => {
+                if (!hex?.startsWith('#')) return `rgba(100, 116, 139, ${alpha})`;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+              };
+              
+              return (
+                <button
+                  onClick={onViewProfile}
+                  className="w-full flex items-center gap-3 p-3 mb-4 transition-all group relative rounded-xl"
+                  style={{
+                    background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.15)} 0%, rgba(15, 23, 42, 0.95) 100%)`,
+                    border: `2px solid ${hexToRgba(glowColor, 0.4)}`,
+                    boxShadow: `0 0 25px ${hexToRgba(glowColor, 0.15)}, 0 4px 15px rgba(0,0,0,0.3)`
+                  }}
+                >
+                  {/* Tier icon */}
+                  <div 
+                    className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)} 0%, rgba(15, 23, 42, 0.95) 100%)`,
+                      border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
+                      boxShadow: `0 0 15px ${hexToRgba(glowColor, 0.3)}`
+                    }}
+                  >
+                    <TierIcon shape={tier.shape} glowColor={glowColor} size="medium" />
+                  </div>
+                  
+                  {/* Player info */}
+                  <div className="flex-1 text-left min-w-0">
+                    <div 
+                      className="font-black text-base tracking-wide truncate"
+                      style={{ color: '#f1f5f9', textShadow: `0 0 12px ${hexToRgba(glowColor, 0.4)}` }}
+                    >
+                      {profile?.username || profile?.display_name || 'Player'}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span 
+                        className="text-xs font-bold uppercase tracking-wider"
+                        style={{ color: glowColor, textShadow: `0 0 10px ${hexToRgba(glowColor, 0.5)}` }}
+                      >
+                        {tier.name}
+                      </span>
+                      <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
+                        {profile?.rating || 1000} ELO
+                      </span>
+                      {/* Leaderboard Rank */}
+                      {leaderboardRank && (
+                        <span className="flex items-center gap-0.5 text-cyan-400 text-[11px] font-semibold">
+                          <BarChart3 size={10} />
+                          #{leaderboardRank}
+                        </span>
+                      )}
+                      {/* Achievement Count */}
+                      <span 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowAchievements(true);
+                        }}
+                        className="flex items-center gap-0.5 text-amber-400 text-[11px] font-semibold hover:text-amber-300 transition-colors cursor-pointer"
+                      >
+                        <Trophy size={10} />
+                        {achievementCount.unlocked}/{achievementCount.total}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Arrow */}
+                  <ChevronRight 
+                    size={20} 
+                    className="group-hover:translate-x-0.5 transition-all flex-shrink-0" 
+                    style={{ color: glowColor, opacity: 0.7 }} 
+                  />
+                </button>
+              );
+            })()}
             
-           {/* Compact Quick Actions - Under Player Box */}
-<div className="flex gap-2 mb-3">
-  <button
-    onClick={() => { soundManager.playButtonClick(); onViewProfile(); }}
-    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
-    style={{
-      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-      borderColor: 'rgba(59, 130, 246, 0.3)',
-      boxShadow: '0 0 15px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
-    }}
-  >
-    <User size={14} className="text-blue-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-blue-300 transition-colors">Profile</span>
-  </button>
-  <button
-    onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
-    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
-    style={{
-      background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-      borderColor: 'rgba(251, 191, 36, 0.3)',
-      boxShadow: '0 0 15px rgba(251, 191, 36, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
-    }}
-  >
-    <Trophy size={14} className="text-amber-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-amber-300 transition-colors text-[11px]">Achievements</span>
-  </button>
-  <button
-    onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
-    className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group relative"
-    style={{
-      background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-      borderColor: 'rgba(34, 211, 238, 0.3)',
-      boxShadow: '0 0 15px rgba(34, 211, 238, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
-    }}
-  >
-    <Users size={14} className="text-cyan-400 group-hover:scale-110 transition-transform" />
-    <span className="text-slate-300 group-hover:text-cyan-300 transition-colors">Friends</span>
-    {pendingFriendRequests > 0 && (
-      <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-[10px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold px-1 shadow-lg shadow-red-500/50">
-        {pendingFriendRequests}
-      </span>
-    )}
-  </button>
-</div>
-
-{/* View Leaderboard - Gold Glow Orb Style */}
-<button
-  onClick={() => {
-    soundManager.playButtonClick();
-    onViewLeaderboard();
-  }}
-  className="w-full p-3 mb-3 rounded-xl transition-all duration-300 relative overflow-hidden group
-    border-2 border-yellow-500/50
-    hover:border-yellow-400/70 hover:ring-4 ring-yellow-500/30
-    active:scale-[0.98]"
-  style={{ 
-    background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(161, 98, 7, 0.3) 100%)',
-    boxShadow: '0 0 30px rgba(234, 179, 8, 0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 50px rgba(234, 179, 8, 0.6)';
-    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(234, 179, 8, 0.4) 0%, rgba(161, 98, 7, 0.5) 100%)';
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 30px rgba(234, 179, 8, 0.4), inset 0 1px 0 rgba(255,255,255,0.1)';
-    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(234, 179, 8, 0.25) 0%, rgba(161, 98, 7, 0.3) 100%)';
-  }}
->
-  <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
-    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
-  </div>
-  <div className="relative flex items-center justify-center gap-2">
-    <Trophy size={20} className="text-yellow-400" />
-    <span className="font-black tracking-wide text-sm text-yellow-300 group-hover:text-white transition-colors">
-      VIEW LEADERBOARD
-    </span>
-  </div>
-</button>
+            {/* Quick Actions - Profile, Leaderboard, Friends */}
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => { soundManager.playButtonClick(); onViewProfile(); }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                  borderColor: 'rgba(59, 130, 246, 0.3)',
+                  boxShadow: '0 0 15px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+                }}
+              >
+                <User size={14} className="text-blue-400 group-hover:scale-110 transition-transform" />
+                <span className="text-slate-300 group-hover:text-blue-300 transition-colors">Profile</span>
+              </button>
+              <button
+                onClick={() => { soundManager.playButtonClick(); onViewLeaderboard(); }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                  borderColor: 'rgba(234, 179, 8, 0.3)',
+                  boxShadow: '0 0 15px rgba(234, 179, 8, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+                }}
+              >
+                <BarChart3 size={14} className="text-yellow-400 group-hover:scale-110 transition-transform" />
+                <span className="text-slate-300 group-hover:text-yellow-300 transition-colors">Leaderboard</span>
+              </button>
+              <button
+                onClick={() => { soundManager.playButtonClick(); setShowFriendsList(true); }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group relative"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(34, 211, 238, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                  borderColor: 'rgba(34, 211, 238, 0.3)',
+                  boxShadow: '0 0 15px rgba(34, 211, 238, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+                }}
+              >
+                <Users size={14} className="text-cyan-400 group-hover:scale-110 transition-transform" />
+                <span className="text-slate-300 group-hover:text-cyan-300 transition-colors">Friends</span>
+                {pendingFriendRequests > 0 && (
+                  <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-[10px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold px-1 shadow-lg shadow-red-500/50">
+                    {pendingFriendRequests}
+                  </span>
+                )}
+              </button>
+            </div>
 
 {/* Find Match - Glow Orb Style - Cyan */}
 <button
