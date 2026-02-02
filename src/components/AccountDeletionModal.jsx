@@ -1,22 +1,22 @@
 // AccountDeletionModal.jsx - Account deletion modal
-// v7.15: Simplified modal for account deletion only (password reset available in sign-in flow)
+// v7.15: Updated flow - Email/Password first, then type DELETE to confirm
 // Place in src/components/AccountDeletionModal.jsx
 
 import { useState } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, Trash2, AlertTriangle, CheckCircle, Loader, ExternalLink } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, Trash2, AlertTriangle, CheckCircle, Loader } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import { soundManager } from '../utils/soundManager';
 
 /**
  * AccountDeletionModal - Modal for permanent account deletion
- * Requires user to verify credentials before deletion
+ * Flow: 1) Enter email/password → 2) Type DELETE to confirm → 3) Account deleted
  */
 const AccountDeletionModal = ({ onClose }) => {
   const { signIn } = useAuth();
   
-  // View modes: 'verify', 'confirm', 'success'
-  const [view, setView] = useState('verify');
+  // View modes: 'credentials', 'confirm', 'deleting', 'success'
+  const [view, setView] = useState('credentials');
   
   // Form state
   const [email, setEmail] = useState('');
@@ -25,11 +25,13 @@ const AccountDeletionModal = ({ onClose }) => {
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  
+  // Store verified user for deletion
+  const [verifiedUserId, setVerifiedUserId] = useState(null);
   
   const requiredConfirmText = 'DELETE';
   
-  // Verify credentials before allowing deletion
+  // Step 1: Verify credentials
   const handleVerifyCredentials = async (e) => {
     e.preventDefault();
     setError('');
@@ -56,6 +58,12 @@ const AccountDeletionModal = ({ onClose }) => {
         return;
       }
       
+      // Get the user ID for deletion
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setVerifiedUserId(user.id);
+      }
+      
       // Credentials verified, proceed to confirmation
       setView('confirm');
     } catch (err) {
@@ -65,58 +73,98 @@ const AccountDeletionModal = ({ onClose }) => {
     setLoading(false);
   };
   
-  // Handle account deletion
+  // Step 2: Handle account deletion after typing DELETE
   const handleDeleteAccount = async () => {
     if (confirmText !== requiredConfirmText) return;
     
+    setView('deleting');
     setLoading(true);
     setError('');
     soundManager.playButtonClick?.();
     
     try {
-      // Get current user
+      // Get current user (should already be signed in from verification)
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         setError('No user session found. Please try again.');
+        setView('confirm');
         setLoading(false);
         return;
       }
       
       console.log('[AccountDeletion] Attempting to delete account for:', user.id);
       
-      // Try the RPC function first (preferred method - handles cascade deletion)
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('delete_user_account', {
-        p_user_id: user.id
-      });
+      // Try Edge Function first (complete deletion including auth.users)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      let edgeFunctionSuccess = false;
       
-      if (rpcError) {
-        console.warn('[AccountDeletion] RPC delete failed:', rpcError.message);
+      try {
+        const session = await supabase.auth.getSession();
+        const accessToken = session.data?.session?.access_token;
         
-        // Check if it's a "function does not exist" error
-        if (rpcError.message?.includes('does not exist') || rpcError.code === '42883') {
-          console.log('[AccountDeletion] RPC function not found, using fallback deletion');
+        if (accessToken && supabaseUrl) {
+          const edgeResponse = await fetch(
+            `${supabaseUrl}/functions/v1/delete-user-account`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
           
-          // Fallback: Delete profile directly (cascades should handle related data)
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .delete()
-            .eq('id', user.id);
+          if (edgeResponse.ok) {
+            const edgeResult = await edgeResponse.json();
+            console.log('[AccountDeletion] Edge Function result:', edgeResult);
+            if (edgeResult.success) {
+              edgeFunctionSuccess = true;
+            }
+          } else {
+            console.warn('[AccountDeletion] Edge Function returned:', edgeResponse.status);
+          }
+        }
+      } catch (edgeError) {
+        console.warn('[AccountDeletion] Edge Function not available:', edgeError);
+      }
+      
+      // If Edge Function didn't work, try RPC function
+      if (!edgeFunctionSuccess) {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('delete_user_account', {
+          p_user_id: user.id
+        });
+        
+        if (rpcError) {
+          console.warn('[AccountDeletion] RPC delete failed:', rpcError.message);
           
-          if (profileError) {
-            console.error('[AccountDeletion] Profile deletion failed:', profileError);
+          // Check if it's a "function does not exist" error
+          if (rpcError.message?.includes('does not exist') || rpcError.code === '42883') {
+            console.log('[AccountDeletion] RPC function not found, using fallback deletion');
+            
+            // Fallback: Delete profile directly (cascades should handle related data)
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .delete()
+              .eq('id', user.id);
+            
+            if (profileError) {
+              console.error('[AccountDeletion] Profile deletion failed:', profileError);
+              setError('Failed to delete account. Please contact support at deadblock.game@gmail.com');
+              setView('confirm');
+              setLoading(false);
+              return;
+            }
+          } else {
+            // Some other RPC error
             setError('Failed to delete account. Please contact support at deadblock.game@gmail.com');
+            setView('confirm');
             setLoading(false);
             return;
           }
         } else {
-          // Some other RPC error
-          setError('Failed to delete account. Please contact support at deadblock.game@gmail.com');
-          setLoading(false);
-          return;
+          console.log('[AccountDeletion] RPC delete successful:', rpcResult);
         }
-      } else {
-        console.log('[AccountDeletion] RPC delete successful:', rpcResult);
       }
       
       // Sign out the user
@@ -136,7 +184,6 @@ const AccountDeletionModal = ({ onClose }) => {
       }
       
       setView('success');
-      setSuccess('Your account has been permanently deleted.');
       
       // Redirect to home after delay
       setTimeout(() => {
@@ -146,20 +193,21 @@ const AccountDeletionModal = ({ onClose }) => {
     } catch (err) {
       console.error('[AccountDeletion] Delete error:', err);
       setError('Failed to delete account. Please contact support at deadblock.game@gmail.com');
+      setView('confirm');
     }
     
     setLoading(false);
   };
   
-  // Render credential verification view
-  const renderVerifyView = () => (
+  // Render Step 1: Email/Password entry
+  const renderCredentialsView = () => (
     <div className="space-y-4">
       <div className="text-center">
         <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
           <Trash2 size={32} className="text-red-400" />
         </div>
         <h3 className="text-red-400 font-bold text-lg">Delete Account</h3>
-        <p className="text-slate-400 text-sm mt-1">Enter your credentials to continue</p>
+        <p className="text-slate-400 text-sm mt-1">First, verify your credentials</p>
       </div>
       
       <div className="p-3 bg-amber-900/30 border border-amber-500/30 rounded-xl">
@@ -239,7 +287,7 @@ const AccountDeletionModal = ({ onClose }) => {
     </div>
   );
   
-  // Render deletion confirmation view
+  // Render Step 2: Type DELETE confirmation
   const renderConfirmView = () => (
     <div className="space-y-4">
       <div className="text-center">
@@ -282,7 +330,7 @@ const AccountDeletionModal = ({ onClose }) => {
       
       <div className="flex gap-3">
         <button
-          onClick={() => { setView('verify'); setConfirmText(''); setError(''); }}
+          onClick={() => { setView('credentials'); setConfirmText(''); setError(''); }}
           disabled={loading}
           className="flex-1 py-3 rounded-xl font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700"
         >
@@ -293,13 +341,20 @@ const AccountDeletionModal = ({ onClose }) => {
           disabled={loading || confirmText !== requiredConfirmText}
           className="flex-1 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
-          {loading ? (
-            <><Loader size={18} className="animate-spin" /> Deleting...</>
-          ) : (
-            <><Trash2 size={18} /> Delete Forever</>
-          )}
+          <Trash2 size={18} /> Delete Forever
         </button>
       </div>
+    </div>
+  );
+  
+  // Render deleting state
+  const renderDeletingView = () => (
+    <div className="space-y-4 text-center py-8">
+      <div className="w-16 h-16 border-4 border-slate-600 border-t-red-400 rounded-full animate-spin mx-auto" />
+      <h3 className="text-red-400 font-bold text-lg">Deleting Account...</h3>
+      <p className="text-slate-400 text-sm">
+        Please wait while we remove your data.
+      </p>
     </div>
   );
   
@@ -326,7 +381,7 @@ const AccountDeletionModal = ({ onClose }) => {
         {/* Header */}
         <div className="p-4 border-b border-slate-700/50 flex items-center justify-between">
           <h2 className="text-white font-bold">Delete Account</h2>
-          {view !== 'success' && (
+          {view !== 'success' && view !== 'deleting' && (
             <button
               onClick={onClose}
               className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
@@ -341,13 +396,14 @@ const AccountDeletionModal = ({ onClose }) => {
           className="p-5 max-h-[70vh] overflow-y-auto"
           style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
         >
-          {view === 'verify' && renderVerifyView()}
+          {view === 'credentials' && renderCredentialsView()}
           {view === 'confirm' && renderConfirmView()}
+          {view === 'deleting' && renderDeletingView()}
           {view === 'success' && renderSuccessView()}
         </div>
         
         {/* Footer with support link */}
-        {view !== 'success' && (
+        {view !== 'success' && view !== 'deleting' && (
           <div className="px-5 pb-4 pt-2 border-t border-slate-800">
             <p className="text-slate-600 text-xs text-center">
               Need help?{' '}

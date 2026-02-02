@@ -23,7 +23,7 @@
     }
     
     .container {
-      max-width: 500px;
+      max-width: 420px;
       margin: 0 auto;
       padding: 40px 20px;
     }
@@ -41,6 +41,7 @@
       -webkit-text-fill-color: transparent;
       background-clip: text;
       text-shadow: 0 0 40px rgba(34, 211, 238, 0.3);
+      letter-spacing: 2px;
     }
     
     .card {
@@ -99,65 +100,71 @@
       text-align: center;
     }
     
-    .data-list {
-      margin-bottom: 24px;
+    .form-group {
+      margin-bottom: 16px;
     }
     
-    .data-list h3 {
-      color: #cbd5e1;
-      font-size: 0.9rem;
-      margin-bottom: 12px;
+    .form-group label {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
     }
     
-    .data-list ul {
-      list-style: none;
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(100, 116, 139, 0.3);
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    
+    .form-group input:focus {
+      outline: none;
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    
+    .form-group input::placeholder {
       color: #64748b;
-      font-size: 0.85rem;
     }
     
-    .data-list li {
-      padding: 6px 0;
-      padding-left: 20px;
+    .input-with-icon {
       position: relative;
     }
     
-    .data-list li::before {
-      content: "•";
+    .input-with-icon svg {
       position: absolute;
-      left: 0;
-      color: #ef4444;
-    }
-    
-    .options {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-    
-    .option-card {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(100, 116, 139, 0.3);
-      border-radius: 12px;
-      padding: 16px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .option-card:hover {
-      border-color: rgba(34, 211, 238, 0.5);
-      background: rgba(15, 23, 42, 0.8);
-    }
-    
-    .option-card h4 {
-      color: #e2e8f0;
-      font-size: 1rem;
-      margin-bottom: 4px;
-    }
-    
-    .option-card p {
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18px;
+      height: 18px;
       color: #64748b;
-      font-size: 0.8rem;
+    }
+    
+    .input-with-icon input {
+      padding-left: 42px;
+    }
+    
+    .toggle-password {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #64748b;
+      padding: 4px;
+    }
+    
+    .toggle-password:hover {
+      color: #94a3b8;
     }
     
     .btn {
@@ -174,29 +181,26 @@
       transition: all 0.2s;
     }
     
-    .btn-primary {
-      background: linear-gradient(135deg, #22d3ee 0%, #3b82f6 100%);
-      color: white;
-    }
-    
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 20px rgba(34, 211, 238, 0.3);
-    }
-    
     .btn-danger {
       background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
       color: white;
     }
     
-    .btn-danger:hover {
+    .btn-danger:hover:not(:disabled) {
       background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      transform: translateY(-1px);
+    }
+    
+    .btn-danger:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
     
     .btn-secondary {
       background: rgba(51, 65, 85, 0.8);
       color: #94a3b8;
       border: 1px solid rgba(100, 116, 139, 0.3);
+      margin-top: 12px;
     }
     
     .btn-secondary:hover {
@@ -204,95 +208,115 @@
       color: #e2e8f0;
     }
     
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin: 20px 0;
+    .error-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+      color: #fca5a5;
+      font-size: 0.9rem;
+      display: none;
     }
     
-    .divider::before,
-    .divider::after {
-      content: "";
-      flex: 1;
-      height: 1px;
-      background: rgba(100, 116, 139, 0.3);
+    .error-box.visible {
+      display: block;
     }
     
-    .divider span {
+    .confirm-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    .confirm-box p {
+      color: #fca5a5;
+      font-size: 0.9rem;
+      margin-bottom: 12px;
+    }
+    
+    .confirm-box code {
+      background: rgba(239, 68, 68, 0.2);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    
+    .confirm-box input {
+      text-align: center;
+      font-family: monospace;
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+    }
+    
+    .data-list {
+      margin-bottom: 20px;
+    }
+    
+    .data-list h3 {
+      color: #cbd5e1;
+      font-size: 0.85rem;
+      margin-bottom: 10px;
+    }
+    
+    .data-list ul {
+      list-style: none;
       color: #64748b;
       font-size: 0.8rem;
     }
     
-    .email-form {
-      display: none;
+    .data-list li {
+      padding: 4px 0;
+      padding-left: 16px;
+      position: relative;
     }
     
-    .email-form.active {
-      display: block;
+    .data-list li::before {
+      content: "•";
+      position: absolute;
+      left: 0;
+      color: #ef4444;
     }
     
-    .form-group {
-      margin-bottom: 16px;
-    }
-    
-    .form-group label {
-      display: block;
-      color: #94a3b8;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-    }
-    
-    .form-group input,
-    .form-group textarea {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(100, 116, 139, 0.3);
-      border-radius: 10px;
-      color: #e2e8f0;
-      font-size: 1rem;
-      transition: border-color 0.2s;
-    }
-    
-    .form-group input:focus,
-    .form-group textarea:focus {
-      outline: none;
-      border-color: rgba(239, 68, 68, 0.5);
-    }
-    
-    .form-group textarea {
-      min-height: 100px;
-      resize: vertical;
-    }
-    
-    .success-message {
-      display: none;
+    .success-view {
       text-align: center;
-      padding: 20px;
+      padding: 20px 0;
     }
     
-    .success-message.active {
-      display: block;
+    .success-view .icon-circle {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: rgba(34, 197, 94, 0.4);
     }
     
-    .success-message svg {
-      width: 48px;
-      height: 48px;
-      color: #22c55e;
-      margin-bottom: 16px;
+    .success-view .icon-circle svg {
+      color: #4ade80;
     }
     
-    .success-message h3 {
-      color: #22c55e;
+    .success-view h3 {
+      color: #4ade80;
       margin-bottom: 8px;
     }
     
-    .success-message p {
+    .success-view p {
       color: #94a3b8;
       font-size: 0.9rem;
+    }
+    
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(100, 116, 139, 0.3);
+      border-top-color: #ef4444;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
     
     .footer {
@@ -311,6 +335,10 @@
       text-decoration: underline;
     }
     
+    .hidden {
+      display: none !important;
+    }
+    
     @media (max-width: 480px) {
       .container {
         padding: 20px 16px;
@@ -325,6 +353,8 @@
       }
     }
   </style>
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div class="container">
@@ -333,81 +363,116 @@
     </div>
     
     <div class="card">
-      <div class="card-header">
-        <div class="icon-circle">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </div>
-        <h2>Delete Your Account</h2>
-        <p>We're sorry to see you go</p>
-      </div>
-      
-      <div class="warning-box">
-        <p>⚠️ Account deletion is permanent and cannot be undone. All your data will be permanently removed.</p>
-      </div>
-      
-      <div class="data-list">
-        <h3>Data that will be deleted:</h3>
-        <ul>
-          <li>Your profile and username</li>
-          <li>Game history and statistics</li>
-          <li>Achievements and progress</li>
-          <li>Friends list and messages</li>
-          <li>ELO rating and leaderboard position</li>
-        </ul>
-      </div>
-      
-      <div id="options-view">
-        <div class="options">
-          <a href="https://deadblock.app" class="option-card" id="app-option">
-            <h4>🎮 Delete in App (Recommended)</h4>
-            <p>Open Deadblock and delete your account securely from the login screen</p>
-          </a>
+      <!-- Step 1: Login -->
+      <div id="login-view">
+        <div class="card-header">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <h2>Delete Your Account</h2>
+          <p>First, verify your credentials</p>
         </div>
         
-        <div class="divider">
-          <span>or request deletion via email</span>
+        <div class="warning-box">
+          <p>⚠️ Account deletion is permanent and cannot be undone. All your data will be removed.</p>
         </div>
         
-        <button class="btn btn-secondary" onclick="showEmailForm()">
-          Request Deletion by Email
-        </button>
-      </div>
-      
-      <div id="email-form" class="email-form">
-        <form id="deletion-form" onsubmit="submitDeletionRequest(event)">
+        <div id="login-error" class="error-box"></div>
+        
+        <form id="login-form">
           <div class="form-group">
             <label>Email Address</label>
-            <input type="email" id="email" required placeholder="Enter the email associated with your account">
+            <div class="input-with-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <input type="email" id="email" required placeholder="your@email.com" autocomplete="email">
+            </div>
           </div>
           
           <div class="form-group">
-            <label>Username (optional)</label>
-            <input type="text" id="username" placeholder="Your Deadblock username">
+            <label>Password</label>
+            <div class="input-with-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <input type="password" id="password" required placeholder="Enter your password" autocomplete="current-password">
+              <button type="button" class="toggle-password" onclick="togglePassword()">
+                <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" width="18" height="18">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
+            </div>
           </div>
           
-          <div class="form-group">
-            <label>Reason for leaving (optional)</label>
-            <textarea id="reason" placeholder="Help us improve by sharing why you're leaving"></textarea>
-          </div>
-          
-          <button type="submit" class="btn btn-danger" style="margin-bottom: 12px;">
-            Submit Deletion Request
+          <button type="submit" id="login-btn" class="btn btn-danger">
+            Continue
           </button>
           
-          <button type="button" class="btn btn-secondary" onclick="hideEmailForm()">
-            Cancel
-          </button>
+          <a href="/" class="btn btn-secondary">Cancel</a>
         </form>
       </div>
       
-      <div id="success-message" class="success-message">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <h3>Request Submitted</h3>
-        <p>We've received your deletion request. Your account will be deleted within 7 business days. You'll receive a confirmation email once complete.</p>
+      <!-- Step 2: Confirm Deletion -->
+      <div id="confirm-view" class="hidden">
+        <div class="card-header">
+          <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2>Final Warning</h2>
+          <p>This action cannot be undone</p>
+        </div>
+        
+        <div class="data-list">
+          <h3>Data that will be permanently deleted:</h3>
+          <ul>
+            <li>Your profile and username</li>
+            <li>Game history and statistics</li>
+            <li>Achievements and progress</li>
+            <li>Friends list and messages</li>
+            <li>ELO rating and leaderboard position</li>
+          </ul>
+        </div>
+        
+        <div id="confirm-error" class="error-box"></div>
+        
+        <div class="confirm-box">
+          <p>Type <code>DELETE</code> to confirm</p>
+          <input type="text" id="confirm-input" placeholder="Type DELETE" autocomplete="off">
+        </div>
+        
+        <button type="button" id="delete-btn" class="btn btn-danger" disabled onclick="deleteAccount()">
+          Delete Forever
+        </button>
+        
+        <button type="button" class="btn btn-secondary" onclick="goBack()">Go Back</button>
+      </div>
+      
+      <!-- Step 3: Deleting -->
+      <div id="deleting-view" class="hidden">
+        <div class="card-header">
+          <div class="spinner"></div>
+          <h2 style="color: #f87171;">Deleting Account...</h2>
+          <p>Please wait while we remove your data</p>
+        </div>
+      </div>
+      
+      <!-- Step 4: Success -->
+      <div id="success-view" class="hidden success-view">
+        <div class="icon-circle">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h3>Account Deleted</h3>
+        <p>Your account has been permanently deleted.</p>
+        <p style="margin-top: 16px; font-size: 0.8rem; color: #64748b;">Redirecting to home page...</p>
+        <div class="spinner" style="border-top-color: #4ade80; margin-top: 20px;"></div>
       </div>
     </div>
     
@@ -415,9 +480,9 @@
       <p>
         <a href="/">← Back to Deadblock</a>
         &nbsp;·&nbsp;
-        <a href="/privacy">Privacy Policy</a>
+        <a href="/privacy.html">Privacy Policy</a>
         &nbsp;·&nbsp;
-        <a href="/terms">Terms of Service</a>
+        <a href="/terms.html">Terms of Service</a>
       </p>
       <p style="margin-top: 12px;">© 2025 Deadblock. All rights reserved.</p>
       <p style="margin-top: 8px;">
@@ -427,51 +492,183 @@
   </div>
   
   <script>
-    function showEmailForm() {
-      document.getElementById('options-view').style.display = 'none';
-      document.getElementById('email-form').classList.add('active');
+    // Initialize Supabase client
+    // Replace these with your actual Supabase credentials
+    const SUPABASE_URL = 'https://joziqyslwqfuznmuapvx.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpvemlxeXNsd3FmdXpubXVhcHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ5MTU2OTYsImV4cCI6MjA1MDQ5MTY5Nn0.59e5_PY2hfMlh7u7QPVmRfxBkNqt4PqVaEJjvXzCnfk';
+    
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    let currentUser = null;
+    
+    // Toggle password visibility
+    function togglePassword() {
+      const passwordInput = document.getElementById('password');
+      const eyeIcon = document.getElementById('eye-icon');
+      
+      if (passwordInput.type === 'password') {
+        passwordInput.type = 'text';
+        eyeIcon.innerHTML = `
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+        `;
+      } else {
+        passwordInput.type = 'password';
+        eyeIcon.innerHTML = `
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        `;
+      }
     }
     
-    function hideEmailForm() {
-      document.getElementById('options-view').style.display = 'block';
-      document.getElementById('email-form').classList.remove('active');
-    }
-    
-    function submitDeletionRequest(event) {
-      event.preventDefault();
+    // Handle login form submission
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
       
       const email = document.getElementById('email').value;
-      const username = document.getElementById('username').value;
-      const reason = document.getElementById('reason').value;
+      const password = document.getElementById('password').value;
+      const loginBtn = document.getElementById('login-btn');
+      const errorBox = document.getElementById('login-error');
       
-      // Create mailto link with pre-filled content
-      const subject = encodeURIComponent('Account Deletion Request - Deadblock');
-      const body = encodeURIComponent(
-        `Account Deletion Request\n` +
-        `========================\n\n` +
-        `Email: ${email}\n` +
-        `Username: ${username || 'Not provided'}\n\n` +
-        `Reason for leaving:\n${reason || 'Not provided'}\n\n` +
-        `Please delete my Deadblock account and all associated data.\n\n` +
-        `I understand this action is permanent and cannot be undone.`
-      );
+      errorBox.classList.remove('visible');
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Verifying...';
       
-      // Open email client
-      window.location.href = `mailto:deadblock.game@gmail.com?subject=${subject}&body=${body}`;
-      
-      // Show success message after a short delay
-      setTimeout(() => {
-        document.getElementById('email-form').classList.remove('active');
-        document.getElementById('success-message').classList.add('active');
-      }, 500);
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password
+        });
+        
+        if (error) {
+          errorBox.textContent = 'Invalid email or password. Please try again.';
+          errorBox.classList.add('visible');
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Continue';
+          return;
+        }
+        
+        currentUser = data.user;
+        
+        // Show confirmation view
+        document.getElementById('login-view').classList.add('hidden');
+        document.getElementById('confirm-view').classList.remove('hidden');
+        
+      } catch (err) {
+        errorBox.textContent = 'An error occurred. Please try again.';
+        errorBox.classList.add('visible');
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Continue';
+      }
+    });
+    
+    // Handle confirm input
+    document.getElementById('confirm-input').addEventListener('input', (e) => {
+      const deleteBtn = document.getElementById('delete-btn');
+      deleteBtn.disabled = e.target.value.toUpperCase() !== 'DELETE';
+    });
+    
+    // Go back to login view
+    function goBack() {
+      document.getElementById('confirm-view').classList.add('hidden');
+      document.getElementById('login-view').classList.remove('hidden');
+      document.getElementById('confirm-input').value = '';
+      document.getElementById('delete-btn').disabled = true;
     }
     
-    // Deep link to app if on mobile
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      const appOption = document.getElementById('app-option');
-      appOption.href = 'deadblock://delete-account';
-      appOption.querySelector('p').textContent = 'Tap to open the app and delete your account';
+    // Delete account
+    async function deleteAccount() {
+      if (!currentUser) {
+        alert('No user session found. Please try again.');
+        return;
+      }
+      
+      const errorBox = document.getElementById('confirm-error');
+      errorBox.classList.remove('visible');
+      
+      // Show deleting view
+      document.getElementById('confirm-view').classList.add('hidden');
+      document.getElementById('deleting-view').classList.remove('hidden');
+      
+      try {
+        console.log('[WebDeletion] Starting deletion for user:', currentUser.id);
+        
+        // Try Edge Function first
+        let edgeFunctionSuccess = false;
+        
+        try {
+          const session = await supabase.auth.getSession();
+          const accessToken = session.data?.session?.access_token;
+          
+          if (accessToken) {
+            const edgeResponse = await fetch(
+              `${SUPABASE_URL}/functions/v1/delete-user-account`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+              }
+            );
+            
+            if (edgeResponse.ok) {
+              const edgeResult = await edgeResponse.json();
+              console.log('[WebDeletion] Edge Function result:', edgeResult);
+              if (edgeResult.success) {
+                edgeFunctionSuccess = true;
+              }
+            }
+          }
+        } catch (edgeError) {
+          console.warn('[WebDeletion] Edge Function not available:', edgeError);
+        }
+        
+        // If Edge Function didn't work, try RPC
+        if (!edgeFunctionSuccess) {
+          const { data: rpcResult, error: rpcError } = await supabase.rpc('delete_user_account', {
+            p_user_id: currentUser.id
+          });
+          
+          if (rpcError) {
+            console.warn('[WebDeletion] RPC failed:', rpcError.message);
+            
+            // Fallback: Delete profile directly
+            if (rpcError.message?.includes('does not exist') || rpcError.code === '42883') {
+              const { error: profileError } = await supabase
+                .from('profiles')
+                .delete()
+                .eq('id', currentUser.id);
+              
+              if (profileError) {
+                throw new Error('Failed to delete profile');
+              }
+            } else {
+              throw rpcError;
+            }
+          }
+        }
+        
+        // Sign out
+        await supabase.auth.signOut();
+        
+        // Show success
+        document.getElementById('deleting-view').classList.add('hidden');
+        document.getElementById('success-view').classList.remove('hidden');
+        
+        // Redirect after delay
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 3000);
+        
+      } catch (err) {
+        console.error('[WebDeletion] Error:', err);
+        
+        // Go back to confirm view with error
+        document.getElementById('deleting-view').classList.add('hidden');
+        document.getElementById('confirm-view').classList.remove('hidden');
+        errorBox.textContent = 'Failed to delete account. Please contact support at deadblock.game@gmail.com';
+        errorBox.classList.add('visible');
+      }
     }
   </script>
 </body>

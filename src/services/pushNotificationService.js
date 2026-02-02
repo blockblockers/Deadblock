@@ -1,13 +1,19 @@
 // pushNotificationService.js - Client-side push notification management
-// v7.15: FIXED - Handles service worker conflicts, proper timeouts, state persistence
+// v7.15.1: FIXED - onConflict matches actual DB constraint, save errors propagate
 // Place in src/services/pushNotificationService.js
 //
-// CRITICAL FIXES:
+// CRITICAL FIXES (v7.15.1):
+// - FIXED: onConflict changed from 'user_id,endpoint' to 'endpoint' to match
+//   actual UNIQUE(endpoint) constraint. Previous mismatch caused silent save failures.
+// - FIXED: saveSubscription errors now propagate to subscribe() and show in UI
+// - Updated test notification message
+//
+// Previous fixes (v7.15):
 // - Unregisters conflicting service workers (service-worker.js vs sw.js)
 // - 10 second timeout on ALL async operations
 // - No more infinite spinning
 // - Better error recovery
-// - NEW: checkSubscription() async method for accurate state on modal reopen
+// - checkSubscription() async method for accurate state on modal reopen
 
 import { supabase } from '../utils/supabase';
 
@@ -292,17 +298,23 @@ class PushNotificationService {
 
       console.log('[PushService] Subscription created');
 
-      // Save to database
-      try {
-        await this.saveSubscription(userId, this.subscription);
-      } catch (saveError) {
-        console.warn('[PushService] Save failed:', saveError.message);
-      }
+      // v7.15.1: Save to database - errors now propagate instead of being swallowed
+      await this.saveSubscription(userId, this.subscription);
 
       return { success: true, subscription: this.subscription };
       
     } catch (error) {
       console.error('[PushService] Subscribe failed:', error.message);
+      // v7.15.1: If browser subscription succeeded but DB save failed,
+      // clean up the browser subscription so state stays consistent
+      if (this.subscription) {
+        try {
+          await this.subscription.unsubscribe();
+        } catch (e) {
+          // ignore cleanup error
+        }
+        this.subscription = null;
+      }
       throw error;
     }
   }
@@ -339,8 +351,14 @@ class PushNotificationService {
     const subscriptionJson = subscription.toJSON();
     
     console.log('[PushService] Saving subscription to database...');
+    console.log('[PushService] User ID:', userId);
+    console.log('[PushService] Endpoint:', subscriptionJson.endpoint?.substring(0, 60) + '...');
     
-    const { error } = await supabase
+    // v7.15.1: Use 'endpoint' as onConflict to match the actual 
+    // UNIQUE(endpoint) constraint on push_subscriptions table.
+    // Previously used 'user_id,endpoint' which doesn't match any constraint,
+    // causing PostgREST to silently fail the upsert.
+    const { data, error } = await supabase
       .from('push_subscriptions')
       .upsert({
         user_id: userId,
@@ -349,15 +367,17 @@ class PushNotificationService {
         auth: subscriptionJson.keys.auth,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'user_id,endpoint'
-      });
+        onConflict: 'endpoint'
+      })
+      .select();
 
     if (error) {
-      console.error('[PushService] Save error:', error);
-      throw error;
+      console.error('[PushService] Save error:', error.code, error.message, error.details);
+      throw new Error(`Failed to save subscription: ${error.message}`);
     }
     
-    console.log('[PushService] Subscription saved');
+    console.log('[PushService] Subscription saved successfully:', data?.length, 'row(s)');
+    return true;
   }
 
   async removeSubscription(userId) {
@@ -401,8 +421,8 @@ class PushNotificationService {
     }
     
     try {
-      await this.swRegistration.showNotification('🎮 Notifications Enabled!', {
-        body: 'You\'ll be notified when it\'s your turn in online games.',
+      await this.swRegistration.showNotification('Deadblock - Notifications Active ✅', {
+        body: 'If you received this test, then notifications are configured!',
         icon: '/pwa-192x192.png',
         badge: '/pwa-192x192.png',
         vibrate: [200, 100, 200],
