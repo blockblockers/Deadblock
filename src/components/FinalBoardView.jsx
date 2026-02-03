@@ -352,8 +352,8 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* BOARD AREA - Takes all remaining space */}
-      <div className="flex-1 flex items-center justify-center p-2 min-h-0 overflow-hidden">
+      {/* BOARD AREA - Compact layout, minimal vertical padding */}
+      <div className="flex-1 flex items-start justify-center p-2 pt-3 min-h-0 overflow-hidden">
         {isLoadingMoves ? (
           <div className="text-center">
             <Loader size={32} className="text-purple-400 animate-spin mx-auto mb-2" />
@@ -362,7 +362,7 @@ const FinalBoardView = ({
         ) : (
           /* Board Grid - Matches GameBoard sizing exactly */
           <div 
-            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
+            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-purple-500/40"
             style={{
               boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)',
               maxWidth: 'calc(100vh - 200px)',

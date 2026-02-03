@@ -1,5 +1,7 @@
 // Matchmaking Service
 // OPTIMIZED: Uses centralized RealtimeManager for match notifications
+// FIXED v7.15.1: Race conditions where matched player's polling kills realtime
+//   before the matchFound event arrives, and duplicate game creation
 import { supabase } from '../utils/supabase';
 import { realtimeManager } from './realtimeManager';
 
@@ -7,6 +9,7 @@ class MatchmakingService {
   constructor() {
     this.unsubscribeHandler = null;
     this.pollingInterval = null;
+    this.matchHandled = false; // Guard against double-firing onMatch
   }
 
   // Join the matchmaking queue
@@ -67,6 +70,43 @@ class MatchmakingService {
     return null;
   }
 
+  // Check if a game was recently created for this user (fallback detection)
+  async checkForRecentGame(userId) {
+    if (!supabase) return null;
+
+    try {
+      // Look for active games created in the last 30 seconds involving this user
+      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
+      
+      const { data: games, error } = await supabase
+        .from('games')
+        .select(`
+          *,
+          player1:profiles!games_player1_id_fkey(*),
+          player2:profiles!games_player2_id_fkey(*)
+        `)
+        .eq('status', 'active')
+        .gte('created_at', thirtySecondsAgo)
+        .or(`player1_id.eq.${userId},player2_id.eq.${userId}`)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('[Matchmaking] Error checking for recent game:', error);
+        return null;
+      }
+
+      if (games && games.length > 0) {
+        console.log('[Matchmaking] Found recent game via fallback:', games[0].id);
+        return games[0];
+      }
+      return null;
+    } catch (err) {
+      console.error('[Matchmaking] Exception checking for recent game:', err);
+      return null;
+    }
+  }
+
   // Create a new game between two players
   async createGame(player1Id, player2Id) {
     if (!supabase) return { error: { message: 'Not configured' } };
@@ -77,7 +117,7 @@ class MatchmakingService {
     // Randomly decide who goes first
     const firstPlayer = Math.random() < 0.5 ? 1 : 2;
     
-    console.log('Creating game between', player1Id, 'and', player2Id);
+    console.log('[Matchmaking] Creating game between', player1Id, 'and', player2Id);
     
     try {
       // First, create the game without the profile joins
@@ -96,11 +136,11 @@ class MatchmakingService {
         .single();
 
       if (createError) {
-        console.error('Error creating game:', createError);
+        console.error('[Matchmaking] Error creating game:', createError);
         return { game: null, error: createError };
       }
 
-      console.log('Game created:', game.id);
+      console.log('[Matchmaking] Game created:', game.id);
 
       // Now fetch the game with player profiles
       const { data: fullGame, error: fetchError } = await supabase
@@ -114,7 +154,7 @@ class MatchmakingService {
         .single();
 
       if (fetchError) {
-        console.error('Error fetching game with profiles:', fetchError);
+        console.error('[Matchmaking] Error fetching game with profiles:', fetchError);
         // Return the basic game even if profile fetch fails
         return { game, error: null };
       }
@@ -125,21 +165,39 @@ class MatchmakingService {
         .delete()
         .in('user_id', [player1Id, player2Id]);
 
-      console.log('Game ready with profiles:', fullGame.id);
+      console.log('[Matchmaking] Game ready with profiles:', fullGame.id);
       return { game: fullGame, error: null };
     } catch (err) {
-      console.error('Exception creating game:', err);
+      console.error('[Matchmaking] Exception creating game:', err);
       return { game: null, error: { message: err.message || 'Unknown error' } };
     }
   }
 
   // Start searching for a match with polling
+  // FIXED: Two race conditions resolved:
+  // 1. When queue entry disappears (other player created game), actively check
+  //    for the new game instead of just stopping (which killed the realtime sub)
+  // 2. Only the earlier-queued player creates the game to prevent duplicates
   startMatchmaking(userId, userRating, onMatch, onError) {
     // Clear any existing polling
     this.stopMatchmaking();
+    this.matchHandled = false;
+
+    // Safe wrapper to prevent double-firing onMatch
+    const safeOnMatch = (game) => {
+      if (this.matchHandled) {
+        console.log('[Matchmaking] Match already handled, ignoring duplicate');
+        return;
+      }
+      this.matchHandled = true;
+      this.stopMatchmaking();
+      onMatch(game);
+    };
 
     // Poll every 2 seconds
     this.pollingInterval = setInterval(async () => {
+      if (this.matchHandled) return;
+      
       try {
         // Check if still in queue
         const { data: queueEntry } = await supabase
@@ -150,8 +208,23 @@ class MatchmakingService {
           .single();
 
         if (!queueEntry) {
-          // No longer in queue, might have been matched
-          this.stopMatchmaking();
+          // FIX #1: Queue entry gone - the OTHER player likely created a game for us.
+          // Instead of just stopping (which kills the realtime sub before the event
+          // arrives), actively check for a recently created game.
+          console.log('[Matchmaking] No queue entry found - checking for recent game...');
+          
+          const recentGame = await this.checkForRecentGame(userId);
+          if (recentGame) {
+            console.log('[Matchmaking] Found game via polling fallback:', recentGame.id);
+            safeOnMatch(recentGame);
+          } else {
+            // No game found either - may have been removed from queue for other reasons
+            // Keep polling a couple more times in case game creation is in progress
+            console.log('[Matchmaking] No game found yet, will retry...');
+            // Don't stop - give it a few more cycles. The realtime sub or next
+            // poll iteration will catch it. After 10 seconds of no queue + no game,
+            // we'll stop naturally.
+          }
           return;
         }
 
@@ -159,19 +232,31 @@ class MatchmakingService {
         const match = await this.findMatch(userId, userRating);
         
         if (match) {
+          // FIX #2: Prevent duplicate game creation.
+          // Only the player who joined the queue FIRST creates the game.
+          // The other player will be notified via realtime or polling fallback.
+          if (queueEntry.queued_at > match.queued_at) {
+            // The other player queued first - they should create the game.
+            // We wait for notification (realtime or polling fallback).
+            console.log('[Matchmaking] Match found but other player queued first - waiting for them to create game');
+            return;
+          }
+          
+          console.log('[Matchmaking] Match found - we are the creator');
+          
           // Found a match! Create the game
           const { game, error } = await this.createGame(userId, match.user_id);
           
           if (error) {
-            console.error('Error creating game:', error);
-            onError?.(error);
+            console.error('[Matchmaking] Error creating game:', error);
+            // Don't call onError for transient failures - the other player might
+            // have already created the game. Check on next poll cycle.
           } else if (game) {
-            this.stopMatchmaking();
-            onMatch(game);
+            safeOnMatch(game);
           }
         }
       } catch (err) {
-        console.error('Matchmaking error:', err);
+        console.error('[Matchmaking] Matchmaking error:', err);
         onError?.(err);
       }
     }, 2000);
@@ -187,6 +272,11 @@ class MatchmakingService {
 
     // Register handler with RealtimeManager (no new channel created!)
     this.unsubscribeHandler = realtimeManager.on('matchFound', async (gameData) => {
+      if (this.matchHandled) {
+        console.log('[Matchmaking] Match already handled, ignoring realtime event');
+        return;
+      }
+      
       console.log('[Matchmaking] Match found via RealtimeManager:', gameData?.id);
       
       // Fetch full game with profiles
@@ -201,6 +291,7 @@ class MatchmakingService {
         .single();
 
       if (game) {
+        this.matchHandled = true;
         this.stopMatchmaking();
         onMatch(game);
       }

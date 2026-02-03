@@ -41,6 +41,36 @@ const theme = {
   cardShadow: 'shadow-[0_0_50px_rgba(251,191,36,0.3),inset_0_0_20px_rgba(251,191,36,0.05)]',
 };
 
+// Helper to fetch game moves for replay (v7.15.1)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const fetchGameMoves = async (gameId) => {
+  const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+  try {
+    const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
+    const token = authData?.access_token;
+    if (!token || !SUPABASE_URL) return [];
+    
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/game_moves?game_id=eq.${gameId}&order=move_number.asc`,
+      {
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    return [];
+  } catch (err) {
+    console.error('Error fetching game moves:', err);
+    return [];
+  }
+};
+
 // Active Game Prompt Modal
 const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   // Find games where it's the user's turn
@@ -258,6 +288,25 @@ const OnlineMenu = ({
   
   // Final Board View state
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
+  const [gameMoves, setGameMoves] = useState([]);
+  const [loadingMoves, setLoadingMoves] = useState(false);
+
+  // Handle opening Final Board View - fetch moves first (v7.15.1)
+  const handleOpenFinalBoardView = async (game) => {
+    soundManager.playButtonClick();
+    setLoadingMoves(true);
+    setSelectedGameForFinalView(game);
+    
+    try {
+      const moves = await fetchGameMoves(game.id);
+      setGameMoves(moves);
+    } catch (err) {
+      console.error('Error fetching moves:', err);
+      setGameMoves([]);
+    }
+    
+    setLoadingMoves(false);
+  };
 
   // Initialize notifications
   // Auto-request notification permission on first online visit (mobile only)
@@ -2567,10 +2616,7 @@ const OnlineMenu = ({
         )}
         {/* Final Board View button */}
         <button
-          onClick={() => {
-            soundManager.playButtonClick();
-            setSelectedGameForFinalView(game);
-          }}
+          onClick={() => handleOpenFinalBoardView(game)}
           className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-lg hover:bg-purple-500/30 transition-colors text-sm"
           title="View final board state"
         >
@@ -2669,14 +2715,24 @@ const OnlineMenu = ({
       {selectedGameForFinalView && (
         <FinalBoardView
           isOpen={true}
-          onClose={() => setSelectedGameForFinalView(null)}
+          onClose={() => {
+            setSelectedGameForFinalView(null);
+            setGameMoves([]);
+          }}
           board={selectedGameForFinalView.board}
           boardPieces={selectedGameForFinalView.board_pieces}
-          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
-                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          moveHistory={gameMoves}
+          isLoadingMoves={loadingMoves}
+          player1={selectedGameForFinalView.player1}
+          player2={selectedGameForFinalView.player2}
           player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
           player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
+          player1Rating={selectedGameForFinalView.player1?.rating || 1200}
+          player2Rating={selectedGameForFinalView.player2?.rating || 1200}
+          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
+                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
+          winnerId={selectedGameForFinalView.winner_id}
+          gameDate={selectedGameForFinalView.updated_at || selectedGameForFinalView.created_at}
         />
       )}
       
