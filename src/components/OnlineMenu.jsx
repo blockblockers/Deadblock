@@ -372,7 +372,7 @@ const OnlineMenu = ({
     };
     
     fetchLobbyCount();
-    const interval = setInterval(fetchLobbyCount, 30000); // Every 30 seconds
+    const interval = setInterval(fetchLobbyCount, 10000); // Every 10 seconds for responsive queue display
     return () => clearInterval(interval);
   }, [profile?.id]);
 
@@ -1467,40 +1467,59 @@ const OnlineMenu = ({
               </button>
             </div>
 
-{/* Find Match - Glow Orb Style - Cyan */}
+{/* Find Match - Expanded with Queue Count */}
 <button
   onClick={handleFindMatch}
-  className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
-    bg-cyan-900/30 border-2 border-cyan-500/40
-    hover:border-white/40 hover:ring-4 ring-cyan-500/50
+  className="w-full p-4 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+    bg-gradient-to-br from-cyan-900/40 to-cyan-800/20 border-2 border-cyan-500/50
+    hover:border-cyan-400/70 hover:ring-4 ring-cyan-500/30
     active:scale-[0.98]"
   style={{ 
-    boxShadow: '0 0 25px rgba(34,211,238,0.3)',
+    boxShadow: '0 0 30px rgba(34,211,238,0.25), inset 0 0 30px rgba(34,211,238,0.1)',
   }}
   onMouseEnter={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 40px rgba(34,211,238,0.6)';
-    e.currentTarget.style.background = 'linear-gradient(to right, #06b6d4, #0891b2)';
+    e.currentTarget.style.boxShadow = '0 0 50px rgba(34,211,238,0.5), inset 0 0 40px rgba(34,211,238,0.15)';
   }}
   onMouseLeave={(e) => {
-    e.currentTarget.style.boxShadow = '0 0 25px rgba(34,211,238,0.3)';
-    e.currentTarget.style.background = '';
+    e.currentTarget.style.boxShadow = '0 0 30px rgba(34,211,238,0.25), inset 0 0 30px rgba(34,211,238,0.1)';
   }}
 >
+  {/* Shine effect */}
   <div className="absolute inset-0 overflow-hidden rounded-xl opacity-0 group-hover:opacity-100">
     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-shine" />
   </div>
   
-  <div className="relative flex items-center justify-center gap-3">
-    <span className="font-black tracking-wide text-sm text-cyan-300 group-hover:text-white transition-colors">
-      FIND MATCH
-    </span>
+  <div className="relative flex items-center justify-between">
+    {/* Left side - Find Match text with icon */}
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 rounded-lg bg-cyan-500/20 flex items-center justify-center border border-cyan-400/30">
+        <Search size={20} className="text-cyan-400" />
+      </div>
+      <div className="text-left">
+        <div className="font-black tracking-wide text-base text-cyan-300 group-hover:text-white transition-colors">
+          FIND MATCH
+        </div>
+        <div className="text-xs text-cyan-400/70 group-hover:text-cyan-200/80 transition-colors">
+          Random opponent
+        </div>
+      </div>
+    </div>
     
-    {lobbyCount > 0 && (
-      <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-normal text-white">
-        {lobbyCount} in queue
-      </span>
-    )}
+    {/* Right side - Queue count */}
+    <div className="flex flex-col items-center px-4 py-1 rounded-lg bg-slate-900/50 border border-cyan-500/30">
+      <div className={`text-2xl font-black ${lobbyCount > 0 ? 'text-cyan-300' : 'text-slate-500'}`}>
+        {lobbyCount}
+      </div>
+      <div className="text-[10px] text-cyan-400/60 uppercase tracking-wider">
+        in queue
+      </div>
+    </div>
   </div>
+  
+  {/* Animated pulse when players are in queue */}
+  {lobbyCount > 0 && (
+    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+  )}
 </button>
 
             {/* Error Banner - Themed in-GUI message */}
