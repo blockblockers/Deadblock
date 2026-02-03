@@ -1,5 +1,4 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
-// v7.15: Fixed push notification toggle state persistence when modal reopens
 // v7.14: Fixed push notification toggle - properly checks subscription state after init
 // UPDATED: Added push notification subscription management
 // v7.10: Added iOS scroll fixes for modal content
@@ -66,6 +65,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
   const [resetEmailError, setResetEmailError] = useState('');
 
   // v7.11: Granular notification preferences
+  // v7.15.2: Added streakReminder for daily play streak notifications
   const [notificationPrefs, setNotificationPrefs] = useState(() => {
     try {
       const saved = localStorage.getItem('deadblock_notification_prefs');
@@ -76,7 +76,8 @@ const SettingsModal = ({ isOpen, onClose }) => {
         rematchRequests: true,
         chatMessages: true,
         gameStart: true,
-        weeklyChallenge: true
+        weeklyChallenge: true,
+        streakReminder: true
       };
     } catch {
       return {
@@ -86,7 +87,8 @@ const SettingsModal = ({ isOpen, onClose }) => {
         rematchRequests: true,
         chatMessages: true,
         gameStart: true,
-        weeklyChallenge: true
+        weeklyChallenge: true,
+        streakReminder: true
       };
     }
   });
@@ -97,9 +99,10 @@ const SettingsModal = ({ isOpen, onClose }) => {
                        user?.identities?.some(i => i.provider === 'google');
   
   // Initialize push notifications and other states
-  // v7.15: Re-check subscription state when modal opens
   useEffect(() => {
     const initPushNotifications = async () => {
+      // v7.14: Fixed initialization to properly detect subscription state
+      
       // First check if push is even supported
       if (!pushNotificationService.isSupported()) {
         console.log('[SettingsModal] Push notifications not supported');
@@ -109,23 +112,26 @@ const SettingsModal = ({ isOpen, onClose }) => {
       
       setPushSupported(true);
       
-      // Initialize the service
-      const initialized = await pushNotificationService.init();
+      // Initialize the service (this fetches existing subscription)
+      const initialized = await pushNotificationService.initialize();
       console.log('[SettingsModal] Push service initialized:', initialized);
       
       if (initialized) {
         // Get permission status
         setPushPermission(pushNotificationService.getPermissionStatus());
         
-        // v7.15: Use async checkSubscription() to query browser directly
-        // This ensures accurate state every time the modal opens
+        // CRITICAL FIX: Check subscription directly from push manager
+        // This ensures we get the true state, not stale internal state
         try {
-          const isSubscribed = await pushNotificationService.checkSubscription();
-          console.log('[SettingsModal] Push subscription state:', isSubscribed);
+          const registration = await navigator.serviceWorker.ready;
+          const currentSubscription = await registration.pushManager.getSubscription();
+          const isSubscribed = currentSubscription !== null;
+          console.log('[SettingsModal] Push subscription state:', isSubscribed, currentSubscription?.endpoint?.slice(-20));
           setPushSubscribed(isSubscribed);
         } catch (err) {
           console.error('[SettingsModal] Error checking subscription:', err);
-          setPushSubscribed(false);
+          // Fallback to service's internal state
+          setPushSubscribed(pushNotificationService.isSubscribed());
         }
       } else {
         console.warn('[SettingsModal] Push initialization failed');
@@ -134,10 +140,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
       }
     };
     
-    // v7.15: Only run when modal is open
-    if (isOpen) {
-      initPushNotifications();
-    }
+    initPushNotifications();
     
     // Check basic notification permission
     if ('Notification' in window) {
@@ -174,7 +177,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, [isOpen]);  // v7.15: Added isOpen dependency to re-check when modal opens
+  }, []);
   
   // Auto-open password reset if this is a recovery session
   useEffect(() => {
@@ -277,6 +280,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
   };
 
   // v7.11: Enable all notifications
+  // v7.15.2: Added streakReminder
   const enableAllNotifications = () => {
     const allEnabled = {
       yourTurn: true,
@@ -285,7 +289,8 @@ const SettingsModal = ({ isOpen, onClose }) => {
       rematchRequests: true,
       chatMessages: true,
       gameStart: true,
-      weeklyChallenge: true
+      weeklyChallenge: true,
+      streakReminder: true
     };
     setNotificationPrefs(allEnabled);
     localStorage.setItem('deadblock_notification_prefs', JSON.stringify(allEnabled));
@@ -650,6 +655,20 @@ const SettingsModal = ({ isOpen, onClose }) => {
                             </div>
                             <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.weeklyChallenge ? 'bg-green-500' : 'bg-slate-600'}`}>
                               <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.weeklyChallenge ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Streak Reminder - v7.15.2 */}
+                          <button
+                            onClick={() => toggleNotificationPref('streakReminder')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🔥</span>
+                              <span className={notificationPrefs.streakReminder ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Streak Reminders</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.streakReminder ? 'bg-orange-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.streakReminder ? 'translate-x-3' : 'translate-x-0'}`} />
                             </div>
                           </button>
                         </div>

@@ -352,10 +352,10 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* BOARD AREA - Compact layout, minimal vertical padding */}
-      <div className="flex-1 flex items-start justify-center p-2 pt-3 min-h-0 overflow-hidden">
+      {/* BOARD AREA - Content at top, scrollable if needed */}
+      <div className="flex-1 flex flex-col items-center justify-start p-2 min-h-0 overflow-auto">
         {isLoadingMoves ? (
-          <div className="text-center">
+          <div className="text-center py-8">
             <Loader size={32} className="text-purple-400 animate-spin mx-auto mb-2" />
             <p className="text-slate-400 text-sm">Loading game...</p>
           </div>
@@ -364,9 +364,7 @@ const FinalBoardView = ({
           <div 
             className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-purple-500/40"
             style={{
-              boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)',
-              maxWidth: 'calc(100vh - 200px)',
-              maxHeight: 'calc(100vh - 200px)',
+              boxShadow: '0 0 30px rgba(147,51,234,0.15), inset 0 0 20px rgba(0,0,0,0.2)',
             }}
           >
             {currentState.board.map((row, rowIdx) =>
@@ -437,7 +435,7 @@ const FinalBoardView = ({
       </div>
 
       {/* CONTROLS - Fixed at bottom */}
-      <div className="bg-slate-900/90 border-t border-slate-700/50 px-3 py-2 flex-shrink-0">
+      <div className="bg-slate-900/90 border-t border-purple-500/30 px-3 py-2 flex-shrink-0">
         {/* Progress bar */}
         {totalMoves > 0 && (
           <div className="mb-2">

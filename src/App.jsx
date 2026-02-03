@@ -3,6 +3,7 @@ import { useGameState } from './hooks/useGameState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isSupabaseConfigured } from './utils/supabase';
 import { useRealtimeConnection } from './hooks/useRealtimeConnection';
+import { streakTracker } from './utils/streakTracker';
 
 // Core screens (always loaded - used frequently)
 import MenuScreen from './components/MenuScreen';
@@ -449,6 +450,18 @@ function AppContent({ onBgThemeChange }) {
       doRedirect();
     }
   }, [isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, hasPassedEntryAuth, profile, pendingOnlineIntent, pendingInviteCode, setGameMode, clearOAuthCallback]);
+  
+  // v7.15.2: Check for streak reminder on app load
+  useEffect(() => {
+    if (isAuthenticated && profile?.id && !authLoading) {
+      // Small delay to ensure notifications are initialized
+      const timer = setTimeout(() => {
+        streakTracker.checkAndRemind();
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, profile?.id, authLoading]);
   
   // Detect mobile device
   useEffect(() => {

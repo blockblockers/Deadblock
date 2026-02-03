@@ -16,6 +16,7 @@ import { soundManager } from '../utils/soundManager';
 import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { streakTracker } from '../utils/streakTracker';
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -263,12 +264,17 @@ const GameScreen = ({
   // Show game over modal when game ends
   useEffect(() => {
     if (gameOver && winner !== null) {
+      // v7.15.2: Record daily play for streak tracking (VS AI game completed)
+      if (gameMode === 'ai') {
+        streakTracker.recordPlay();
+      }
+      
       const delay = setTimeout(() => {
         setShowGameOverModal(true);
       }, 500);
       return () => clearTimeout(delay);
     }
-  }, [gameOver, winner]);
+  }, [gameOver, winner, gameMode]);
 
   const handleCloseModal = () => {
     setShowGameOverModal(false);

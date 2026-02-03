@@ -99,6 +99,7 @@ class NotificationService {
     chat: [50],                          // Single short buzz
     victory: [100, 50, 100, 50, 300],   // Celebratory pattern
     defeat: [200, 200, 200],            // Slow triple
+    streakReminder: [100, 100, 100, 100, 200],  // Urgent pulsing
     default: [100, 50, 100]
   };
 
@@ -116,7 +117,8 @@ class NotificationService {
       'rematch_declined': '/badge-defeat.svg',
       'chat_message': '/badge-chat.svg',
       'victory': '/badge-victory.svg',
-      'defeat': '/badge-defeat.svg'
+      'defeat': '/badge-defeat.svg',
+      'streak_reminder': '/badges/badge-streak.svg'  // N pentomino - Flame Orange
     };
     return badgeMap[type] || '/badge-default.svg';
   }
@@ -473,6 +475,45 @@ class NotificationService {
       tag: 'deadblock-friend-request',
       renotify: true,
       data: { type: 'friend_request' }
+    });
+  }
+
+  // v7.15.2: Streak reminder notification - only for 5+ day streaks
+  notifyStreakReminder(currentStreak) {
+    // Check if streak reminders are enabled in user preferences
+    try {
+      const prefs = JSON.parse(localStorage.getItem('deadblock_notification_prefs') || '{}');
+      if (prefs.streakReminder === false) {
+        console.log('[NotificationService] Streak reminders disabled');
+        return null;
+      }
+    } catch (e) {
+      // Default to enabled if can't read prefs
+    }
+    
+    const messages = [
+      // Straightforward (1-3)
+      `Your ${currentStreak}-day streak is at risk! Play today to keep it going.`,
+      `Don't lose your ${currentStreak}-day streak! Play a game today.`,
+      `${currentStreak} days strong! Play today to continue your streak.`,
+      // Casual (4-6)
+      `🔥 ${currentStreak} days and counting! Keep the fire alive!`,
+      `Your ${currentStreak}-day streak is calling! One game keeps it going.`,
+      `Almost there! Don't let your ${currentStreak}-day streak slip away!`,
+      // Energetic (7-8)
+      `🔥 STREAK ALERT! ${currentStreak} days on the line - play now!`,
+      `${currentStreak} DAYS! Don't break the chain - get in there!`,
+      // Cyberpunk themed (9-10)
+      `[SYSTEM WARNING] ${currentStreak}-day neural link deteriorating. Reconnect immediately.`,
+      `Your ${currentStreak}-day grid dominance is fading. Jack in before midnight, operator.`
+    ];
+    
+    return this.sendNotification('Deadblock - Streak at Risk! 🔥', {
+      body: this.getRandomMessage(messages),
+      tag: 'deadblock-streak-reminder',
+      renotify: true,
+      requireInteraction: true,
+      data: { type: 'streak_reminder', streak: currentStreak }
     });
   }
 }

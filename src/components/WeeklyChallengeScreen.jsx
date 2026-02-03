@@ -12,6 +12,7 @@ import { useGameState } from '../hooks/useGameState';
 import { soundManager } from '../utils/soundManager';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
 import { streakService } from '../services/streakService';
+import { streakTracker } from '../utils/streakTracker';
 import { useAuth } from '../contexts/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
@@ -896,6 +897,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         setGameComplete(true);
         soundManager.playPuzzleSolvedSound();
         submitResult(finalTime);
+        
+        // v7.15.2: Record daily play for streak tracking
+        streakTracker.recordPlay();
         
         // v7.12: Update play streak
         try {

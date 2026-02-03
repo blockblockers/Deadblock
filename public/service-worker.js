@@ -1,5 +1,5 @@
 // service-worker.js - UNIFIED Service Worker for Deadblock PWA
-// v7.12 - Combines caching + full push notifications
+// v7.15.2 - Added streak_reminder notification type (N pentomino - Flame Orange)
 // FIXES:
 // - All notification types navigate to correct screen
 // - Chat notifications open game WITH chat panel
@@ -7,7 +7,7 @@
 // - Handles both camelCase and snake_case data keys from database
 // Place in: public/service-worker.js
 
-const CACHE_NAME = 'deadblock-v7.12';
+const CACHE_NAME = 'deadblock-v7.15.2';
 const APP_URL = self.location.origin;
 
 // =============================================================================
@@ -28,6 +28,7 @@ const BADGES = {
   'victory': '/badges/badge-victory.svg',          // W pentomino
   'defeat': '/badges/badge-defeat.svg',            // L pentomino
   'weekly_challenge': '/badges/badge-weekly.svg',  // Z pentomino
+  'streak_reminder': '/badges/badge-streak.svg',   // N pentomino - Flame Orange
   'default': '/badges/badge-default.svg'           // I pentomino
 };
 
@@ -44,6 +45,7 @@ const VIBRATIONS = {
   'victory': [100, 50, 100, 50, 300],
   'defeat': [200, 200, 200],
   'weekly_challenge': [100, 50, 100, 50, 100, 50, 200],
+  'streak_reminder': [100, 100, 100, 100, 200],  // Urgent pulsing
   'default': [100, 50, 100]
 };
 
@@ -53,7 +55,8 @@ const REQUIRE_INTERACTION = [
   'rematch_request', 
   'weekly_challenge',
   'victory',
-  'defeat'
+  'defeat',
+  'streak_reminder'
 ];
 
 // =============================================================================
@@ -227,6 +230,8 @@ function getActions(type) {
       return [{ action: 'view', title: '🏆 View Game' }];
     case 'defeat':
       return [{ action: 'view', title: '📊 View Game' }];
+    case 'streak_reminder':
+      return [{ action: 'play', title: '🔥 Play Now' }];
     default:
       return [];
   }
@@ -316,6 +321,11 @@ self.addEventListener('notificationclick', (event) => {
       url = '/?navigateTo=online&showFriends=true';
       break;
       
+    case 'streak_reminder':
+      // Navigate to main menu so player can choose any game mode
+      url = '/';
+      break;
+      
     default:
       // Fallback - if we have a gameId, go to that game
       if (gameId) {
@@ -373,4 +383,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] v7.12 unified service worker loaded');
+console.log('[SW] v7.15.2 unified service worker loaded');

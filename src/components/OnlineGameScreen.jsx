@@ -33,6 +33,7 @@ import { ratingService } from '../services/ratingService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { realtimeManager } from '../services/realtimeManager';
 import { streakService } from '../services/streakService';
+import { streakTracker } from '../utils/streakTracker';
 
 // Orange/Amber theme for online mode
 const theme = {
@@ -1381,6 +1382,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     }
 
     // console.log('handleConfirm: Move successful');
+    
+    // v7.15.2: Record daily play for streak tracking
+    streakTracker.recordPlay();
     
     // Set expected piece count to ignore stale updates
     expectedPieceCountRef.current = newUsedPieces.length;

@@ -26,6 +26,7 @@ import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { statsService } from '../utils/statsService';
 import { streakService } from '../services/streakService';
+import { streakTracker } from '../utils/streakTracker';
 
 // ============================================================================
 // CONSTANTS - Centralized configuration for easy maintenance
@@ -1562,6 +1563,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         soundManager.playWin();
         const newStreak = streak + 1;
         setStreak(newStreak);
+        
+        // v7.15.2: Record daily play for streak tracking
+        streakTracker.recordPlay();
         
         // Track in database
         if (!isOfflineMode) {

@@ -1,215 +1,971 @@
-// RematchModal.jsx - Themed modal for rematch requests
-// v7.7: Added "Back to Menu" button for requester waiting state
-import React, { useState, useEffect } from 'react';
-import { X, Swords, Check, Loader2, Home } from 'lucide-react';
+// SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.14: Fixed push notification toggle - properly checks subscription state after init
+// UPDATED: Added push notification subscription management
+// v7.10: Added iOS scroll fixes for modal content
+// v7.11: Added granular notification preferences
+// Place in src/components/SettingsModal.jsx
+
+import { useState, useEffect } from 'react';
+import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music, Key, Lock, Eye, EyeOff, Check, Loader, Mail, Trash2, Bell, BellOff, Download, Smartphone, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
+import { useAuth } from '../contexts/AuthContext';
+import { pushNotificationService } from '../services/pushNotificationService';
 
-/**
- * RematchModal - Themed modal for rematch requests
- * 
- * When a player clicks "Rematch" after game over:
- * 1. A rematch request is sent to the opponent
- * 2. This modal shows the request status
- * 3. Opponent sees the request in their game over modal
- * 4. Either player can accept to start the rematch
- * 
- * v7.7: Added onBackToMenu for navigating away while keeping request active
- */
-const RematchModal = ({
-  isOpen,
-  onClose,
-  onAccept,
-  onDecline,
-  onBackToMenu,          // NEW: Navigate to menu without canceling request
-  isRequester,           // true if this player sent the request
-  requesterName,         // Name of player who requested rematch
-  isWaiting = false,     // Waiting for opponent response
-  opponentAccepted = false,
-  opponentDeclined = false,
-  error = null,
-  firstPlayerName = null, // Who goes first in the new game
-}) => {
-  const [dots, setDots] = useState('');
-  const [hasPlayedSound, setHasPlayedSound] = useState(false);
+const SettingsModal = ({ isOpen, onClose }) => {
+  const { 
+    profile, 
+    user, 
+    isAuthenticated, 
+    signOut, 
+    updatePassword, 
+    resetPassword,
+    isPasswordRecovery,
+    clearPasswordRecovery
+  } = useAuth();
+  
+  const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
+  const [musicEnabled, setMusicEnabled] = useState(soundManager.isMusicEnabled());
+  const [vibrationEnabled, setVibrationEnabled] = useState(soundManager.isVibrationEnabled());
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  
+  // Push Notification states
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushPermission, setPushPermission] = useState('default');
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushError, setPushError] = useState(null);
+  
+  // Browser Notification states (fallback)
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState('default');
+  const [requestingNotifications, setRequestingNotifications] = useState(false);
+  
+  // PWA Install states
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIOSInstructions, setShowIOSInstructions] = useState(false);
+  
+  // Password reset states
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  
+  // Send reset email states
+  const [showSendResetEmail, setShowSendResetEmail] = useState(false);
+  const [sendingResetEmail, setSendingResetEmail] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [resetEmailError, setResetEmailError] = useState('');
 
-  // Animate waiting dots
-  useEffect(() => {
-    if (!isWaiting) return;
-    const interval = setInterval(() => {
-      setDots(d => d.length >= 3 ? '' : d + '.');
-    }, 500);
-    return () => clearInterval(interval);
-  }, [isWaiting]);
-
-  // Play sound on open (only once)
-  useEffect(() => {
-    if (isOpen && !hasPlayedSound) {
-      soundManager.playSound('notification');
-      setHasPlayedSound(true);
+  // v7.11: Granular notification preferences
+  // v7.15.2: Added streakReminder for daily play streak notifications
+  const [notificationPrefs, setNotificationPrefs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('deadblock_notification_prefs');
+      return saved ? JSON.parse(saved) : {
+        yourTurn: true,
+        gameInvites: true,
+        friendRequests: true,
+        rematchRequests: true,
+        chatMessages: true,
+        gameStart: true,
+        weeklyChallenge: true,
+        streakReminder: true
+      };
+    } catch {
+      return {
+        yourTurn: true,
+        gameInvites: true,
+        friendRequests: true,
+        rematchRequests: true,
+        chatMessages: true,
+        gameStart: true,
+        weeklyChallenge: true,
+        streakReminder: true
+      };
     }
-    if (!isOpen) {
-      setHasPlayedSound(false);
-    }
-  }, [isOpen, hasPlayedSound]);
+  });
+  const [showNotificationPrefs, setShowNotificationPrefs] = useState(false);
 
-  if (!isOpen) return null;
-
-  return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0, 0, 0, 0.8)' }}
-    >
-      {/* Backdrop blur */}
-      <div className="absolute inset-0 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Modal */}
-      <div className="relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-amber-500/30 shadow-2xl shadow-amber-500/20 max-w-sm w-full overflow-hidden">
+  // Check if user is using Google OAuth (no password auth)
+  const isGoogleUser = user?.app_metadata?.provider === 'google' || 
+                       user?.identities?.some(i => i.provider === 'google');
+  
+  // Initialize push notifications and other states
+  useEffect(() => {
+    const initPushNotifications = async () => {
+      // v7.14: Fixed initialization to properly detect subscription state
+      
+      // First check if push is even supported
+      if (!pushNotificationService.isSupported()) {
+        console.log('[SettingsModal] Push notifications not supported');
+        setPushSupported(false);
+        return;
+      }
+      
+      setPushSupported(true);
+      
+      // Initialize the service (this fetches existing subscription)
+      const initialized = await pushNotificationService.initialize();
+      console.log('[SettingsModal] Push service initialized:', initialized);
+      
+      if (initialized) {
+        // Get permission status
+        setPushPermission(pushNotificationService.getPermissionStatus());
         
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 p-2 rounded-full bg-slate-700/50 hover:bg-slate-600/50 text-slate-400 hover:text-white transition-colors z-10"
-        >
-          <X size={20} />
-        </button>
+        // CRITICAL FIX: Check subscription directly from push manager
+        // This ensures we get the true state, not stale internal state
+        try {
+          const registration = await navigator.serviceWorker.ready;
+          const currentSubscription = await registration.pushManager.getSubscription();
+          const isSubscribed = currentSubscription !== null;
+          console.log('[SettingsModal] Push subscription state:', isSubscribed, currentSubscription?.endpoint?.slice(-20));
+          setPushSubscribed(isSubscribed);
+        } catch (err) {
+          console.error('[SettingsModal] Error checking subscription:', err);
+          // Fallback to service's internal state
+          setPushSubscribed(pushNotificationService.isSubscribed());
+        }
+      } else {
+        console.warn('[SettingsModal] Push initialization failed');
+        setPushPermission(pushNotificationService.getPermissionStatus());
+        setPushSubscribed(false);
+      }
+    };
+    
+    initPushNotifications();
+    
+    // Check basic notification permission
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission);
+      setNotificationsEnabled(Notification.permission === 'granted');
+    }
+    
+    // Check if iOS
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(iOS);
+    
+    // Check if already installed (standalone mode)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                         window.navigator.standalone === true;
+    setIsInstalled(isStandalone);
+    
+    // Listen for beforeinstallprompt
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    // Listen for appinstalled
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    };
+    
+    window.addEventListener('appinstalled', handleAppInstalled);
+    
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+  
+  // Auto-open password reset if this is a recovery session
+  useEffect(() => {
+    if (isOpen && isPasswordRecovery) {
+      console.log('[SettingsModal] Password recovery session detected, opening reset form');
+      setShowPasswordReset(true);
+    }
+  }, [isOpen, isPasswordRecovery]);
 
-        {/* Header glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-amber-500/20 blur-3xl" />
-
-        {/* Content */}
-        <div className="relative p-6 pt-8">
+  // Handle push notification subscription toggle
+  const handlePushToggle = async () => {
+    if (!pushSupported || !user?.id) {
+      console.log('[SettingsModal] Toggle blocked:', { pushSupported, userId: user?.id });
+      return;
+    }
+    
+    setPushLoading(true);
+    setPushError(null);
+    
+    try {
+      if (pushSubscribed) {
+        // Unsubscribe
+        console.log('[SettingsModal] Attempting to unsubscribe...');
+        const result = await pushNotificationService.unsubscribe(user.id);
+        console.log('[SettingsModal] Unsubscribe result:', result);
+        
+        if (result.success) {
+          setPushSubscribed(false);
+          soundManager.playClickSound?.('click');
+        } else {
+          console.error('[SettingsModal] Unsubscribe failed:', result.reason);
+          setPushError('Failed to disable notifications: ' + (result.reason || 'Unknown error'));
+        }
+      } else {
+        // Subscribe
+        console.log('[SettingsModal] Attempting to subscribe...');
+        const result = await pushNotificationService.subscribe(user.id);
+        console.log('[SettingsModal] Subscribe result:', result);
+        
+        if (result.success) {
+          setPushSubscribed(true);
+          setPushPermission('granted');
+          soundManager.playClickSound?.('success');
           
-          {/* Icon */}
-          <div className="flex justify-center mb-4">
-            <div className="relative">
-              <div className="absolute inset-0 bg-amber-500/30 blur-xl rounded-full" />
-              <div className="relative bg-gradient-to-br from-amber-500 to-orange-600 p-4 rounded-full">
-                <Swords size={32} className="text-white" />
-              </div>
-            </div>
-          </div>
+          // Show test notification
+          setTimeout(() => {
+            pushNotificationService.sendTestNotification();
+          }, 500);
+        } else {
+          if (result.reason === 'permission_denied') {
+            setPushPermission('denied');
+            setPushError('Notification permission was denied. Please enable in browser settings.');
+          } else {
+            setPushError('Failed to enable notifications: ' + (result.reason || 'Please try again.'));
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[SettingsModal] Push toggle error:', error);
+      setPushError('An error occurred: ' + error.message);
+    } finally {
+      setPushLoading(false);
+    }
+  };
+  
+  // Handle basic notification toggle (fallback)
+  const handleNotificationToggle = async () => {
+    if (notificationPermission === 'denied') {
+      return;
+    }
+    
+    if (notificationPermission === 'default') {
+      setRequestingNotifications(true);
+      try {
+        const permission = await Notification.requestPermission();
+        setNotificationPermission(permission);
+        setNotificationsEnabled(permission === 'granted');
+        
+        if (permission === 'granted') {
+          // Show test notification
+          new Notification('Notifications Enabled!', {
+            body: 'You will now receive notifications when it\'s your turn.',
+            icon: '/pwa-192x192.png'
+          });
+        }
+      } catch (err) {
+        console.error('Notification permission error:', err);
+      } finally {
+        setRequestingNotifications(false);
+      }
+    }
+  };
 
-          {/* Title */}
-          <h2 className="text-2xl font-bold text-center text-white mb-2">
-            {isRequester ? 'Rematch Requested' : 'Rematch Challenge!'}
-          </h2>
+  // v7.11: Toggle individual notification preference
+  const toggleNotificationPref = (key) => {
+    const newPrefs = { ...notificationPrefs, [key]: !notificationPrefs[key] };
+    setNotificationPrefs(newPrefs);
+    localStorage.setItem('deadblock_notification_prefs', JSON.stringify(newPrefs));
+    soundManager.playClickSound?.('click');
+  };
 
-          {/* Status message */}
-          <div className="text-center mb-6">
-            {isWaiting && !opponentAccepted && !opponentDeclined && (
-              <div className="flex items-center justify-center gap-2 text-amber-400">
-                <Loader2 size={20} className="animate-spin" />
-                <span>Waiting for opponent{dots}</span>
-              </div>
-            )}
-            
-            {opponentAccepted && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-center gap-2 text-green-400">
-                  <Check size={20} />
-                  <span>Opponent accepted!</span>
-                </div>
-                {firstPlayerName && (
-                  <p className="text-amber-300 text-sm">
-                    {firstPlayerName} goes first
-                  </p>
-                )}
-                <p className="text-slate-400 text-sm">Starting game...</p>
-              </div>
-            )}
-            
-            {opponentDeclined && (
-              <div className="text-red-400">
-                Opponent declined the rematch
-              </div>
-            )}
-            
-            {error && (
-              <div className="text-red-400">
-                {error}
-              </div>
-            )}
-            
-            {!isRequester && !isWaiting && !opponentAccepted && !opponentDeclined && !error && (
-              <p className="text-slate-300">
-                <span className="text-amber-400 font-semibold">{requesterName}</span> wants a rematch!
-              </p>
-            )}
-            
-            {isRequester && !isWaiting && !opponentAccepted && !opponentDeclined && !error && (
-              <p className="text-slate-300">
-                Your rematch request has been sent
-              </p>
-            )}
-          </div>
+  // v7.11: Enable all notifications
+  // v7.15.2: Added streakReminder
+  const enableAllNotifications = () => {
+    const allEnabled = {
+      yourTurn: true,
+      gameInvites: true,
+      friendRequests: true,
+      rematchRequests: true,
+      chatMessages: true,
+      gameStart: true,
+      weeklyChallenge: true,
+      streakReminder: true
+    };
+    setNotificationPrefs(allEnabled);
+    localStorage.setItem('deadblock_notification_prefs', JSON.stringify(allEnabled));
+    soundManager.playClickSound?.('success');
+  };
 
-          {/* Buttons */}
+  // Handle PWA install
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+      }
+      setDeferredPrompt(null);
+    } else if (isIOS) {
+      setShowIOSInstructions(true);
+    }
+  };
+  
+  // Toggle handlers for audio
+  const toggleSound = () => {
+    soundManager.toggleSound();
+    setSoundEnabled(soundManager.isSoundEnabled());
+    soundManager.playClickSound?.('click');
+  };
+  
+  const toggleMusic = () => {
+    soundManager.toggleMusic();
+    setMusicEnabled(soundManager.isMusicEnabled());
+    soundManager.playClickSound?.('click');
+  };
+  
+  const toggleVibration = () => {
+    soundManager.toggleVibration();
+    setVibrationEnabled(soundManager.isVibrationEnabled());
+    if (soundManager.isVibrationEnabled()) {
+      soundManager.vibrate([50]);
+    }
+  };
+  
+  // Handle sign out
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      // Unsubscribe from push notifications before signing out
+      if (pushSubscribed && user?.id) {
+        await pushNotificationService.unsubscribe(user.id);
+      }
+      await signOut();
+      onClose();
+    } catch (err) {
+      console.error('Sign out error:', err);
+    } finally {
+      setSigningOut(false);
+      setShowSignOutConfirm(false);
+    }
+  };
+  
+  // Handle password update (when in recovery mode)
+  const handleUpdatePassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+    
+    if (newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+    
+    setUpdatingPassword(true);
+    try {
+      const { error } = await updatePassword(newPassword);
+      if (error) {
+        setPasswordError(error.message || 'Failed to update password');
+      } else {
+        setPasswordSuccess('Password updated successfully!');
+        setNewPassword('');
+        setConfirmPassword('');
+        // Clear the recovery state
+        if (clearPasswordRecovery) {
+          clearPasswordRecovery();
+        }
+        setTimeout(() => {
+          setShowPasswordReset(false);
+          setPasswordSuccess('');
+        }, 2000);
+      }
+    } catch (err) {
+      setPasswordError('An error occurred');
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+  
+  // Handle sending password reset email
+  const handleSendResetEmail = async () => {
+    setResetEmailError('');
+    setSendingResetEmail(true);
+    
+    try {
+      const { error } = await resetPassword(user?.email);
+      if (error) {
+        setResetEmailError(error.message || 'Failed to send reset email');
+      } else {
+        setResetEmailSent(true);
+      }
+    } catch (err) {
+      setResetEmailError('An error occurred');
+    } finally {
+      setSendingResetEmail(false);
+    }
+  };
+  
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl w-full max-w-sm max-h-[90vh] overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.2)] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-cyan-500/20 flex-shrink-0">
+          <h2 className="text-lg font-bold text-cyan-300">Settings</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-700 rounded-lg transition-colors"
+          >
+            <X size={20} className="text-slate-400" />
+          </button>
+        </div>
+        
+        {/* Scrollable Content - v7.10: iOS scroll fix */}
+        <div 
+          className="flex-1 overflow-y-auto p-4 space-y-4"
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+        >
+          {/* Sound Settings */}
           <div className="space-y-3">
-            {/* Accept button (for receiver) */}
-            {!isRequester && !opponentDeclined && !opponentAccepted && (
-              <button
-                onClick={onAccept}
-                className="w-full py-3 px-6 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-green-500/30 transition-all flex items-center justify-center gap-2"
-              >
-                <Check size={20} />
-                Accept Rematch
-              </button>
-            )}
-
-            {/* Decline button (for receiver) */}
-            {!isRequester && !opponentAccepted && !opponentDeclined && (
-              <button
-                onClick={onDecline}
-                className="w-full py-3 px-6 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2"
-              >
-                <X size={20} />
-                Decline
-              </button>
-            )}
-
-            {/* Cancel button (for requester waiting) */}
-            {isRequester && isWaiting && !opponentAccepted && !opponentDeclined && (
-              <button
-                onClick={onDecline}
-                className="w-full py-3 px-6 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white font-medium rounded-xl transition-all"
-              >
-                Cancel Request
-              </button>
-            )}
-
-            {/* NEW v7.7: Back to Menu button (for requester waiting) */}
-            {isRequester && isWaiting && !opponentAccepted && !opponentDeclined && onBackToMenu && (
-              <>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Audio</h3>
+            
+            <button
+              onClick={toggleSound}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                soundEnabled 
+                  ? 'bg-cyan-600/20 border border-cyan-500/30' 
+                  : 'bg-slate-700/50 border border-slate-600/30'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {soundEnabled ? <Volume2 size={20} className="text-cyan-400" /> : <VolumeX size={20} className="text-slate-500" />}
+                <span className={soundEnabled ? 'text-white' : 'text-slate-400'}>Sound Effects</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${soundEnabled ? 'bg-cyan-500' : 'bg-slate-600'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${soundEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+            </button>
+            
+            <button
+              onClick={toggleMusic}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                musicEnabled 
+                  ? 'bg-cyan-600/20 border border-cyan-500/30' 
+                  : 'bg-slate-700/50 border border-slate-600/30'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Music size={20} className={musicEnabled ? 'text-cyan-400' : 'text-slate-500'} />
+                <span className={musicEnabled ? 'text-white' : 'text-slate-400'}>Background Music</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${musicEnabled ? 'bg-cyan-500' : 'bg-slate-600'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${musicEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+            </button>
+            
+            <button
+              onClick={toggleVibration}
+              className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                vibrationEnabled 
+                  ? 'bg-cyan-600/20 border border-cyan-500/30' 
+                  : 'bg-slate-700/50 border border-slate-600/30'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <Vibrate size={20} className={vibrationEnabled ? 'text-cyan-400' : 'text-slate-500'} />
+                <span className={vibrationEnabled ? 'text-white' : 'text-slate-400'}>Haptic Feedback</span>
+              </div>
+              <div className={`w-10 h-6 rounded-full p-1 transition-colors ${vibrationEnabled ? 'bg-cyan-500' : 'bg-slate-600'}`}>
+                <div className={`w-4 h-4 rounded-full bg-white transition-transform ${vibrationEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+              </div>
+            </button>
+          </div>
+          
+          {/* Push Notifications Section */}
+          {isAuthenticated && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Notifications</h3>
+              
+              {pushSupported ? (
+                <>
+                  <button
+                    onClick={handlePushToggle}
+                    disabled={pushLoading || pushPermission === 'denied'}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                      pushSubscribed 
+                        ? 'bg-green-600/20 border border-green-500/30' 
+                        : pushPermission === 'denied'
+                          ? 'bg-red-900/20 border border-red-500/30'
+                          : 'bg-slate-700/50 border border-slate-600/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {pushLoading ? (
+                        <Loader size={20} className="text-cyan-400 animate-spin" />
+                      ) : pushSubscribed ? (
+                        <Bell size={20} className="text-green-400" />
+                      ) : (
+                        <BellOff size={20} className={pushPermission === 'denied' ? 'text-red-400' : 'text-slate-500'} />
+                      )}
+                      <div className="text-left">
+                        <span className={pushSubscribed ? 'text-white' : pushPermission === 'denied' ? 'text-red-300' : 'text-slate-400'}>
+                          Push Notifications
+                        </span>
+                        <p className="text-xs text-slate-500">
+                          {pushSubscribed 
+                            ? 'Enabled - even when app is closed' 
+                            : pushPermission === 'denied'
+                              ? 'Blocked - enable in browser settings'
+                              : 'Get notified when it\'s your turn'}
+                        </p>
+                      </div>
+                    </div>
+                    {!pushLoading && pushPermission !== 'denied' && (
+                      <div className={`w-10 h-6 rounded-full p-1 transition-colors ${pushSubscribed ? 'bg-green-500' : 'bg-slate-600'}`}>
+                        <div className={`w-4 h-4 rounded-full bg-white transition-transform ${pushSubscribed ? 'translate-x-4' : 'translate-x-0'}`} />
+                      </div>
+                    )}
+                    {pushPermission === 'denied' && (
+                      <span className="text-xs text-red-400">Blocked</span>
+                    )}
+                  </button>
+                  
+                  {pushError && (
+                    <p className="text-xs text-red-400 px-3">{pushError}</p>
+                  )}
+                  
+                  {/* v7.11: Granular Notification Settings */}
+                  {pushSubscribed && (
+                    <div className="space-y-1 mt-2">
+                      <button
+                        onClick={() => setShowNotificationPrefs(!showNotificationPrefs)}
+                        className="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-700/30 rounded-lg transition-all"
+                      >
+                        <span className="text-xs text-slate-400 uppercase tracking-wide">Notification Types</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); enableAllNotifications(); }}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+                          >
+                            Enable All
+                          </button>
+                          {showNotificationPrefs ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+                        </div>
+                      </button>
+                      
+                      {showNotificationPrefs && (
+                        <div className="space-y-1 pl-2">
+                          {/* Your Turn */}
+                          <button
+                            onClick={() => toggleNotificationPref('yourTurn')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🎮</span>
+                              <span className={notificationPrefs.yourTurn ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Your Turn</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.yourTurn ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.yourTurn ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Game Invites */}
+                          <button
+                            onClick={() => toggleNotificationPref('gameInvites')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">📩</span>
+                              <span className={notificationPrefs.gameInvites ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Game Invites</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.gameInvites ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.gameInvites ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Friend Requests */}
+                          <button
+                            onClick={() => toggleNotificationPref('friendRequests')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">👥</span>
+                              <span className={notificationPrefs.friendRequests ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Friend Requests</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.friendRequests ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.friendRequests ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Rematch Requests */}
+                          <button
+                            onClick={() => toggleNotificationPref('rematchRequests')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🔄</span>
+                              <span className={notificationPrefs.rematchRequests ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Rematch Requests</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.rematchRequests ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.rematchRequests ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Chat Messages */}
+                          <button
+                            onClick={() => toggleNotificationPref('chatMessages')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">💬</span>
+                              <span className={notificationPrefs.chatMessages ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Chat Messages</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.chatMessages ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.chatMessages ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Game Start */}
+                          <button
+                            onClick={() => toggleNotificationPref('gameStart')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🚀</span>
+                              <span className={notificationPrefs.gameStart ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Game Started</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.gameStart ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.gameStart ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Weekly Challenge */}
+                          <button
+                            onClick={() => toggleNotificationPref('weeklyChallenge')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">📅</span>
+                              <span className={notificationPrefs.weeklyChallenge ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Weekly Challenge</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.weeklyChallenge ? 'bg-green-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.weeklyChallenge ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                          
+                          {/* Streak Reminder - v7.15.2 */}
+                          <button
+                            onClick={() => toggleNotificationPref('streakReminder')}
+                            className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-slate-700/30 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🔥</span>
+                              <span className={notificationPrefs.streakReminder ? 'text-slate-300 text-sm' : 'text-slate-500 text-sm'}>Streak Reminders</span>
+                            </div>
+                            <div className={`w-8 h-5 rounded-full p-0.5 transition-colors ${notificationPrefs.streakReminder ? 'bg-orange-500' : 'bg-slate-600'}`}>
+                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationPrefs.streakReminder ? 'translate-x-3' : 'translate-x-0'}`} />
+                            </div>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Fallback to basic browser notifications
                 <button
-                  onClick={() => {
-                    soundManager.playButtonClick();
-                    onBackToMenu();
-                  }}
-                  className="w-full py-3 px-6 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-medium rounded-xl transition-all flex items-center justify-center gap-2 border border-slate-700"
+                  onClick={handleNotificationToggle}
+                  disabled={requestingNotifications || notificationPermission === 'denied'}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
+                    notificationsEnabled 
+                      ? 'bg-green-600/20 border border-green-500/30' 
+                      : notificationPermission === 'denied'
+                        ? 'bg-red-900/20 border border-red-500/30'
+                        : 'bg-slate-700/50 border border-slate-600/30'
+                  }`}
                 >
-                  <Home size={18} />
-                  Back to Menu
+                  <div className="flex items-center gap-3">
+                    {requestingNotifications ? (
+                      <Loader size={20} className="text-cyan-400 animate-spin" />
+                    ) : notificationsEnabled ? (
+                      <Bell size={20} className="text-green-400" />
+                    ) : (
+                      <BellOff size={20} className={notificationPermission === 'denied' ? 'text-red-400' : 'text-slate-500'} />
+                    )}
+                    <div className="text-left">
+                      <span className={notificationsEnabled ? 'text-white' : 'text-slate-400'}>
+                        Browser Notifications
+                      </span>
+                      <p className="text-xs text-slate-500">
+                        {notificationsEnabled 
+                          ? 'Enabled (when tab is open)' 
+                          : notificationPermission === 'denied'
+                            ? 'Blocked - enable in browser settings'
+                            : 'Works when browser is open'}
+                      </p>
+                    </div>
+                  </div>
+                  {notificationPermission !== 'denied' && (
+                    <div className={`w-10 h-6 rounded-full p-1 transition-colors ${notificationsEnabled ? 'bg-green-500' : 'bg-slate-600'}`}>
+                      <div className={`w-4 h-4 rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </div>
+                  )}
                 </button>
-                <p className="text-slate-500 text-xs text-center">
-                  Your rematch request will stay active
-                </p>
-              </>
-            )}
-
-            {/* Close button (when done) */}
-            {(opponentDeclined || error) && (
+              )}
+            </div>
+          )}
+          
+          {/* App Installation Section */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">App Installation</h3>
+            
+            {isInstalled ? (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-600/20 border border-green-500/30">
+                <Check size={20} className="text-green-400" />
+                <div>
+                  <span className="text-white">App Installed</span>
+                  <p className="text-xs text-green-400/80">Running as standalone app</p>
+                </div>
+              </div>
+            ) : isIOS ? (
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowIOSInstructions(!showIOSInstructions)}
+                  className="w-full flex items-center justify-between p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-slate-700 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <Smartphone size={20} className="text-slate-400" />
+                    <span className="text-slate-300">Install App</span>
+                  </div>
+                  <span className="text-xs text-slate-500">iOS</span>
+                </button>
+                
+                {showIOSInstructions && (
+                  <div className="p-3 rounded-lg bg-blue-900/20 border border-blue-500/30 text-sm space-y-2">
+                    <p className="text-blue-300 font-medium">To install on iOS:</p>
+                    <ol className="text-blue-200/80 space-y-1 list-decimal list-inside text-xs">
+                      <li>Tap the Share button <span className="inline-block w-4 h-4 bg-blue-400/30 rounded text-center text-xs">↑</span></li>
+                      <li>Scroll down and tap "Add to Home Screen"</li>
+                      <li>Tap "Add" to confirm</li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            ) : deferredPrompt ? (
               <button
-                onClick={onClose}
-                className="w-full py-3 px-6 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-medium rounded-xl border border-amber-500/30 transition-all"
+                onClick={handleInstall}
+                className="w-full flex items-center justify-between p-3 rounded-lg bg-cyan-600/20 border border-cyan-500/30 hover:bg-cyan-600/30 transition-colors"
               >
-                Close
+                <div className="flex items-center gap-3">
+                  <Download size={20} className="text-cyan-400" />
+                  <div className="text-left">
+                    <span className="text-white">Install App</span>
+                    <p className="text-xs text-cyan-400/80">Add to home screen</p>
+                  </div>
+                </div>
               </button>
+            ) : (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30">
+                <Smartphone size={20} className="text-slate-500" />
+                <div>
+                  <span className="text-slate-400">App Installation</span>
+                  <p className="text-xs text-slate-500">Not available in this browser</p>
+                </div>
+              </div>
             )}
           </div>
+          
+          {/* Account Section */}
+          {isAuthenticated && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">Account</h3>
+              
+              {/* Show account email */}
+              <div className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30">
+                <div className="flex items-center gap-2 text-sm">
+                  <Mail size={16} className="text-slate-500" />
+                  <span className="text-slate-400 truncate">{user?.email}</span>
+                </div>
+                {isGoogleUser && (
+                  <div className="mt-1 text-xs text-slate-500 flex items-center gap-1">
+                    <ExternalLink size={12} />
+                    Signed in with Google
+                  </div>
+                )}
+              </div>
+              
+              {/* Password Reset - Only show for non-Google users or if in recovery mode */}
+              {(!isGoogleUser || isPasswordRecovery) && !showPasswordReset && !showSendResetEmail && (
+                <button
+                  onClick={() => setShowSendResetEmail(true)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-slate-700 transition-colors text-left"
+                >
+                  <Key size={20} className="text-slate-400" />
+                  <div>
+                    <span className="text-slate-300">Change Password</span>
+                    <p className="text-xs text-slate-500">Send password reset email</p>
+                  </div>
+                </button>
+              )}
+              
+              {/* Password Reset Form (for recovery mode) */}
+              {showPasswordReset && (
+                <div className="space-y-3 p-3 rounded-lg bg-amber-900/20 border border-amber-500/30">
+                  <h4 className="text-amber-300 font-bold flex items-center gap-2">
+                    <Key size={16} />
+                    Set New Password
+                  </h4>
+                  
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="New password"
+                      className="w-full pl-10 pr-10 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                    >
+                      {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      className="w-full pl-10 pr-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-amber-500 focus:outline-none text-sm"
+                    />
+                  </div>
+                  
+                  {passwordError && (
+                    <p className="text-red-400 text-xs">{passwordError}</p>
+                  )}
+                  
+                  {passwordSuccess && (
+                    <p className="text-green-400 text-xs flex items-center gap-1">
+                      <Check size={14} /> {passwordSuccess}
+                    </p>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleUpdatePassword}
+                      disabled={updatingPassword}
+                      className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
+                    >
+                      {updatingPassword ? 'Updating...' : 'Update Password'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowPasswordReset(false);
+                        setNewPassword('');
+                        setConfirmPassword('');
+                        setPasswordError('');
+                      }}
+                      className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Send Reset Email Form */}
+              {showSendResetEmail && !showPasswordReset && (
+                <div className="space-y-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30">
+                  {!resetEmailSent ? (
+                    <>
+                      <p className="text-sm text-slate-300">
+                        Send a password reset link to <span className="text-cyan-400">{user?.email}</span>?
+                      </p>
+                      
+                      {resetEmailError && (
+                        <p className="text-red-400 text-xs">{resetEmailError}</p>
+                      )}
+                      
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSendResetEmail}
+                          disabled={sendingResetEmail}
+                          className="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
+                        >
+                          {sendingResetEmail ? 'Sending...' : 'Send Reset Email'}
+                        </button>
+                        <button
+                          onClick={() => setShowSendResetEmail(false)}
+                          className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-2">
+                      <Check size={24} className="text-green-400 mx-auto mb-2" />
+                      <p className="text-green-400 font-bold">Reset Email Sent!</p>
+                      <p className="text-sm text-slate-400 mt-1">Check your inbox for the reset link</p>
+                      <button
+                        onClick={() => {
+                          setShowSendResetEmail(false);
+                          setResetEmailSent(false);
+                        }}
+                        className="mt-3 text-cyan-400 text-sm hover:text-cyan-300"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Sign Out */}
+              {!showSignOutConfirm ? (
+                <button
+                  onClick={() => setShowSignOutConfirm(true)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-red-900/30 hover:border-red-500/30 transition-colors text-left group"
+                >
+                  <LogOut size={20} className="text-slate-400 group-hover:text-red-400" />
+                  <span className="text-slate-300 group-hover:text-red-300">Sign Out</span>
+                </button>
+              ) : (
+                <div className="space-y-2 p-3 rounded-lg bg-red-900/20 border border-red-500/30">
+                  <p className="text-red-300 text-sm">Are you sure you want to sign out?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSignOut}
+                      disabled={signingOut}
+                      className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
+                    >
+                      {signingOut ? 'Signing out...' : 'Sign Out'}
+                    </button>
+                    <button
+                      onClick={() => setShowSignOutConfirm(false)}
+                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-export default RematchModal;
+export default SettingsModal;
