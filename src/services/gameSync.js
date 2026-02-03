@@ -823,6 +823,58 @@ class GameSyncService {
       return { forfeited: [] };
     }
   }
+
+  // v7.15.3: Get count of players currently in matchmaking queue
+  async getMatchmakingCount() {
+    if (!supabase) return { data: { count: 0 }, error: null };
+
+    const headers = getAuthHeaders();
+    if (!headers) {
+      return { data: { count: 0 }, error: null };
+    }
+
+    try {
+      // Query the matchmaking_queue table for active entries
+      // Players are "active" if they joined recently (within last 2 minutes) and haven't been matched
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/matchmaking_queue?status=eq.waiting&created_at=gte.${twoMinutesAgo}&select=id`,
+        { 
+          headers: {
+            ...headers,
+            'Prefer': 'count=exact'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        return { data: { count: 0 }, error: null };
+      }
+
+      // Get count from content-range header
+      const contentRange = response.headers.get('content-range');
+      let count = 0;
+      
+      if (contentRange) {
+        // Format is "0-N/total" or "*/total" for empty results
+        const match = contentRange.match(/\/(\d+)$/);
+        if (match) {
+          count = parseInt(match[1], 10);
+        }
+      } else {
+        // Fallback: count the results
+        const data = await response.json();
+        count = Array.isArray(data) ? data.length : 0;
+      }
+
+      return { data: { count }, error: null };
+
+    } catch (e) {
+      console.error('[GameSync] getMatchmakingCount error:', e);
+      return { data: { count: 0 }, error: null };
+    }
+  }
 }
 
 // Standalone function for creating rematch games
@@ -888,59 +940,6 @@ export async function createRematchGame(originalGameId, currentUserId, opponentI
   } catch (e) {
     console.error('[GameSync] Rematch error:', e);
     return { data: null, error: { message: e.message } };
-  }
-}
-
-  // v7.15.3: Get count of players currently in matchmaking queue
-  async getMatchmakingCount() {
-    if (!supabase) return { data: { count: 0 }, error: null };
-
-    const headers = getAuthHeaders();
-    if (!headers) {
-      return { data: { count: 0 }, error: null };
-    }
-
-    try {
-      // Query the matchmaking_queue table for active entries
-      // Players are "active" if they joined recently (within last 2 minutes) and haven't been matched
-      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
-      
-      const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/matchmaking_queue?status=eq.waiting&created_at=gte.${twoMinutesAgo}&select=id`,
-        { 
-          headers: {
-            ...headers,
-            'Prefer': 'count=exact'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        return { data: { count: 0 }, error: null };
-      }
-
-      // Get count from content-range header
-      const contentRange = response.headers.get('content-range');
-      let count = 0;
-      
-      if (contentRange) {
-        // Format is "0-N/total" or "*/total" for empty results
-        const match = contentRange.match(/\/(\d+)$/);
-        if (match) {
-          count = parseInt(match[1], 10);
-        }
-      } else {
-        // Fallback: count the results
-        const data = await response.json();
-        count = Array.isArray(data) ? data.length : 0;
-      }
-
-      return { data: { count }, error: null };
-
-    } catch (e) {
-      console.error('[GameSync] getMatchmakingCount error:', e);
-      return { data: { count: 0 }, error: null };
-    }
   }
 }
 
