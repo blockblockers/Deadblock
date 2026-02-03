@@ -108,19 +108,20 @@ class NotificationService {
   }
 
   getNotificationBadge(type) {
+    // PNG badges for Android (must be monochrome white-on-transparent)
     const badgeMap = {
-      'your_turn': '/badge-turn.svg',
-      'game_invite': '/badge-invite.svg',
-      'invite_accepted': '/badge-invite.svg',
-      'rematch_request': '/badge-rematch.svg',
-      'rematch_accepted': '/badge-rematch.svg',
-      'rematch_declined': '/badge-defeat.svg',
-      'chat_message': '/badge-chat.svg',
-      'victory': '/badge-victory.svg',
-      'defeat': '/badge-defeat.svg',
-      'streak_reminder': '/badges/badge-streak.svg'  // N pentomino - Flame Orange
+      'your_turn': '/badges/badge-turn.png',
+      'game_invite': '/badges/badge-invite.png',
+      'invite_accepted': '/badges/badge-invite.png',
+      'rematch_request': '/badges/badge-rematch.png',
+      'rematch_accepted': '/badges/badge-rematch.png',
+      'rematch_declined': '/badges/badge-defeat.png',
+      'chat_message': '/badges/badge-chat.png',
+      'victory': '/badges/badge-victory.png',
+      'defeat': '/badges/badge-defeat.png',
+      'streak_reminder': '/badges/badge-streak.png'
     };
-    return badgeMap[type] || '/badge-default.svg';
+    return badgeMap[type] || '/badges/badge-default.png';
   }
 
   sendNotification(title, options = {}) {

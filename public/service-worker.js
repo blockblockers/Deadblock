@@ -1,5 +1,6 @@
 // service-worker.js - UNIFIED Service Worker for Deadblock PWA
-// v7.15.2 - Added streak_reminder notification type (N pentomino - Flame Orange)
+// v7.15.3 - Fixed notification badges: now using monochrome PNG files for Android
+// v7.15.2 - Added streak_reminder notification type (N pentomino)
 // FIXES:
 // - All notification types navigate to correct screen
 // - Chat notifications open game WITH chat panel
@@ -7,29 +8,29 @@
 // - Handles both camelCase and snake_case data keys from database
 // Place in: public/service-worker.js
 
-const CACHE_NAME = 'deadblock-v7.15.2';
+const CACHE_NAME = 'deadblock-v7.15.3';
 const APP_URL = self.location.origin;
 
 // =============================================================================
 // PENTOMINO BADGES & VIBRATION PATTERNS
 // =============================================================================
 
-// Pentomino badge paths - place SVG files in public/badges/
+// Pentomino badge paths - PNG files for Android notification badges (must be monochrome)
 const BADGES = {
-  'your_turn': '/badges/badge-turn.svg',           // T pentomino
-  'game_start': '/badges/badge-turn.svg',          // T pentomino
-  'game_invite': '/badges/badge-invite.svg',       // I pentomino
-  'invite_accepted': '/badges/badge-invite.svg',   // I pentomino
-  'friend_request': '/badges/badge-friend.svg',    // F pentomino
-  'rematch_request': '/badges/badge-rematch.svg',  // X pentomino
-  'rematch_accepted': '/badges/badge-rematch.svg', // X pentomino
-  'chat_message': '/badges/badge-chat.svg',        // U pentomino
-  'chat': '/badges/badge-chat.svg',                // U pentomino
-  'victory': '/badges/badge-victory.svg',          // W pentomino
-  'defeat': '/badges/badge-defeat.svg',            // L pentomino
-  'weekly_challenge': '/badges/badge-weekly.svg',  // Z pentomino
-  'streak_reminder': '/badges/badge-streak.svg',   // N pentomino - Flame Orange
-  'default': '/badges/badge-default.svg'           // I pentomino
+  'your_turn': '/badges/badge-turn.png',           // T pentomino
+  'game_start': '/badges/badge-turn.png',          // T pentomino
+  'game_invite': '/badges/badge-invite.png',       // I pentomino
+  'invite_accepted': '/badges/badge-invite.png',   // I pentomino
+  'friend_request': '/badges/badge-friend.png',    // F pentomino
+  'rematch_request': '/badges/badge-rematch.png',  // X pentomino
+  'rematch_accepted': '/badges/badge-rematch.png', // X pentomino
+  'chat_message': '/badges/badge-chat.png',        // U pentomino
+  'chat': '/badges/badge-chat.png',                // U pentomino
+  'victory': '/badges/badge-victory.png',          // W pentomino
+  'defeat': '/badges/badge-defeat.png',            // L pentomino
+  'weekly_challenge': '/badges/badge-weekly.png',  // Z pentomino
+  'streak_reminder': '/badges/badge-streak.png',   // N pentomino
+  'default': '/badges/badge-default.png'           // I pentomino
 };
 
 // Vibration patterns per notification type
@@ -73,7 +74,7 @@ const CORE_ASSETS = [
 // INSTALL EVENT
 // =============================================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v7.12...');
+  console.log('[SW] Installing v7.15.3...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -94,7 +95,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE EVENT
 // =============================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v7.12...');
+  console.log('[SW] Activating v7.15.3...');
   event.waitUntil(
     caches.keys()
       .then((cacheNames) => {
@@ -383,4 +384,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] v7.15.2 unified service worker loaded');
+console.log('[SW] v7.15.3 unified service worker loaded');

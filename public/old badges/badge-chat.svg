@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- U Pentomino rotated to look like "C" - Chat (Neon Yellow like game's U piece) -->
+  <defs>
+    <linearGradient id="chatGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef9c3"/>
+      <stop offset="50%" stop-color="#fde047"/>
+      <stop offset="100%" stop-color="#ca8a04"/>
+    </linearGradient>
+  </defs>
+  <!-- U rotated 90° CCW to form "C" shape -->
+  <rect x="28" y="16" width="20" height="20" rx="3" fill="url(#chatGrad)"/>
+  <rect x="50" y="16" width="20" height="20" rx="3" fill="url(#chatGrad)"/>
+  <rect x="28" y="38" width="20" height="20" rx="3" fill="url(#chatGrad)"/>
+  <rect x="28" y="60" width="20" height="20" rx="3" fill="url(#chatGrad)"/>
+  <rect x="50" y="60" width="20" height="20" rx="3" fill="url(#chatGrad)"/>
+</svg>
