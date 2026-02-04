@@ -1,5 +1,4 @@
 // Puzzle Generator - Play complete game, then back out N moves
-// v7.15.4: Enhanced with smart AI play and puzzle validation
 // This guarantees exactly N moves remain and they are playable
 
 import { pieces } from './pieces';
@@ -53,28 +52,59 @@ const getAllValidMoves = (board, usedPieces) => {
   return moves;
 };
 
-// Get unique piece types from a list of moves
+// Get unique pieces that can be played (ignoring position variations)
 const getUniquePieceOptions = (moves) => {
-  return [...new Set(moves.map(m => m.pieceType))];
+  const pieceSet = new Set();
+  moves.forEach(m => pieceSet.add(m.pieceType));
+  return Array.from(pieceSet);
 };
 
-// Simulate placing a move on the board
+// Simulate a move and return the resulting board state
 const simulateMove = (board, boardPieces, usedPieces, move, player) => {
   const newBoard = board.map(r => [...r]);
   const newBoardPieces = boardPieces.map(r => [...r]);
-  const newUsedPieces = [...usedPieces, move.pieceType];
   
   for (const [dx, dy] of move.coords) {
     newBoard[move.row + dy][move.col + dx] = player;
     newBoardPieces[move.row + dy][move.col + dx] = move.pieceType;
   }
   
-  return { board: newBoard, boardPieces: newBoardPieces, usedPieces: newUsedPieces };
+  return {
+    board: newBoard,
+    boardPieces: newBoardPieces,
+    usedPieces: [...usedPieces, move.pieceType]
+  };
 };
 
-// =====================================================
-// SMART MOVE SELECTION (replaces pure random)
-// =====================================================
+// Check if a move leads to winning (opponent has no moves after)
+const isWinningMove = (board, boardPieces, usedPieces, move) => {
+  const result = simulateMove(board, boardPieces, usedPieces, move, 1);
+  const opponentMoves = getAllValidMoves(result.board, result.usedPieces);
+  return opponentMoves.length === 0;
+};
+
+// Check if a move leads to a trap (opponent can still play, then player loses)
+const isTrapMove = (board, boardPieces, usedPieces, move) => {
+  // After player makes this move...
+  const afterPlayer = simulateMove(board, boardPieces, usedPieces, move, 1);
+  const opponentMoves = getAllValidMoves(afterPlayer.board, afterPlayer.usedPieces);
+  
+  // If opponent has no moves, this is a winning move, not a trap
+  if (opponentMoves.length === 0) return false;
+  
+  // If opponent can play, check if there's any opponent move that leaves player with no moves
+  for (const oppMove of opponentMoves) {
+    const afterOpponent = simulateMove(afterPlayer.board, afterPlayer.boardPieces, afterPlayer.usedPieces, oppMove, 2);
+    const playerMovesAfter = getAllValidMoves(afterOpponent.board, afterOpponent.usedPieces);
+    
+    // If player has no moves after opponent plays, this is a trap
+    if (playerMovesAfter.length === 0) {
+      return true;
+    }
+  }
+  
+  return false;
+};
 
 // Quick evaluation for move quality - prefers center positions
 const quickEval = (board, row, col, coords) => {
@@ -82,7 +112,6 @@ const quickEval = (board, row, col, coords) => {
   for (const [dx, dy] of coords) {
     const r = row + dy;
     const c = col + dx;
-    // Center preference
     score += (3.5 - Math.abs(r - 3.5)) + (3.5 - Math.abs(c - 3.5));
   }
   return score;
@@ -105,13 +134,11 @@ const selectStrategicMove = (board, usedPieces, isEarlyGame) => {
     return topMoves[Math.floor(Math.random() * topMoves.length)];
   }
   
-  // Mid/late game: evaluate by position quality
+  // Mid/late game: evaluate by limiting opponent options
   const scored = moves.map(m => {
-    const newBoard = simulateMove(board, [], usedPieces, m, 1).board;
-    const newUsedPieces = [...usedPieces, m.pieceType];
-    // Count how many pieces opponent can still play
-    const opponentMoveCount = getAllValidMoves(newBoard, newUsedPieces).length;
-    // Prefer moves that limit opponent options
+    const result = simulateMove(board, [], usedPieces, m, 1);
+    const opponentMoveCount = getAllValidMoves(result.board, result.usedPieces).length;
+    // Prefer moves that limit opponent options, with randomness
     return { ...m, score: -opponentMoveCount + Math.random() * 5 };
   });
   
@@ -120,116 +147,323 @@ const selectStrategicMove = (board, usedPieces, isEarlyGame) => {
   return topMoves[Math.floor(Math.random() * topMoves.length)];
 };
 
-// =====================================================
-// PUZZLE VALIDATION
-// =====================================================
-
-/**
- * Validates that a puzzle has a winning path within N moves.
- * Simplified validation to avoid being too strict.
- * 
- * @param {Array} board - Current board state
- * @param {Array} usedPieces - Already used pieces
- * @param {number} expectedMoves - Expected moves to win (from difficulty)
- * @returns {Object} { isValid, hasWinningPath }
- */
-const validatePuzzleDifficulty = (board, usedPieces, expectedMoves) => {
-  // Check if there's any path to victory within expectedMoves
-  // Uses iterative deepening to avoid performance issues
-  const hasWinningPath = (currentBoard, currentUsedPieces, movesLeft, depth = 0) => {
-    // Prevent infinite recursion
-    if (depth > 10) return false;
-    if (movesLeft <= 0) return false;
-    
-    const moves = getAllValidMoves(currentBoard, currentUsedPieces);
-    
-    // If player has no moves on their turn, they LOSE (not win)
-    if (moves.length === 0) return false;
-    
-    // Check each possible player move
-    for (const move of moves) {
-      const result = simulateMove(currentBoard, [], currentUsedPieces, move, 1);
-      const opponentMoves = getAllValidMoves(result.board, result.usedPieces);
-      
-      // If opponent can't move after our move, we win!
-      if (opponentMoves.length === 0) {
-        return true;
-      }
-      
-      // If this is our last move and opponent can still play, try next move
-      if (movesLeft === 1) continue;
-      
-      // For multi-move puzzles, check if we can still win after opponent responds
-      // Only check a few opponent responses to limit computation
-      let foundWinningContinuation = false;
-      for (const oppMove of opponentMoves.slice(0, 3)) {
-        const afterOpp = simulateMove(result.board, [], result.usedPieces, oppMove, 2);
-        if (hasWinningPath(afterOpp.board, afterOpp.usedPieces, movesLeft - 1, depth + 1)) {
-          foundWinningContinuation = true;
-          break;
-        }
-      }
-      
-      if (foundWinningContinuation) return true;
-    }
-    
-    return false;
-  };
-  
-  try {
-    const canWin = hasWinningPath(board, usedPieces, expectedMoves);
-    
-    return {
-      isValid: canWin,
-      hasWinningPath: canWin
-    };
-  } catch (e) {
-    console.error('Puzzle validation error:', e);
-    // If validation fails, accept the puzzle anyway (fail-open)
-    return {
-      isValid: true,
-      hasWinningPath: true
-    };
-  }
-};
-
-// =====================================================
-// WINNING/TRAP MOVE DETECTION (for EASY puzzles)
-// =====================================================
-
-// Check if a move results in a winning state (opponent can't play)
-const isWinningMove = (board, boardPieces, usedPieces, move) => {
-  const result = simulateMove(board, boardPieces, usedPieces, move, 1);
-  const opponentMoves = getAllValidMoves(result.board, result.usedPieces);
-  return opponentMoves.length === 0;
-};
-
-// Check if a move is a "trap" - looks valid but lets opponent win
-const isTrapMove = (board, boardPieces, usedPieces, move) => {
-  const afterPlayer = simulateMove(board, boardPieces, usedPieces, move, 1);
-  const opponentMoves = getAllValidMoves(afterPlayer.board, afterPlayer.usedPieces);
-  
-  if (opponentMoves.length === 0) return false; // This is a winning move, not a trap
-  
-  // Check if any opponent move leaves player with no moves
-  for (const oppMove of opponentMoves) {
-    const afterOpponent = simulateMove(afterPlayer.board, afterPlayer.boardPieces, afterPlayer.usedPieces, oppMove, 2);
-    const playerMovesAfter = getAllValidMoves(afterOpponent.board, afterOpponent.usedPieces);
-    
-    if (playerMovesAfter.length === 0) {
-      return true; // This move lets opponent win
-    }
-  }
-  
-  return false;
-};
-
-// =====================================================
-// GAME SIMULATION (with smart AI)
-// =====================================================
-
-// Play a complete game using strategic AI moves
+// Play a complete AI vs AI game using strategic moves, recording all states
 const playCompleteGame = () => {
+  const board = createEmptyBoard();
+  const boardPieces = createEmptyBoard();
+  const usedPieces = [];
+  const history = []; // Each entry: { board, boardPieces, usedPieces } BEFORE the move
+  
+  let moveCount = 0;
+  
+  while (true) {
+    const isEarlyGame = moveCount < 4;
+    
+    // Save state BEFORE this move
+    history.push({
+      board: board.map(r => [...r]),
+      boardPieces: boardPieces.map(r => [...r]),
+      usedPieces: [...usedPieces]
+    });
+    
+    // Use strategic move selection (smarter than pure random)
+    const move = selectStrategicMove(board, usedPieces, isEarlyGame);
+    
+    if (!move) break;
+    
+    // Place the piece
+    for (const [dx, dy] of move.coords) {
+      board[move.row + dy][move.col + dx] = moveCount % 2 + 1;
+      boardPieces[move.row + dy][move.col + dx] = move.pieceType;
+    }
+    usedPieces.push(move.pieceType);
+    moveCount++;
+  }
+  
+  return {
+    history,
+    totalMoves: moveCount
+  };
+};
+
+// Generate an EASY puzzle (1 move) with trap possibilities
+const generateEasyPuzzleWithTraps = (onProgress = null) => {
+  // Try multiple games to find one with good trap conditions
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (onProgress) onProgress(attempt + 1, 50);
+    
+    const game = playCompleteGame();
+    
+    // Need at least 2 moves (so we can back out 1 and have the player move)
+    if (game.totalMoves < 2) {
+      continue;
+    }
+    
+    // Get state from 1 move before end (player's turn)
+    const puzzleStateIndex = game.totalMoves - 1;
+    const puzzleState = game.history[puzzleStateIndex];
+    
+    if (!puzzleState) continue;
+    
+    // Get all valid moves from this state
+    const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
+    if (allMoves.length === 0) continue;
+    
+    // Find winning moves and trap moves
+    const winningMoves = [];
+    const trapMoves = [];
+    
+    for (const move of allMoves) {
+      if (isWinningMove(puzzleState.board, puzzleState.boardPieces, puzzleState.usedPieces, move)) {
+        winningMoves.push(move);
+      } else if (isTrapMove(puzzleState.board, puzzleState.boardPieces, puzzleState.usedPieces, move)) {
+        trapMoves.push(move);
+      }
+    }
+    
+    // For a good EASY puzzle, we want:
+    // - At least 1 winning move
+    // - At least 1 trap move (wrong choice that looks valid)
+    // - Multiple different pieces that can be played
+    const winningPieces = getUniquePieceOptions(winningMoves);
+    const trapPieces = getUniquePieceOptions(trapMoves);
+    const allPieces = getUniquePieceOptions(allMoves);
+    
+    // We want at least 2 different pieces playable, with at least one trap
+    if (winningMoves.length > 0 && trapMoves.length > 0 && allPieces.length >= 2) {
+      console.log(`EASY puzzle generated: ${winningPieces.length} winning pieces, ${trapPieces.length} trap pieces, ${allPieces.length} total options`);
+      
+      return {
+        id: `puzzle-easy-${Date.now()}`,
+        name: 'Easy Puzzle',
+        difficulty: PUZZLE_DIFFICULTY.EASY,
+        description: '1 move remaining - choose wisely!',
+        boardState: boardToString(puzzleState.boardPieces),
+        usedPieces: [...puzzleState.usedPieces],
+        movesRemaining: 1,
+        // Store hint data (not shown to player but useful for debugging)
+        _winningPieces: winningPieces,
+        _trapPieces: trapPieces
+      };
+    }
+  }
+  
+  console.error('Failed to generate EASY puzzle with traps after 50 attempts');
+  return null;
+};
+
+// Generate puzzle by playing game then backing out N moves
+export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress = null) => {
+  // Special handling for EASY puzzles with trap logic
+  if (difficulty === PUZZLE_DIFFICULTY.EASY) {
+    return generateEasyPuzzleWithTraps(onProgress);
+  }
+  
+  const movesToBackOut = getMovesForDifficulty(difficulty);
+  
+  // Try multiple games to find one with enough moves
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (onProgress) onProgress(attempt + 1, 30);
+    
+    const game = playCompleteGame();
+    
+    // Need at least N moves to back out
+    if (game.totalMoves < movesToBackOut) {
+      console.log(`Game ${attempt + 1}: Only ${game.totalMoves} moves, need ${movesToBackOut}`);
+      continue;
+    }
+    
+    // Get the state from N moves before the end
+    const puzzleStateIndex = game.totalMoves - movesToBackOut;
+    const puzzleState = game.history[puzzleStateIndex];
+    
+    if (!puzzleState) {
+      console.log(`Game ${attempt + 1}: No state at index ${puzzleStateIndex}`);
+      continue;
+    }
+    
+    // Verify moves are still possible from this state
+    const remainingMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
+    
+    if (remainingMoves.length > 0) {
+      console.log(`Puzzle generated (${difficulty}): ${puzzleState.usedPieces.length} pieces placed, exactly ${movesToBackOut} moves to play`);
+      
+      const difficultyNames = {
+        [PUZZLE_DIFFICULTY.EASY]: 'Easy',
+        [PUZZLE_DIFFICULTY.MEDIUM]: 'Medium',
+        [PUZZLE_DIFFICULTY.HARD]: 'Hard'
+      };
+      
+      return {
+        id: `puzzle-${difficulty}-${Date.now()}`,
+        name: `${difficultyNames[difficulty]} Puzzle`,
+        difficulty: difficulty,
+        description: `${movesToBackOut} moves remaining`,
+        boardState: boardToString(puzzleState.boardPieces),
+        usedPieces: [...puzzleState.usedPieces],
+        movesRemaining: movesToBackOut
+      };
+    }
+  }
+  
+  console.error(`Failed to generate ${difficulty} puzzle after 30 attempts`);
+  return null;
+};
+
+// Simple 1-move puzzle for speed mode (less strict requirements)
+// Prefer puzzles where most/all moves are winning moves to reduce frustration
+export const generateSpeedPuzzle = () => {
+  let bestPuzzle = null;
+  let bestWinRatio = 0;
+  
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const game = playCompleteGame();
+    
+    // Need at least 2 moves (so we can back out 1)
+    if (game.totalMoves < 2) {
+      continue;
+    }
+    
+    // Get state from 1 move before end
+    const puzzleStateIndex = game.totalMoves - 1;
+    const puzzleState = game.history[puzzleStateIndex];
+    
+    if (!puzzleState) continue;
+    
+    // Get all valid moves from this state
+    const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
+    
+    if (allMoves.length === 0) continue;
+    
+    // Check each possible move to see if any leads to a winning state
+    // (i.e., after placing the piece, no other piece can be placed)
+    const winningMoves = [];
+    
+    for (const move of allMoves) {
+      // Simulate placing this piece
+      const testBoard = puzzleState.board.map(r => [...r]);
+      const testUsedPieces = [...puzzleState.usedPieces, move.pieceType];
+      
+      for (const [dx, dy] of move.coords) {
+        testBoard[move.row + dy][move.col + dx] = 1;
+      }
+      
+      // Check if ANY unused piece can be placed after this move
+      const opponentCanPlay = canAnyPieceBePlaced(testBoard, testUsedPieces);
+      
+      if (!opponentCanPlay) {
+        // This is a winning move!
+        winningMoves.push(move);
+      }
+    }
+    
+    // If we found winning moves, check if this is a good puzzle
+    if (winningMoves.length > 0) {
+      const winRatio = winningMoves.length / allMoves.length;
+      
+      // Ideal puzzle: ALL moves are winning (100% win ratio)
+      // This means any valid placement wins - very intuitive!
+      if (winRatio >= 1.0) {
+        console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves (PERFECT - 100%)`);
+        return {
+          id: `speed-puzzle-${Date.now()}`,
+          name: 'Speed Puzzle',
+          difficulty: PUZZLE_DIFFICULTY.EASY,
+          description: '1 move to win!',
+          boardState: boardToString(puzzleState.boardPieces),
+          usedPieces: [...puzzleState.usedPieces],
+          movesRemaining: 1,
+          _winningMoveCount: winningMoves.length,
+          _totalMoves: allMoves.length
+        };
+      }
+      
+      // Track the best puzzle we've found so far
+      // Prefer higher win ratios (more intuitive puzzles)
+      if (winRatio > bestWinRatio) {
+        bestWinRatio = winRatio;
+        bestPuzzle = {
+          id: `speed-puzzle-${Date.now()}`,
+          name: 'Speed Puzzle',
+          difficulty: PUZZLE_DIFFICULTY.EASY,
+          description: '1 move to win!',
+          boardState: boardToString(puzzleState.boardPieces),
+          usedPieces: [...puzzleState.usedPieces],
+          movesRemaining: 1,
+          _winningMoveCount: winningMoves.length,
+          _totalMoves: allMoves.length
+        };
+      }
+    }
+  }
+  
+  // Return the best puzzle found (prefer 50%+ win ratio)
+  if (bestPuzzle && bestWinRatio >= 0.5) {
+    console.log(`Speed puzzle generated: ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
+    return bestPuzzle;
+  }
+  
+  // If no good puzzle found, return the best we have (even if low win ratio)
+  if (bestPuzzle) {
+    console.log(`Speed puzzle generated (low quality): ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
+    return bestPuzzle;
+  }
+  
+  console.error('Failed to generate winning speed puzzle after 50 attempts');
+  return null;
+};
+
+// Async wrapper
+export const getRandomPuzzle = async (difficulty = PUZZLE_DIFFICULTY.EASY, useAI = false, onProgress = null) => {
+  await new Promise(resolve => setTimeout(resolve, 50));
+  
+  const puzzle = generatePuzzle(difficulty, onProgress);
+  
+  if (puzzle && onProgress) {
+    const maxProgress = difficulty === PUZZLE_DIFFICULTY.EASY ? 50 : 30;
+    onProgress(maxProgress, maxProgress);
+  }
+  
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
+  return puzzle;
+};
+
+// Async wrapper for speed puzzles (simpler, faster generation)
+export const getSpeedPuzzle = async () => {
+  await new Promise(resolve => setTimeout(resolve, 10));
+  
+  const puzzle = generateSpeedPuzzle();
+  
+  await new Promise(resolve => setTimeout(resolve, 10));
+  
+  return puzzle;
+};
+
+// =====================================================
+// SEEDED PUZZLE GENERATION (for Weekly Challenges)
+// =====================================================
+
+// Simple seeded random number generator (Mulberry32)
+const createSeededRandom = (seed) => {
+  // Convert string seed to number
+  let a = 0;
+  for (let i = 0; i < seed.length; i++) {
+    a = ((a << 5) - a) + seed.charCodeAt(i);
+    a = a & a; // Convert to 32-bit integer
+  }
+  a = Math.abs(a);
+  
+  return () => {
+    let t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+};
+
+// Seeded version of playCompleteGame with strategic moves
+const playCompleteGameSeeded = (random) => {
   let board = createEmptyBoard();
   let boardPieces = createEmptyBoard();
   let usedPieces = [];
@@ -238,9 +472,10 @@ const playCompleteGame = () => {
   let moveCount = 0;
   
   while (moveCount < 12) {
-    const isEarlyGame = moveCount < 4;
+    const moves = getAllValidMoves(board, usedPieces);
+    if (moves.length === 0) break;
     
-    // Save state BEFORE this move
+    // Save state before move
     history.push({
       board: board.map(r => [...r]),
       boardPieces: boardPieces.map(r => [...r]),
@@ -248,10 +483,30 @@ const playCompleteGame = () => {
       player: currentPlayer
     });
     
-    // Use strategic move selection (not pure random)
-    const move = selectStrategicMove(board, usedPieces, isEarlyGame);
+    // Use strategic selection with seeded randomness
+    let move;
+    const isEarlyGame = moveCount < 4;
     
-    if (!move) break;
+    if (isEarlyGame) {
+      // Early game: center preference with seeded randomness
+      const scored = moves.map(m => ({
+        ...m,
+        score: quickEval(board, m.row, m.col, m.coords) + random() * 8
+      }));
+      scored.sort((a, b) => b.score - a.score);
+      const topMoves = scored.slice(0, Math.min(3, scored.length));
+      move = topMoves[Math.floor(random() * topMoves.length)];
+    } else {
+      // Mid/late game: position evaluation with seeded randomness
+      const scored = moves.map(m => {
+        const result = simulateMove(board, [], usedPieces, m, currentPlayer);
+        const oppMoves = getAllValidMoves(result.board, result.usedPieces).length;
+        return { ...m, score: -oppMoves + random() * 5 };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const topMoves = scored.slice(0, Math.min(2, scored.length));
+      move = topMoves[Math.floor(random() * topMoves.length)];
+    }
     
     // Apply move
     for (const [dx, dy] of move.coords) {
@@ -271,331 +526,32 @@ const playCompleteGame = () => {
   };
 };
 
-// =====================================================
-// EASY PUZZLE GENERATION (with traps)
-// =====================================================
-
-const generateEasyPuzzleWithTraps = (onProgress = null) => {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    if (onProgress) onProgress(attempt + 1, 50);
-    
-    const game = playCompleteGame();
-    
-    if (game.totalMoves < 2) continue;
-    
-    // Get state from 1 move before end
-    const puzzleStateIndex = game.totalMoves - 1;
-    const puzzleState = game.history[puzzleStateIndex];
-    
-    if (!puzzleState) continue;
-    
-    const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
-    if (allMoves.length === 0) continue;
-    
-    // Find winning moves and trap moves
-    const winningMoves = [];
-    const trapMoves = [];
-    
-    for (const move of allMoves) {
-      if (isWinningMove(puzzleState.board, puzzleState.boardPieces, puzzleState.usedPieces, move)) {
-        winningMoves.push(move);
-      } else if (isTrapMove(puzzleState.board, puzzleState.boardPieces, puzzleState.usedPieces, move)) {
-        trapMoves.push(move);
-      }
-    }
-    
-    const winningPieces = getUniquePieceOptions(winningMoves);
-    const trapPieces = getUniquePieceOptions(trapMoves);
-    const allPieces = getUniquePieceOptions(allMoves);
-    
-    // Good EASY puzzle: at least 1 winning move, ideally some traps
-    if (winningMoves.length > 0 && allPieces.length >= 2) {
-      // Validate the puzzle
-      const validation = validatePuzzleDifficulty(puzzleState.board, puzzleState.usedPieces, 1);
-      
-      if (validation.isValid) {
-        console.log(`EASY puzzle generated: ${winningPieces.length} winning pieces, ${trapPieces.length} trap pieces, ${allPieces.length} total options (validated)`);
-        
-        return {
-          id: `puzzle-easy-${Date.now()}`,
-          name: 'Easy Puzzle',
-          difficulty: PUZZLE_DIFFICULTY.EASY,
-          description: '1 move remaining - choose wisely!',
-          boardState: boardToString(puzzleState.boardPieces),
-          usedPieces: [...puzzleState.usedPieces],
-          movesRemaining: 1,
-          _winningPieces: winningPieces,
-          _trapPieces: trapPieces,
-          _validated: true
-        };
-      }
-    }
-  }
-  
-  console.error('Failed to generate EASY puzzle with traps after 50 attempts');
-  return null;
-};
-
-// =====================================================
-// MEDIUM/HARD PUZZLE GENERATION (with validation)
-// =====================================================
-
-export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress = null) => {
-  if (difficulty === PUZZLE_DIFFICULTY.EASY) {
-    return generateEasyPuzzleWithTraps(onProgress);
-  }
-  
-  const movesToBackOut = getMovesForDifficulty(difficulty);
-  
-  for (let attempt = 0; attempt < 30; attempt++) {
-    if (onProgress) onProgress(attempt + 1, 30);
-    
-    const game = playCompleteGame();
-    
-    if (game.totalMoves < movesToBackOut) {
-      console.log(`Game ${attempt + 1}: Only ${game.totalMoves} moves, need ${movesToBackOut}`);
-      continue;
-    }
-    
-    const puzzleStateIndex = game.totalMoves - movesToBackOut;
-    const puzzleState = game.history[puzzleStateIndex];
-    
-    if (!puzzleState) {
-      console.log(`Game ${attempt + 1}: No state at index ${puzzleStateIndex}`);
-      continue;
-    }
-    
-    const remainingMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
-    
-    if (remainingMoves.length > 0) {
-      // Validate puzzle difficulty
-      const validation = validatePuzzleDifficulty(puzzleState.board, puzzleState.usedPieces, movesToBackOut);
-      
-      if (!validation.isValid) {
-        console.log(`Game ${attempt + 1}: Puzzle failed validation (no winning path found within ${movesToBackOut} moves)`);
-        continue;
-      }
-      
-      console.log(`Puzzle generated (${difficulty}): ${puzzleState.usedPieces.length} pieces placed, ${movesToBackOut} moves required (validated)`);
-      
-      const difficultyNames = {
-        [PUZZLE_DIFFICULTY.EASY]: 'Easy',
-        [PUZZLE_DIFFICULTY.MEDIUM]: 'Medium',
-        [PUZZLE_DIFFICULTY.HARD]: 'Hard'
-      };
-      
-      return {
-        id: `puzzle-${difficulty}-${Date.now()}`,
-        name: `${difficultyNames[difficulty]} Puzzle`,
-        difficulty: difficulty,
-        description: `${movesToBackOut} moves remaining`,
-        boardState: boardToString(puzzleState.boardPieces),
-        usedPieces: [...puzzleState.usedPieces],
-        movesRemaining: movesToBackOut,
-        _validated: true
-      };
-    }
-  }
-  
-  console.error(`Failed to generate ${difficulty} puzzle after 30 attempts`);
-  return null;
-};
-
-// =====================================================
-// SPEED PUZZLE GENERATION
-// =====================================================
-
-export const generateSpeedPuzzle = () => {
-  let bestPuzzle = null;
-  let bestWinRatio = 0;
-  
-  for (let attempt = 0; attempt < 50; attempt++) {
-    const game = playCompleteGame();
-    
-    if (game.totalMoves < 2) continue;
-    
-    const puzzleStateIndex = game.totalMoves - 1;
-    const puzzleState = game.history[puzzleStateIndex];
-    
-    if (!puzzleState) continue;
-    
-    const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
-    if (allMoves.length === 0) continue;
-    
-    // Find winning moves
-    const winningMoves = [];
-    
-    for (const move of allMoves) {
-      const testBoard = puzzleState.board.map(r => [...r]);
-      const testUsedPieces = [...puzzleState.usedPieces, move.pieceType];
-      
-      for (const [dx, dy] of move.coords) {
-        testBoard[move.row + dy][move.col + dx] = 1;
-      }
-      
-      const opponentCanPlay = canAnyPieceBePlaced(testBoard, testUsedPieces);
-      
-      if (!opponentCanPlay) {
-        winningMoves.push(move);
-      }
-    }
-    
-    if (winningMoves.length > 0) {
-      const winRatio = winningMoves.length / allMoves.length;
-      
-      // Ideal: 100% win ratio (any valid move wins)
-      if (winRatio >= 1.0) {
-        console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves (PERFECT - 100%)`);
-        return {
-          id: `speed-puzzle-${Date.now()}`,
-          name: 'Speed Puzzle',
-          difficulty: PUZZLE_DIFFICULTY.EASY,
-          description: '1 move to win!',
-          boardState: boardToString(puzzleState.boardPieces),
-          usedPieces: [...puzzleState.usedPieces],
-          movesRemaining: 1,
-          _winningMoveCount: winningMoves.length,
-          _totalMoves: allMoves.length
-        };
-      }
-      
-      if (winRatio > bestWinRatio) {
-        bestWinRatio = winRatio;
-        bestPuzzle = {
-          id: `speed-puzzle-${Date.now()}`,
-          name: 'Speed Puzzle',
-          difficulty: PUZZLE_DIFFICULTY.EASY,
-          description: '1 move to win!',
-          boardState: boardToString(puzzleState.boardPieces),
-          usedPieces: [...puzzleState.usedPieces],
-          movesRemaining: 1,
-          _winningMoveCount: winningMoves.length,
-          _totalMoves: allMoves.length
-        };
-      }
-    }
-  }
-  
-  if (bestPuzzle && bestWinRatio >= 0.5) {
-    console.log(`Speed puzzle generated: ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
-    return bestPuzzle;
-  }
-  
-  if (bestPuzzle) {
-    console.log(`Speed puzzle generated (low quality): ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
-    return bestPuzzle;
-  }
-  
-  console.error('Failed to generate winning speed puzzle after 50 attempts');
-  return null;
-};
-
-// =====================================================
-// SEEDED PUZZLE GENERATION (for Weekly Challenges)
-// =====================================================
-
-const createSeededRandom = (seed) => {
-  let a = 0;
-  for (let i = 0; i < seed.length; i++) {
-    a = ((a << 5) - a) + seed.charCodeAt(i);
-    a = a & a;
-  }
-  a = Math.abs(a);
-  
-  return () => {
-    let t = a += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-};
-
-// Seeded version with strategic move selection
-const playCompleteGameSeeded = (random) => {
-  let board = createEmptyBoard();
-  let boardPieces = createEmptyBoard();
-  let usedPieces = [];
-  const history = [];
-  let currentPlayer = 1;
-  let moveCount = 0;
-  
-  while (moveCount < 12) {
-    const moves = getAllValidMoves(board, usedPieces);
-    if (moves.length === 0) break;
-    
-    history.push({
-      board: board.map(r => [...r]),
-      boardPieces: boardPieces.map(r => [...r]),
-      usedPieces: [...usedPieces],
-      player: currentPlayer
-    });
-    
-    // Use strategic selection with seeded randomness
-    let move;
-    if (moveCount < 4) {
-      // Early game: center preference
-      const scored = moves.map(m => ({
-        ...m,
-        score: quickEval(board, m.row, m.col, m.coords) + random() * 8
-      }));
-      scored.sort((a, b) => b.score - a.score);
-      const topMoves = scored.slice(0, Math.min(3, scored.length));
-      move = topMoves[Math.floor(random() * topMoves.length)];
-    } else {
-      // Later: position evaluation
-      const scored = moves.map(m => {
-        const newBoard = simulateMove(board, [], usedPieces, m, currentPlayer).board;
-        const oppMoves = getAllValidMoves(newBoard, [...usedPieces, m.pieceType]).length;
-        return { ...m, score: -oppMoves + random() * 5 };
-      });
-      scored.sort((a, b) => b.score - a.score);
-      const topMoves = scored.slice(0, Math.min(2, scored.length));
-      move = topMoves[Math.floor(random() * topMoves.length)];
-    }
-    
-    // Apply move
-    for (const [dx, dy] of move.coords) {
-      board[move.row + dy][move.col + dx] = currentPlayer;
-      boardPieces[move.row + dy][move.col + dx] = move.pieceType;
-    }
-    usedPieces.push(move.pieceType);
-    moveCount++;
-    
-    currentPlayer = currentPlayer === 1 ? 2 : 1;
-  }
-  
-  return {
-    history,
-    totalMoves: moveCount
-  };
-};
-
+// Generate a deterministic puzzle from a seed string
 const generateSeededPuzzle = (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
   const random = createSeededRandom(seed);
   const movesToBackOut = getMovesForDifficulty(difficulty);
   
+  // Try multiple games with the seeded RNG
   for (let attempt = 0; attempt < 30; attempt++) {
     const game = playCompleteGameSeeded(random);
     
-    if (game.totalMoves < movesToBackOut) continue;
+    // Need at least N moves to back out
+    if (game.totalMoves < movesToBackOut) {
+      continue;
+    }
     
+    // Get the state from N moves before the end
     const puzzleStateIndex = game.totalMoves - movesToBackOut;
     const puzzleState = game.history[puzzleStateIndex];
     
     if (!puzzleState) continue;
     
+    // Get all valid moves from this state
     const allMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
     
+    // Just need at least 1 valid move
     if (allMoves.length > 0) {
-      // Validate the puzzle
-      const validation = validatePuzzleDifficulty(puzzleState.board, puzzleState.usedPieces, movesToBackOut);
-      
-      if (!validation.hasWinningPath) {
-        console.log(`Seeded puzzle attempt ${attempt + 1}: No winning path found`);
-        continue;
-      }
-      
-      console.log(`Seeded puzzle generated from seed "${seed}": ${allMoves.length} possible moves (validated)`);
+      console.log(`Seeded puzzle generated from seed "${seed}": ${allMoves.length} possible moves`);
       
       return {
         id: `seeded-puzzle-${seed}`,
@@ -605,8 +561,7 @@ const generateSeededPuzzle = (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
         boardState: boardToString(puzzleState.boardPieces),
         usedPieces: [...puzzleState.usedPieces],
         movesRemaining: movesToBackOut,
-        seed: seed,
-        _validated: true
+        seed: seed
       };
     }
   }
@@ -615,35 +570,7 @@ const generateSeededPuzzle = (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
   return null;
 };
 
-// =====================================================
-// ASYNC WRAPPERS
-// =====================================================
-
-export const getRandomPuzzle = async (difficulty = PUZZLE_DIFFICULTY.EASY, useAI = false, onProgress = null) => {
-  await new Promise(resolve => setTimeout(resolve, 50));
-  
-  const puzzle = generatePuzzle(difficulty, onProgress);
-  
-  if (puzzle && onProgress) {
-    const maxProgress = difficulty === PUZZLE_DIFFICULTY.EASY ? 50 : 30;
-    onProgress(maxProgress, maxProgress);
-  }
-  
-  await new Promise(resolve => setTimeout(resolve, 100));
-  
-  return puzzle;
-};
-
-export const getSpeedPuzzle = async () => {
-  await new Promise(resolve => setTimeout(resolve, 10));
-  
-  const puzzle = generateSpeedPuzzle();
-  
-  await new Promise(resolve => setTimeout(resolve, 10));
-  
-  return puzzle;
-};
-
+// Async wrapper for seeded puzzles
 export const getSeededPuzzle = async (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
   await new Promise(resolve => setTimeout(resolve, 50));
   
