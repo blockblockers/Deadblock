@@ -1,5 +1,6 @@
 // useGameState.js - Custom hook for managing local game state
 // v7.12: Added play streak update on game completion
+// v7.15.4: Use per-difficulty AI move delays from aiLogic
 // CRITICAL: This hook must export startNewGame, setGameMode, and all other functions App.jsx needs
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
@@ -11,15 +12,14 @@ import {
   placePiece,
   BOARD_SIZE 
 } from '../utils/gameLogic';
-import { selectAIMove, getAllPossibleMoves, AI_DIFFICULTY } from '../utils/aiLogic';
+import { selectAIMove, getAllPossibleMoves, AI_DIFFICULTY, AI_MOVE_DELAY } from '../utils/aiLogic';
 import { getRandomPuzzle, PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 import { statsService } from '../utils/statsService';
 import { streakService } from '../services/streakService';
 
-// AI delay in milliseconds for realistic turn-based gameplay
-const AI_MOVE_DELAY = 1500;
-const AI_MOVE_DELAY_FAST = 100; // For modes that need instant AI (e.g., weekly challenge)
+// Fast AI delay for modes that need instant AI (e.g., weekly challenge, puzzle mode)
+const AI_MOVE_DELAY_FAST = 100;
 
 export const useGameState = () => {
   // Core game state
@@ -222,8 +222,12 @@ export const useGameState = () => {
     
     setIsAIThinking(true);
     
-    // Add delay for realistic gameplay (shorter in fast mode)
-    const moveDelay = fastAIMode ? AI_MOVE_DELAY_FAST : AI_MOVE_DELAY;
+    // Add delay for realistic gameplay
+    // - Fast mode: instant (100ms) for weekly challenge/puzzle validation
+    // - Normal mode: per-difficulty delay (1.2s beginner, 1.5s intermediate, 1.8s expert)
+    const moveDelay = fastAIMode 
+      ? AI_MOVE_DELAY_FAST 
+      : (AI_MOVE_DELAY[aiDifficulty] || AI_MOVE_DELAY[AI_DIFFICULTY.AVERAGE]);
     await new Promise(resolve => setTimeout(resolve, moveDelay));
     
     try {

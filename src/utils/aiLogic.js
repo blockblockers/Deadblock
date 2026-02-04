@@ -303,7 +303,7 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
       if (bestMove) return bestMove;
       
       console.log('Expert AI: Falling back to strategic move');
-      // Fall through to average if minimax fails
+      /* falls through */ // Intentional fall-through to AVERAGE when minimax fails
 
     case AI_DIFFICULTY.AVERAGE:
     default:
