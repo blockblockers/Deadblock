@@ -2001,7 +2001,10 @@ const OnlineMenu = ({
 
             {/* Active Games Button - Glow Orb Style */}
             {activeGames.length > 0 && (() => {
-              const myTurnCount = activeGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length;
+              // Exclude unviewed wins from display count (winner already saw final move)
+              const displayGames = activeGames.filter(g => !(g?._isUnviewedResult && !g?._isLoss));
+              if (displayGames.length === 0) return null;
+              const myTurnCount = displayGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length;
               const waitingCount = activeGames.length - myTurnCount;
               return (
                 <button
@@ -2030,7 +2033,7 @@ const OnlineMenu = ({
                   </div>
                   <div className="relative flex items-center justify-center gap-2">
                     <span className="font-black tracking-wide text-sm text-green-300 group-hover:text-white transition-colors">
-                      ACTIVE GAMES ({activeGames.length})
+                      ACTIVE GAMES ({displayGames.length})
                     </span>
                     {myTurnCount > 0 && (
                       <span className="bg-amber-500/80 px-2 py-0.5 rounded-full text-xs font-bold text-white animate-pulse">
@@ -2374,7 +2377,7 @@ const OnlineMenu = ({
                 <div className="space-y-3">
                   {/* v7.12: Separate unviewed completed games from active games */}
                   {(() => {
-                    const unviewedCompleted = activeGames.filter(g => g?._isUnviewedResult);
+                    const unviewedCompleted = activeGames.filter(g => g?._isUnviewedResult && g?._isLoss);
                     const reallyActive = activeGames.filter(g => g && !g._isUnviewedResult);
                     
                     return (
@@ -2391,7 +2394,6 @@ const OnlineMenu = ({
                             
                             {unviewedCompleted.map(game => {
                               const opponentName = getOpponentName(game);
-                              const isLoss = game._isLoss;
                               
                               return (
                                 <button
@@ -2401,41 +2403,29 @@ const OnlineMenu = ({
                                     setShowActiveGames(false);
                                     onResumeGame(game);
                                   }}
-                                  className={`w-full p-4 rounded-lg flex items-center justify-between transition-all ${
-                                    isLoss 
-                                      ? 'bg-gradient-to-r from-red-900/40 to-red-800/30 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-pulse'
-                                      : 'bg-gradient-to-r from-green-900/40 to-emerald-900/30 border border-green-500/50 shadow-[0_0_15px_rgba(34,197,94,0.2)]'
-                                  }`}
+                                  className="w-full p-4 rounded-lg flex items-center justify-between transition-all bg-gradient-to-r from-red-900/40 to-red-800/30 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-pulse"
                                 >
                                   <div className="flex items-center gap-3">
                                     {/* Result Icon */}
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                      isLoss 
-                                        ? 'bg-red-500/30 text-red-400' 
-                                        : 'bg-green-500/30 text-green-400'
-                                    }`}>
-                                      {isLoss ? <Skull size={20} /> : <Trophy size={20} />}
+                                    <div className="w-10 h-10 rounded-full flex items-center justify-center bg-red-500/30 text-red-400">
+                                      <Skull size={20} />
                                     </div>
                                     
                                     {/* Game Info */}
                                     <div className="text-left">
                                       <div className="text-white font-medium flex items-center gap-2">
                                         vs {opponentName}
-                                        <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                                          isLoss 
-                                            ? 'bg-red-500/30 text-red-300' 
-                                            : 'bg-green-500/30 text-green-300'
-                                        }`}>
-                                          {isLoss ? 'LOSS' : 'WIN'}
+                                        <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-red-500/30 text-red-300">
+                                          LOSS
                                         </span>
                                       </div>
-                                      <div className={`text-sm ${isLoss ? 'text-red-300' : 'text-green-300'}`}>
+                                      <div className="text-sm text-red-300">
                                         Tap to view final board
                                       </div>
                                     </div>
                                   </div>
                                   
-                                  <ChevronRight size={20} className={isLoss ? 'text-red-400' : 'text-green-400'} />
+                                  <ChevronRight size={20} className="text-red-400" />
                                 </button>
                               );
                             })}

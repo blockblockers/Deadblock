@@ -1,5 +1,4 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.15.2: Fixed unviewed loss flow - properly delays modal, marks game as viewed
 // v7.15: Removed duplicate pieces bars, chat icon now overlays bottom-right of piece tray
 // v7.14: Added streak tracking on game completion
 // v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
@@ -34,7 +33,6 @@ import { ratingService } from '../services/ratingService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { realtimeManager } from '../services/realtimeManager';
 import { streakService } from '../services/streakService';
-import { streakTracker } from '../utils/streakTracker';
 
 // Orange/Amber theme for online mode
 const theme = {
@@ -195,8 +193,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const moveInProgressRef = useRef(false);
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
+  const dismissedGameOverRef = useRef(false);
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
-  const viewingCompletedGameRef = useRef(false); // v7.15.2: Track when viewing a completed game (to delay modal)
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
@@ -610,7 +608,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             // Store new game ID and trigger navigation via state change
             setNewGameFromRematch(request.new_game_id);
             // Reset game state for new game
-            viewingCompletedGameRef.current = false; // v7.15.2: Reset completed game flag
             setCurrentGameId(request.new_game_id);
             setGame(null);
             setLoading(true);
@@ -793,8 +790,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      // v7.15.2: Skip if we're intentionally viewing a completed game (handled separately)
-      if (gameData.status === 'completed' && !showGameOver && !viewingCompletedGameRef.current) {
+      if (gameData.status === 'completed' && !showGameOver && !dismissedGameOverRef.current) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -870,12 +866,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         // For completed games, we want to show the board first, then the modal
         // So we'll set the game state but NOT trigger game over yet
         if (isCompletedGame) {
-          // v7.15.2: Set flag to prevent real-time handler from immediately showing modal
-          viewingCompletedGameRef.current = true;
-          
-          // v7.15.2: Mark game as viewed so it moves from "active" to "recent" on next refresh
-          gameSyncService.markGameAsViewed(currentGameId);
-          
           // Set game result for later use
           const result = {
             isWin: iWon,
@@ -906,7 +896,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           if (lastMove && mountedRef.current && boardRef.current) {
             const winnerNum = data.winner_id === data.player1_id ? 1 : 2;
             
-            // v7.15.2: Wait longer for board to render before animation (was 500ms)
+            // Wait for board to render, then trigger animation
             setTimeout(() => {
               if (!mountedRef.current || !boardRef.current) return;
               
@@ -935,15 +925,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               const boardRect = boardRef.current.getBoundingClientRect();
               const cellSize = boardRect.width / BOARD_SIZE;
               triggerAnimation(placedCells, winnerNum, boardRef, cellSize);
-              soundManager.playSound('place');
-            }, 800);
+            }, 500);
           }
           
-          // v7.15.2: Show game over modal after 5 second delay for completed games
-          // This gives user time to see the board and the winning move animation
+          // v7.13: Show game over modal after 5 second delay for completed games
+          // This gives user time to see the board and the winning move
           setTimeout(() => {
-            if (mountedRef.current) {
-              viewingCompletedGameRef.current = false; // Clear the flag
+            if (mountedRef.current && !showGameOver && !dismissedGameOverRef.current) {
               setShowGameOver(true);
               soundManager.playSound(iWon ? 'win' : 'lose');
             }
@@ -1395,9 +1383,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     // console.log('handleConfirm: Move successful');
     
-    // v7.15.2: Record daily play for streak tracking
-    streakTracker.recordPlay();
-    
     // Set expected piece count to ignore stale updates
     expectedPieceCountRef.current = newUsedPieces.length;
 
@@ -1832,7 +1817,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           gameMode="online"
           opponentName={opponent?.display_name || opponent?.username || 'Opponent'}
           onClose={() => {
-            // Just close the modal but stay on game screen
+            // Permanently dismiss - won't reappear from real-time updates
+            dismissedGameOverRef.current = true;
             setShowGameOver(false);
           }}
           onRematch={async () => {

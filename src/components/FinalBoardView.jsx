@@ -352,19 +352,21 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* BOARD AREA - Content at top, scrollable if needed */}
-      <div className="flex-1 flex flex-col items-center justify-start p-2 min-h-0 overflow-auto">
+      {/* BOARD AREA - Takes all remaining space */}
+      <div className="flex-1 flex items-center justify-center p-2 min-h-0 overflow-hidden">
         {isLoadingMoves ? (
-          <div className="text-center py-8">
+          <div className="text-center">
             <Loader size={32} className="text-purple-400 animate-spin mx-auto mb-2" />
             <p className="text-slate-400 text-sm">Loading game...</p>
           </div>
         ) : (
           /* Board Grid - Matches GameBoard sizing exactly */
           <div 
-            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-purple-500/40"
+            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
             style={{
-              boxShadow: '0 0 30px rgba(147,51,234,0.15), inset 0 0 20px rgba(0,0,0,0.2)',
+              boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)',
+              maxWidth: 'calc(100vh - 200px)',
+              maxHeight: 'calc(100vh - 200px)',
             }}
           >
             {currentState.board.map((row, rowIdx) =>
@@ -389,18 +391,28 @@ const FinalBoardView = ({
                       w-9 h-9 sm:w-12 sm:h-12 rounded-md sm:rounded-lg relative
                       transition-all duration-150 overflow-hidden
                       ${isOccupied 
-                        ? `${pieceColor || (cellValue === 1 
-                            ? 'bg-gradient-to-br from-cyan-400 via-cyan-500 to-blue-600' 
-                            : 'bg-gradient-to-br from-pink-400 via-pink-500 to-rose-600'
-                          )} shadow-lg` 
+                        ? isLastMove
+                          ? 'shadow-lg'
+                          : `${pieceColor || (cellValue === 1 
+                              ? 'bg-gradient-to-br from-cyan-400 via-cyan-500 to-blue-600' 
+                              : 'bg-gradient-to-br from-pink-400 via-pink-500 to-rose-600'
+                            )} shadow-lg`
                         : 'bg-slate-700/50'
                       }
-                      ${isLastMove ? 'ring-2 ring-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]' : ''}
                     `}
+                    style={isLastMove ? {
+                      background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
+                      boxShadow: '0 0 20px rgba(251,191,36,0.7), 0 0 40px rgba(251,191,36,0.3)',
+                    } : undefined}
                   >
-                    {/* Scan line effect for placed pieces */}
-                    {isOccupied && (
+                    {/* Scan line effect for placed pieces (not on gold last move) */}
+                    {isOccupied && !isLastMove && (
                       <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(255,255,255,0.1)_2px,rgba(255,255,255,0.1)_4px)]" />
+                    )}
+                    
+                    {/* Gold shimmer effect on last move cells */}
+                    {isLastMove && (
+                      <div className="absolute inset-0 opacity-50 bg-[repeating-linear-gradient(135deg,transparent,transparent_3px,rgba(255,255,255,0.3)_3px,rgba(255,255,255,0.3)_5px)] animate-gold-shimmer" />
                     )}
                     
                     {/* Move number overlay - only in final view */}
@@ -408,7 +420,8 @@ const FinalBoardView = ({
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span 
                           className={`
-                            font-black text-white drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]
+                            font-black drop-shadow-[0_2px_3px_rgba(0,0,0,0.9)]
+                            ${isLastMove ? 'text-white' : 'text-white'}
                             ${cellInfo.moveNumber > 9 ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-sm'}
                           `}
                           style={{
@@ -420,11 +433,15 @@ const FinalBoardView = ({
                       </div>
                     )}
                     
-                    {/* Last move indicator */}
-                    {isLastMove && (
-                      <div className="absolute top-0 right-0 bg-amber-500 text-[5px] sm:text-[6px] font-bold px-0.5 rounded-bl text-black">
-                        LAST
-                      </div>
+                    {/* Gold confetti particles on last move cells */}
+                    {isLastMove && showFinal && (
+                      <>
+                        <div className="absolute w-1 h-1 bg-yellow-300 rounded-full animate-confetti-1" style={{ left: '20%', top: '-10%' }} />
+                        <div className="absolute w-1.5 h-1 bg-amber-400 rounded-sm animate-confetti-2" style={{ left: '60%', top: '-10%' }} />
+                        <div className="absolute w-1 h-1.5 bg-yellow-200 rounded-sm animate-confetti-3" style={{ left: '40%', top: '-10%' }} />
+                        <div className="absolute w-1 h-1 bg-orange-400 rounded-full animate-confetti-4" style={{ left: '80%', top: '-10%' }} />
+                        <div className="absolute w-1.5 h-1 bg-yellow-500 rounded-sm animate-confetti-5" style={{ left: '10%', top: '-10%' }} />
+                      </>
                     )}
                   </div>
                 );
@@ -435,7 +452,7 @@ const FinalBoardView = ({
       </div>
 
       {/* CONTROLS - Fixed at bottom */}
-      <div className="bg-slate-900/90 border-t border-purple-500/30 px-3 py-2 flex-shrink-0">
+      <div className="bg-slate-900/90 border-t border-slate-700/50 px-3 py-2 flex-shrink-0">
         {/* Progress bar */}
         {totalMoves > 0 && (
           <div className="mb-2">
@@ -528,6 +545,55 @@ const FinalBoardView = ({
           </div>
         )}
       </div>
+      
+      {/* Gold confetti and shimmer animations */}
+      <style>{`
+        @keyframes gold-shimmer {
+          0% { background-position: 0% 0%; }
+          100% { background-position: 200% 200%; }
+        }
+        .animate-gold-shimmer {
+          background-size: 200% 200%;
+          animation: gold-shimmer 2s linear infinite;
+        }
+        @keyframes confetti-fall-1 {
+          0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+          25% { transform: translate(3px, 8px) rotate(90deg); opacity: 1; }
+          50% { transform: translate(-2px, 16px) rotate(180deg); opacity: 0.8; }
+          75% { transform: translate(4px, 24px) rotate(270deg); opacity: 0.5; }
+          100% { transform: translate(1px, 32px) rotate(360deg); opacity: 0; }
+        }
+        @keyframes confetti-fall-2 {
+          0% { transform: translate(0, 0) rotate(45deg); opacity: 1; }
+          25% { transform: translate(-4px, 10px) rotate(135deg); opacity: 1; }
+          50% { transform: translate(2px, 18px) rotate(225deg); opacity: 0.8; }
+          75% { transform: translate(-3px, 26px) rotate(315deg); opacity: 0.5; }
+          100% { transform: translate(0px, 34px) rotate(405deg); opacity: 0; }
+        }
+        @keyframes confetti-fall-3 {
+          0% { transform: translate(0, 0) rotate(20deg); opacity: 1; }
+          30% { transform: translate(5px, 12px) rotate(120deg); opacity: 1; }
+          60% { transform: translate(-1px, 22px) rotate(240deg); opacity: 0.7; }
+          100% { transform: translate(3px, 36px) rotate(380deg); opacity: 0; }
+        }
+        @keyframes confetti-fall-4 {
+          0% { transform: translate(0, 0) rotate(-10deg); opacity: 1; }
+          35% { transform: translate(-3px, 9px) rotate(80deg); opacity: 1; }
+          65% { transform: translate(4px, 20px) rotate(200deg); opacity: 0.6; }
+          100% { transform: translate(-2px, 30px) rotate(350deg); opacity: 0; }
+        }
+        @keyframes confetti-fall-5 {
+          0% { transform: translate(0, 0) rotate(60deg); opacity: 1; }
+          20% { transform: translate(2px, 7px) rotate(140deg); opacity: 1; }
+          55% { transform: translate(-4px, 19px) rotate(260deg); opacity: 0.7; }
+          100% { transform: translate(1px, 33px) rotate(420deg); opacity: 0; }
+        }
+        .animate-confetti-1 { animation: confetti-fall-1 1.8s ease-out infinite; animation-delay: 0s; }
+        .animate-confetti-2 { animation: confetti-fall-2 2.1s ease-out infinite; animation-delay: 0.3s; }
+        .animate-confetti-3 { animation: confetti-fall-3 1.9s ease-out infinite; animation-delay: 0.1s; }
+        .animate-confetti-4 { animation: confetti-fall-4 2.3s ease-out infinite; animation-delay: 0.5s; }
+        .animate-confetti-5 { animation: confetti-fall-5 2.0s ease-out infinite; animation-delay: 0.2s; }
+      `}</style>
     </div>
   );
 };

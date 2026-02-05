@@ -117,33 +117,43 @@ const quickEval = (board, row, col, coords) => {
   return score;
 };
 
-// Select a strategic move (similar to AI AVERAGE difficulty)
-// This creates more realistic game states for puzzles
+// Select a strategic move (smarter than pure random, but fast)
+// Uses center-preference scoring + adjacency awareness instead of
+// expensive nested getAllValidMoves calls
 const selectStrategicMove = (board, usedPieces, isEarlyGame) => {
   const moves = getAllValidMoves(board, usedPieces);
   if (moves.length === 0) return null;
   
-  if (isEarlyGame) {
-    // Early game: prefer center positions with some randomness
-    const scored = moves.map(m => ({
-      ...m,
-      score: quickEval(board, m.row, m.col, m.coords) + Math.random() * 8
-    }));
-    scored.sort((a, b) => b.score - a.score);
-    const topMoves = scored.slice(0, Math.min(3, scored.length));
-    return topMoves[Math.floor(Math.random() * topMoves.length)];
-  }
-  
-  // Mid/late game: evaluate by limiting opponent options
+  // Score every move by center proximity + board coverage
+  // This is O(moves) - fast enough for puzzle generation
   const scored = moves.map(m => {
-    const result = simulateMove(board, [], usedPieces, m, 1);
-    const opponentMoveCount = getAllValidMoves(result.board, result.usedPieces).length;
-    // Prefer moves that limit opponent options, with randomness
-    return { ...m, score: -opponentMoveCount + Math.random() * 5 };
+    let score = quickEval(board, m.row, m.col, m.coords);
+    
+    if (!isEarlyGame) {
+      // Mid/late game bonus: prefer moves adjacent to existing pieces
+      // (creates tighter, more strategic-looking boards)
+      let adjacencyBonus = 0;
+      for (const [dx, dy] of m.coords) {
+        const r = m.row + dy;
+        const c = m.col + dx;
+        // Check all 4 neighbors for occupied cells
+        if (r > 0 && board[r - 1][c]) adjacencyBonus += 2;
+        if (r < BOARD_SIZE - 1 && board[r + 1][c]) adjacencyBonus += 2;
+        if (c > 0 && board[r][c - 1]) adjacencyBonus += 2;
+        if (c < BOARD_SIZE - 1 && board[r][c + 1]) adjacencyBonus += 2;
+      }
+      score += adjacencyBonus;
+    }
+    
+    // Add randomness to keep variety
+    score += Math.random() * (isEarlyGame ? 8 : 5);
+    
+    return { ...m, score };
   });
   
   scored.sort((a, b) => b.score - a.score);
-  const topMoves = scored.slice(0, Math.min(2, scored.length));
+  const topN = isEarlyGame ? 3 : 2;
+  const topMoves = scored.slice(0, Math.min(topN, scored.length));
   return topMoves[Math.floor(Math.random() * topMoves.length)];
 };
 
@@ -487,26 +497,32 @@ const playCompleteGameSeeded = (random) => {
     let move;
     const isEarlyGame = moveCount < 4;
     
-    if (isEarlyGame) {
-      // Early game: center preference with seeded randomness
-      const scored = moves.map(m => ({
-        ...m,
-        score: quickEval(board, m.row, m.col, m.coords) + random() * 8
-      }));
-      scored.sort((a, b) => b.score - a.score);
-      const topMoves = scored.slice(0, Math.min(3, scored.length));
-      move = topMoves[Math.floor(random() * topMoves.length)];
-    } else {
-      // Mid/late game: position evaluation with seeded randomness
-      const scored = moves.map(m => {
-        const result = simulateMove(board, [], usedPieces, m, currentPlayer);
-        const oppMoves = getAllValidMoves(result.board, result.usedPieces).length;
-        return { ...m, score: -oppMoves + random() * 5 };
-      });
-      scored.sort((a, b) => b.score - a.score);
-      const topMoves = scored.slice(0, Math.min(2, scored.length));
-      move = topMoves[Math.floor(random() * topMoves.length)];
-    }
+    // Score by center proximity + adjacency (fast, no nested getAllValidMoves)
+    const scored = moves.map(m => {
+      let score = quickEval(board, m.row, m.col, m.coords);
+      
+      if (!isEarlyGame) {
+        // Adjacency bonus for tighter boards
+        let adjacencyBonus = 0;
+        for (const [dx, dy] of m.coords) {
+          const r = m.row + dy;
+          const c = m.col + dx;
+          if (r > 0 && board[r - 1][c]) adjacencyBonus += 2;
+          if (r < BOARD_SIZE - 1 && board[r + 1][c]) adjacencyBonus += 2;
+          if (c > 0 && board[r][c - 1]) adjacencyBonus += 2;
+          if (c < BOARD_SIZE - 1 && board[r][c + 1]) adjacencyBonus += 2;
+        }
+        score += adjacencyBonus;
+      }
+      
+      score += random() * (isEarlyGame ? 8 : 5);
+      return { ...m, score };
+    });
+    
+    scored.sort((a, b) => b.score - a.score);
+    const topN = isEarlyGame ? 3 : 2;
+    const topMoves = scored.slice(0, Math.min(topN, scored.length));
+    move = topMoves[Math.floor(random() * topMoves.length)];
     
     // Apply move
     for (const [dx, dy] of move.coords) {

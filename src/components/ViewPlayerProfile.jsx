@@ -379,13 +379,19 @@ const ViewPlayerProfile = ({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div 
+        className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+        style={{ overscrollBehavior: 'contain', touchAction: 'none' }}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
         <div 
           className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border shadow-2xl max-h-[90vh] flex flex-col"
           style={{ 
             borderColor: hexToRgba(glowColor, 0.3),
-            boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`
+            boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
+            touchAction: 'pan-y',
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div 
@@ -403,8 +409,22 @@ const ViewPlayerProfile = ({
           
           {/* Content - Scrollable */}
           <div 
-            className="p-4 overflow-y-auto flex-1"
-            style={{ WebkitOverflowScrolling: 'touch' }}
+            className="p-4 overflow-y-auto flex-1 overscroll-contain"
+            style={{ 
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain',
+              touchAction: 'pan-y',
+              msOverflowStyle: '-ms-autohiding-scrollbar',
+              transform: 'translateZ(0)',
+              willChange: 'scroll-position',
+            }}
+            onTouchStart={(e) => {
+              // Allow scroll to start immediately
+              e.currentTarget.style.scrollBehavior = 'auto';
+            }}
+            onTouchEnd={(e) => {
+              e.currentTarget.style.scrollBehavior = 'smooth';
+            }}
           >
             {loading ? (
               <div className="text-center py-8">
@@ -680,6 +700,9 @@ const ViewPlayerProfile = ({
                     Member since {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                   </div>
                 )}
+                
+                {/* Bottom spacing for scroll breathing room */}
+                <div className="h-4" />
               </>
             )}
           </div>

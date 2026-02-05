@@ -1,10 +1,9 @@
 // PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, and achievements
-// v7.15: Achievement count and leaderboard rank inline with ELO, removed overlapping badge
 // v7.12: Added NEW achievements indicator badge (similar to friend requests)
 // Place in src/components/PlayerProfileCard.jsx
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle, BarChart3 } from 'lucide-react';
+import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
 import { supabase } from '../utils/supabase';
@@ -212,7 +211,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   const [showAchievements, setShowAchievements] = useState(false);
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
   const [newAchievementsCount, setNewAchievementsCount] = useState(0);
-  const [leaderboardRank, setLeaderboardRank] = useState(null);
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   
   // Use cached profile as fallback
@@ -259,16 +257,22 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           const lastViewedTime = localStorage.getItem(`deadblock_achievements_viewed_${effectiveProfile.id}`);
           const lastViewed = lastViewedTime ? new Date(lastViewedTime) : null;
           
-          if (lastViewed) {
+          if (lastViewed && !isNaN(lastViewed.getTime())) {
             // Count achievements unlocked after last view
             const newCount = unlocked.filter(a => {
               const unlockedAt = a.unlockedAt || a.unlocked_at;
               return unlockedAt && new Date(unlockedAt) > lastViewed;
             }).length;
             setNewAchievementsCount(newCount);
-          } else if (unlocked.length > 0) {
-            // Never viewed - all unlocked are "new"
-            setNewAchievementsCount(unlocked.length);
+          } else {
+            // No valid lastViewed (localStorage cleared, first open, etc.)
+            // Don't mark existing achievements as "new" - initialize the timestamp
+            // so only future unlocks will trigger the badge
+            localStorage.setItem(
+              `deadblock_achievements_viewed_${effectiveProfile.id}`,
+              new Date().toISOString()
+            );
+            setNewAchievementsCount(0);
           }
         } else {
           console.log('[PlayerProfileCard] No achievements found or error:', result.error);
@@ -279,29 +283,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     };
     
     loadAchievements();
-  }, [effectiveProfile?.id]);
-  
-  // Load leaderboard rank
-  useEffect(() => {
-    const loadLeaderboardRank = async () => {
-      if (!effectiveProfile?.id) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id')
-          .order('rating', { ascending: false });
-        
-        if (!error && data) {
-          const rank = data.findIndex(p => p.id === effectiveProfile.id) + 1;
-          if (rank > 0) setLeaderboardRank(rank);
-        }
-      } catch (err) {
-        console.error('[PlayerProfileCard] Error loading leaderboard rank:', err);
-      }
-    };
-    
-    loadLeaderboardRank();
   }, [effectiveProfile?.id]);
   
   // Mark achievements as viewed when modal opens
@@ -404,6 +385,45 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           boxShadow: `0 0 25px ${glowRgba['15']}, 0 4px 15px rgba(0,0,0,0.3)`
         }}
       >
+        {/* Action buttons (achievements, edit) */}
+        <div className="absolute top-2 right-2 flex gap-1 z-10">
+          {/* Achievements button with NEW indicator */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenAchievements();
+            }}
+            className="relative p-1.5 rounded-lg transition-all hover:scale-110"
+            style={{ 
+              background: newAchievementsCount > 0 
+                ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.2))'
+                : 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
+              border: newAchievementsCount > 0 
+                ? '1px solid rgba(251, 191, 36, 0.5)'
+                : '1px solid rgba(251, 191, 36, 0.3)'
+            }}
+            title={`Achievements (${achievementCount.unlocked}/${achievementCount.total})`}
+          >
+            <Trophy 
+              size={14} 
+              className="text-amber-400" 
+            />
+            {/* NEW badge */}
+            {newAchievementsCount > 0 && (
+              <span 
+                className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[10px] font-bold rounded-full animate-pulse"
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  color: 'white',
+                  boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)'
+                }}
+              >
+                {newAchievementsCount > 9 ? '9+' : newAchievementsCount}
+              </span>
+            )}
+          </button>
+        </div>
+        
         {/* Tier icon */}
         <div 
           className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
@@ -417,14 +437,14 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
         </div>
         
         {/* Player info */}
-        <div className="flex-1 text-left min-w-0">
+        <div className="flex-1 text-left min-w-0 pr-16">
           <div 
             className="font-black text-base tracking-wide truncate"
             style={{ color: '#f1f5f9', textShadow: `0 0 12px ${glowRgba['40']}` }}
           >
             {displayName}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             {rankInfo && (
               <span 
                 className="text-xs font-bold uppercase tracking-wider"
@@ -436,32 +456,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
             <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
               {effectiveProfile.rating || 1000} ELO
             </span>
-            {/* Leaderboard Rank */}
-            {leaderboardRank && (
-              <span className="flex items-center gap-0.5 text-cyan-400 text-[11px] font-semibold">
-                <BarChart3 size={10} />
-                #{leaderboardRank}
-              </span>
-            )}
-            {/* Achievement Count */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenAchievements();
-              }}
-              className="flex items-center gap-0.5 text-amber-400 text-[11px] font-semibold hover:text-amber-300 transition-colors relative"
-            >
-              <Trophy size={10} />
-              {achievementCount.unlocked}/{achievementCount.total}
-              {newAchievementsCount > 0 && (
-                <span 
-                  className="ml-0.5 px-1 py-0 text-[9px] font-bold rounded bg-red-500 text-white"
-                  style={{ animation: 'pulse 1.5s ease-in-out infinite' }}
-                >
-                  +{newAchievementsCount > 9 ? '9+' : newAchievementsCount}
-                </span>
-              )}
-            </button>
           </div>
         </div>
         
