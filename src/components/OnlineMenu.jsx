@@ -1274,19 +1274,19 @@ const OnlineMenu = ({
 
       {/* Content - v7.10: Removed duplicate scroll styles, let parent handle scrolling */}
       <div 
-        className="relative flex flex-col items-center px-3 sm:px-4 pt-6 sm:pt-8 pb-32"
+        className="relative flex flex-col items-center px-3 sm:px-4 pt-12 sm:pt-16 pb-32"
         style={{ 
           minHeight: '100%',
           paddingBottom: 'max(160px, calc(env(safe-area-inset-bottom) + 160px))',
-          paddingTop: 'max(24px, env(safe-area-inset-top))',
+          paddingTop: 'max(48px, calc(env(safe-area-inset-top) + 48px))',
           // v7.10: NO scroll styles here - parent handles all scrolling
         }}
       >
         <div className="w-full max-w-md">
           
-          {/* Title - Centered and Enlarged */}
-          <div className="text-center mb-6 sm:mb-8">
-            <NeonTitle size="xlarge" />
+          {/* Title - Sized to match game menu */}
+          <div className="text-center mb-4">
+            <NeonTitle size="large" />
             <NeonSubtitle text="ONLINE" size="large" className="mt-2" />
           </div>
 
@@ -2127,15 +2127,24 @@ const OnlineMenu = ({
                 onResumeGame?.(data.game);
               }
             } else if (notification.type === 'friend_request') {
-              // Accept friend request
-              await friendsService.acceptFriendRequest(notification.id, profile.id);
-              loadFriendRequests();
-              soundManager.playSound('success');
+              // Accept friend request - with error handling
+              const { error } = await friendsService.acceptFriendRequest(notification.id, profile.id);
+              if (!error) {
+                soundManager.playSound('success');
+                loadFriendRequests();
+              } else {
+                console.error('[OnlineMenu] Failed to accept friend request:', error);
+              }
             }
           }}
-          onDecline={(notification) => {
+          onDecline={async (notification) => {
             if (notification.type === 'friend_request') {
-              friendsService.declineFriendRequest(notification.id, profile.id);
+              const { error } = await friendsService.declineFriendRequest(notification.id, profile.id);
+              if (!error) {
+                loadFriendRequests();
+              } else {
+                console.error('[OnlineMenu] Failed to decline friend request:', error);
+              }
             }
           }}
         />

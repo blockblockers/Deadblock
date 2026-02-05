@@ -1,126 +1,119 @@
 // GameInviteNotification.jsx - Toast notifications for game invites and friend requests
-// Shows popups when receiving challenges or friend requests
+// FIXED: Uses centralized RealtimeManager instead of separate channels
+// FIX: Changed table subscription from 'friendships' (wrong) to 'friends' (correct)
+// FIX: Added proper error handling for friend request accept in parent handler
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Swords, UserPlus, X, Check, Clock } from 'lucide-react';
 import { inviteService } from '../services/inviteService';
 import { supabase } from '../utils/supabase';
+import { realtimeManager } from '../services/realtimeManager';
 import { soundManager } from '../utils/soundManager';
 import { notificationService } from '../services/notificationService';
 
 const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
   const [notifications, setNotifications] = useState([]);
+  const unsubscribeRef = useRef([]);
 
-  // Subscribe to new invites
+  // Subscribe to real-time events via centralized RealtimeManager
   useEffect(() => {
     if (!userId) return;
 
     console.log('[GameInviteNotification] Setting up subscriptions for:', userId);
 
-    // Subscribe to game invites
-    const inviteChannel = supabase
-      .channel(`invite-notify-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'game_invites',
-          filter: `to_user_id=eq.${userId}`
-        },
-        async (payload) => {
-          console.log('[GameInviteNotification] New invite received:', payload);
-          
-          // Fetch full invite with sender info
-          const { data: invite } = await supabase
-            .from('game_invites')
-            .select(`
-              *,
-              from_user:profiles!game_invites_from_user_id_fkey(id, username, display_name)
-            `)
-            .eq('id', payload.new.id)
-            .single();
+    // Listen for game invites via RealtimeManager
+    const unsubInvite = realtimeManager.on('gameInvite', async (invite) => {
+      if (!invite) return;
+      
+      // Only show notifications for invites directed at this user
+      if (invite.to_user_id !== userId) return;
+      
+      console.log('[GameInviteNotification] New invite received:', invite.id);
+      
+      // Fetch full invite with sender info
+      const { data: fullInvite } = await supabase
+        .from('game_invites')
+        .select(`
+          *,
+          from_user:profiles!game_invites_from_user_id_fkey(id, username, display_name)
+        `)
+        .eq('id', invite.id)
+        .single();
 
-          if (invite && invite.status === 'pending') {
-            const senderName = invite.from_user?.display_name || invite.from_user?.username || 'Someone';
+      if (fullInvite && fullInvite.status === 'pending') {
+        const senderName = fullInvite.from_user?.username || fullInvite.from_user?.display_name || 'Someone';
+        
+        setNotifications(prev => [
+          ...prev,
+          {
+            id: fullInvite.id,
+            type: 'invite',
+            sender: senderName,
+            senderId: fullInvite.from_user_id,
+            timestamp: Date.now()
+          }
+        ]);
+
+        soundManager.playSound('notification');
+
+        if (document.hidden) {
+          notificationService.notifyGameInvite(senderName, fullInvite.id);
+        }
+      }
+    });
+
+    // Listen for friend requests via RealtimeManager
+    // RealtimeManager subscribes to the correct 'friends' table (not 'friendships')
+    const unsubFriend = realtimeManager.on('friendRequest', async (request) => {
+      if (!request) return;
+      
+      // Only show notifications for requests directed at this user
+      if (request.friend_id !== userId) return;
+      
+      console.log('[GameInviteNotification] New friend request:', request.id);
+      
+      if (request.status === 'pending') {
+        // Fetch sender info - request.user_id is the person who sent the request
+        const { data: sender } = await supabase
+          .from('profiles')
+          .select('id, username, display_name')
+          .eq('id', request.user_id)
+          .single();
+
+        if (sender) {
+          const senderName = sender.username || sender.display_name || 'Someone';
+          
+          setNotifications(prev => {
+            // Avoid duplicate notifications for same request
+            if (prev.some(n => n.id === request.id)) return prev;
             
-            // Add to notifications
-            setNotifications(prev => [
+            return [
               ...prev,
               {
-                id: invite.id,
-                type: 'invite',
+                id: request.id,
+                type: 'friend_request',
                 sender: senderName,
-                senderId: invite.from_user_id,
+                senderId: sender.id,
                 timestamp: Date.now()
               }
-            ]);
+            ];
+          });
 
-            // Play sound
-            soundManager.playSound('notification');
-
-            // Send browser notification
-            if (document.hidden) {
-              notificationService.notifyGameInvite(senderName, invite.id);
-            }
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('[GameInviteNotification] Invite channel status:', status);
-      });
-
-    // Subscribe to friend requests
-    const friendChannel = supabase
-      .channel(`friend-notify-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friendships',
-          filter: `friend_id=eq.${userId}`
-        },
-        async (payload) => {
-          console.log('[GameInviteNotification] New friend request:', payload);
+          soundManager.playSound('notification');
           
-          if (payload.new.status === 'pending') {
-            // Fetch sender info
-            const { data: sender } = await supabase
-              .from('profiles')
-              .select('id, username, display_name')
-              .eq('id', payload.new.user_id)
-              .single();
-
-            if (sender) {
-              const senderName = sender.display_name || sender.username || 'Someone';
-              
-              // Add to notifications
-              setNotifications(prev => [
-                ...prev,
-                {
-                  id: payload.new.id,
-                  type: 'friend_request',
-                  sender: senderName,
-                  senderId: sender.id,
-                  timestamp: Date.now()
-                }
-              ]);
-
-              // Play sound
-              soundManager.playSound('notification');
-            }
+          if (document.hidden) {
+            notificationService.notifyFriendRequest(senderName);
           }
         }
-      )
-      .subscribe((status) => {
-        console.log('[GameInviteNotification] Friend channel status:', status);
-      });
+      }
+    });
+
+    unsubscribeRef.current = [unsubInvite, unsubFriend];
 
     return () => {
       console.log('[GameInviteNotification] Cleaning up subscriptions');
-      inviteChannel.unsubscribe();
-      friendChannel.unsubscribe();
+      unsubscribeRef.current.forEach(unsub => unsub?.());
+      unsubscribeRef.current = [];
     };
   }, [userId]);
 
