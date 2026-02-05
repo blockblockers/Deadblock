@@ -175,6 +175,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [chatToast, setChatToast] = useState(null); // { senderName, message, timestamp }
   const [turnStartedAt, setTurnStartedAt] = useState(null);
   const [connected, setConnected] = useState(false); // Track realtime connection
+  const [winningMoveCells, setWinningMoveCells] = useState(null); // Gold/confetti cells for completed games
   
   // Drag state
   const [isDragging, setIsDragging] = useState(false);
@@ -623,6 +624,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             setPendingMove(null);
             setRotation(0);
             setFlipped(false);
+            setWinningMoveCells(null);
             return;
           }
           
@@ -890,19 +892,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           setIsMyTurn(false);
           setLoading(false);
           
-          // Fetch and animate the winning move
+          // Fetch and show the winning move with gold/confetti effect
           const { data: lastMove } = await gameSyncService.getLastMove(currentGameId);
           
-          if (lastMove && mountedRef.current && boardRef.current) {
-            const winnerNum = data.winner_id === data.player1_id ? 1 : 2;
-            
-            // Wait for board to render, then trigger animation
-            setTimeout(() => {
-              if (!mountedRef.current || !boardRef.current) return;
-              
-              const pieceCoords = pieces[lastMove.piece_type];
-              if (!pieceCoords) return;
-              
+          if (lastMove && mountedRef.current) {
+            const pieceCoords = pieces[lastMove.piece_type];
+            if (pieceCoords) {
               let coords = [...pieceCoords];
               const rot = lastMove.rotation || 0;
               const flip = lastMove.flipped || false;
@@ -922,10 +917,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 cell.col >= 0 && cell.col < BOARD_SIZE
               );
               
-              const boardRect = boardRef.current.getBoundingClientRect();
-              const cellSize = boardRect.width / BOARD_SIZE;
-              triggerAnimation(placedCells, winnerNum, boardRef, cellSize);
-            }, 500);
+              // Set gold/confetti cells instead of PlacementAnimation
+              setTimeout(() => {
+                if (mountedRef.current) {
+                  setWinningMoveCells(placedCells);
+                }
+              }, 500);
+            }
           }
           
           // v7.13: Show game over modal after 5 second delay for completed games
@@ -1622,6 +1620,49 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                     onComplete={clearAnimation}
                   />
                 )}
+                {/* Gold/Confetti Overlay for completed game winning move */}
+                {winningMoveCells && winningMoveCells.length > 0 && boardRef.current && (
+                  <div className="absolute inset-0 pointer-events-none z-10">
+                    {winningMoveCells.map((cell, idx) => {
+                      const boardRect = boardRef.current?.getBoundingClientRect();
+                      if (!boardRect) return null;
+                      const boardWidth = boardRect.width;
+                      // Match GameBoard grid: gap-0.5 sm:gap-1, p-1.5 sm:p-2
+                      const isSmall = window.innerWidth < 640;
+                      const gap = isSmall ? 2 : 4;
+                      const padding = isSmall ? 6 : 8;
+                      const cellSize = isSmall ? 36 : 48;
+                      const left = padding + cell.col * (cellSize + gap);
+                      const top = padding + cell.row * (cellSize + gap);
+                      
+                      return (
+                        <div
+                          key={`gold-${cell.row}-${cell.col}`}
+                          className="absolute rounded-md sm:rounded-lg overflow-hidden winning-move-gold"
+                          style={{
+                            left: `${left}px`,
+                            top: `${top}px`,
+                            width: `${cellSize}px`,
+                            height: `${cellSize}px`,
+                            background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
+                            boxShadow: '0 0 20px rgba(251,191,36,0.7), 0 0 40px rgba(251,191,36,0.3)',
+                            animation: 'winning-move-pop 0.5s ease-out both',
+                            animationDelay: `${idx * 0.06}s`,
+                          }}
+                        >
+                          {/* Gold shimmer */}
+                          <div className="absolute inset-0 opacity-50 bg-[repeating-linear-gradient(135deg,transparent,transparent_3px,rgba(255,255,255,0.3)_3px,rgba(255,255,255,0.3)_5px)] animate-gold-shimmer-online" />
+                          {/* Confetti particles */}
+                          <div className="absolute w-1 h-1 bg-yellow-300 rounded-full animate-confetti-online-1" style={{ left: '20%', top: '-10%' }} />
+                          <div className="absolute w-1.5 h-1 bg-amber-400 rounded-sm animate-confetti-online-2" style={{ left: '60%', top: '-10%' }} />
+                          <div className="absolute w-1 h-1.5 bg-yellow-200 rounded-sm animate-confetti-online-3" style={{ left: '40%', top: '-10%' }} />
+                          <div className="absolute w-1 h-1 bg-orange-400 rounded-full animate-confetti-online-4" style={{ left: '80%', top: '-10%' }} />
+                          <div className="absolute w-1.5 h-1 bg-yellow-500 rounded-sm animate-confetti-online-5" style={{ left: '10%', top: '-10%' }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1990,6 +2031,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 setPendingMove(null);
                 setRotation(0);
                 setFlipped(false);
+                setWinningMoveCells(null);
                 setGame(null);
                 setLoading(true);
                 
@@ -2029,6 +2071,62 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`
         ) : null}
       />
+
+      {/* Gold confetti and shimmer animations for completed game winning move */}
+      {winningMoveCells && (
+        <style>{`
+          @keyframes winning-move-pop {
+            0% { transform: scale(0); opacity: 0; }
+            60% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+          @keyframes gold-shimmer-online {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 200% 200%; }
+          }
+          .animate-gold-shimmer-online {
+            background-size: 200% 200%;
+            animation: gold-shimmer-online 2s linear infinite;
+          }
+          @keyframes confetti-online-1 {
+            0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+            25% { transform: translate(3px, 8px) rotate(90deg); opacity: 1; }
+            50% { transform: translate(-2px, 16px) rotate(180deg); opacity: 0.8; }
+            75% { transform: translate(4px, 24px) rotate(270deg); opacity: 0.5; }
+            100% { transform: translate(1px, 32px) rotate(360deg); opacity: 0; }
+          }
+          @keyframes confetti-online-2 {
+            0% { transform: translate(0, 0) rotate(45deg); opacity: 1; }
+            25% { transform: translate(-4px, 10px) rotate(135deg); opacity: 1; }
+            50% { transform: translate(2px, 18px) rotate(225deg); opacity: 0.8; }
+            75% { transform: translate(-3px, 26px) rotate(315deg); opacity: 0.5; }
+            100% { transform: translate(0px, 34px) rotate(405deg); opacity: 0; }
+          }
+          @keyframes confetti-online-3 {
+            0% { transform: translate(0, 0) rotate(20deg); opacity: 1; }
+            30% { transform: translate(5px, 12px) rotate(120deg); opacity: 1; }
+            60% { transform: translate(-1px, 22px) rotate(240deg); opacity: 0.7; }
+            100% { transform: translate(3px, 36px) rotate(380deg); opacity: 0; }
+          }
+          @keyframes confetti-online-4 {
+            0% { transform: translate(0, 0) rotate(-10deg); opacity: 1; }
+            35% { transform: translate(-3px, 9px) rotate(80deg); opacity: 1; }
+            65% { transform: translate(4px, 20px) rotate(200deg); opacity: 0.6; }
+            100% { transform: translate(-2px, 30px) rotate(350deg); opacity: 0; }
+          }
+          @keyframes confetti-online-5 {
+            0% { transform: translate(0, 0) rotate(60deg); opacity: 1; }
+            20% { transform: translate(2px, 7px) rotate(140deg); opacity: 1; }
+            55% { transform: translate(-4px, 19px) rotate(260deg); opacity: 0.7; }
+            100% { transform: translate(1px, 33px) rotate(420deg); opacity: 0; }
+          }
+          .animate-confetti-online-1 { animation: confetti-online-1 1.8s ease-out infinite; animation-delay: 0s; }
+          .animate-confetti-online-2 { animation: confetti-online-2 2.1s ease-out infinite; animation-delay: 0.3s; }
+          .animate-confetti-online-3 { animation: confetti-online-3 1.9s ease-out infinite; animation-delay: 0.1s; }
+          .animate-confetti-online-4 { animation: confetti-online-4 2.3s ease-out infinite; animation-delay: 0.5s; }
+          .animate-confetti-online-5 { animation: confetti-online-5 2.0s ease-out infinite; animation-delay: 0.2s; }
+        `}</style>
+      )}
     </div>
   );
 };
