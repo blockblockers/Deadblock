@@ -195,6 +195,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
   const dismissedGameOverRef = useRef(false);
+  const viewingCompletedGameRef = useRef(false);  // v7.16: Prevents real-time handler from overriding 5s modal delay
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
@@ -609,6 +610,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             // Store new game ID and trigger navigation via state change
             setNewGameFromRematch(request.new_game_id);
             // Reset game state for new game
+            viewingCompletedGameRef.current = false;  // v7.16: Reset for new game
+            dismissedGameOverRef.current = false;     // v7.16: Reset for new game
             setCurrentGameId(request.new_game_id);
             setGame(null);
             setLoading(true);
@@ -792,7 +795,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      if (gameData.status === 'completed' && !showGameOver && !dismissedGameOverRef.current) {
+      // v7.16: Skip if we're deliberately viewing a completed game (5s delay in progress)
+      if (gameData.status === 'completed' && !showGameOver && !dismissedGameOverRef.current && !viewingCompletedGameRef.current) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -868,6 +872,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         // For completed games, we want to show the board first, then the modal
         // So we'll set the game state but NOT trigger game over yet
         if (isCompletedGame) {
+          // v7.16: Prevent real-time updates from showing modal prematurely
+          viewingCompletedGameRef.current = true;
+          
+          // v7.16: Mark as viewed so it moves from Active → Recent on next menu load
+          gameSyncService.markGameAsViewed(currentGameId);
+          
           // Set game result for later use
           const result = {
             isWin: iWon,
@@ -1048,6 +1058,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     return () => {
       mountedRef.current = false;
+      viewingCompletedGameRef.current = false;  // v7.16: Reset on unmount
       clearTimeout(loadingTimeout);
       if (subscription) {
         subscription.unsubscribe();
