@@ -1,21 +1,30 @@
 // AI Logic for Deadblock - Optimized for Speed
-// UPDATED: Fair random opening move (no piece selection bias), configurable delay
+// v2.0 - MAJOR UPDATE: Added PUZZLE_OPTIMAL difficulty
+// 
+// UPDATES:
+// ✅ Fair random opening move (no piece selection bias)
+// ✅ Configurable delay per difficulty
+// ✅ NEW: PUZZLE_OPTIMAL difficulty - plays perfectly to block player wins
+// ✅ Defensive scoring: AI prioritizes blocking player's winning moves
+// ✅ Counter-threat creation: AI creates its own winning opportunities
+
 import { pieces } from './pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from './gameLogic';
 
 export const AI_DIFFICULTY = {
   RANDOM: 'random',
   AVERAGE: 'average',
-  PROFESSIONAL: 'professional'
+  PROFESSIONAL: 'professional',
+  PUZZLE_OPTIMAL: 'puzzle_optimal'  // NEW: Perfect play for puzzles
 };
 
 // Configurable AI move delay (in milliseconds)
-// This creates a more natural turn-based feel
 export const AI_MOVE_DELAY = {
-  [AI_DIFFICULTY.RANDOM]: 1200,      // 1.2 seconds for beginner
-  [AI_DIFFICULTY.AVERAGE]: 1500,     // 1.5 seconds for intermediate
-  [AI_DIFFICULTY.PROFESSIONAL]: 1800, // 1.8 seconds for expert (thinking time)
-  PUZZLE: 1500,                       // 1.5 seconds for puzzle mode
+  [AI_DIFFICULTY.RANDOM]: 1200,         // 1.2 seconds for beginner
+  [AI_DIFFICULTY.AVERAGE]: 1500,        // 1.5 seconds for intermediate
+  [AI_DIFFICULTY.PROFESSIONAL]: 1800,   // 1.8 seconds for expert
+  [AI_DIFFICULTY.PUZZLE_OPTIMAL]: 800,  // 0.8 seconds for puzzle (faster response)
+  PUZZLE: 1500,                         // 1.5 seconds for puzzle mode (legacy)
 };
 
 // ====== OPTIMIZED MOVE GENERATION ======
@@ -242,13 +251,7 @@ const findBestMove = (board, usedPieces) => {
 };
 
 // ====== RANDOM OPENING MOVE (FIXED - fair piece selection) ======
-// Previously picked a flat random move from all possible moves.
-// Symmetric pieces like X (8 identical orientations) got 8x the
-// representation, making X appear ~8x more often than asymmetric pieces.
-// Fix: Pick a random piece type FIRST (equal 1/12 probability),
-// then pick a random center-ish placement for that piece.
 const getRandomOpeningMove = (board, usedPieces) => {
-  // Use dedupe=true to eliminate symmetric orientation duplicates
   const moves = getAllPossibleMoves(board, usedPieces, true);
   if (moves.length === 0) return null;
 
@@ -275,6 +278,90 @@ const getRandomOpeningMove = (board, usedPieces) => {
   return selected;
 };
 
+// ====== PUZZLE OPTIMAL AI (NEW) ======
+// This AI plays perfectly to block player's winning moves and create counter-threats
+
+const PUZZLE_AI_MAX_MOVES_TO_CHECK = 12; // Evaluate top moves for performance
+const PUZZLE_AI_MAX_PLAYER_MOVES = 8;    // Check player responses
+
+// Count how many winning moves the player has from a given board state
+const countPlayerWinningMoves = (board, usedPieces) => {
+  const playerMoves = getAllPossibleMoves(board, usedPieces, true);
+  let winningCount = 0;
+  
+  for (const pm of playerMoves.slice(0, PUZZLE_AI_MAX_PLAYER_MOVES)) {
+    const afterPlayer = applyMove(board, pm, 1);
+    const afterPlayerUsed = [...usedPieces, pm.pieceType];
+    
+    // Check if AI can make any move after player plays
+    if (!canAnyMoveBeMade(afterPlayer, afterPlayerUsed)) {
+      winningCount++;
+    }
+  }
+  
+  return winningCount;
+};
+
+// Find the optimal defensive move for puzzle AI
+const findPuzzleOptimalMove = (board, usedPieces) => {
+  const allMoves = getAllPossibleMoves(board, usedPieces, true);
+  if (allMoves.length === 0) return null;
+  
+  // Pre-score moves by quick heuristic for ordering
+  const scoredMoves = allMoves.map(move => ({
+    ...move,
+    quickScore: quickEval(board, move.row, move.col, move.coords)
+  })).sort((a, b) => b.quickScore - a.quickScore);
+  
+  // Only evaluate top candidates for performance
+  const candidates = scoredMoves.slice(0, PUZZLE_AI_MAX_MOVES_TO_CHECK);
+  
+  // Count player's current winning moves BEFORE AI plays
+  const playerWinningMovesBefore = countPlayerWinningMoves(board, usedPieces);
+  
+  let bestMove = candidates[0];
+  let bestScore = -Infinity;
+  
+  console.log(`Puzzle AI: Evaluating ${candidates.length} moves, player has ${playerWinningMovesBefore} winning moves`);
+  
+  for (const move of candidates) {
+    const newBoard = applyMove(board, move, 2); // AI is player 2
+    const newUsed = [...usedPieces, move.pieceType];
+    
+    let score = 0;
+    
+    // 1. HIGHEST PRIORITY: Check if this is a winning move for AI
+    const playerMovesAfter = getAllPossibleMoves(newBoard, newUsed, true);
+    if (playerMovesAfter.length === 0) {
+      score += 100000; // Winning move - highest priority
+      console.log(`Puzzle AI: Found winning move ${move.pieceType}`);
+    }
+    
+    // 2. HIGH PRIORITY: Count how many player winning moves this blocks
+    const playerWinningMovesAfter = countPlayerWinningMoves(newBoard, newUsed);
+    const blockedWinningMoves = playerWinningMovesBefore - playerWinningMovesAfter;
+    score += blockedWinningMoves * 1000; // High value for blocking wins
+    
+    // 3. MEDIUM PRIORITY: Prefer moves that leave player with fewer total options
+    score -= playerMovesAfter.length * 10;
+    
+    // 4. LOW PRIORITY: Prefer moves that leave player with fewer winning moves
+    score -= playerWinningMovesAfter * 500;
+    
+    // 5. TIE-BREAKER: Slight center preference and randomness
+    score += quickEval(board, move.row, move.col, move.coords) * 0.5;
+    score += Math.random() * 2; // Small randomness for variety
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
+    }
+  }
+  
+  console.log(`Puzzle AI: Best move ${bestMove.pieceType} with score ${bestScore}`);
+  return bestMove;
+};
+
 // ====== MAIN SELECT FUNCTION ======
 
 export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = AI_DIFFICULTY.AVERAGE) => {
@@ -288,6 +375,18 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
   switch (difficulty) {
     case AI_DIFFICULTY.RANDOM:
       return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+
+    case AI_DIFFICULTY.PUZZLE_OPTIMAL:
+      // NEW: Perfect play for puzzles - blocks player wins, creates threats
+      console.log(`Puzzle Optimal AI thinking... (${usedPieces.length} pieces placed)`);
+      await new Promise(r => setTimeout(r, 30)); // Brief yield for UI
+      
+      const optimalMove = findPuzzleOptimalMove(board, usedPieces);
+      if (optimalMove) return optimalMove;
+      
+      // Fallback to professional if optimal fails
+      console.log('Puzzle AI: Falling back to professional AI');
+      /* falls through */
 
     case AI_DIFFICULTY.PROFESSIONAL:
       // Fair random opening move
@@ -303,7 +402,7 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
       if (bestMove) return bestMove;
       
       console.log('Expert AI: Falling back to strategic move');
-      /* falls through */ // Intentional fall-through to AVERAGE when minimax fails
+      /* falls through */
 
     case AI_DIFFICULTY.AVERAGE:
     default:

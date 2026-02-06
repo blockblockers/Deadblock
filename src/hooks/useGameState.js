@@ -1,6 +1,7 @@
 // useGameState.js - Custom hook for managing local game state
-// v7.12: Added play streak update on game completion
+// v7.16: Use PUZZLE_OPTIMAL AI for puzzle mode - blocks player wins, creates counter-threats
 // v7.15.4: Use per-difficulty AI move delays from aiLogic
+// v7.12: Added play streak update on game completion
 // CRITICAL: This hook must export startNewGame, setGameMode, and all other functions App.jsx needs
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
@@ -231,7 +232,9 @@ export const useGameState = () => {
     await new Promise(resolve => setTimeout(resolve, moveDelay));
     
     try {
-      const move = await selectAIMove(board, boardPieces, usedPieces, aiDifficulty);
+      // v7.16: Use PUZZLE_OPTIMAL for puzzle mode - AI actively blocks player's winning moves
+      const difficulty = gameMode === 'puzzle' ? AI_DIFFICULTY.PUZZLE_OPTIMAL : aiDifficulty;
+      const move = await selectAIMove(board, boardPieces, usedPieces, difficulty);
       
       if (!move) {
         // AI can't move - player wins

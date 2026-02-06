@@ -1,8 +1,24 @@
-// Puzzle Generator - Play complete game, then back out N moves
-// This guarantees exactly N moves remain and they are playable
+// Puzzle Generator - Enhanced with Board Variety & Solution Uniqueness
+// v2.1 - TIMEOUT PROTECTION UPDATE
+// 
+// FIXES:
+// ✅ Pieces now spread across entire board (not clustered in center)
+// ✅ Zone-based scoring rotates preferred placement areas each move
+// ✅ Solution uniqueness validation - prefer puzzles with 1-3 winning paths
+// ✅ Opening moves forced to different quadrants for variety
+// ✅ Reduced adjacency bonus to prevent clustering
+// ✅ v2.1: Timeout protection prevents infinite loops (3s max)
+// ✅ v2.1: Expensive uniqueness check disabled by default for performance
 
 import { pieces } from './pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE, createEmptyBoard } from './gameLogic';
+
+// =====================================================
+// TIMEOUT PROTECTION - Prevents infinite loops on slow devices
+// =====================================================
+const PUZZLE_GENERATION_TIMEOUT_MS = 3000; // 3 seconds max per generation call
+const UNIQUENESS_CHECK_TIME_BUDGET_MS = 1500; // Only run expensive check if under this time
+const ENABLE_UNIQUENESS_CHECK = false; // Disabled by default for performance
 
 export const PUZZLE_DIFFICULTY = {
   EASY: 'easy',
@@ -106,7 +122,44 @@ const isTrapMove = (board, boardPieces, usedPieces, move) => {
   return false;
 };
 
-// Quick evaluation for move quality - prefers center positions
+// =====================================================
+// ZONE-BASED VARIETY SYSTEM (replaces center-biased quickEval)
+// =====================================================
+
+const ZONES = {
+  TOP_LEFT: (r, c) => (r < 4 && c < 4) ? 6 : 0,
+  TOP_RIGHT: (r, c) => (r < 4 && c >= 4) ? 6 : 0,
+  BOTTOM_LEFT: (r, c) => (r >= 4 && c < 4) ? 6 : 0,
+  BOTTOM_RIGHT: (r, c) => (r >= 4 && c >= 4) ? 6 : 0,
+  CENTER: (r, c) => (r >= 2 && r <= 5 && c >= 2 && c <= 5) ? 5 : 0,
+  EDGES: (r, c) => (r === 0 || r === 7 || c === 0 || c === 7) ? 4 : 0,
+  CORNERS: (r, c) => ((r <= 1 || r >= 6) && (c <= 1 || c >= 6)) ? 5 : 0,
+};
+
+const ZONE_ORDER = ['TOP_LEFT', 'BOTTOM_RIGHT', 'TOP_RIGHT', 'BOTTOM_LEFT', 'CORNERS', 'CENTER', 'EDGES'];
+
+// Get varied evaluation score based on move count (rotates through zones)
+const getVariedEval = (board, row, col, coords, moveCount) => {
+  // Rotate through different zone preferences based on move number
+  const preferredZoneName = ZONE_ORDER[moveCount % ZONE_ORDER.length];
+  const preferredZone = ZONES[preferredZoneName];
+  
+  let score = 0;
+  for (const [dx, dy] of coords) {
+    const r = row + dy;
+    const c = col + dx;
+    if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+      score += preferredZone(r, c);
+    }
+  }
+  
+  // Add high randomness for variety (more than before)
+  score += Math.random() * 15;
+  
+  return score;
+};
+
+// Legacy quickEval for backward compatibility (used in some places)
 const quickEval = (board, row, col, coords) => {
   let score = 0;
   for (const [dx, dy] of coords) {
@@ -117,47 +170,132 @@ const quickEval = (board, row, col, coords) => {
   return score;
 };
 
-// Select a strategic move (smarter than pure random, but fast)
-// Uses center-preference scoring + adjacency awareness instead of
-// expensive nested getAllValidMoves calls
-const selectStrategicMove = (board, usedPieces, isEarlyGame) => {
+// =====================================================
+// STRATEGIC MOVE SELECTION WITH VARIETY
+// =====================================================
+
+// Select a strategic move with zone-based variety
+const selectStrategicMove = (board, usedPieces, moveCount) => {
   const moves = getAllValidMoves(board, usedPieces);
   if (moves.length === 0) return null;
   
-  // Score every move by center proximity + board coverage
-  // This is O(moves) - fast enough for puzzle generation
+  // Score every move by zone preference + board coverage
   const scored = moves.map(m => {
-    let score = quickEval(board, m.row, m.col, m.coords);
+    let score = getVariedEval(board, m.row, m.col, m.coords, moveCount);
     
-    if (!isEarlyGame) {
-      // Mid/late game bonus: prefer moves adjacent to existing pieces
-      // (creates tighter, more strategic-looking boards)
+    // Light adjacency bonus after first few moves (reduced from 2 to 0.5)
+    if (moveCount >= 3) {
       let adjacencyBonus = 0;
       for (const [dx, dy] of m.coords) {
         const r = m.row + dy;
         const c = m.col + dx;
         // Check all 4 neighbors for occupied cells
-        if (r > 0 && board[r - 1][c]) adjacencyBonus += 2;
-        if (r < BOARD_SIZE - 1 && board[r + 1][c]) adjacencyBonus += 2;
-        if (c > 0 && board[r][c - 1]) adjacencyBonus += 2;
-        if (c < BOARD_SIZE - 1 && board[r][c + 1]) adjacencyBonus += 2;
+        if (r > 0 && board[r - 1][c]) adjacencyBonus += 0.5;
+        if (r < BOARD_SIZE - 1 && board[r + 1][c]) adjacencyBonus += 0.5;
+        if (c > 0 && board[r][c - 1]) adjacencyBonus += 0.5;
+        if (c < BOARD_SIZE - 1 && board[r][c + 1]) adjacencyBonus += 0.5;
       }
       score += adjacencyBonus;
     }
-    
-    // Add randomness to keep variety
-    score += Math.random() * (isEarlyGame ? 8 : 5);
     
     return { ...m, score };
   });
   
   scored.sort((a, b) => b.score - a.score);
-  const topN = isEarlyGame ? 3 : 2;
-  const topMoves = scored.slice(0, Math.min(topN, scored.length));
+  
+  // Pick from top 5 for more variety (increased from top 2-3)
+  const topMoves = scored.slice(0, Math.min(5, scored.length));
   return topMoves[Math.floor(Math.random() * topMoves.length)];
 };
 
-// Play a complete AI vs AI game using strategic moves, recording all states
+// Get opening move forced to specific quadrant for variety
+const getOpeningMove = (board, usedPieces, moveCount) => {
+  const moves = getAllValidMoves(board, usedPieces);
+  if (moves.length === 0) return null;
+  
+  // Force different quadrants for first 4 moves
+  const quadrantFilters = [
+    (r, c) => r < 3 && c < 3,       // Move 0: Top-left corner area
+    (r, c) => r >= 5 && c >= 5,     // Move 1: Bottom-right corner area
+    (r, c) => r < 3 && c >= 5,      // Move 2: Top-right corner area
+    (r, c) => r >= 5 && c < 3,      // Move 3: Bottom-left corner area
+  ];
+  
+  if (moveCount < quadrantFilters.length) {
+    const filter = quadrantFilters[moveCount];
+    const filtered = moves.filter(m => {
+      // Check if any cell of the piece is in preferred quadrant
+      return m.coords.some(([dx, dy]) => filter(m.row + dy, m.col + dx));
+    });
+    
+    if (filtered.length > 0) {
+      // Pick randomly from filtered moves
+      return filtered[Math.floor(Math.random() * filtered.length)];
+    }
+  }
+  
+  // Fallback to varied selection
+  return selectStrategicMove(board, usedPieces, moveCount);
+};
+
+// =====================================================
+// SOLUTION UNIQUENESS VALIDATION
+// =====================================================
+
+// Count winning paths from a puzzle state (limited depth for performance)
+const countWinningPaths = (board, boardPieces, usedPieces, movesRemaining, depth = 0) => {
+  // Performance limits
+  const MAX_DEPTH = 2;
+  const MAX_MOVES_TO_CHECK = 8;
+  
+  if (depth > MAX_DEPTH) return 0;
+  
+  const moves = getAllValidMoves(board, usedPieces);
+  if (moves.length === 0) return 0;
+  
+  let winningPaths = 0;
+  const movesToCheck = moves.slice(0, MAX_MOVES_TO_CHECK);
+  
+  for (const move of movesToCheck) {
+    const result = simulateMove(board, boardPieces, usedPieces, move, 1);
+    const opponentMoves = getAllValidMoves(result.board, result.usedPieces);
+    
+    if (opponentMoves.length === 0) {
+      // Immediate win
+      winningPaths++;
+    } else if (movesRemaining > 1 && depth < MAX_DEPTH) {
+      // Check if any path through opponent responses leads to win
+      const oppMovesToCheck = opponentMoves.slice(0, 3); // Limit opponent moves
+      for (const oppMove of oppMovesToCheck) {
+        const afterOpp = simulateMove(result.board, result.boardPieces, result.usedPieces, oppMove, 2);
+        winningPaths += countWinningPaths(
+          afterOpp.board, 
+          afterOpp.boardPieces, 
+          afterOpp.usedPieces, 
+          movesRemaining - 1,
+          depth + 1
+        );
+      }
+    }
+  }
+  
+  return winningPaths;
+};
+
+// Score puzzle by uniqueness (fewer winning paths = better)
+const getUniquenessScore = (winningPaths) => {
+  if (winningPaths === 1) return 100;  // Perfect: exactly one solution
+  if (winningPaths <= 3) return 80;    // Great: very few solutions
+  if (winningPaths <= 6) return 50;    // Good: limited solutions
+  if (winningPaths <= 10) return 30;   // OK: several solutions
+  return 10;                            // Many solutions
+};
+
+// =====================================================
+// GAME SIMULATION FOR PUZZLE GENERATION
+// =====================================================
+
+// Play a complete AI vs AI game using varied strategic moves
 const playCompleteGame = () => {
   const board = createEmptyBoard();
   const boardPieces = createEmptyBoard();
@@ -167,8 +305,6 @@ const playCompleteGame = () => {
   let moveCount = 0;
   
   while (true) {
-    const isEarlyGame = moveCount < 4;
-    
     // Save state BEFORE this move
     history.push({
       board: board.map(r => [...r]),
@@ -176,8 +312,10 @@ const playCompleteGame = () => {
       usedPieces: [...usedPieces]
     });
     
-    // Use strategic move selection (smarter than pure random)
-    const move = selectStrategicMove(board, usedPieces, isEarlyGame);
+    // Use opening move for first 4 moves (quadrant-based), then strategic
+    const move = moveCount < 4 
+      ? getOpeningMove(board, usedPieces, moveCount)
+      : selectStrategicMove(board, usedPieces, moveCount);
     
     if (!move) break;
     
@@ -196,10 +334,24 @@ const playCompleteGame = () => {
   };
 };
 
+// =====================================================
+// PUZZLE GENERATORS
+// =====================================================
+
 // Generate an EASY puzzle (1 move) with trap possibilities
 const generateEasyPuzzleWithTraps = (onProgress = null) => {
+  let bestPuzzle = null;
+  let bestScore = 0;
+  const startTime = Date.now();
+  
   // Try multiple games to find one with good trap conditions
   for (let attempt = 0; attempt < 50; attempt++) {
+    // Timeout protection
+    if (Date.now() - startTime > PUZZLE_GENERATION_TIMEOUT_MS) {
+      console.warn(`[PuzzleGen] EASY timeout after ${attempt} attempts, returning best found`);
+      break;
+    }
+    
     if (onProgress) onProgress(attempt + 1, 50);
     
     const game = playCompleteGame();
@@ -231,19 +383,35 @@ const generateEasyPuzzleWithTraps = (onProgress = null) => {
       }
     }
     
-    // For a good EASY puzzle, we want:
-    // - At least 1 winning move
-    // - At least 1 trap move (wrong choice that looks valid)
-    // - Multiple different pieces that can be played
+    // Score this puzzle
     const winningPieces = getUniquePieceOptions(winningMoves);
     const trapPieces = getUniquePieceOptions(trapMoves);
     const allPieces = getUniquePieceOptions(allMoves);
     
-    // We want at least 2 different pieces playable, with at least one trap
-    if (winningMoves.length > 0 && trapMoves.length > 0 && allPieces.length >= 2) {
-      console.log(`EASY puzzle generated: ${winningPieces.length} winning pieces, ${trapPieces.length} trap pieces, ${allPieces.length} total options`);
-      
-      return {
+    // Calculate puzzle quality score
+    let puzzleScore = 0;
+    
+    // Must have at least 1 winning move
+    if (winningMoves.length === 0) continue;
+    
+    // Prefer puzzles with traps (makes it challenging)
+    if (trapMoves.length > 0) puzzleScore += 30;
+    
+    // Prefer puzzles with fewer winning pieces (harder to guess)
+    if (winningPieces.length === 1) puzzleScore += 40;
+    else if (winningPieces.length === 2) puzzleScore += 20;
+    
+    // Prefer puzzles with multiple piece options (interesting choices)
+    if (allPieces.length >= 3) puzzleScore += 20;
+    
+    // Prefer puzzles with board variety (pieces not all clustered)
+    const boardSpread = calculateBoardSpread(puzzleState.boardPieces);
+    puzzleScore += boardSpread;
+    
+    // Check if this is the best puzzle so far
+    if (puzzleScore > bestScore) {
+      bestScore = puzzleScore;
+      bestPuzzle = {
         id: `puzzle-easy-${Date.now()}`,
         name: 'Easy Puzzle',
         difficulty: PUZZLE_DIFFICULTY.EASY,
@@ -251,15 +419,54 @@ const generateEasyPuzzleWithTraps = (onProgress = null) => {
         boardState: boardToString(puzzleState.boardPieces),
         usedPieces: [...puzzleState.usedPieces],
         movesRemaining: 1,
-        // Store hint data (not shown to player but useful for debugging)
         _winningPieces: winningPieces,
-        _trapPieces: trapPieces
+        _trapPieces: trapPieces,
+        _score: puzzleScore
       };
+      
+      // If we found a great puzzle, use it
+      if (puzzleScore >= 80) {
+        console.log(`EASY puzzle generated (score ${puzzleScore}): ${winningPieces.length} winning pieces, ${trapPieces.length} trap pieces`);
+        return bestPuzzle;
+      }
     }
   }
   
-  console.error('Failed to generate EASY puzzle with traps after 50 attempts');
+  if (bestPuzzle) {
+    console.log(`EASY puzzle generated (score ${bestScore}): best found after 50 attempts`);
+    return bestPuzzle;
+  }
+  
+  console.error('Failed to generate EASY puzzle after 50 attempts');
   return null;
+};
+
+// Calculate how spread out pieces are on the board (higher = more variety)
+const calculateBoardSpread = (boardPieces) => {
+  let minRow = 7, maxRow = 0, minCol = 7, maxCol = 0;
+  let pieceCount = 0;
+  
+  for (let r = 0; r < BOARD_SIZE; r++) {
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (boardPieces[r][c]) {
+        pieceCount++;
+        minRow = Math.min(minRow, r);
+        maxRow = Math.max(maxRow, r);
+        minCol = Math.min(minCol, c);
+        maxCol = Math.max(maxCol, c);
+      }
+    }
+  }
+  
+  if (pieceCount === 0) return 0;
+  
+  // Calculate spread as percentage of board used
+  const rowSpread = maxRow - minRow + 1;
+  const colSpread = maxCol - minCol + 1;
+  const areaUsed = rowSpread * colSpread;
+  const spreadScore = (areaUsed / 64) * 30; // Max 30 points for full board spread
+  
+  return Math.round(spreadScore);
 };
 
 // Generate puzzle by playing game then backing out N moves
@@ -270,9 +477,18 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
   }
   
   const movesToBackOut = getMovesForDifficulty(difficulty);
+  let bestPuzzle = null;
+  let bestUniquenessScore = 0;
+  const startTime = Date.now();
   
   // Try multiple games to find one with enough moves
   for (let attempt = 0; attempt < 30; attempt++) {
+    // Timeout protection
+    if (Date.now() - startTime > PUZZLE_GENERATION_TIMEOUT_MS) {
+      console.warn(`[PuzzleGen] ${difficulty} timeout after ${attempt} attempts, returning best found`);
+      break;
+    }
+    
     if (onProgress) onProgress(attempt + 1, 30);
     
     const game = playCompleteGame();
@@ -295,8 +511,30 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
     // Verify moves are still possible from this state
     const remainingMoves = getAllValidMoves(puzzleState.board, puzzleState.usedPieces);
     
-    if (remainingMoves.length > 0) {
-      console.log(`Puzzle generated (${difficulty}): ${puzzleState.usedPieces.length} pieces placed, exactly ${movesToBackOut} moves to play`);
+    if (remainingMoves.length === 0) continue;
+    
+    // Calculate solution uniqueness (only if enabled and within time budget)
+    let winningPaths = 0;
+    let uniquenessScore = 50; // Default mid-score when check is skipped
+    const elapsedTime = Date.now() - startTime;
+    
+    if (ENABLE_UNIQUENESS_CHECK && elapsedTime < UNIQUENESS_CHECK_TIME_BUDGET_MS) {
+      winningPaths = countWinningPaths(
+        puzzleState.board, 
+        puzzleState.boardPieces, 
+        puzzleState.usedPieces, 
+        movesToBackOut
+      );
+      uniquenessScore = getUniquenessScore(winningPaths);
+    }
+    
+    // Calculate board spread
+    const spreadScore = calculateBoardSpread(puzzleState.boardPieces);
+    const totalScore = uniquenessScore + spreadScore;
+    
+    // Track best puzzle
+    if (totalScore > bestUniquenessScore) {
+      bestUniquenessScore = totalScore;
       
       const difficultyNames = {
         [PUZZLE_DIFFICULTY.EASY]: 'Easy',
@@ -304,16 +542,30 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
         [PUZZLE_DIFFICULTY.HARD]: 'Hard'
       };
       
-      return {
+      bestPuzzle = {
         id: `puzzle-${difficulty}-${Date.now()}`,
         name: `${difficultyNames[difficulty]} Puzzle`,
         difficulty: difficulty,
         description: `${movesToBackOut} moves remaining`,
         boardState: boardToString(puzzleState.boardPieces),
         usedPieces: [...puzzleState.usedPieces],
-        movesRemaining: movesToBackOut
+        movesRemaining: movesToBackOut,
+        _winningPaths: winningPaths,
+        _uniquenessScore: uniquenessScore,
+        _spreadScore: spreadScore
       };
+      
+      // If we found a great puzzle (unique solution + good spread), use it
+      if (uniquenessScore >= 80 && spreadScore >= 15) {
+        console.log(`Puzzle generated (${difficulty}): ${winningPaths} winning paths, spread ${spreadScore}`);
+        return bestPuzzle;
+      }
     }
+  }
+  
+  if (bestPuzzle) {
+    console.log(`Puzzle generated (${difficulty}): best found with score ${bestUniquenessScore}`);
+    return bestPuzzle;
   }
   
   console.error(`Failed to generate ${difficulty} puzzle after 30 attempts`);
@@ -325,8 +577,15 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
 export const generateSpeedPuzzle = () => {
   let bestPuzzle = null;
   let bestWinRatio = 0;
+  const startTime = Date.now();
   
   for (let attempt = 0; attempt < 50; attempt++) {
+    // Timeout protection
+    if (Date.now() - startTime > PUZZLE_GENERATION_TIMEOUT_MS) {
+      console.warn(`[PuzzleGen] Speed puzzle timeout after ${attempt} attempts, returning best found`);
+      break;
+    }
+    
     const game = playCompleteGame();
     
     // Need at least 2 moves (so we can back out 1)
@@ -346,7 +605,6 @@ export const generateSpeedPuzzle = () => {
     if (allMoves.length === 0) continue;
     
     // Check each possible move to see if any leads to a winning state
-    // (i.e., after placing the piece, no other piece can be placed)
     const winningMoves = [];
     
     for (const move of allMoves) {
@@ -372,7 +630,6 @@ export const generateSpeedPuzzle = () => {
       const winRatio = winningMoves.length / allMoves.length;
       
       // Ideal puzzle: ALL moves are winning (100% win ratio)
-      // This means any valid placement wins - very intuitive!
       if (winRatio >= 1.0) {
         console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves (PERFECT - 100%)`);
         return {
@@ -389,7 +646,6 @@ export const generateSpeedPuzzle = () => {
       }
       
       // Track the best puzzle we've found so far
-      // Prefer higher win ratios (more intuitive puzzles)
       if (winRatio > bestWinRatio) {
         bestWinRatio = winRatio;
         bestPuzzle = {
@@ -472,7 +728,7 @@ const createSeededRandom = (seed) => {
   };
 };
 
-// Seeded version of playCompleteGame with strategic moves
+// Seeded version of playCompleteGame with zone-based variety
 const playCompleteGameSeeded = (random) => {
   let board = createEmptyBoard();
   let boardPieces = createEmptyBoard();
@@ -493,36 +749,61 @@ const playCompleteGameSeeded = (random) => {
       player: currentPlayer
     });
     
-    // Use strategic selection with seeded randomness
     let move;
-    const isEarlyGame = moveCount < 4;
     
-    // Score by center proximity + adjacency (fast, no nested getAllValidMoves)
-    const scored = moves.map(m => {
-      let score = quickEval(board, m.row, m.col, m.coords);
+    // Opening moves: force different quadrants
+    if (moveCount < 4) {
+      const quadrantFilters = [
+        (r, c) => r < 3 && c < 3,
+        (r, c) => r >= 5 && c >= 5,
+        (r, c) => r < 3 && c >= 5,
+        (r, c) => r >= 5 && c < 3,
+      ];
+      const filter = quadrantFilters[moveCount];
+      const filtered = moves.filter(m => 
+        m.coords.some(([dx, dy]) => filter(m.row + dy, m.col + dx))
+      );
       
-      if (!isEarlyGame) {
-        // Adjacency bonus for tighter boards
-        let adjacencyBonus = 0;
+      if (filtered.length > 0) {
+        move = filtered[Math.floor(random() * filtered.length)];
+      }
+    }
+    
+    // Fallback: zone-based selection with seeded randomness
+    if (!move) {
+      const preferredZoneName = ZONE_ORDER[moveCount % ZONE_ORDER.length];
+      const preferredZone = ZONES[preferredZoneName];
+      
+      const scored = moves.map(m => {
+        let score = 0;
         for (const [dx, dy] of m.coords) {
           const r = m.row + dy;
           const c = m.col + dx;
-          if (r > 0 && board[r - 1][c]) adjacencyBonus += 2;
-          if (r < BOARD_SIZE - 1 && board[r + 1][c]) adjacencyBonus += 2;
-          if (c > 0 && board[r][c - 1]) adjacencyBonus += 2;
-          if (c < BOARD_SIZE - 1 && board[r][c + 1]) adjacencyBonus += 2;
+          if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+            score += preferredZone(r, c);
+          }
         }
-        score += adjacencyBonus;
-      }
+        
+        // Light adjacency bonus
+        if (moveCount >= 3) {
+          for (const [dx, dy] of m.coords) {
+            const r = m.row + dy;
+            const c = m.col + dx;
+            if (r > 0 && board[r - 1][c]) score += 0.5;
+            if (r < BOARD_SIZE - 1 && board[r + 1][c]) score += 0.5;
+            if (c > 0 && board[r][c - 1]) score += 0.5;
+            if (c < BOARD_SIZE - 1 && board[r][c + 1]) score += 0.5;
+          }
+        }
+        
+        score += random() * 15;
+        return { ...m, score };
+      });
       
-      score += random() * (isEarlyGame ? 8 : 5);
-      return { ...m, score };
-    });
-    
-    scored.sort((a, b) => b.score - a.score);
-    const topN = isEarlyGame ? 3 : 2;
-    const topMoves = scored.slice(0, Math.min(topN, scored.length));
-    move = topMoves[Math.floor(random() * topMoves.length)];
+      scored.sort((a, b) => b.score - a.score);
+      const topMoves = scored.slice(0, Math.min(5, scored.length));
+      move = topMoves[Math.floor(random() * topMoves.length)];
+    }
     
     // Apply move
     for (const [dx, dy] of move.coords) {
@@ -546,9 +827,16 @@ const playCompleteGameSeeded = (random) => {
 const generateSeededPuzzle = (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
   const random = createSeededRandom(seed);
   const movesToBackOut = getMovesForDifficulty(difficulty);
+  const startTime = Date.now();
   
   // Try multiple games with the seeded RNG
   for (let attempt = 0; attempt < 30; attempt++) {
+    // Timeout protection
+    if (Date.now() - startTime > PUZZLE_GENERATION_TIMEOUT_MS) {
+      console.warn(`[PuzzleGen] Seeded puzzle timeout after ${attempt} attempts`);
+      break;
+    }
+    
     const game = playCompleteGameSeeded(random);
     
     // Need at least N moves to back out
