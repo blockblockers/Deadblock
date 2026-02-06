@@ -1,9 +1,9 @@
 // PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, and achievements
-// v7.12: Added NEW achievements indicator badge (similar to friend requests)
+// v7.17: Match OnlineMenu profile display style - inline stats with leaderboard rank and achievement count
 // Place in src/components/PlayerProfileCard.jsx
 
 import { useState, useEffect, useCallback } from 'react';
-import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle } from 'lucide-react';
+import { ChevronRight, WifiOff, HelpCircle, Trophy, X, Loader, LogIn, Check, AlertCircle, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
 import { supabase } from '../utils/supabase';
@@ -203,6 +203,7 @@ const UsernameEditModal = ({ currentUsername, onSave, onClose }) => {
 
 /**
  * PlayerProfileCard - Shows player profile in main menu
+ * v7.17: Updated to match OnlineMenu profile display style
  */
 const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   const { user, profile, isAuthenticated, updateProfile, refreshProfile, loading: authLoading } = useAuth();
@@ -212,6 +213,7 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   const [achievementCount, setAchievementCount] = useState({ unlocked: 0, total: 0 });
   const [newAchievementsCount, setNewAchievementsCount] = useState(0);
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
+  const [leaderboardRank, setLeaderboardRank] = useState(null);
   
   // Use cached profile as fallback
   const [localCachedProfile] = useState(() => getCachedProfileSync());
@@ -228,6 +230,29 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     const b = parseInt(hex.slice(5, 7), 16);
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
+  
+  // Fetch leaderboard rank
+  useEffect(() => {
+    const fetchLeaderboardRank = async () => {
+      if (!effectiveProfile?.id) return;
+      
+      try {
+        // Count players with higher rating
+        const { count, error } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .gt('rating', effectiveProfile.rating || 1000);
+        
+        if (!error && count !== null) {
+          setLeaderboardRank(count + 1);
+        }
+      } catch (err) {
+        console.warn('[PlayerProfileCard] Failed to fetch leaderboard rank:', err);
+      }
+    };
+    
+    fetchLeaderboardRank();
+  }, [effectiveProfile?.id, effectiveProfile?.rating]);
   
   // Load achievement counts and check for new ones
   useEffect(() => {
@@ -286,7 +311,8 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   }, [effectiveProfile?.id]);
   
   // Mark achievements as viewed when modal opens
-  const handleOpenAchievements = () => {
+  const handleOpenAchievements = (e) => {
+    e?.stopPropagation();
     setShowAchievements(true);
     
     // Mark as viewed
@@ -364,8 +390,8 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     );
   }
   
-  // Authenticated view with profile
-  const displayName = effectiveProfile.display_name || effectiveProfile.username || 'Player';
+  // Authenticated view with profile - UPDATED to match OnlineMenu style
+  const displayName = effectiveProfile.username || effectiveProfile.display_name || 'Player';
   const glowRgba = {
     '15': hexToRgba(glowColor, 0.15),
     '30': hexToRgba(glowColor, 0.3),
@@ -377,7 +403,7 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     <>
       <button
         onClick={onClick}
-        className="w-full flex items-center gap-3 p-3 transition-all group relative"
+        className="w-full flex items-center gap-3 p-3 transition-all group"
         style={{
           background: `linear-gradient(135deg, ${glowRgba['15']} 0%, rgba(15, 23, 42, 0.95) 100%)`,
           border: `2px solid ${glowRgba['40']}`,
@@ -385,45 +411,6 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           boxShadow: `0 0 25px ${glowRgba['15']}, 0 4px 15px rgba(0,0,0,0.3)`
         }}
       >
-        {/* Action buttons (achievements, edit) */}
-        <div className="absolute top-2 right-2 flex gap-1 z-10">
-          {/* Achievements button with NEW indicator */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenAchievements();
-            }}
-            className="relative p-1.5 rounded-lg transition-all hover:scale-110"
-            style={{ 
-              background: newAchievementsCount > 0 
-                ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.3), rgba(245, 158, 11, 0.2))'
-                : 'linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.1))',
-              border: newAchievementsCount > 0 
-                ? '1px solid rgba(251, 191, 36, 0.5)'
-                : '1px solid rgba(251, 191, 36, 0.3)'
-            }}
-            title={`Achievements (${achievementCount.unlocked}/${achievementCount.total})`}
-          >
-            <Trophy 
-              size={14} 
-              className="text-amber-400" 
-            />
-            {/* NEW badge */}
-            {newAchievementsCount > 0 && (
-              <span 
-                className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 flex items-center justify-center text-[10px] font-bold rounded-full animate-pulse"
-                style={{
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  color: 'white',
-                  boxShadow: '0 0 8px rgba(245, 158, 11, 0.6)'
-                }}
-              >
-                {newAchievementsCount > 9 ? '9+' : newAchievementsCount}
-              </span>
-            )}
-          </button>
-        </div>
-        
         {/* Tier icon */}
         <div 
           className="relative w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0"
@@ -436,15 +423,16 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           {rankInfo && <TierIcon shape={rankInfo.shape} glowColor={glowColor} size="medium" />}
         </div>
         
-        {/* Player info */}
-        <div className="flex-1 text-left min-w-0 pr-16">
+        {/* Player info - matching OnlineMenu style */}
+        <div className="flex-1 text-left min-w-0">
           <div 
             className="font-black text-base tracking-wide truncate"
             style={{ color: '#f1f5f9', textShadow: `0 0 12px ${glowRgba['40']}` }}
           >
             {displayName}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Tier name */}
             {rankInfo && (
               <span 
                 className="text-xs font-bold uppercase tracking-wider"
@@ -453,8 +441,37 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
                 {rankInfo.name}
               </span>
             )}
+            {/* ELO Rating */}
             <span style={{ color: '#94a3b8', fontSize: '12px', fontWeight: '500' }}>
               {effectiveProfile.rating || 1000} ELO
+            </span>
+            {/* Leaderboard Rank - matching OnlineMenu */}
+            {leaderboardRank && (
+              <span className="flex items-center gap-0.5 text-cyan-400 text-[11px] font-semibold">
+                <BarChart3 size={10} />
+                #{leaderboardRank}
+              </span>
+            )}
+            {/* Achievement Count - clickable, matching OnlineMenu */}
+            <span 
+              onClick={handleOpenAchievements}
+              className="flex items-center gap-0.5 text-amber-400 text-[11px] font-semibold hover:text-amber-300 transition-colors cursor-pointer relative"
+            >
+              <Trophy size={10} />
+              {achievementCount.unlocked}/{achievementCount.total}
+              {/* NEW badge for unviewed achievements */}
+              {newAchievementsCount > 0 && (
+                <span 
+                  className="absolute -top-2 -right-3 min-w-[14px] h-3.5 px-0.5 flex items-center justify-center text-[8px] font-bold rounded-full animate-pulse"
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                    color: 'white',
+                    boxShadow: '0 0 6px rgba(245, 158, 11, 0.6)'
+                  }}
+                >
+                  {newAchievementsCount > 9 ? '!' : newAchievementsCount}
+                </span>
+              )}
             </span>
           </div>
         </div>
