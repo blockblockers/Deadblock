@@ -1,11 +1,13 @@
 // SpectatorView.jsx - Watch live games
-// v7.7: Added game switching for multiple active games (when watching a friend)
+// v7.17: Added Back button and Deadblock title to header
 // v7.10: Added iOS scroll fixes for games list
+// v7.7: Added game switching for multiple active games (when watching a friend)
 import { useState, useEffect, useRef } from 'react';
-import { Eye, X, Users, Clock, Trophy, Radio, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, X, Users, Clock, Trophy, Radio, AlertTriangle, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { spectatorService } from '../services/spectatorService';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
+import NeonTitle from './NeonTitle';
 import GameBoard from './GameBoard';
 import { BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
@@ -176,30 +178,41 @@ const SpectatorView = ({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-950 flex flex-col">
-      {/* Header */}
+      {/* Header with Back Button and Deadblock Title */}
       <div className="bg-slate-900 border-b border-amber-500/30 p-4">
-        <div className="flex items-center justify-between max-w-md mx-auto">
+        <div className="flex items-center justify-between max-w-md mx-auto relative">
+          {/* Back Button */}
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white transition-colors"
+            className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
           >
-            <X size={24} />
+            <ArrowLeft size={20} />
+            <span className="text-sm">Back</span>
           </button>
           
-          <div className="flex items-center gap-2 text-amber-400">
-            <Eye size={20} />
-            <span className="font-medium">Spectating</span>
-            {!isGameOver && (
-              <span className="flex items-center gap-1 text-xs text-red-400 animate-pulse">
-                <Radio size={12} /> LIVE
-              </span>
-            )}
+          {/* Centered Deadblock Title */}
+          <div className="absolute left-1/2 transform -translate-x-1/2">
+            <NeonTitle text="DEADBLOCK" size="small" />
           </div>
           
+          {/* Spectator Count */}
           <div className="flex items-center gap-1 text-slate-500 text-sm">
             <Users size={16} />
             <span>{spectators.length}</span>
           </div>
+        </div>
+      </div>
+      
+      {/* Live Indicator Bar */}
+      <div className="bg-slate-800/50 border-b border-slate-700/50 py-2 px-4">
+        <div className="max-w-md mx-auto flex items-center justify-center gap-2">
+          <Eye size={16} className="text-amber-400" />
+          <span className="text-amber-400 font-medium text-sm">Spectating</span>
+          {!isGameOver && (
+            <span className="flex items-center gap-1 text-xs text-red-400 animate-pulse">
+              <Radio size={12} /> LIVE
+            </span>
+          )}
         </div>
       </div>
 

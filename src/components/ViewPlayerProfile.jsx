@@ -1,8 +1,9 @@
 // ViewPlayerProfile - View another player's profile
+// v7.17: Enhanced scroll behavior with shadow indicators
 // v7.12: Added full stats display (AI wins, puzzle stats) for all players
 // v7.12: Added player_stats loading from profiles table
 // v7.12: Final Board View now fetches moves for full replay functionality
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
@@ -141,6 +142,11 @@ const ViewPlayerProfile = ({
   const [loadingMoves, setLoadingMoves] = useState(false);
   const [gameMoves, setGameMoves] = useState([]);
   const [playerStats, setPlayerStats] = useState(null); // v7.12: Full stats from profiles table
+  
+  // v7.17: Enhanced scroll state
+  const scrollContainerRef = useRef(null);
+  const touchStartRef = useRef({ y: 0, scrollTop: 0 });
+  const [scrollState, setScrollState] = useState({ atTop: true, atBottom: false });
 
   // Use calculated stats from actual games (more accurate than profile.games_won)
   const displayWins = calculatedStats.totalGames > 0 ? calculatedStats.wins : (profile?.games_won || 0);
@@ -150,6 +156,49 @@ const ViewPlayerProfile = ({
   // Get rank info
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
   const glowColor = rankInfo?.glowColor || '#22d3ee';
+  
+  // v7.17: Enhanced scroll handlers
+  const handleScroll = useCallback((e) => {
+    const container = e.target;
+    const atTop = container.scrollTop <= 5;
+    const atBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 5;
+    
+    setScrollState(prev => {
+      if (prev.atTop !== atTop || prev.atBottom !== atBottom) {
+        return { atTop, atBottom };
+      }
+      return prev;
+    });
+  }, []);
+  
+  const handleTouchStart = useCallback((e) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    
+    touchStartRef.current = {
+      y: e.touches[0].clientY,
+      scrollTop: container.scrollTop
+    };
+  }, []);
+  
+  const handleTouchMove = useCallback((e) => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    
+    const touchY = e.touches[0].clientY;
+    const deltaY = touchY - touchStartRef.current.y;
+    
+    // At top and pulling down - prevent pull-to-refresh
+    if (container.scrollTop <= 0 && deltaY > 0) {
+      e.preventDefault();
+    }
+    
+    // At bottom and pulling up - prevent overscroll
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 1;
+    if (isAtBottom && deltaY < 0) {
+      e.preventDefault();
+    }
+  }, []);
 
   useEffect(() => {
     if (playerId) {
@@ -158,6 +207,7 @@ const ViewPlayerProfile = ({
       setRecentGames([]);
       setHeadToHead(null);
       setPlayerStats(null);
+      setScrollState({ atTop: true, atBottom: false });
       loadPlayerData();
     }
   }, [playerId]);
@@ -407,304 +457,335 @@ const ViewPlayerProfile = ({
             </button>
           </div>
           
-          {/* Content - Scrollable */}
-          <div 
-            className="p-4 overflow-y-auto flex-1 overscroll-contain"
-            style={{ 
-              WebkitOverflowScrolling: 'touch',
-              overscrollBehavior: 'contain',
-              touchAction: 'pan-y',
-              msOverflowStyle: '-ms-autohiding-scrollbar',
-              transform: 'translateZ(0)',
-              willChange: 'scroll-position',
-            }}
-            onTouchStart={(e) => {
-              // Allow scroll to start immediately
-              e.currentTarget.style.scrollBehavior = 'auto';
-            }}
-            onTouchEnd={(e) => {
-              e.currentTarget.style.scrollBehavior = 'smooth';
-            }}
-          >
-            {loading ? (
-              <div className="text-center py-8">
-                <Loader size={32} className="animate-spin mx-auto text-cyan-400 mb-3" />
-                <p className="text-slate-400">Loading profile...</p>
-              </div>
-            ) : !profile ? (
-              <div className="text-center py-8">
-                <p className="text-slate-400">Player not found</p>
-              </div>
-            ) : (
-              <>
-                {/* Profile Header */}
-                <div className="flex items-center gap-4 mb-4">
-                  <div 
-                    className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
-                    style={{ 
-                      background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)}, ${hexToRgba(glowColor, 0.1)})`,
-                      border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
-                      color: glowColor
-                    }}
-                  >
-                    {(profile.username || profile.display_name)?.[0]?.toUpperCase() || '?'}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-white">
-                      {profile.username || profile.display_name || 'Unknown'}
-                    </h3>
-                    {rankInfo && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <TierIcon shape={rankInfo.shape} glowColor={glowColor} size="small" />
-                        <span style={{ color: glowColor }} className="font-bold text-sm">
-                          {rankInfo.name}
-                        </span>
-                        <span className="text-slate-500 text-sm">
-                          {profile.rating || 1000} ELO
-                        </span>
-                      </div>
-                    )}
-                  </div>
+          {/* Content - Enhanced Scrollable Container */}
+          <div className="flex-1 relative" style={{ minHeight: 0 }}>
+            {/* Top scroll shadow indicator */}
+            <div 
+              className="absolute top-0 left-0 right-0 h-4 z-10 pointer-events-none transition-opacity duration-200"
+              style={{
+                background: 'linear-gradient(to bottom, rgba(15, 23, 42, 0.95), transparent)',
+                opacity: scrollState.atTop ? 0 : 1
+              }}
+            />
+            
+            {/* Scrollable content */}
+            <div 
+              ref={scrollContainerRef}
+              className="h-full p-4 overscroll-contain"
+              onScroll={handleScroll}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              style={{ 
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
+                touchAction: 'pan-y',
+                transform: 'translateZ(0)',
+                willChange: 'scroll-position',
+                paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+              }}
+            >
+              {loading ? (
+                <div className="text-center py-8">
+                  <Loader size={32} className="animate-spin mx-auto text-cyan-400 mb-3" />
+                  <p className="text-slate-400">Loading profile...</p>
                 </div>
-
-                {/* Online Stats */}
-                <div 
-                  className="rounded-xl p-4 mb-4"
-                  style={{ 
-                    backgroundColor: getTierBackground(glowColor),
-                    border: `1px solid ${hexToRgba(glowColor, 0.3)}`
-                  }}
-                >
-                  <div className="flex items-center gap-2 mb-3">
-                    <Swords size={16} style={{ color: glowColor }} />
-                    <span className="font-bold text-white">Online Stats</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-white">{displayGames}</div>
-                      <div className="text-xs text-slate-400">Games</div>
+              ) : !profile ? (
+                <div className="text-center py-8">
+                  <p className="text-slate-400">Player not found</p>
+                </div>
+              ) : (
+                <>
+                  {/* Profile Header */}
+                  <div className="flex items-center gap-4 mb-4">
+                    <div 
+                      className="w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold"
+                      style={{ 
+                        background: `linear-gradient(135deg, ${hexToRgba(glowColor, 0.3)}, ${hexToRgba(glowColor, 0.1)})`,
+                        border: `2px solid ${hexToRgba(glowColor, 0.5)}`,
+                        color: glowColor
+                      }}
+                    >
+                      {(profile.username || profile.display_name)?.[0]?.toUpperCase() || '?'}
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-400">{displayWins}</div>
-                      <div className="text-xs text-slate-400">Wins</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold" style={{ color: glowColor }}>{winRate}%</div>
-                      <div className="text-xs text-slate-400">Win Rate</div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-white">
+                        {profile.username || profile.display_name || 'Unknown'}
+                      </h3>
+                      {rankInfo && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <TierIcon shape={rankInfo.shape} glowColor={glowColor} size="small" />
+                          <span style={{ color: glowColor }} className="font-bold text-sm">
+                            {rankInfo.name}
+                          </span>
+                          <span className="text-slate-500 text-sm">
+                            {profile.rating || 1000} ELO
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
 
-                {/* v7.12: Play Streak */}
-                <div className="mb-4">
-                  <StreakDisplay userId={playerId} variant="badge" />
-                </div>
-
-                {/* v7.12: Full Stats Section - Always visible */}
-                {playerStats && (totalAiGames > 0 || totalPuzzlesSolved > 0 || playerStats.speed_best_streak > 0) && (
+                  {/* Online Stats */}
                   <div 
                     className="rounded-xl p-4 mb-4"
                     style={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                      backgroundColor: getTierBackground(glowColor),
+                      border: `1px solid ${hexToRgba(glowColor, 0.3)}`
                     }}
                   >
                     <div className="flex items-center gap-2 mb-3">
-                      <Target size={16} className="text-cyan-400" />
-                      <span className="font-bold text-white">Player Stats</span>
+                      <Swords size={16} style={{ color: glowColor }} />
+                      <span className="font-bold text-white">Online Stats</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* AI Stats */}
-                      {totalAiGames > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Bot size={14} className="text-purple-400" />
-                            <span className="text-slate-400 text-xs">AI Battles</span>
-                          </div>
-                          <div className="text-white font-bold">{totalAiWins} / {totalAiGames}</div>
-                          <div className="text-slate-500 text-xs">wins</div>
-                        </div>
-                      )}
-                      
-                      {/* Puzzle Stats */}
-                      {totalPuzzlesSolved > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Zap size={14} className="text-green-400" />
-                            <span className="text-slate-400 text-xs">Puzzles</span>
-                          </div>
-                          <div className="text-white font-bold">{totalPuzzlesSolved}</div>
-                          <div className="text-slate-500 text-xs">solved</div>
-                        </div>
-                      )}
-                      
-                      {/* Speed Streak */}
-                      {playerStats.speed_best_streak > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Flame size={14} className="text-orange-400" />
-                            <span className="text-slate-400 text-xs">Speed Streak</span>
-                          </div>
-                          <div className="text-white font-bold">{playerStats.speed_best_streak}</div>
-                          <div className="text-slate-500 text-xs">best</div>
-                        </div>
-                      )}
-                      
-                      {/* Local Games */}
-                      {playerStats.local_games_played > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Gamepad2 size={14} className="text-pink-400" />
-                            <span className="text-slate-400 text-xs">Local Games</span>
-                          </div>
-                          <div className="text-white font-bold">{playerStats.local_games_played}</div>
-                          <div className="text-slate-500 text-xs">played</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Head to Head */}
-                {headToHead && (
-                  <div 
-                    className="rounded-xl p-3 mb-4"
-                    style={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 text-sm">Head to Head</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-400 font-bold">{headToHead.myWins}</span>
-                        <span className="text-slate-600">-</span>
-                        <span className="text-red-400 font-bold">{headToHead.theirWins}</span>
-                        <span className="text-slate-500 text-xs">({headToHead.total} games)</span>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-white">{displayGames}</div>
+                        <div className="text-xs text-slate-400">Games</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-400">{displayWins}</div>
+                        <div className="text-xs text-slate-400">Wins</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold" style={{ color: glowColor }}>{winRate}%</div>
+                        <div className="text-xs text-slate-400">Win Rate</div>
                       </div>
                     </div>
                   </div>
-                )}
 
-                {/* Achievements */}
-                {achievementStats && (
-                  <div 
-                    className="rounded-xl p-3 mb-4"
-                    style={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                    }}
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Trophy size={14} className="text-amber-400" />
-                      <span className="text-slate-400 text-xs">Achievements</span>
-                    </div>
-                    <div className="text-white font-bold">
-                      {achievementStats.unlocked_count} / {achievementStats.total_achievements}
-                    </div>
+                  {/* v7.12: Play Streak */}
+                  <div className="mb-4">
+                    <StreakDisplay userId={playerId} variant="badge" />
                   </div>
-                )}
 
-                {/* Recent Games */}
-                {recentGames.length > 0 && (
-                  <div className="mt-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Clock size={14} className="text-slate-400" />
-                      <span className="text-slate-400 text-xs font-medium">Recent Games</span>
-                    </div>
-                    <div className="space-y-2">
-                      {recentGames.slice(0, 5).map((game) => {
-                        const won = game.winner_id === playerId;
-                        const opponent = game.opponent;
-                        const opponentName = opponent?.username || opponent?.display_name || 'Unknown';
-                        const isClickable = !!opponent?.id && onViewPlayer;
+                  {/* v7.12: Full Stats Section - Always visible */}
+                  {playerStats && (totalAiGames > 0 || totalPuzzlesSolved > 0 || playerStats.speed_best_streak > 0) && (
+                    <div 
+                      className="rounded-xl p-4 mb-4"
+                      style={{ 
+                        backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                        border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <Target size={16} className="text-cyan-400" />
+                        <span className="font-bold text-white">Player Stats</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* AI Stats */}
+                        {totalAiGames > 0 && (
+                          <div 
+                            className="rounded-lg p-3"
+                            style={{ backgroundColor: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.2)' }}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Bot size={12} className="text-purple-400" />
+                              <span className="text-purple-400 text-xs font-medium">VS AI</span>
+                            </div>
+                            <div className="text-lg font-bold text-white">{totalAiWins}</div>
+                            <div className="text-[10px] text-slate-500">wins of {totalAiGames} games</div>
+                          </div>
+                        )}
                         
-                        return (
-                          <div key={game.id}>
-                            <button
-                              onClick={() => {
-                                if (isClickable) {
-                                  soundManager.playButtonClick();
-                                  onViewPlayer(opponent.id, opponent);
-                                }
-                              }}
-                              disabled={!isClickable}
-                              className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
-                                isClickable ? 'hover:bg-slate-800/70 cursor-pointer' : 'cursor-default'
-                              }`}
-                              style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)' }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <div 
-                                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                                  style={{ 
-                                    backgroundColor: hexToRgba(glowColor, 0.2),
-                                    color: glowColor
-                                  }}
-                                >
-                                  {opponentName[0]?.toUpperCase() || '?'}
-                                </div>
-                                <div className="text-left">
-                                  <div className="text-white text-sm">{opponentName}</div>
-                                  <div className="text-slate-500 text-xs">
-                                    {new Date(game.created_at).toLocaleDateString()}
+                        {/* Puzzle Stats */}
+                        {totalPuzzlesSolved > 0 && (
+                          <div 
+                            className="rounded-lg p-3"
+                            style={{ backgroundColor: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.2)' }}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Target size={12} className="text-green-400" />
+                              <span className="text-green-400 text-xs font-medium">Puzzles</span>
+                            </div>
+                            <div className="text-lg font-bold text-white">{totalPuzzlesSolved}</div>
+                            <div className="text-[10px] text-slate-500">puzzles solved</div>
+                          </div>
+                        )}
+                        
+                        {/* Speed Puzzle Stats */}
+                        {playerStats.speed_best_streak > 0 && (
+                          <div 
+                            className="rounded-lg p-3"
+                            style={{ backgroundColor: 'rgba(249, 115, 22, 0.1)', border: '1px solid rgba(249, 115, 22, 0.2)' }}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Zap size={12} className="text-orange-400" />
+                              <span className="text-orange-400 text-xs font-medium">Speed Best</span>
+                            </div>
+                            <div className="text-lg font-bold text-white">{playerStats.speed_best_streak}</div>
+                            <div className="text-[10px] text-slate-500">puzzles in a row</div>
+                          </div>
+                        )}
+                        
+                        {/* Local Games */}
+                        {playerStats.local_games_played > 0 && (
+                          <div 
+                            className="rounded-lg p-3"
+                            style={{ backgroundColor: 'rgba(34, 211, 238, 0.1)', border: '1px solid rgba(34, 211, 238, 0.2)' }}
+                          >
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <Gamepad2 size={12} className="text-cyan-400" />
+                              <span className="text-cyan-400 text-xs font-medium">Local</span>
+                            </div>
+                            <div className="text-lg font-bold text-white">{playerStats.local_games_played}</div>
+                            <div className="text-[10px] text-slate-500">2-player games</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Achievement Stats */}
+                  {achievementStats && achievementStats.unlocked_count > 0 && (
+                    <div 
+                      className="rounded-xl p-4 mb-4"
+                      style={{ 
+                        backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                        border: '1px solid rgba(251, 191, 36, 0.2)'
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Award size={16} className="text-amber-400" />
+                          <span className="font-bold text-white">Achievements</span>
+                        </div>
+                        <div className="text-amber-400 font-bold">
+                          {achievementStats.unlocked_count}/{achievementStats.total_achievements}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Head to Head */}
+                  {headToHead && (
+                    <div 
+                      className="rounded-xl p-4 mb-4"
+                      style={{ 
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)'
+                      }}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <Swords size={16} className="text-red-400" />
+                        <span className="font-bold text-white">Head to Head</span>
+                      </div>
+                      <div className="flex items-center justify-around">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-400">{headToHead.myWins}</div>
+                          <div className="text-xs text-slate-400">You</div>
+                        </div>
+                        <div className="text-slate-600 text-lg">vs</div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-red-400">{headToHead.theirWins}</div>
+                          <div className="text-xs text-slate-400">Them</div>
+                        </div>
+                      </div>
+                      <div className="text-center mt-2 text-slate-500 text-xs">
+                        {headToHead.total} games played
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Games */}
+                  {recentGames.length > 0 && (
+                    <div className="mt-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock size={14} className="text-slate-400" />
+                        <span className="text-slate-400 text-xs font-medium">Recent Games</span>
+                      </div>
+                      <div className="space-y-2">
+                        {recentGames.slice(0, 5).map((game) => {
+                          const won = game.winner_id === playerId;
+                          const opponent = game.opponent;
+                          const opponentName = opponent?.username || opponent?.display_name || 'Unknown';
+                          const isClickable = !!opponent?.id && onViewPlayer;
+                          
+                          return (
+                            <div key={game.id}>
+                              <button
+                                onClick={() => {
+                                  if (isClickable) {
+                                    soundManager.playButtonClick();
+                                    onViewPlayer(opponent.id, opponent);
+                                  }
+                                }}
+                                disabled={!isClickable}
+                                className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
+                                  isClickable ? 'hover:bg-slate-800/70 cursor-pointer' : 'cursor-default'
+                                }`}
+                                style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)' }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div 
+                                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+                                    style={{ 
+                                      backgroundColor: hexToRgba(glowColor, 0.2),
+                                      color: glowColor
+                                    }}
+                                  >
+                                    {opponentName[0]?.toUpperCase() || '?'}
+                                  </div>
+                                  <div className="text-left">
+                                    <div className="text-white text-sm">{opponentName}</div>
+                                    <div className="text-slate-500 text-xs">
+                                      {new Date(game.created_at).toLocaleDateString()}
+                                    </div>
                                   </div>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
-                                  {won ? 'WIN' : 'LOSS'}
-                                </span>
-                                {isClickable && (
-                                  <ChevronRight size={14} className="text-slate-600" />
-                                )}
-                              </div>
-                            </button>
-                            
-                            {/* Final Board View button */}
-                            <div className="mt-1.5 flex justify-end">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenFinalBoardView(game);
-                                }}
-                                className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
-                                title="View final board"
-                              >
-                                <LayoutGrid size={12} />
-                                Final
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-sm font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
+                                    {won ? 'WIN' : 'LOSS'}
+                                  </span>
+                                  {isClickable && (
+                                    <ChevronRight size={14} className="text-slate-600" />
+                                  )}
+                                </div>
                               </button>
+                              
+                              {/* Final Board View button */}
+                              <div className="mt-1.5 flex justify-end">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenFinalBoardView(game);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
+                                  title="View final board"
+                                >
+                                  <LayoutGrid size={12} />
+                                  Final
+                                </button>
+                              </div>
                             </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Member since */}
-                {profile.created_at && (
-                  <div className="mt-4 text-center text-slate-500 text-xs">
-                    Member since {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                  </div>
-                )}
-                
-                {/* Bottom spacing for scroll breathing room */}
-                <div className="h-4" />
-              </>
-            )}
+                  {/* Member since */}
+                  {profile.created_at && (
+                    <div className="mt-4 text-center text-slate-500 text-xs">
+                      Member since {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                    </div>
+                  )}
+                  
+                  {/* Bottom spacing for scroll breathing room */}
+                  <div className="h-4" />
+                </>
+              )}
+            </div>
+            
+            {/* Bottom scroll shadow indicator */}
+            <div 
+              className="absolute bottom-0 left-0 right-0 h-4 z-10 pointer-events-none transition-opacity duration-200"
+              style={{
+                background: 'linear-gradient(to top, rgba(15, 23, 42, 0.95), transparent)',
+                opacity: scrollState.atBottom ? 0 : 1
+              }}
+            />
           </div>
 
           {/* Actions */}

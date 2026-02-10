@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.17: Fixed Active Games modal scroll, user-specific localStorage keys, accurate game count
 // v7.15: Compact player profile card matching main menu, removed sign out/refresh buttons, replaced achievements button with leaderboard
 // v7.14: Real-time "Your turn" updates - no more waiting for refresh!
 // v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
@@ -728,8 +729,9 @@ const OnlineMenu = ({
     loadGamesInProgress.current = true;
 
     try {
-      // Check for stale games once per session (every 6 hours)
-      const lastStaleCheck = localStorage.getItem('deadblock_last_stale_check');
+      // Check for stale games once per session (every 6 hours) - v7.17: User-specific key
+      const staleCheckKey = `deadblock_last_stale_check_${profile.id}`;
+      const lastStaleCheck = localStorage.getItem(staleCheckKey);
       const sixHoursAgo = Date.now() - (6 * 60 * 60 * 1000);
       
       if (!lastStaleCheck || parseInt(lastStaleCheck) < sixHoursAgo) {
@@ -737,7 +739,7 @@ const OnlineMenu = ({
         if (forfeited?.length > 0) {
           console.log(`[OnlineMenu] Auto-forfeited ${forfeited.length} stale game(s)`);
         }
-        localStorage.setItem('deadblock_last_stale_check', Date.now().toString());
+        localStorage.setItem(staleCheckKey, Date.now().toString());
       }
       
       // Get active games + unviewed completed games (v7.12)
@@ -2001,11 +2003,16 @@ const OnlineMenu = ({
 
             {/* Active Games Button - Glow Orb Style */}
             {activeGames.length > 0 && (() => {
-              // Exclude unviewed wins from display count (winner already saw final move)
-              const displayGames = activeGames.filter(g => !(g?._isUnviewedResult && !g?._isLoss));
+              // v7.17: Fixed count calculation - only count truly active games + unviewed losses
+              const unviewedLosses = activeGames.filter(g => g?._isUnviewedResult && g?._isLoss);
+              const reallyActiveGames = activeGames.filter(g => g && !g._isUnviewedResult);
+              const displayGames = [...unviewedLosses, ...reallyActiveGames];
+              
               if (displayGames.length === 0) return null;
-              const myTurnCount = displayGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length;
-              const waitingCount = activeGames.length - myTurnCount;
+              
+              // Only count "your turn" for truly active games (not completed unviewed losses)
+              const myTurnCount = reallyActiveGames.filter(g => gameSyncService.isPlayerTurn(g, profile?.id)).length;
+              const waitingCount = reallyActiveGames.length - myTurnCount;
               return (
                 <button
                   onClick={() => {
@@ -2353,27 +2360,15 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.12: Enhanced scroll handling for mobile */}
+            {/* Games List - v7.17: Simplified scroll handling for better mobile support */}
             <div 
               className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
                 WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
                 touchAction: 'pan-y',
-                // Force hardware acceleration and contain scroll
                 transform: 'translateZ(0)',
-                willChange: 'scroll-position',
-                // Prevent iOS bounce effect from propagating
-                position: 'relative',
-                isolation: 'isolate'
-              }}
-              onTouchStart={(e) => {
-                // Allow scroll to start from any touch position
-                e.currentTarget.style.scrollBehavior = 'auto';
-              }}
-              onTouchEnd={(e) => {
-                // Restore smooth scrolling after touch
-                e.currentTarget.style.scrollBehavior = 'smooth';
+                willChange: 'scroll-position'
               }}
             >
               <div className="p-4 space-y-3">
@@ -2410,6 +2405,8 @@ const OnlineMenu = ({
                                   onClick={() => {
                                     soundManager.playButtonClick();
                                     setShowActiveGames(false);
+                                    // Mark as viewed so it moves to Recent Games (user-specific)
+                                    gameSyncService.markGameAsViewed(game.id, profile.id);
                                     onResumeGame(game);
                                   }}
                                   className="w-full p-4 rounded-lg flex items-center justify-between transition-all bg-gradient-to-r from-red-900/40 to-red-800/30 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-pulse"
@@ -2540,7 +2537,7 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.12: Enhanced scroll handling */}
+            {/* Games List - v7.17: Simplified scroll handling */}
             <div 
               className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
@@ -2548,15 +2545,7 @@ const OnlineMenu = ({
                 overscrollBehavior: 'contain',
                 touchAction: 'pan-y',
                 transform: 'translateZ(0)',
-                willChange: 'scroll-position',
-                position: 'relative',
-                isolation: 'isolate'
-              }}
-              onTouchStart={(e) => {
-                e.currentTarget.style.scrollBehavior = 'auto';
-              }}
-              onTouchEnd={(e) => {
-                e.currentTarget.style.scrollBehavior = 'smooth';
+                willChange: 'scroll-position'
               }}
             >
               <div className="p-4">

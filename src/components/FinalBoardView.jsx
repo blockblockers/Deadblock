@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
 // v7.17 - COMPACT LAYOUT UPDATE
 // 
 // FIXES:
@@ -10,12 +11,13 @@
 // ✅ Replay works correctly - pieces appear when pressing play
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause, Loader, Trophy } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause, Loader, Trophy, ArrowLeft } from 'lucide-react';
 import { BOARD_SIZE, getPieceCoords } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
+import NeonTitle from './NeonTitle';
 
 const FinalBoardView = ({ 
   board, 
@@ -102,20 +104,33 @@ const FinalBoardView = ({
     
     if (!moveHistory || moveHistory.length === 0) {
       // No move history - use boardPieces to estimate move numbers
-      let moveNum = 1;
+      // v7.17: Group cells by piece type and mark all cells of "last" piece
+      const pieceGroups = {};
+      
       Object.entries(safeBoardPieces).forEach(([key, pieceType]) => {
-        map[key] = {
-          moveNumber: moveNum,
-          pieceType,
-          isLastMove: false
-        };
+        if (!pieceGroups[pieceType]) {
+          pieceGroups[pieceType] = [];
+        }
+        pieceGroups[pieceType].push(key);
+      });
+      
+      // Assign move numbers (we don't know true order, so use piece type order)
+      let moveNum = 1;
+      const pieceTypes = Object.keys(pieceGroups);
+      const lastPieceType = pieceTypes[pieceTypes.length - 1];
+      
+      pieceTypes.forEach((pieceType) => {
+        const isLast = pieceType === lastPieceType;
+        pieceGroups[pieceType].forEach(key => {
+          map[key] = {
+            moveNumber: moveNum,
+            pieceType,
+            isLastMove: isLast  // Mark ALL cells of last piece
+          };
+        });
         moveNum++;
       });
-      // Mark last one
-      const keys = Object.keys(map);
-      if (keys.length > 0) {
-        map[keys[keys.length - 1]].isLastMove = true;
-      }
+      
       return map;
     }
 
@@ -284,16 +299,21 @@ const FinalBoardView = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/98 flex flex-col">
-      {/* HEADER - Compact */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0">
+      {/* HEADER - With Back Button and Deadblock Title */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
+        {/* Back Button */}
         <button 
           onClick={onClose}
-          className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
+          className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
         >
-          <X size={18} />
+          <ArrowLeft size={18} />
+          <span className="text-xs hidden sm:inline">Back</span>
         </button>
         
-        <span className="text-purple-400 font-bold text-xs tracking-wider">GAME REPLAY</span>
+        {/* Centered Deadblock Title */}
+        <div className="absolute left-1/2 transform -translate-x-1/2">
+          <NeonTitle text="DEADBLOCK" size="small" />
+        </div>
         
         {/* Speed control - compact */}
         <div className="flex gap-0.5">

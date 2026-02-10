@@ -1,4 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.17: Fixed gold confetti highlighting all cells of winning piece using getPieceCoords
 // v7.15: Removed duplicate pieces bars, chat icon now overlays bottom-right of piece tray
 // v7.14: Added streak tracking on game completion
 // v7.13: Fixed unviewed loss flow - shows board for 5s before game over modal
@@ -195,7 +196,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
   const dismissedGameOverRef = useRef(false);
-  const viewingCompletedGameRef = useRef(false);  // v7.16: Prevents real-time handler from overriding 5s modal delay
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
@@ -610,8 +610,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             // Store new game ID and trigger navigation via state change
             setNewGameFromRematch(request.new_game_id);
             // Reset game state for new game
-            viewingCompletedGameRef.current = false;  // v7.16: Reset for new game
-            dismissedGameOverRef.current = false;     // v7.16: Reset for new game
             setCurrentGameId(request.new_game_id);
             setGame(null);
             setLoading(true);
@@ -795,8 +793,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      // v7.16: Skip if we're deliberately viewing a completed game (5s delay in progress)
-      if (gameData.status === 'completed' && !showGameOver && !dismissedGameOverRef.current && !viewingCompletedGameRef.current) {
+      if (gameData.status === 'completed' && !showGameOver && !dismissedGameOverRef.current) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -872,12 +869,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         // For completed games, we want to show the board first, then the modal
         // So we'll set the game state but NOT trigger game over yet
         if (isCompletedGame) {
-          // v7.16: Prevent real-time updates from showing modal prematurely
-          viewingCompletedGameRef.current = true;
-          
-          // v7.16: Mark as viewed so it moves from Active → Recent on next menu load
-          gameSyncService.markGameAsViewed(currentGameId);
-          
           // Set game result for later use
           const result = {
             isWin: iWon,
@@ -906,19 +897,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           const { data: lastMove } = await gameSyncService.getLastMove(currentGameId);
           
           if (lastMove && mountedRef.current) {
-            const pieceCoords = pieces[lastMove.piece_type];
-            if (pieceCoords) {
-              let coords = [...pieceCoords];
-              const rot = lastMove.rotation || 0;
-              const flip = lastMove.flipped || false;
-              
-              for (let r = 0; r < rot; r++) {
-                coords = coords.map(([x, y]) => [-y, x]);
-              }
-              if (flip) {
-                coords = coords.map(([x, y]) => [-x, y]);
-              }
-              
+            // v7.17: Use getPieceCoords for correct transformation (matches game logic)
+            const rot = lastMove.rotation || 0;
+            const flip = lastMove.flipped || false;
+            const coords = getPieceCoords(lastMove.piece_type, rot, flip);
+            
+            if (coords && coords.length > 0) {
               const placedCells = coords.map(([dx, dy]) => ({
                 row: lastMove.row + dy,
                 col: lastMove.col + dx
@@ -969,23 +953,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             setTimeout(() => {
               if (!mountedRef.current || !boardRef.current) return;
               
-              // Get the piece cells from the move
-              const pieceCoords = pieces[lastMove.piece_type];
-              if (!pieceCoords) return;
-              
-              // Apply rotation and flip to get actual placed cells
-              let coords = [...pieceCoords];
+              // v7.17: Use getPieceCoords for correct transformation (matches game logic)
               const rot = lastMove.rotation || 0;
               const flip = lastMove.flipped || false;
+              const coords = getPieceCoords(lastMove.piece_type, rot, flip);
               
-              // Rotate
-              for (let r = 0; r < rot; r++) {
-                coords = coords.map(([x, y]) => [-y, x]);
-              }
-              // Flip
-              if (flip) {
-                coords = coords.map(([x, y]) => [-x, y]);
-              }
+              if (!coords || coords.length === 0) return;
               
               // Calculate actual board positions
               const placedCells = coords.map(([dx, dy]) => ({
@@ -1058,7 +1031,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     return () => {
       mountedRef.current = false;
-      viewingCompletedGameRef.current = false;  // v7.16: Reset on unmount
       clearTimeout(loadingTimeout);
       if (subscription) {
         subscription.unsubscribe();

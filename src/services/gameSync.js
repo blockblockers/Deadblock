@@ -1,4 +1,5 @@
 // Game Sync Service - Real-time game state management
+// v7.17: User-specific localStorage keys for viewed games (fixes losses reappearing after sign out)
 // FIXED: 
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
@@ -497,8 +498,8 @@ class GameSyncService {
     }
 
     try {
-      // Get viewed games from localStorage
-      const viewedGames = this.getViewedGames();
+      // v7.17: Get user-specific viewed games from localStorage
+      const viewedGames = this.getViewedGames(userId);
 
       // Fetch active games
       const activeResponse = await fetch(
@@ -568,27 +569,28 @@ class GameSyncService {
     }
   }
 
-  // v7.15.2: Mark a completed game as viewed (stores in localStorage)
-  markGameAsViewed(gameId) {
-    if (!gameId) return;
+  // v7.17: Mark a completed game as viewed (stores in user-specific localStorage)
+  markGameAsViewed(gameId, userId) {
+    if (!gameId || !userId) return;
     
     try {
-      const viewedGames = this.getViewedGames();
+      const viewedGames = this.getViewedGames(userId);
       if (!viewedGames.includes(gameId)) {
         viewedGames.push(gameId);
         // Keep only last 100 viewed games to prevent localStorage bloat
         const trimmed = viewedGames.slice(-100);
-        localStorage.setItem('deadblock_viewed_games', JSON.stringify(trimmed));
+        localStorage.setItem(`deadblock_viewed_games_${userId}`, JSON.stringify(trimmed));
       }
     } catch (e) {
       console.warn('[GameSync] Failed to mark game as viewed:', e);
     }
   }
 
-  // v7.15.2: Get list of viewed game IDs from localStorage
-  getViewedGames() {
+  // v7.17: Get list of viewed game IDs from localStorage (user-specific)
+  getViewedGames(userId) {
+    if (!userId) return [];
     try {
-      const stored = localStorage.getItem('deadblock_viewed_games');
+      const stored = localStorage.getItem(`deadblock_viewed_games_${userId}`);
       return stored ? JSON.parse(stored) : [];
     } catch (e) {
       return [];
