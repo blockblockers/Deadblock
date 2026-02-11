@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.17 - Full screen takeover with z-[60], fully opaque background
 // v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
 // v7.17 - COMPACT LAYOUT UPDATE
 // 
@@ -298,7 +299,13 @@ const FinalBoardView = ({
   }, [showFinal, currentMoveIndex, boardStates, safeBoard, safeBoardPieces]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/98 flex flex-col">
+    <div 
+      className="fixed inset-0 z-[60] bg-slate-950 flex flex-col"
+      style={{
+        paddingTop: 'env(safe-area-inset-top)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
       {/* HEADER - With Back Button and Deadblock Title */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
         {/* Back Button */}

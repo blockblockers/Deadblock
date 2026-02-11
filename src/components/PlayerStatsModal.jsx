@@ -1,9 +1,10 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
-// v7.17: Fixed double hash issue, added detailed puzzle/AI stats sections
+// v7.17: Improved scroll with touchAction, backdrop click to close
+// v7.14: Added play streak display, leaderboard rank, fixed scroll
 // Place in src/components/PlayerStatsModal.jsx
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal, Hash } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { statsService } from '../utils/statsService';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
@@ -46,7 +47,6 @@ const StatCard = ({ icon: Icon, label, value, subValue, color = 'cyan' }) => {
     purple: { bg: 'rgba(168, 85, 247, 0.1)', border: 'rgba(168, 85, 247, 0.2)', text: '#a855f7' },
     orange: { bg: 'rgba(249, 115, 22, 0.1)', border: 'rgba(249, 115, 22, 0.2)', text: '#f97316' },
     red: { bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.2)', text: '#ef4444' },
-    blue: { bg: 'rgba(59, 130, 246, 0.1)', border: 'rgba(59, 130, 246, 0.2)', text: '#3b82f6' },
   };
   const c = colors[color] || colors.cyan;
   
@@ -73,8 +73,6 @@ const Section = ({ id, title, icon: Icon, color, children, expanded, onToggle })
     green: '#22c55e',
     purple: '#a855f7',
     orange: '#f97316',
-    blue: '#3b82f6',
-    red: '#ef4444',
   };
   const c = colors[color] || colors.cyan;
   
@@ -124,59 +122,10 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const [weeklyStats, setWeeklyStats] = useState({ first: 0, second: 0, third: 0, total: 0 });
   
   const scrollContainerRef = useRef(null);
-  const touchStartRef = useRef({ y: 0, scrollTop: 0 });
-  
-  // Scroll position tracking for shadow indicators
-  const [scrollState, setScrollState] = useState({ atTop: true, atBottom: false });
   
   // Get tier info for theming
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
   const glowColor = rankInfo?.glowColor || '#22d3ee';
-  
-  // Enhanced scroll handler - track position for shadows
-  const handleScroll = useCallback((e) => {
-    const container = e.target;
-    const atTop = container.scrollTop <= 5;
-    const atBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 5;
-    
-    setScrollState(prev => {
-      if (prev.atTop !== atTop || prev.atBottom !== atBottom) {
-        return { atTop, atBottom };
-      }
-      return prev;
-    });
-  }, []);
-  
-  // Enhanced touch start - capture initial position
-  const handleTouchStart = useCallback((e) => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    
-    touchStartRef.current = {
-      y: e.touches[0].clientY,
-      scrollTop: container.scrollTop
-    };
-  }, []);
-  
-  // Enhanced touch move - prevent overscroll at boundaries
-  const handleTouchMove = useCallback((e) => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-    
-    const touchY = e.touches[0].clientY;
-    const deltaY = touchY - touchStartRef.current.y;
-    
-    // At top and pulling down - prevent pull-to-refresh
-    if (container.scrollTop <= 0 && deltaY > 0) {
-      e.preventDefault();
-    }
-    
-    // At bottom and pulling up - prevent overscroll
-    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 1;
-    if (isAtBottom && deltaY < 0) {
-      e.preventDefault();
-    }
-  }, []);
   
   useEffect(() => {
     if (isOpen && !isOffline) {
@@ -302,7 +251,10 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const tierBg = getTierBackground(glowColor);
   
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div 
         className="w-full max-w-md max-h-[90vh] rounded-2xl overflow-hidden flex flex-col"
         style={{ 
@@ -310,6 +262,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
           border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
           boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}`
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div 
@@ -389,11 +342,11 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 <span className="text-slate-500 text-sm">
                   {profile?.rating || 1000} ELO
                 </span>
-                {/* Leaderboard Rank - FIXED: removed duplicate # */}
+                {/* Leaderboard Rank */}
                 {leaderboardRank && (
-                  <span className="flex items-center gap-0.5 text-cyan-400 text-xs font-semibold">
-                    <BarChart3 size={10} />
-                    #{leaderboardRank}
+                  <span className="flex items-center gap-1 text-amber-400 text-xs">
+                    <Hash size={12} />
+                    #{leaderboardRank} Global
                   </span>
                 )}
               </div>
@@ -415,37 +368,17 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
           </button>
         </div>
         
-        {/* Stats Content - Enhanced Scrollable Container */}
-        <div className="flex-1 relative" style={{ minHeight: 0 }}>
-          {/* Top scroll shadow indicator */}
-          <div 
-            className="absolute top-0 left-0 right-0 h-4 z-10 pointer-events-none transition-opacity duration-200"
-            style={{
-              background: `linear-gradient(to bottom, ${tierBg}, transparent)`,
-              opacity: scrollState.atTop ? 0 : 1
-            }}
-          />
-          
-          {/* Scrollable content */}
-          <div 
-            ref={scrollContainerRef}
-            className="h-full p-4 space-y-3"
-            onScroll={handleScroll}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            style={{
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              WebkitOverflowScrolling: 'touch',
-              overscrollBehavior: 'contain',
-              touchAction: 'pan-y',
-              // Hardware acceleration for smooth scrolling
-              transform: 'translateZ(0)',
-              willChange: 'scroll-position',
-              // Safe area padding for notched devices
-              paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-            }}
-          >
+        {/* Stats Content - Scrollable */}
+        <div 
+          ref={scrollContainerRef}
+          className="flex-1 p-4 space-y-3 overflow-y-auto overscroll-contain"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+            touchAction: 'pan-y',
+            minHeight: 0,
+          }}
+        >
           {isOffline ? (
             <div className="text-center py-8">
               <Gamepad2 size={48} className="mx-auto text-slate-600 mb-3" />
@@ -502,7 +435,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 </div>
               </Section>
               
-              {/* Play Streak Section */}
+              {/* Play Streak Section - NEW */}
               <Section 
                 id="streak" 
                 title="Play Streak" 
@@ -548,119 +481,6 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     </span>
                   </div>
                 )}
-              </Section>
-              
-              {/* Puzzle Stats Section - DETAILED */}
-              <Section 
-                id="puzzles" 
-                title="Puzzle Mode" 
-                icon={Target} 
-                color="green"
-                expanded={expandedSection === 'puzzles'}
-                onToggle={handleSectionToggle}
-              >
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                    <div className="text-green-400 text-lg font-bold">{stats?.puzzles_easy_solved || 0}</div>
-                    <div className="text-xs text-slate-500">Easy</div>
-                    <div className="text-[10px] text-slate-600">
-                      {stats?.puzzles_easy_attempted || 0} tried • {stats?.puzzleEasyWinRate || 0}%
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                    <div className="text-amber-400 text-lg font-bold">{stats?.puzzles_medium_solved || 0}</div>
-                    <div className="text-xs text-slate-500">Medium</div>
-                    <div className="text-[10px] text-slate-600">
-                      {stats?.puzzles_medium_attempted || 0} tried • {stats?.puzzleMediumWinRate || 0}%
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
-                    <div className="text-red-400 text-lg font-bold">{stats?.puzzles_hard_solved || 0}</div>
-                    <div className="text-xs text-slate-500">Hard</div>
-                    <div className="text-[10px] text-slate-600">
-                      {stats?.puzzles_hard_attempted || 0} tried • {stats?.puzzleHardWinRate || 0}%
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2 text-center text-sm text-slate-400">
-                  {stats?.puzzleTotalSolved || 0} puzzles solved total
-                </div>
-              </Section>
-              
-              {/* VS AI Stats Section - DETAILED */}
-              <Section 
-                id="ai" 
-                title="VS AI" 
-                icon={Bot} 
-                color="purple"
-                expanded={expandedSection === 'ai'}
-                onToggle={handleSectionToggle}
-              >
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                    <div className="text-green-400 text-lg font-bold">{stats?.ai_easy_wins || 0}</div>
-                    <div className="text-xs text-slate-500">Beginner</div>
-                    <div className="text-[10px] text-slate-600">
-                      {stats?.ai_easy_losses || 0}L • {stats?.aiEasyWinRate || 0}%
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                    <div className="text-amber-400 text-lg font-bold">{stats?.ai_medium_wins || 0}</div>
-                    <div className="text-xs text-slate-500">Intermediate</div>
-                    <div className="text-[10px] text-slate-600">
-                      {stats?.ai_medium_losses || 0}L • {stats?.aiMediumWinRate || 0}%
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-center">
-                    <div className="text-red-400 text-lg font-bold">{stats?.ai_hard_wins || 0}</div>
-                    <div className="text-xs text-slate-500">Expert</div>
-                    <div className="text-[10px] text-slate-600">
-                      {stats?.ai_hard_losses || 0}L • {stats?.aiHardWinRate || 0}%
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2 text-center text-sm text-slate-400">
-                  {stats?.aiTotalWins || 0}W / {(stats?.aiTotalGames || 0) - (stats?.aiTotalWins || 0)}L total
-                </div>
-              </Section>
-              
-              {/* Speed Puzzle Section - DETAILED */}
-              <Section 
-                id="speed" 
-                title="Speed Puzzle" 
-                icon={Zap} 
-                color="orange"
-                expanded={expandedSection === 'speed'}
-                onToggle={handleSectionToggle}
-              >
-                <div className="grid grid-cols-2 gap-2">
-                  <StatCard 
-                    icon={Zap} 
-                    label="Best Streak" 
-                    value={stats?.speed_best_streak || 0}
-                    subValue="puzzles in a row"
-                    color="orange"
-                  />
-                  <StatCard 
-                    icon={Target} 
-                    label="Avg per Session" 
-                    value={stats?.speedAvgStreak || 0}
-                    subValue="puzzles"
-                    color="amber"
-                  />
-                  <StatCard 
-                    icon={Gamepad2} 
-                    label="Total Sessions" 
-                    value={stats?.speed_total_sessions || 0}
-                    color="cyan"
-                  />
-                  <StatCard 
-                    icon={Trophy} 
-                    label="Total Puzzles" 
-                    value={stats?.speed_total_puzzles || 0}
-                    color="green"
-                  />
-                </div>
               </Section>
               
               {/* Achievements Section */}
@@ -716,7 +536,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 id="online" 
                 title="Online Games" 
                 icon={Globe} 
-                color="blue"
+                color="green"
                 expanded={expandedSection === 'online'}
                 onToggle={handleSectionToggle}
               >
@@ -735,48 +555,15 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     color="amber"
                   />
                 </div>
-                {/* FIXED: removed duplicate # from leaderboard rank display */}
                 {leaderboardRank && (
                   <div className="mt-2 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center justify-center gap-2">
-                    <BarChart3 size={16} className="text-cyan-400" />
+                    <Hash size={16} className="text-cyan-400" />
                     <span className="text-cyan-300 font-medium">Global Rank: #{leaderboardRank}</span>
                   </div>
                 )}
               </Section>
-              
-              {/* Local Games Section */}
-              {(stats?.local_games_played || 0) > 0 && (
-                <Section 
-                  id="local" 
-                  title="Local Games" 
-                  icon={Users} 
-                  color="cyan"
-                  expanded={expandedSection === 'local'}
-                  onToggle={handleSectionToggle}
-                >
-                  <div className="grid grid-cols-1 gap-2">
-                    <StatCard 
-                      icon={Users} 
-                      label="2-Player Games" 
-                      value={stats?.local_games_played || 0}
-                      subValue="games played locally"
-                      color="cyan"
-                    />
-                  </div>
-                </Section>
-              )}
             </>
           )}
-          </div>
-          
-          {/* Bottom scroll shadow indicator */}
-          <div 
-            className="absolute bottom-0 left-0 right-0 h-4 z-10 pointer-events-none transition-opacity duration-200"
-            style={{
-              background: `linear-gradient(to top, ${tierBg}, transparent)`,
-              opacity: scrollState.atBottom ? 0 : 1
-            }}
-          />
         </div>
         
         {/* Footer */}
