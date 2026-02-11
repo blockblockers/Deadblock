@@ -1,5 +1,5 @@
 // Leaderboard.jsx - Global leaderboard with scrollable list
-// v7.14: Fixed scroll issues - properly scrollable list container
+// v7.17: Fixed mobile scroll - proper touch-action, safe area padding, hardware acceleration
 // Place in src/components/Leaderboard.jsx
 
 import { useState, useEffect, useRef } from 'react';
@@ -116,8 +116,13 @@ const Leaderboard = ({ onBack }) => {
       {/* Glow */}
       <div className="fixed top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Content */}
-      <div className="relative flex-1 flex flex-col min-h-0 px-4 pt-6 pb-4">
+      {/* Content - v7.17: Added safe area bottom padding */}
+      <div 
+        className="relative flex-1 flex flex-col min-h-0 px-4 pt-6"
+        style={{
+          paddingBottom: 'max(16px, env(safe-area-inset-bottom))'
+        }}
+      >
         <div className="max-w-md mx-auto w-full flex flex-col flex-1 min-h-0">
           {/* Header - Fixed */}
           <div className="flex items-center justify-between mb-4 flex-shrink-0">
@@ -187,8 +192,15 @@ const Leaderboard = ({ onBack }) => {
             </div>
           )}
 
-          {/* Leaderboard Container - Scrollable */}
-          <div className="flex-1 min-h-0 bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-amber-500/30 overflow-hidden shadow-[0_0_30px_rgba(251,191,36,0.2)] flex flex-col">
+          {/* Leaderboard Container - Scrollable v7.17: Improved flex constraints */}
+          <div 
+            className="flex-1 min-h-0 bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-amber-500/30 shadow-[0_0_30px_rgba(251,191,36,0.2)] flex flex-col"
+            style={{
+              overflow: 'hidden',
+              // Ensure container takes remaining space but doesn't overflow
+              maxHeight: '100%'
+            }}
+          >
             {/* Column Headers - Fixed within container */}
             <div className="flex items-center px-4 py-3 bg-slate-800/50 border-b border-slate-700/50 text-slate-500 text-xs uppercase tracking-wider flex-shrink-0">
               <div className="w-12 text-center">Rank</div>
@@ -198,14 +210,18 @@ const Leaderboard = ({ onBack }) => {
               </div>
             </div>
             
-            {/* Scrollable List */}
+            {/* Scrollable List - v7.17: Enhanced mobile scroll */}
             <div 
               ref={scrollRef}
               className="flex-1 overflow-y-auto"
               style={{
                 WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
-                minHeight: 0
+                minHeight: 0,
+                touchAction: 'pan-y',
+                // Hardware acceleration for smooth iOS scrolling
+                transform: 'translateZ(0)',
+                willChange: 'scroll-position'
               }}
             >
               {loading ? (
@@ -220,7 +236,7 @@ const Leaderboard = ({ onBack }) => {
                   <p className="text-slate-500 text-sm">Be the first to play!</p>
                 </div>
               ) : (
-                <div className="divide-y divide-slate-800/50">
+                <div className="divide-y divide-slate-800/50 pb-4">
                   {players.map((player, index) => {
                     const rank = index + 1;
                     const isCurrentUser = player.id === profile?.id;

@@ -1,4 +1,5 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.17: Persistent timer - saves elapsed time on reset/close, restores when returning
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -18,6 +19,65 @@ import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
+
+// =========================================================================
+// v7.17: PERSISTENT TIMER HELPERS
+// Saves/restores elapsed time so users don't lose progress on reset or close
+// =========================================================================
+const TIMER_STORAGE_PREFIX = 'deadblock_weekly_timer_';
+
+const getTimerStorageKey = (challengeId) => `${TIMER_STORAGE_PREFIX}${challengeId}`;
+
+const saveTimerState = (challengeId, elapsedMs, attemptCount) => {
+  if (!challengeId) return;
+  try {
+    const key = getTimerStorageKey(challengeId);
+    const data = {
+      elapsedMs,
+      attemptCount,
+      savedAt: Date.now()
+    };
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (e) {
+    console.warn('[WeeklyChallenge] Failed to save timer state:', e);
+  }
+};
+
+const loadTimerState = (challengeId) => {
+  if (!challengeId) return null;
+  try {
+    const key = getTimerStorageKey(challengeId);
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    
+    const data = JSON.parse(stored);
+    
+    // Validate data structure
+    if (typeof data.elapsedMs !== 'number' || data.elapsedMs < 0) return null;
+    
+    // Check if saved within the last 7 days (challenge week)
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - data.savedAt > sevenDaysMs) {
+      clearTimerState(challengeId);
+      return null;
+    }
+    
+    return data;
+  } catch (e) {
+    console.warn('[WeeklyChallenge] Failed to load timer state:', e);
+    return null;
+  }
+};
+
+const clearTimerState = (challengeId) => {
+  if (!challengeId) return;
+  try {
+    const key = getTimerStorageKey(challengeId);
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.warn('[WeeklyChallenge] Failed to clear timer state:', e);
+  }
+};
 
 // Timer display component - RED THEME
 const TimerDisplay = ({ elapsedMs, isPaused }) => {
@@ -247,6 +307,22 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       document.body.style.touchAction = '';
     };
   }, []);
+  
+  // v7.17: Save timer state on browser/tab close
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (challenge?.id && gameStarted && !gameComplete && startTimeRef.current) {
+        const currentTime = accumulatedMs + (Date.now() - startTimeRef.current);
+        saveTimerState(challenge.id, currentTime, attemptCount);
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [challenge, gameStarted, gameComplete, accumulatedMs, attemptCount]);
   
   // Game state from hook
   const {
@@ -837,6 +913,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           setBestTime(existingResult.best_time_ms || existingResult.completion_time_ms);
           setIsFirstAttempt(false);
         }
+        
+        // v7.17: Restore saved timer state if user previously left mid-challenge
+        const savedTimer = loadTimerState(challenge.id);
+        if (savedTimer) {
+          setAccumulatedMs(savedTimer.elapsedMs);
+          setElapsedMs(savedTimer.elapsedMs);
+          setAttemptCount(savedTimer.attemptCount || 0);
+          console.log('[WeeklyChallenge] Restored timer:', savedTimer.elapsedMs, 'ms');
+        }
       } catch (err) {
         console.error('Error loading weekly puzzle:', err);
         setLoadError('Failed to load puzzle: ' + (err.message || 'Unknown error'));
@@ -898,6 +983,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         soundManager.playPuzzleSolvedSound();
         submitResult(finalTime);
         
+        // v7.17: Clear saved timer state on successful completion
+        if (challenge?.id) {
+          clearTimerState(challenge.id);
+        }
+        
         // v7.15.2: Record daily play for streak tracking
         streakTracker.recordPlay();
         
@@ -918,13 +1008,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           console.warn('[WeeklyChallenge] Failed to update streak:', err);
         }
       } else if (winner === 2) {
-        pauseTimer();
+        const pausedTime = pauseTimer();
         setGameLost(true);
         setAttemptCount(prev => prev + 1);
         soundManager.playGameOver();
+        
+        // v7.17: Save timer state when AI wins (loss)
+        if (challenge?.id) {
+          saveTimerState(challenge.id, pausedTime, attemptCount + 1);
+        }
       }
     }
-  }, [gameOver, winner, gameStarted, stopTimer, pauseTimer, isFirstAttempt]);
+  }, [gameOver, winner, gameStarted, stopTimer, pauseTimer, isFirstAttempt, challenge, attemptCount]);
   
   // Submit result
   const submitResult = async (timeMs) => {
@@ -957,18 +1052,38 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     soundManager.playClickSound('success');
   }, [resetCurrentPuzzle, startTimer]);
   
-  // Full restart
+  // Full restart - v7.17: Timer continues, saves state
   const handleRestart = useCallback(() => {
+    // Save current elapsed time before resetting board
+    const currentTime = timerRef.current 
+      ? accumulatedMs + (Date.now() - startTimeRef.current)
+      : accumulatedMs;
+    
+    // Stop current timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    // Save timer state for persistence
+    if (challenge?.id) {
+      saveTimerState(challenge.id, currentTime, attemptCount);
+    }
+    
+    // Reset board state but keep timer
     resetCurrentPuzzle();
     setGameComplete(false);
     setGameLost(false);
     setCompletionTime(null);
     setWasFirstAttempt(false);
-    setElapsedMs(0);
-    setAccumulatedMs(0);
-    setAttemptCount(0);
+    
+    // v7.17: Continue timer from current time (don't reset to 0)
+    setAccumulatedMs(currentTime);
+    setElapsedMs(currentTime);
+    // Don't reset attemptCount - it tracks total attempts
+    
     setGameStarted(false);
-  }, [resetCurrentPuzzle]);
+  }, [resetCurrentPuzzle, accumulatedMs, attemptCount, challenge]);
   
   // View leaderboard
   const handleViewLeaderboard = () => {
@@ -976,14 +1091,41 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     onLeaderboard(challenge);
   };
   
-  // Cleanup
+  // v7.17: Go to menu - saves timer state before navigating away
+  const handleGoToMenu = useCallback(() => {
+    soundManager.playButtonClick();
+    
+    // Save current elapsed time before leaving
+    if (challenge?.id && !gameComplete) {
+      const currentTime = timerRef.current 
+        ? accumulatedMs + (Date.now() - startTimeRef.current)
+        : elapsedMs;
+      saveTimerState(challenge.id, currentTime, attemptCount);
+    }
+    
+    // Stop timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    (onMainMenu || onMenu)();
+  }, [challenge, gameComplete, accumulatedMs, elapsedMs, attemptCount, onMainMenu, onMenu]);
+  
+  // Cleanup - v7.17: Save timer state on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
+        
+        // Save current elapsed time before unmounting
+        if (challenge?.id && startTimeRef.current && !gameComplete) {
+          const currentTime = accumulatedMs + (Date.now() - startTimeRef.current);
+          saveTimerState(challenge.id, currentTime, attemptCount);
+        }
       }
     };
-  }, []);
+  }, [challenge, accumulatedMs, attemptCount, gameComplete]);
   
   // =========================================================================
   // RENDER
@@ -1268,7 +1410,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             <div className="flex gap-2 justify-between mb-2 flex-wrap">
               {/* Menu Button - Orange with Home icon only */}
               <button
-                onClick={() => { soundManager.playButtonClick(); (onMainMenu || onMenu)(); }}
+                onClick={handleGoToMenu}
                 className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(251,146,60,0.4)]"
               >
                 <Home size={16} />
