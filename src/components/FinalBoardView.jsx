@@ -1,6 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
-// v7.19 - Compact layout: reduced board-to-controls spacing, more header padding for iPhone
-// v7.18 - Added more padding to header/footer, safe area handling for mobile
+// v7.18 - Fixed layout: more top padding for iPhone, compact board-to-controls spacing, proper safe area
 // v7.17 - Full screen takeover with z-[60], fully opaque background
 // v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
 // v7.17 - COMPACT LAYOUT UPDATE
@@ -304,20 +303,19 @@ const FinalBoardView = ({
     <div 
       className="fixed inset-0 z-[60] bg-slate-950 flex flex-col"
       style={{
-        // v7.19: More padding at top for iPhone notch/dynamic island
-        paddingTop: 'max(8px, env(safe-area-inset-top))',
-        paddingBottom: 'env(safe-area-inset-bottom)',
+        // v7.18: Extra top padding for iPhone notch/dynamic island
+        paddingTop: 'max(12px, env(safe-area-inset-top))',
       }}
     >
-      {/* HEADER - With Back Button and Deadblock Title */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
+      {/* HEADER - Compact with Back Button and Deadblock Title */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
         {/* Back Button */}
         <button 
           onClick={onClose}
-          className="flex items-center gap-1.5 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
+          className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
         >
-          <ArrowLeft size={20} />
-          <span className="text-sm">Back</span>
+          <ArrowLeft size={18} />
+          <span className="text-xs hidden sm:inline">Back</span>
         </button>
         
         {/* Centered Deadblock Title */}
@@ -326,14 +324,14 @@ const FinalBoardView = ({
         </div>
         
         {/* Speed control - compact */}
-        <div className="flex gap-1">
+        <div className="flex gap-0.5">
           {[1000, 500, 250].map((speed, idx) => {
             const labels = ['1x', '2x', '4x'];
             return (
               <button
                 key={speed}
                 onClick={() => setPlaybackSpeed(speed)}
-                className={`px-2 py-1 text-xs font-bold rounded transition-all ${
+                className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${
                   playbackSpeed === speed 
                     ? 'bg-purple-600 text-white' 
                     : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -346,13 +344,13 @@ const FinalBoardView = ({
         </div>
       </div>
 
-      {/* PLAYER INFO - Compact */}
-      <div className="flex items-center justify-between px-4 py-1.5 bg-slate-900/70 border-b border-slate-700/30 flex-shrink-0">
+      {/* PLAYER INFO - More compact */}
+      <div className="flex items-center justify-between px-3 py-1 bg-slate-900/70 border-b border-slate-700/30 flex-shrink-0">
         {/* Player 1 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className="relative">
             <div 
-              className="w-8 h-8 rounded-md flex items-center justify-center"
+              className="w-6 h-6 rounded-md flex items-center justify-center"
               style={{ 
                 background: `linear-gradient(135deg, ${p1Tier.glowColor}40, transparent)`,
                 boxShadow: isP1Winner ? `0 0 8px ${p1Tier.glowColor}` : 'none'
@@ -360,25 +358,25 @@ const FinalBoardView = ({
             >
               <TierIcon shape={p1Tier.shape} glowColor={p1Tier.glowColor} size="small" />
             </div>
-            {isP1Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400" />}
+            {isP1Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
           </div>
           <div>
-            <div className={`font-bold text-sm ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
-            <div className="text-slate-500 text-xs">{p1Rating}</div>
+            <div className={`font-bold text-[11px] ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
+            <div className="text-slate-500 text-[9px]">{p1Rating}</div>
           </div>
         </div>
 
-        <span className="text-slate-600 font-black text-xs">VS</span>
+        <span className="text-slate-600 font-black text-[10px]">VS</span>
 
         {/* Player 2 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <div className="text-right">
-            <div className={`font-bold text-sm ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
-            <div className="text-slate-500 text-xs">{p2Rating}</div>
+            <div className={`font-bold text-[11px] ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
+            <div className="text-slate-500 text-[9px]">{p2Rating}</div>
           </div>
           <div className="relative">
             <div 
-              className="w-8 h-8 rounded-md flex items-center justify-center"
+              className="w-6 h-6 rounded-md flex items-center justify-center"
               style={{ 
                 background: `linear-gradient(135deg, ${p2Tier.glowColor}40, transparent)`,
                 boxShadow: isP2Winner ? `0 0 8px ${p2Tier.glowColor}` : 'none'
@@ -386,28 +384,28 @@ const FinalBoardView = ({
             >
               <TierIcon shape={p2Tier.shape} glowColor={p2Tier.glowColor} size="small" />
             </div>
-            {isP2Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400" />}
+            {isP2Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
           </div>
         </div>
       </div>
 
-      {/* STATUS LINE */}
-      <div className="text-center py-1 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
+      {/* STATUS LINE - Minimal */}
+      <div className="text-center py-0.5 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
         {showFinal ? (
-          <span className="text-amber-400 font-medium text-xs">
+          <span className="text-amber-400 font-medium text-[11px]">
             {(isP1Winner || isP2Winner) ? `🏆 ${isP1Winner ? p1Name : p2Name} wins!` : 'Final'} 
-            <span className="text-slate-400 ml-2">• {totalMoves} moves</span>
+            <span className="text-slate-400 ml-1.5">• {totalMoves} moves</span>
           </span>
         ) : (
-          <span className="text-slate-300 text-xs">
+          <span className="text-slate-300 text-[11px]">
             Move <span className="text-white font-bold">{currentMoveIndex + 1}</span>
             <span className="text-slate-500">/{totalMoves}</span>
           </span>
         )}
       </div>
 
-      {/* BOARD AREA - Minimal padding to maximize board size */}
-      <div className="flex-1 flex items-center justify-center px-3 py-1 min-h-0 overflow-hidden">
+      {/* BOARD AREA - Minimal vertical padding, board directly connected to controls */}
+      <div className="flex-1 flex items-center justify-center px-2 min-h-0 overflow-hidden">
         {isLoadingMoves ? (
           <div className="text-center">
             <Loader size={28} className="text-purple-400 animate-spin mx-auto mb-1" />
@@ -416,12 +414,12 @@ const FinalBoardView = ({
         ) : (
           /* Board Grid - Matches GameBoard sizing, constrained to fit screen */
           <div 
-            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-xl bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
+            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
             style={{
               boxShadow: '0 0 20px rgba(0,0,0,0.3), inset 0 0 15px rgba(0,0,0,0.2)',
-              // v7.19: Reduced offset for compact layout (was 220px)
-              width: 'min(calc(100vw - 24px), calc(100vh - 180px))',
-              height: 'min(calc(100vw - 24px), calc(100vh - 180px))',
+              // v7.18: Increased offset (200px) to leave room for controls + safe area
+              width: 'min(calc(100vw - 16px), calc(100vh - 200px))',
+              height: 'min(calc(100vw - 16px), calc(100vh - 200px))',
               maxWidth: '400px',
               maxHeight: '400px',
             }}
@@ -504,12 +502,12 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* CONTROLS - Compact, directly below board */}
+      {/* CONTROLS - At bottom with safe area padding */}
       <div 
-        className="bg-slate-900/90 border-t border-slate-700/50 px-4 pt-2 flex-shrink-0"
+        className="bg-slate-900/90 border-t border-slate-700/50 px-3 pt-2 flex-shrink-0"
         style={{
-          // v7.19: Better safe area padding for home indicator
-          paddingBottom: 'max(16px, calc(env(safe-area-inset-bottom) + 12px))'
+          // v7.18: Proper bottom padding for iPhone home indicator
+          paddingBottom: 'max(12px, calc(env(safe-area-inset-bottom) + 8px))',
         }}
       >
         {/* Progress bar */}
@@ -528,7 +526,7 @@ const FinalBoardView = ({
           </div>
         )}
         
-        {/* Control buttons */}
+        {/* Control buttons - larger touch targets */}
         <div className="flex items-center justify-center gap-2">
           <button
             onClick={first}

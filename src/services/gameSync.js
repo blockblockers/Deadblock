@@ -1,5 +1,4 @@
 // Game Sync Service - Real-time game state management
-// v7.17: User-specific localStorage keys for viewed games (fixes losses reappearing after sign out)
 // FIXED: 
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
@@ -498,7 +497,7 @@ class GameSyncService {
     }
 
     try {
-      // v7.17: Get user-specific viewed games from localStorage
+      // v7.18: Get user-specific viewed games from localStorage
       const viewedGames = this.getViewedGames(userId);
 
       // Fetch active games
@@ -569,7 +568,7 @@ class GameSyncService {
     }
   }
 
-  // v7.17: Mark a completed game as viewed (stores in user-specific localStorage)
+  // v7.18: Mark a completed game as viewed (stores in user-specific localStorage)
   markGameAsViewed(gameId, userId) {
     if (!gameId || !userId) return;
     
@@ -580,13 +579,14 @@ class GameSyncService {
         // Keep only last 100 viewed games to prevent localStorage bloat
         const trimmed = viewedGames.slice(-100);
         localStorage.setItem(`deadblock_viewed_games_${userId}`, JSON.stringify(trimmed));
+        console.log('[GameSync] Marked game as viewed:', gameId, 'for user:', userId);
       }
     } catch (e) {
       console.warn('[GameSync] Failed to mark game as viewed:', e);
     }
   }
 
-  // v7.17: Get list of viewed game IDs from localStorage (user-specific)
+  // v7.18: Get list of viewed game IDs from localStorage (user-specific)
   getViewedGames(userId) {
     if (!userId) return [];
     try {

@@ -1,6 +1,5 @@
 // ViewPlayerProfile - View another player's profile
-// v7.18: Enhanced scroll with hardware acceleration, minHeight fix, safe area padding
-// v7.17: Fixed scroll by removing touchAction blocking on backdrop
+// v7.18: Fixed scroll - removed touchAction:none from backdrop, added minHeight:0, hardware acceleration
 // v7.12: Added full stats display (AI wins, puzzle stats) for all players
 // v7.12: Added player_stats loading from profiles table
 // v7.12: Final Board View now fetches moves for full replay functionality
@@ -385,6 +384,7 @@ const ViewPlayerProfile = ({
         className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         style={{
+          // v7.18: Safe area padding
           paddingTop: 'max(16px, env(safe-area-inset-top))',
           paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         }}
@@ -394,7 +394,7 @@ const ViewPlayerProfile = ({
           style={{ 
             borderColor: hexToRgba(glowColor, 0.3),
             boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
-            minHeight: 0, // Critical for flex scroll to work
+            minHeight: 0, // v7.18: Critical for flex scroll to work
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -419,11 +419,10 @@ const ViewPlayerProfile = ({
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain',
               touchAction: 'pan-y',
-              minHeight: 0,
-              // Hardware acceleration for iOS
+              minHeight: 0, // v7.18: Critical for flex children to scroll
+              // Hardware acceleration for smooth iOS scrolling
               transform: 'translateZ(0)',
               willChange: 'scroll-position',
-              maxHeight: '100%',
             }}
           >
             {loading ? (

@@ -1,5 +1,5 @@
 // Online Menu - Hub for online features
-// v7.18: Fixed lost game viewing - opens FinalBoardView directly, immediate state update after marking viewed
+// v7.18: Fixed lost game click - immediate state update, delayed navigation, user-specific viewed games
 // v7.17: Fixed Active Games modal scroll, user-specific localStorage keys, accurate game count
 // v7.15: Compact player profile card matching main menu, removed sign out/refresh buttons, replaced achievements button with leaderboard
 // v7.14: Real-time "Your turn" updates - no more waiting for refresh!
@@ -2406,22 +2406,22 @@ const OnlineMenu = ({
                                   onClick={() => {
                                     soundManager.playButtonClick();
                                     
-                                    // v7.18: Mark as viewed and update state BEFORE navigation
+                                    // v7.18: Mark as viewed FIRST (user-specific key)
                                     gameSyncService.markGameAsViewed(game.id, profile.id);
                                     
-                                    // Remove from activeGames state immediately
+                                    // v7.18: Immediately update state to remove from activeGames
                                     setActiveGames(prev => prev.filter(g => g.id !== game.id));
                                     
-                                    // Add to recentGames if not already there
+                                    // v7.18: Immediately add to recentGames if not already there
                                     setRecentGames(prev => {
                                       if (prev.some(g => g.id === game.id)) return prev;
                                       return [game, ...prev].slice(0, 10);
                                     });
                                     
-                                    // Close modal then navigate (prevents glitch)
+                                    // Close modal first (prevents visual glitch)
                                     setShowActiveGames(false);
                                     
-                                    // Small delay to let modal close before navigation
+                                    // v7.18: Small delay before navigation to let modal close
                                     setTimeout(() => {
                                       onResumeGame(game);
                                     }, 50);
