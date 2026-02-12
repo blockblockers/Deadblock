@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.18: Fixed lost game viewing - opens FinalBoardView directly, immediate state update after marking viewed
 // v7.17: Fixed Active Games modal scroll, user-specific localStorage keys, accurate game count
 // v7.15: Compact player profile card matching main menu, removed sign out/refresh buttons, replaced achievements button with leaderboard
 // v7.14: Real-time "Your turn" updates - no more waiting for refresh!
@@ -2404,10 +2405,26 @@ const OnlineMenu = ({
                                   key={game.id}
                                   onClick={() => {
                                     soundManager.playButtonClick();
-                                    setShowActiveGames(false);
-                                    // Mark as viewed so it moves to Recent Games (user-specific)
+                                    
+                                    // v7.18: Mark as viewed and update state BEFORE navigation
                                     gameSyncService.markGameAsViewed(game.id, profile.id);
-                                    onResumeGame(game);
+                                    
+                                    // Remove from activeGames state immediately
+                                    setActiveGames(prev => prev.filter(g => g.id !== game.id));
+                                    
+                                    // Add to recentGames if not already there
+                                    setRecentGames(prev => {
+                                      if (prev.some(g => g.id === game.id)) return prev;
+                                      return [game, ...prev].slice(0, 10);
+                                    });
+                                    
+                                    // Close modal then navigate (prevents glitch)
+                                    setShowActiveGames(false);
+                                    
+                                    // Small delay to let modal close before navigation
+                                    setTimeout(() => {
+                                      onResumeGame(game);
+                                    }, 50);
                                   }}
                                   className="w-full p-4 rounded-lg flex items-center justify-between transition-all bg-gradient-to-r from-red-900/40 to-red-800/30 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-pulse"
                                 >

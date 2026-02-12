@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.18 - Added more padding to header/footer, safe area handling for mobile
 // v7.17 - Full screen takeover with z-[60], fully opaque background
 // v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
 // v7.17 - COMPACT LAYOUT UPDATE
@@ -307,14 +308,14 @@ const FinalBoardView = ({
       }}
     >
       {/* HEADER - With Back Button and Deadblock Title */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
         {/* Back Button */}
         <button 
           onClick={onClose}
-          className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
+          className="flex items-center gap-1.5 p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
         >
-          <ArrowLeft size={18} />
-          <span className="text-xs hidden sm:inline">Back</span>
+          <ArrowLeft size={20} />
+          <span className="text-sm">Back</span>
         </button>
         
         {/* Centered Deadblock Title */}
@@ -323,14 +324,14 @@ const FinalBoardView = ({
         </div>
         
         {/* Speed control - compact */}
-        <div className="flex gap-0.5">
+        <div className="flex gap-1">
           {[1000, 500, 250].map((speed, idx) => {
             const labels = ['1x', '2x', '4x'];
             return (
               <button
                 key={speed}
                 onClick={() => setPlaybackSpeed(speed)}
-                className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${
+                className={`px-2 py-1 text-xs font-bold rounded transition-all ${
                   playbackSpeed === speed 
                     ? 'bg-purple-600 text-white' 
                     : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -343,13 +344,13 @@ const FinalBoardView = ({
         </div>
       </div>
 
-      {/* PLAYER INFO - More compact */}
-      <div className="flex items-center justify-between px-3 py-1 bg-slate-900/70 border-b border-slate-700/30 flex-shrink-0">
+      {/* PLAYER INFO - More spacious */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900/70 border-b border-slate-700/30 flex-shrink-0">
         {/* Player 1 */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <div className="relative">
             <div 
-              className="w-6 h-6 rounded-md flex items-center justify-center"
+              className="w-8 h-8 rounded-md flex items-center justify-center"
               style={{ 
                 background: `linear-gradient(135deg, ${p1Tier.glowColor}40, transparent)`,
                 boxShadow: isP1Winner ? `0 0 8px ${p1Tier.glowColor}` : 'none'
@@ -357,25 +358,25 @@ const FinalBoardView = ({
             >
               <TierIcon shape={p1Tier.shape} glowColor={p1Tier.glowColor} size="small" />
             </div>
-            {isP1Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
+            {isP1Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400" />}
           </div>
           <div>
-            <div className={`font-bold text-[11px] ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
-            <div className="text-slate-500 text-[9px]">{p1Rating}</div>
+            <div className={`font-bold text-sm ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
+            <div className="text-slate-500 text-xs">{p1Rating}</div>
           </div>
         </div>
 
-        <span className="text-slate-600 font-black text-[10px]">VS</span>
+        <span className="text-slate-600 font-black text-xs">VS</span>
 
         {/* Player 2 */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <div className="text-right">
-            <div className={`font-bold text-[11px] ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
-            <div className="text-slate-500 text-[9px]">{p2Rating}</div>
+            <div className={`font-bold text-sm ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
+            <div className="text-slate-500 text-xs">{p2Rating}</div>
           </div>
           <div className="relative">
             <div 
-              className="w-6 h-6 rounded-md flex items-center justify-center"
+              className="w-8 h-8 rounded-md flex items-center justify-center"
               style={{ 
                 background: `linear-gradient(135deg, ${p2Tier.glowColor}40, transparent)`,
                 boxShadow: isP2Winner ? `0 0 8px ${p2Tier.glowColor}` : 'none'
@@ -383,28 +384,28 @@ const FinalBoardView = ({
             >
               <TierIcon shape={p2Tier.shape} glowColor={p2Tier.glowColor} size="small" />
             </div>
-            {isP2Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
+            {isP2Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400" />}
           </div>
         </div>
       </div>
 
-      {/* STATUS LINE - Minimal */}
-      <div className="text-center py-0.5 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
+      {/* STATUS LINE */}
+      <div className="text-center py-1.5 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
         {showFinal ? (
-          <span className="text-amber-400 font-medium text-[11px]">
+          <span className="text-amber-400 font-medium text-xs">
             {(isP1Winner || isP2Winner) ? `🏆 ${isP1Winner ? p1Name : p2Name} wins!` : 'Final'} 
-            <span className="text-slate-400 ml-1.5">• {totalMoves} moves</span>
+            <span className="text-slate-400 ml-2">• {totalMoves} moves</span>
           </span>
         ) : (
-          <span className="text-slate-300 text-[11px]">
+          <span className="text-slate-300 text-xs">
             Move <span className="text-white font-bold">{currentMoveIndex + 1}</span>
             <span className="text-slate-500">/{totalMoves}</span>
           </span>
         )}
       </div>
 
-      {/* BOARD AREA - Fills remaining space with minimal padding */}
-      <div className="flex-1 flex items-center justify-center px-2 py-1 min-h-0 overflow-hidden">
+      {/* BOARD AREA - Fills remaining space with padding */}
+      <div className="flex-1 flex items-center justify-center px-4 py-3 min-h-0 overflow-hidden">
         {isLoadingMoves ? (
           <div className="text-center">
             <Loader size={28} className="text-purple-400 animate-spin mx-auto mb-1" />
@@ -413,14 +414,14 @@ const FinalBoardView = ({
         ) : (
           /* Board Grid - Matches GameBoard sizing, constrained to fit screen */
           <div 
-            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
+            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-xl bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
             style={{
               boxShadow: '0 0 20px rgba(0,0,0,0.3), inset 0 0 15px rgba(0,0,0,0.2)',
-              // v7.17: Use min of width and height to keep board square and fitting
-              width: 'min(calc(100vw - 16px), calc(100vh - 160px))',
-              height: 'min(calc(100vw - 16px), calc(100vh - 160px))',
-              maxWidth: '400px',
-              maxHeight: '400px',
+              // v7.18: Account for larger header/footer with 220px offset
+              width: 'min(calc(100vw - 32px), calc(100vh - 220px))',
+              height: 'min(calc(100vw - 32px), calc(100vh - 220px))',
+              maxWidth: '380px',
+              maxHeight: '380px',
             }}
           >
             {currentState.board.map((row, rowIdx) =>
@@ -501,12 +502,17 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* CONTROLS - Compact at bottom */}
-      <div className="bg-slate-900/90 border-t border-slate-700/50 px-3 py-1.5 flex-shrink-0">
+      {/* CONTROLS - More padding at bottom */}
+      <div 
+        className="bg-slate-900/90 border-t border-slate-700/50 px-4 py-3 flex-shrink-0"
+        style={{
+          paddingBottom: 'max(12px, calc(env(safe-area-inset-bottom) + 8px))'
+        }}
+      >
         {/* Progress bar */}
         {totalMoves > 0 && (
-          <div className="mb-1.5">
-            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+          <div className="mb-2.5">
+            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
                 style={{ 
@@ -520,45 +526,45 @@ const FinalBoardView = ({
         )}
         
         {/* Control buttons */}
-        <div className="flex items-center justify-center gap-1">
+        <div className="flex items-center justify-center gap-2">
           <button
             onClick={first}
             disabled={totalMoves === 0}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
           >
-            <SkipBack size={14} />
+            <SkipBack size={16} />
           </button>
           
           <button
             onClick={prev}
             disabled={totalMoves === 0}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={20} />
           </button>
           
           <button
             onClick={isPlaying ? pause : play}
             disabled={totalMoves === 0}
-            className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-1"
+            className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-2 shadow-lg"
           >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
+            {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
           </button>
           
           <button
             onClick={next}
             disabled={totalMoves === 0}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
           >
-            <ChevronRight size={18} />
+            <ChevronRight size={20} />
           </button>
           
           <button
             onClick={last}
             disabled={totalMoves === 0}
-            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
           >
-            <SkipForward size={14} />
+            <SkipForward size={16} />
           </button>
         </div>
       </div>
