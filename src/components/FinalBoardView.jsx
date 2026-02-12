@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.19 - Compact layout: reduced board-to-controls spacing, more header padding for iPhone
 // v7.18 - Added more padding to header/footer, safe area handling for mobile
 // v7.17 - Full screen takeover with z-[60], fully opaque background
 // v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
@@ -303,12 +304,13 @@ const FinalBoardView = ({
     <div 
       className="fixed inset-0 z-[60] bg-slate-950 flex flex-col"
       style={{
-        paddingTop: 'env(safe-area-inset-top)',
+        // v7.19: More padding at top for iPhone notch/dynamic island
+        paddingTop: 'max(8px, env(safe-area-inset-top))',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
       {/* HEADER - With Back Button and Deadblock Title */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
         {/* Back Button */}
         <button 
           onClick={onClose}
@@ -344,8 +346,8 @@ const FinalBoardView = ({
         </div>
       </div>
 
-      {/* PLAYER INFO - More spacious */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-900/70 border-b border-slate-700/30 flex-shrink-0">
+      {/* PLAYER INFO - Compact */}
+      <div className="flex items-center justify-between px-4 py-1.5 bg-slate-900/70 border-b border-slate-700/30 flex-shrink-0">
         {/* Player 1 */}
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -390,7 +392,7 @@ const FinalBoardView = ({
       </div>
 
       {/* STATUS LINE */}
-      <div className="text-center py-1.5 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
+      <div className="text-center py-1 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
         {showFinal ? (
           <span className="text-amber-400 font-medium text-xs">
             {(isP1Winner || isP2Winner) ? `🏆 ${isP1Winner ? p1Name : p2Name} wins!` : 'Final'} 
@@ -404,8 +406,8 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* BOARD AREA - Fills remaining space with padding */}
-      <div className="flex-1 flex items-center justify-center px-4 py-3 min-h-0 overflow-hidden">
+      {/* BOARD AREA - Minimal padding to maximize board size */}
+      <div className="flex-1 flex items-center justify-center px-3 py-1 min-h-0 overflow-hidden">
         {isLoadingMoves ? (
           <div className="text-center">
             <Loader size={28} className="text-purple-400 animate-spin mx-auto mb-1" />
@@ -417,11 +419,11 @@ const FinalBoardView = ({
             className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-xl bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
             style={{
               boxShadow: '0 0 20px rgba(0,0,0,0.3), inset 0 0 15px rgba(0,0,0,0.2)',
-              // v7.18: Account for larger header/footer with 220px offset
-              width: 'min(calc(100vw - 32px), calc(100vh - 220px))',
-              height: 'min(calc(100vw - 32px), calc(100vh - 220px))',
-              maxWidth: '380px',
-              maxHeight: '380px',
+              // v7.19: Reduced offset for compact layout (was 220px)
+              width: 'min(calc(100vw - 24px), calc(100vh - 180px))',
+              height: 'min(calc(100vw - 24px), calc(100vh - 180px))',
+              maxWidth: '400px',
+              maxHeight: '400px',
             }}
           >
             {currentState.board.map((row, rowIdx) =>
@@ -502,17 +504,18 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* CONTROLS - More padding at bottom */}
+      {/* CONTROLS - Compact, directly below board */}
       <div 
-        className="bg-slate-900/90 border-t border-slate-700/50 px-4 py-3 flex-shrink-0"
+        className="bg-slate-900/90 border-t border-slate-700/50 px-4 pt-2 flex-shrink-0"
         style={{
-          paddingBottom: 'max(12px, calc(env(safe-area-inset-bottom) + 8px))'
+          // v7.19: Better safe area padding for home indicator
+          paddingBottom: 'max(16px, calc(env(safe-area-inset-bottom) + 12px))'
         }}
       >
         {/* Progress bar */}
         {totalMoves > 0 && (
-          <div className="mb-2.5">
-            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+          <div className="mb-2">
+            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
                 style={{ 
@@ -546,7 +549,7 @@ const FinalBoardView = ({
           <button
             onClick={isPlaying ? pause : play}
             disabled={totalMoves === 0}
-            className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-2 shadow-lg"
+            className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-1 shadow-lg"
           >
             {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
           </button>
