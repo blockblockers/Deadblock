@@ -2424,7 +2424,7 @@ const OnlineMenu = ({
                                     // v7.18: Small delay before navigation to let modal close
                                     setTimeout(() => {
                                       onResumeGame(game);
-                                    }, 50);
+                                    }, 100);
                                   }}
                                   className="w-full p-4 rounded-lg flex items-center justify-between transition-all bg-gradient-to-r from-red-900/40 to-red-800/30 border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)] animate-pulse"
                                 >

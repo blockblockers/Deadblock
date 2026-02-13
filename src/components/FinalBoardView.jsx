@@ -1,5 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
-// v7.18 - Fixed layout: more top padding for iPhone, compact board-to-controls spacing, proper safe area
+// v7.18 - Fixed layout: proper safe area padding, compact spacing, play button visible
 // v7.17 - Full screen takeover with z-[60], fully opaque background
 // v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
 // v7.17 - COMPACT LAYOUT UPDATE
@@ -303,12 +303,12 @@ const FinalBoardView = ({
     <div 
       className="fixed inset-0 z-[60] bg-slate-950 flex flex-col"
       style={{
-        // v7.18: Extra top padding for iPhone notch/dynamic island
-        paddingTop: 'max(12px, env(safe-area-inset-top))',
+        // v7.18: Safe area padding for notch/dynamic island
+        paddingTop: 'max(8px, env(safe-area-inset-top))',
       }}
     >
-      {/* HEADER - Compact with Back Button and Deadblock Title */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
+      {/* HEADER - Very compact */}
+      <div className="flex items-center justify-between px-3 py-1 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
         {/* Back Button */}
         <button 
           onClick={onClose}
@@ -404,7 +404,7 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* BOARD AREA - Minimal vertical padding, board directly connected to controls */}
+      {/* BOARD AREA - Minimal padding, room for controls */}
       <div className="flex-1 flex items-center justify-center px-2 min-h-0 overflow-hidden">
         {isLoadingMoves ? (
           <div className="text-center">
@@ -417,11 +417,12 @@ const FinalBoardView = ({
             className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
             style={{
               boxShadow: '0 0 20px rgba(0,0,0,0.3), inset 0 0 15px rgba(0,0,0,0.2)',
-              // v7.18: Increased offset (200px) to leave room for controls + safe area
-              width: 'min(calc(100vw - 16px), calc(100vh - 200px))',
-              height: 'min(calc(100vw - 16px), calc(100vh - 200px))',
-              maxWidth: '400px',
-              maxHeight: '400px',
+              // v7.18: Board sizing uses dvh (dynamic viewport height) for better mobile support
+              // Fallback to vh for older browsers, 260px offset for header+player+status+controls
+              width: 'min(calc(100vw - 24px), calc(100dvh - 260px), calc(100vh - 260px))',
+              height: 'min(calc(100vw - 24px), calc(100dvh - 260px), calc(100vh - 260px))',
+              maxWidth: '340px',
+              maxHeight: '340px',
             }}
           >
             {currentState.board.map((row, rowIdx) =>
@@ -507,13 +508,13 @@ const FinalBoardView = ({
         className="bg-slate-900/90 border-t border-slate-700/50 px-3 pt-2 flex-shrink-0"
         style={{
           // v7.18: Proper bottom padding for iPhone home indicator
-          paddingBottom: 'max(12px, calc(env(safe-area-inset-bottom) + 8px))',
+          paddingBottom: 'max(16px, calc(env(safe-area-inset-bottom) + 8px))',
         }}
       >
         {/* Progress bar */}
         {totalMoves > 0 && (
           <div className="mb-2">
-            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
                 style={{ 
@@ -547,7 +548,7 @@ const FinalBoardView = ({
           <button
             onClick={isPlaying ? pause : play}
             disabled={totalMoves === 0}
-            className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-1 shadow-lg"
+            className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-1 shadow-lg shadow-purple-500/30"
           >
             {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
           </button>

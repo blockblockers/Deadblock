@@ -384,13 +384,13 @@ const ViewPlayerProfile = ({
         className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
         style={{
-          // v7.18: Safe area padding
+          // v7.18: Safe area padding for iPhone
           paddingTop: 'max(16px, env(safe-area-inset-top))',
           paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         }}
       >
         <div 
-          className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border shadow-2xl max-h-[90vh] flex flex-col"
+          className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border shadow-2xl max-h-[85vh] flex flex-col"
           style={{ 
             borderColor: hexToRgba(glowColor, 0.3),
             boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
@@ -420,7 +420,6 @@ const ViewPlayerProfile = ({
               overscrollBehavior: 'contain',
               touchAction: 'pan-y',
               minHeight: 0, // v7.18: Critical for flex children to scroll
-              // Hardware acceleration for smooth iOS scrolling
               transform: 'translateZ(0)',
               willChange: 'scroll-position',
             }}

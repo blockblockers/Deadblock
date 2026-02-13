@@ -1,5 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.18: Removed duplicate back button from header (Menu button exists below grid)
+// v7.18: Fixed completed game modal - reset dismissedGameOverRef when gameId changes
 // v7.17: Fixed gold confetti highlighting all cells of winning piece using getPieceCoords
 // v7.15: Removed duplicate pieces bars, chat icon now overlays bottom-right of piece tray
 // v7.14: Added streak tracking on game completion
@@ -9,7 +9,7 @@
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle } from 'lucide-react';
+import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -834,6 +834,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (!currentGameId || !userId) return;
     
     mountedRef.current = true;
+    
+    // v7.18: Reset game over state when loading a new game
+    // This fixes the issue where dismissedGameOverRef stays true between games
+    dismissedGameOverRef.current = false;
+    setShowGameOver(false);
+    setGameResult(null);
+    setWinningMoveCells(null);
+    
     // console.log('OnlineGameScreen: Starting game load', { gameId: currentGameId, userId });
 
     const loadingTimeout = setTimeout(() => {
@@ -1032,6 +1040,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     return () => {
       mountedRef.current = false;
+      // v7.18: Reset dismissedGameOverRef on cleanup so it's fresh for next game
+      dismissedGameOverRef.current = false;
       clearTimeout(loadingTimeout);
       if (subscription) {
         subscription.unsubscribe();
@@ -1530,10 +1540,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
-          {/* UPDATED: Header with centered title, NO back button (Menu exists below grid) */}
+          {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
           <div className="flex items-center justify-between mb-2">
-            {/* Spacer for symmetry */}
-            <div className="w-16" />
+            <button
+              onClick={handleLeave}
+              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
+            >
+              <ArrowLeft size={16} />
+              Menu
+            </button>
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
