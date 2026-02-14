@@ -1,5 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.18: Fixed completed game modal - reset dismissedGameOverRef when gameId changes
+// v7.18: Fixed 5-second game over modal - removed stale closure check, use ref only
 // v7.17: Fixed gold confetti highlighting all cells of winning piece using getPieceCoords
 // v7.15: Removed duplicate pieces bars, chat icon now overlays bottom-right of piece tray
 // v7.14: Added streak tracking on game completion
@@ -929,10 +929,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             }
           }
           
-          // v7.13: Show game over modal after 5 second delay for completed games
+          // v7.18: Show game over modal after 5 second delay for completed games
           // This gives user time to see the board and the winning move
+          // NOTE: Only check dismissedGameOverRef (not showGameOver) to avoid stale closure
           setTimeout(() => {
-            if (mountedRef.current && !showGameOver && !dismissedGameOverRef.current) {
+            if (mountedRef.current && !dismissedGameOverRef.current) {
               setShowGameOver(true);
               soundManager.playSound(iWon ? 'win' : 'lose');
             }

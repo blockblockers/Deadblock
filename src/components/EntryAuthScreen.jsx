@@ -1,4 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.18: Fixed footer positioning - sits at bottom of screen with proper safe area
 // v7.15: Added account deletion modal for App Store/Play Store compliance
 // Features:
 // - Clear separation between Google sign-in and local account
@@ -275,12 +276,13 @@ const EntryAuthScreen = ({
     onCancelInvite?.();
   };
 
-  // Scroll styles for mobile/iPad
+  // Scroll styles for mobile/iPad - v7.18: Added smooth scrolling
   const scrollStyles = needsScroll ? {
     overflow: 'auto',
     WebkitOverflowScrolling: 'touch',
     touchAction: 'pan-y pinch-zoom',
     overscrollBehavior: 'contain',
+    scrollBehavior: 'smooth',
     height: '100%',
     minHeight: '100dvh',
   } : {};
@@ -1108,7 +1110,7 @@ const EntryAuthScreen = ({
       <div className="relative z-10 flex-1 flex flex-col items-center p-4 pt-12 sm:pt-16"
         style={{
           paddingTop: 'max(48px, env(safe-area-inset-top))',
-          paddingBottom: 'max(80px, env(safe-area-inset-bottom))',
+          paddingBottom: '16px',
         }}
       >
         {/* Spacer to push content to ~35% from top on larger screens */}
@@ -1143,10 +1145,12 @@ const EntryAuthScreen = ({
         <div className="flex-1" />
       </div>
 
-      {/* Footer - Fixed at bottom (Privacy/Terms links now in index.html footer) */}
-      <div className="relative z-10 text-center pb-5 px-4"
+      {/* Footer - At bottom with safe area */}
+      <div 
+        className="relative z-10 text-center px-4 flex-shrink-0"
         style={{
-          paddingBottom: 'max(20px, env(safe-area-inset-bottom))',
+          paddingTop: '8px',
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
         }}
       >
         <p className="text-slate-600 text-xs mb-2">

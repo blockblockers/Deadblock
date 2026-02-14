@@ -1,5 +1,5 @@
 // ViewPlayerProfile - View another player's profile
-// v7.18: Fixed scroll - removed touchAction:none from backdrop, added minHeight:0, hardware acceleration
+// v7.18: Fixed scroll - removed flex layout, use explicit overflow-y-auto with max-height
 // v7.12: Added full stats display (AI wins, puzzle stats) for all players
 // v7.12: Added player_stats loading from profiles table
 // v7.12: Final Board View now fetches moves for full replay functionality
@@ -380,28 +380,40 @@ const ViewPlayerProfile = ({
 
   return (
     <>
+      {/* Backdrop - NO touchAction:none */}
       <div 
-        className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal Container - Centered, handles safe areas */}
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
         style={{
-          // v7.18: Safe area padding for iPhone
+          padding: '16px',
           paddingTop: 'max(16px, env(safe-area-inset-top))',
           paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         }}
       >
+        {/* Modal */}
         <div 
-          className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border shadow-2xl max-h-[85vh] flex flex-col"
+          className="bg-slate-900 rounded-xl max-w-md w-full border shadow-2xl pointer-events-auto"
           style={{ 
             borderColor: hexToRgba(glowColor, 0.3),
             boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
-            minHeight: 0, // v7.18: Critical for flex scroll to work
+            maxHeight: '85vh',
+            display: 'flex',
+            flexDirection: 'column',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
+          {/* Header - Fixed */}
           <div 
-            className="p-4 border-b flex items-center justify-between flex-shrink-0"
-            style={{ borderColor: hexToRgba(glowColor, 0.2) }}
+            className="p-4 border-b flex items-center justify-between"
+            style={{ 
+              borderColor: hexToRgba(glowColor, 0.2),
+              flexShrink: 0,
+            }}
           >
             <h2 className="text-lg font-bold text-white">Player Profile</h2>
             <button
@@ -412,16 +424,14 @@ const ViewPlayerProfile = ({
             </button>
           </div>
           
-          {/* Content - Scrollable */}
+          {/* Content - Scrollable with explicit overflow */}
           <div 
-            className="p-4 overflow-y-auto flex-1 overscroll-contain"
+            className="p-4 overflow-y-auto overscroll-contain"
             style={{ 
+              flex: '1 1 auto',
+              minHeight: 0,
               WebkitOverflowScrolling: 'touch',
               overscrollBehavior: 'contain',
-              touchAction: 'pan-y',
-              minHeight: 0, // v7.18: Critical for flex children to scroll
-              transform: 'translateZ(0)',
-              willChange: 'scroll-position',
             }}
           >
             {loading ? (
@@ -765,6 +775,7 @@ const ViewPlayerProfile = ({
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Final Board View Modal */}

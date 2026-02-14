@@ -1,5 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
-// v7.18 - Fixed layout: proper safe area padding, compact spacing, play button visible
+// v7.18 - Added cyberpunk grid background, controls directly under board, more header padding
 // v7.17 - Full screen takeover with z-[60], fully opaque background
 // v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
 // v7.17 - COMPACT LAYOUT UPDATE
@@ -301,21 +301,35 @@ const FinalBoardView = ({
 
   return (
     <div 
-      className="fixed inset-0 z-[60] bg-slate-950 flex flex-col"
+      className="fixed inset-0 z-[60] flex flex-col overflow-hidden"
       style={{
-        // v7.18: Safe area padding for notch/dynamic island
-        paddingTop: 'max(8px, env(safe-area-inset-top))',
+        // v7.18: Cyberpunk grid background pattern
+        background: `
+          linear-gradient(to bottom, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.99)),
+          repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.03) 40px, rgba(139, 92, 246, 0.03) 41px),
+          repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.03) 40px, rgba(139, 92, 246, 0.03) 41px)
+        `,
+        backgroundColor: '#0f172a',
       }}
     >
-      {/* HEADER - Very compact */}
-      <div className="flex items-center justify-between px-3 py-1 bg-slate-900/90 border-b border-slate-700/50 flex-shrink-0 relative">
+      {/* v7.18: Extra padding at top for iPhone notch/dynamic island */}
+      <div 
+        className="flex-shrink-0"
+        style={{ 
+          height: 'max(16px, env(safe-area-inset-top))',
+          background: 'linear-gradient(to bottom, rgba(15, 23, 42, 1), transparent)'
+        }}
+      />
+      
+      {/* HEADER - With Back Button and Deadblock Title */}
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20 flex-shrink-0 relative backdrop-blur-sm">
         {/* Back Button */}
         <button 
           onClick={onClose}
-          className="flex items-center gap-1 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all"
+          className="flex items-center gap-1.5 px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all"
         >
           <ArrowLeft size={18} />
-          <span className="text-xs hidden sm:inline">Back</span>
+          <span className="text-xs">Back</span>
         </button>
         
         {/* Centered Deadblock Title */}
@@ -324,17 +338,17 @@ const FinalBoardView = ({
         </div>
         
         {/* Speed control - compact */}
-        <div className="flex gap-0.5">
+        <div className="flex gap-1">
           {[1000, 500, 250].map((speed, idx) => {
             const labels = ['1x', '2x', '4x'];
             return (
               <button
                 key={speed}
                 onClick={() => setPlaybackSpeed(speed)}
-                className={`px-1.5 py-0.5 text-[10px] font-bold rounded transition-all ${
+                className={`px-2 py-1 text-[10px] font-bold rounded transition-all ${
                   playbackSpeed === speed 
-                    ? 'bg-purple-600 text-white' 
-                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/30' 
+                    : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-700'
                 }`}
               >
                 {labels[idx]}
@@ -344,87 +358,88 @@ const FinalBoardView = ({
         </div>
       </div>
 
-      {/* PLAYER INFO - More compact */}
-      <div className="flex items-center justify-between px-3 py-1 bg-slate-900/70 border-b border-slate-700/30 flex-shrink-0">
+      {/* PLAYER INFO - Compact with glow effects */}
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/60 border-b border-slate-700/30 flex-shrink-0">
         {/* Player 1 */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <div className="relative">
             <div 
-              className="w-6 h-6 rounded-md flex items-center justify-center"
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
               style={{ 
                 background: `linear-gradient(135deg, ${p1Tier.glowColor}40, transparent)`,
-                boxShadow: isP1Winner ? `0 0 8px ${p1Tier.glowColor}` : 'none'
+                boxShadow: isP1Winner ? `0 0 12px ${p1Tier.glowColor}` : 'none'
               }}
             >
               <TierIcon shape={p1Tier.shape} glowColor={p1Tier.glowColor} size="small" />
             </div>
-            {isP1Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
+            {isP1Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400 drop-shadow-lg" />}
           </div>
           <div>
-            <div className={`font-bold text-[11px] ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
-            <div className="text-slate-500 text-[9px]">{p1Rating}</div>
+            <div className={`font-bold text-xs ${isP1Winner ? 'text-amber-400' : 'text-white'}`}>{p1Name}</div>
+            <div className="text-slate-500 text-[10px]">{p1Rating}</div>
           </div>
         </div>
 
-        <span className="text-slate-600 font-black text-[10px]">VS</span>
+        <span className="text-slate-600 font-black text-xs px-2">VS</span>
 
         {/* Player 2 */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <div className="text-right">
-            <div className={`font-bold text-[11px] ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
-            <div className="text-slate-500 text-[9px]">{p2Rating}</div>
+            <div className={`font-bold text-xs ${isP2Winner ? 'text-amber-400' : 'text-white'}`}>{p2Name}</div>
+            <div className="text-slate-500 text-[10px]">{p2Rating}</div>
           </div>
           <div className="relative">
             <div 
-              className="w-6 h-6 rounded-md flex items-center justify-center"
+              className="w-7 h-7 rounded-lg flex items-center justify-center"
               style={{ 
                 background: `linear-gradient(135deg, ${p2Tier.glowColor}40, transparent)`,
-                boxShadow: isP2Winner ? `0 0 8px ${p2Tier.glowColor}` : 'none'
+                boxShadow: isP2Winner ? `0 0 12px ${p2Tier.glowColor}` : 'none'
               }}
             >
               <TierIcon shape={p2Tier.shape} glowColor={p2Tier.glowColor} size="small" />
             </div>
-            {isP2Winner && <Trophy size={8} className="absolute -top-0.5 -right-0.5 text-amber-400" />}
+            {isP2Winner && <Trophy size={10} className="absolute -top-1 -right-1 text-amber-400 drop-shadow-lg" />}
           </div>
         </div>
       </div>
 
-      {/* STATUS LINE - Minimal */}
-      <div className="text-center py-0.5 bg-slate-900/50 border-b border-slate-700/30 flex-shrink-0">
+      {/* STATUS LINE */}
+      <div className="text-center py-1 bg-slate-900/40 border-b border-slate-700/20 flex-shrink-0">
         {showFinal ? (
-          <span className="text-amber-400 font-medium text-[11px]">
+          <span className="text-amber-400 font-medium text-xs">
             {(isP1Winner || isP2Winner) ? `🏆 ${isP1Winner ? p1Name : p2Name} wins!` : 'Final'} 
-            <span className="text-slate-400 ml-1.5">• {totalMoves} moves</span>
+            <span className="text-slate-400 ml-2">• {totalMoves} moves</span>
           </span>
         ) : (
-          <span className="text-slate-300 text-[11px]">
+          <span className="text-slate-300 text-xs">
             Move <span className="text-white font-bold">{currentMoveIndex + 1}</span>
             <span className="text-slate-500">/{totalMoves}</span>
           </span>
         )}
       </div>
 
-      {/* BOARD AREA - Minimal padding, room for controls */}
-      <div className="flex-1 flex items-center justify-center px-2 min-h-0 overflow-hidden">
+      {/* BOARD + CONTROLS AREA - Centered together */}
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-2 min-h-0">
         {isLoadingMoves ? (
           <div className="text-center">
-            <Loader size={28} className="text-purple-400 animate-spin mx-auto mb-1" />
-            <p className="text-slate-400 text-xs">Loading game...</p>
+            <Loader size={32} className="text-purple-400 animate-spin mx-auto mb-2" />
+            <p className="text-slate-400 text-sm">Loading game...</p>
           </div>
         ) : (
-          /* Board Grid - Matches GameBoard sizing, constrained to fit screen */
-          <div 
-            className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1 sm:p-1.5 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
-            style={{
-              boxShadow: '0 0 20px rgba(0,0,0,0.3), inset 0 0 15px rgba(0,0,0,0.2)',
-              // v7.18: Board sizing uses dvh (dynamic viewport height) for better mobile support
-              // Fallback to vh for older browsers, 260px offset for header+player+status+controls
-              width: 'min(calc(100vw - 24px), calc(100dvh - 260px), calc(100vh - 260px))',
-              height: 'min(calc(100vw - 24px), calc(100dvh - 260px), calc(100vh - 260px))',
-              maxWidth: '340px',
-              maxHeight: '340px',
-            }}
-          >
+          <div className="flex flex-col items-center">
+            {/* Board Grid with cyberpunk styling */}
+            <div 
+              className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-xl border border-purple-500/30"
+              style={{
+                background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))',
+                boxShadow: '0 0 30px rgba(139, 92, 246, 0.15), inset 0 0 20px rgba(0,0,0,0.3)',
+                // Board sizing - leaves room for controls below
+                width: 'min(calc(100vw - 32px), calc(100dvh - 320px), calc(100vh - 320px))',
+                height: 'min(calc(100vw - 32px), calc(100dvh - 320px), calc(100vh - 320px))',
+                maxWidth: '340px',
+                maxHeight: '340px',
+              }}
+            >
             {currentState.board.map((row, rowIdx) =>
               row.map((cellValue, colIdx) => {
                 const key = `${rowIdx}-${colIdx}`;
@@ -499,77 +514,80 @@ const FinalBoardView = ({
                 );
               })
             )}
+            </div>
+            
+            {/* CONTROLS - Directly under board */}
+            <div className="w-full max-w-[340px] mt-3">
+              {/* Progress bar */}
+              {totalMoves > 0 && (
+                <div className="mb-2 px-2">
+                  <div className="h-1.5 bg-slate-700/80 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
+                      style={{ 
+                        width: showFinal 
+                          ? '100%' 
+                          : `${((currentMoveIndex + 1) / totalMoves) * 100}%` 
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {/* Control buttons - larger touch targets */}
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={first}
+                  disabled={totalMoves === 0}
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                >
+                  <SkipBack size={16} />
+                </button>
+                
+                <button
+                  onClick={prev}
+                  disabled={totalMoves === 0}
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                
+                <button
+                  onClick={isPlaying ? pause : play}
+                  disabled={totalMoves === 0}
+                  className="p-3.5 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-2 shadow-lg shadow-purple-500/40"
+                >
+                  {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" />}
+                </button>
+                
+                <button
+                  onClick={next}
+                  disabled={totalMoves === 0}
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                >
+                  <ChevronRight size={20} />
+                </button>
+                
+                <button
+                  onClick={last}
+                  disabled={totalMoves === 0}
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                >
+                  <SkipForward size={16} />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      {/* CONTROLS - At bottom with safe area padding */}
+      {/* Bottom safe area padding */}
       <div 
-        className="bg-slate-900/90 border-t border-slate-700/50 px-3 pt-2 flex-shrink-0"
-        style={{
-          // v7.18: Proper bottom padding for iPhone home indicator
-          paddingBottom: 'max(16px, calc(env(safe-area-inset-bottom) + 8px))',
+        className="flex-shrink-0"
+        style={{ 
+          height: 'max(8px, env(safe-area-inset-bottom))',
         }}
-      >
-        {/* Progress bar */}
-        {totalMoves > 0 && (
-          <div className="mb-2">
-            <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
-                style={{ 
-                  width: showFinal 
-                    ? '100%' 
-                    : `${((currentMoveIndex + 1) / totalMoves) * 100}%` 
-                }}
-              />
-            </div>
-          </div>
-        )}
-        
-        {/* Control buttons - larger touch targets */}
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={first}
-            disabled={totalMoves === 0}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
-          >
-            <SkipBack size={16} />
-          </button>
-          
-          <button
-            onClick={prev}
-            disabled={totalMoves === 0}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
-          >
-            <ChevronLeft size={20} />
-          </button>
-          
-          <button
-            onClick={isPlaying ? pause : play}
-            disabled={totalMoves === 0}
-            className="p-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-1 shadow-lg shadow-purple-500/30"
-          >
-            {isPlaying ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
-          </button>
-          
-          <button
-            onClick={next}
-            disabled={totalMoves === 0}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
-          >
-            <ChevronRight size={20} />
-          </button>
-          
-          <button
-            onClick={last}
-            disabled={totalMoves === 0}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all disabled:opacity-30"
-          >
-            <SkipForward size={16} />
-          </button>
-        </div>
-      </div>
+      />
 
       {/* Animation styles */}
       <style>{`
