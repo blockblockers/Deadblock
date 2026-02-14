@@ -776,7 +776,6 @@ const ViewPlayerProfile = ({
           )}
         </div>
       </div>
-      </div>
 
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
