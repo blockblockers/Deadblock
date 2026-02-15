@@ -1,4 +1,5 @@
 // Game Sync Service - Real-time game state management
+// v7.19: Database-based viewed game tracking (persists across cache clears)
 // FIXED: 
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
@@ -486,8 +487,9 @@ class GameSyncService {
     }
   }
 
-  // v7.15.2: Get active games + unviewed completed games (losses/wins the user hasn't seen yet)
-  // Uses localStorage to track which completed games have been viewed
+  // v7.19: Get active games + unviewed completed games (losses/wins the user hasn't seen yet)
+  // Uses DATABASE to track which completed games have been viewed (persists across cache clears)
+  // Falls back to localStorage if database columns don't exist yet
   async getActiveAndUnviewedGames(userId) {
     if (!supabase || !userId) return { data: [], error: null };
 
@@ -497,31 +499,72 @@ class GameSyncService {
     }
 
     try {
-      // v7.18: Get user-specific viewed games from localStorage
-      const viewedGames = this.getViewedGames(userId);
-
       // Fetch active games
       const activeResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.active&order=updated_at.desc&select=*`,
         { headers }
       );
 
-      // Fetch ALL completed games (we'll filter by viewed status client-side)
-      // Limit to last 50 to avoid fetching entire history
-      const completedResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.completed&order=updated_at.desc&limit=50&select=*`,
-        { headers }
-      );
+      // v7.19: Try database-based filtering first (new columns)
+      // If that fails (columns don't exist), fall back to localStorage filtering
+      let unviewedCompleted = [];
+      let usedDatabaseFiltering = false;
+      
+      try {
+        const completedAsPlayer1Response = await fetch(
+          `${SUPABASE_URL}/rest/v1/games?player1_id=eq.${userId}&status=eq.completed&player1_viewed_at=is.null&order=updated_at.desc&limit=50&select=*`,
+          { headers }
+        );
+        
+        const completedAsPlayer2Response = await fetch(
+          `${SUPABASE_URL}/rest/v1/games?player2_id=eq.${userId}&status=eq.completed&player2_viewed_at=is.null&order=updated_at.desc&limit=50&select=*`,
+          { headers }
+        );
 
-      if (!activeResponse.ok || !completedResponse.ok) {
+        if (completedAsPlayer1Response.ok && completedAsPlayer2Response.ok) {
+          const p1Games = await completedAsPlayer1Response.json();
+          const p2Games = await completedAsPlayer2Response.json();
+          
+          // Check if we got valid responses (not errors due to missing columns)
+          if (Array.isArray(p1Games) && Array.isArray(p2Games)) {
+            unviewedCompleted = [...p1Games, ...p2Games];
+            usedDatabaseFiltering = true;
+          }
+        }
+      } catch (dbError) {
+        console.log('[GameSync] Database filtering not available, using localStorage fallback');
+      }
+      
+      // Fallback to localStorage filtering if database filtering didn't work
+      if (!usedDatabaseFiltering) {
+        const viewedGames = this.getViewedGames(userId);
+        const completedResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.completed&order=updated_at.desc&limit=50&select=*`,
+          { headers }
+        );
+        
+        if (completedResponse.ok) {
+          const completedGames = await completedResponse.json();
+          unviewedCompleted = completedGames.filter(game => !viewedGames.includes(game.id));
+        }
+      }
+
+      if (!activeResponse.ok) {
         return { data: [], error: { message: 'Failed to fetch games' } };
       }
 
       const activeGames = await activeResponse.json();
-      const completedGames = await completedResponse.json();
-
-      // Filter completed games to only include unviewed ones (no time limit)
-      const unviewedCompleted = completedGames.filter(game => !viewedGames.includes(game.id));
+      
+      // Deduplicate (in case same game appears in both player1 and player2 results)
+      const seenIds = new Set();
+      unviewedCompleted = unviewedCompleted.filter(game => {
+        if (seenIds.has(game.id)) return false;
+        seenIds.add(game.id);
+        return true;
+      });
+      
+      // Sort by updated_at descending
+      unviewedCompleted.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
 
       // Mark unviewed completed games with flags
       unviewedCompleted.forEach(game => {
@@ -568,30 +611,82 @@ class GameSyncService {
     }
   }
 
-  // v7.18: Mark a completed game as viewed (stores in user-specific localStorage)
-  markGameAsViewed(gameId, userId) {
+  // v7.19: Mark a completed game as viewed (stores in DATABASE for persistence)
+  // Also updates localStorage as backup/cache
+  // Gracefully falls back to localStorage-only if database columns don't exist
+  async markGameAsViewed(gameId, userId) {
     if (!gameId || !userId) return;
     
+    // Always update localStorage first (immediate, guaranteed to work)
     try {
       const viewedGames = this.getViewedGames(userId);
       if (!viewedGames.includes(gameId)) {
         viewedGames.push(gameId);
-        // Keep only last 100 viewed games to prevent localStorage bloat
         const trimmed = viewedGames.slice(-100);
         localStorage.setItem(`deadblock_viewed_games_${userId}`, JSON.stringify(trimmed));
-        console.log('[GameSync] Marked game as viewed:', gameId, 'for user:', userId);
       }
     } catch (e) {
-      console.warn('[GameSync] Failed to mark game as viewed:', e);
+      console.warn('[GameSync] Failed to update localStorage:', e);
+    }
+    
+    // Then try to update database (async, may fail if columns don't exist)
+    try {
+      const headers = getAuthHeaders();
+      if (headers) {
+        // First, get the game to determine if user is player1 or player2
+        const gameResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}&select=player1_id,player2_id`,
+          { headers }
+        );
+        
+        if (gameResponse.ok) {
+          const games = await gameResponse.json();
+          if (games.length > 0) {
+            const game = games[0];
+            const isPlayer1 = game.player1_id === userId;
+            const columnToUpdate = isPlayer1 ? 'player1_viewed_at' : 'player2_viewed_at';
+            
+            // Update the viewed_at timestamp
+            const updateResponse = await fetch(
+              `${SUPABASE_URL}/rest/v1/games?id=eq.${gameId}`,
+              {
+                method: 'PATCH',
+                headers: {
+                  ...headers,
+                  'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({
+                  [columnToUpdate]: new Date().toISOString()
+                })
+              }
+            );
+            
+            if (updateResponse.ok) {
+              console.log(`[GameSync] Marked game ${gameId} as viewed in database for user ${userId}`);
+            } else {
+              // Column might not exist yet - that's ok, localStorage backup is working
+              console.log('[GameSync] Database update skipped (column may not exist yet)');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Database update failed - that's ok, localStorage backup is working
+      console.log('[GameSync] Database viewed update failed, using localStorage only:', e.message);
     }
   }
 
-  // v7.18: Get list of viewed game IDs from localStorage (user-specific)
+  // v7.19: Get list of viewed game IDs from localStorage (backup/cache)
   getViewedGames(userId) {
-    if (!userId) return [];
     try {
-      const stored = localStorage.getItem(`deadblock_viewed_games_${userId}`);
-      return stored ? JSON.parse(stored) : [];
+      // Try user-specific key first
+      if (userId) {
+        const stored = localStorage.getItem(`deadblock_viewed_games_${userId}`);
+        if (stored) return JSON.parse(stored);
+      }
+      // Fallback to old non-user-specific key for migration
+      const oldStored = localStorage.getItem('deadblock_viewed_games');
+      return oldStored ? JSON.parse(oldStored) : [];
     } catch (e) {
       return [];
     }

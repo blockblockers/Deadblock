@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.19 - Added animated glow orbs for consistent cyberpunk aesthetic across all views
 // v7.18 - Added cyberpunk grid background, controls directly under board, more header padding
 // v7.17 - Full screen takeover with z-[60], fully opaque background
 // v7.17 - Added Back button, Deadblock title, fixed last move gold highlighting
@@ -11,6 +12,7 @@
 // ✅ Proper piece colors - uses pieceColors from pieces.js (same as GameBoard)
 // ✅ Move numbers displayed on pieces in final view
 // ✅ Replay works correctly - pieces appear when pressing play
+// ✅ Animated glow orbs for consistent look across all call sites
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, ChevronLeft, ChevronRight, SkipBack, SkipForward, Play, Pause, Loader, Trophy, ArrowLeft } from 'lucide-react';
@@ -312,6 +314,11 @@ const FinalBoardView = ({
         backgroundColor: '#0f172a',
       }}
     >
+      {/* v7.19: Animated glow orbs for cyberpunk aesthetic - matches OnlineMenu */}
+      <div className="fixed top-10 right-10 w-64 h-64 bg-purple-500/30 rounded-full blur-3xl pointer-events-none animate-glow-pulse-1" />
+      <div className="fixed bottom-20 left-10 w-56 h-56 bg-cyan-500/25 rounded-full blur-3xl pointer-events-none animate-glow-pulse-2" />
+      <div className="fixed top-1/3 left-1/4 w-48 h-48 bg-pink-500/20 rounded-full blur-3xl pointer-events-none animate-glow-pulse-3" />
+      
       {/* v7.18: Extra padding at top for iPhone notch/dynamic island */}
       <div 
         className="flex-shrink-0"
@@ -595,6 +602,21 @@ const FinalBoardView = ({
           0%, 100% { box-shadow: 0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3); }
           50% { box-shadow: 0 0 25px rgba(251, 191, 36, 0.9), inset 0 0 12px rgba(255, 255, 255, 0.5); }
         }
+        @keyframes glow-pulse-1 {
+          0%, 100% { opacity: 0.3; transform: scale(1) translate(0, 0); }
+          50% { opacity: 0.5; transform: scale(1.1) translate(-10px, 10px); }
+        }
+        @keyframes glow-pulse-2 {
+          0%, 100% { opacity: 0.25; transform: scale(1) translate(0, 0); }
+          50% { opacity: 0.4; transform: scale(1.15) translate(15px, -5px); }
+        }
+        @keyframes glow-pulse-3 {
+          0%, 100% { opacity: 0.2; transform: scale(1) translate(0, 0); }
+          50% { opacity: 0.35; transform: scale(1.05) translate(-5px, -10px); }
+        }
+        .animate-glow-pulse-1 { animation: glow-pulse-1 8s ease-in-out infinite; }
+        .animate-glow-pulse-2 { animation: glow-pulse-2 10s ease-in-out infinite; animation-delay: 2s; }
+        .animate-glow-pulse-3 { animation: glow-pulse-3 12s ease-in-out infinite; animation-delay: 4s; }
         @keyframes confetti-fall-1 {
           0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
           20% { transform: translate(3px, 8px) rotate(90deg); opacity: 1; }

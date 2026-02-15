@@ -1,5 +1,5 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
-// v7.18: Enhanced scroll with hardware acceleration, safe area padding, fixed double hash
+// v7.19: Fixed scroll - separate backdrop from modal container for proper touch handling
 // v7.17: Improved scroll with touchAction, backdrop click to close
 // v7.14: Added play streak display, leaderboard rank, fixed scroll
 // Place in src/components/PlayerStatsModal.jsx
@@ -252,24 +252,32 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const tierBg = getTierBackground(glowColor);
   
   return (
-    <div 
-      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{
-        paddingTop: 'max(16px, env(safe-area-inset-top))',
-        paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-      }}
-    >
+    <>
+      {/* Backdrop - separate for proper touch handling */}
       <div 
-        className="w-full max-w-md max-h-[90vh] rounded-2xl overflow-hidden flex flex-col"
-        style={{ 
-          backgroundColor: tierBg,
-          border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
-          boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}`,
-          minHeight: 0, // Critical for flex scroll to work
+        className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Modal Container - pointer-events-none allows touch passthrough */}
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+        style={{
+          padding: '16px',
+          paddingTop: 'max(16px, env(safe-area-inset-top))',
+          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
         }}
-        onClick={(e) => e.stopPropagation()}
       >
+        {/* Modal - pointer-events-auto captures events */}
+        <div 
+          className="w-full max-w-md max-h-[85vh] rounded-2xl overflow-hidden flex flex-col pointer-events-auto"
+          style={{ 
+            backgroundColor: tierBg,
+            border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
+            boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}`
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* Header */}
         <div 
           className="p-4 flex items-center gap-4 flex-shrink-0"
@@ -352,7 +360,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 {leaderboardRank && (
                   <span className="flex items-center gap-1 text-amber-400 text-xs">
                     <Hash size={12} />
-                    {leaderboardRank} Global
+                    #{leaderboardRank} Global
                   </span>
                 )}
               </div>
@@ -377,17 +385,12 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         {/* Stats Content - Scrollable */}
         <div 
           ref={scrollContainerRef}
-          className="flex-1 p-4 space-y-3 overflow-y-auto overscroll-contain"
+          className="p-4 space-y-3 overflow-y-auto overscroll-contain"
           style={{
+            flex: '1 1 auto',
+            minHeight: 0,
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',
-            touchAction: 'pan-y',
-            minHeight: 0,
-            // Hardware acceleration for iOS
-            transform: 'translateZ(0)',
-            willChange: 'scroll-position',
-            // Ensure content can scroll
-            maxHeight: '100%',
           }}
         >
           {isOffline ? (
@@ -569,13 +572,10 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 {leaderboardRank && (
                   <div className="mt-2 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center justify-center gap-2">
                     <Hash size={16} className="text-cyan-400" />
-                    <span className="text-cyan-300 font-medium">Global Rank: {leaderboardRank}</span>
+                    <span className="text-cyan-300 font-medium">Global Rank: #{leaderboardRank}</span>
                   </div>
                 )}
               </Section>
-              
-              {/* Bottom padding for scroll */}
-              <div className="h-4 flex-shrink-0" />
             </>
           )}
         </div>
@@ -583,10 +583,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         {/* Footer */}
         <div 
           className="p-3 text-center flex-shrink-0"
-          style={{ 
-            borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}`,
-            paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-          }}
+          style={{ borderTop: `1px solid ${hexToRgba(glowColor, 0.2)}` }}
         >
           <p className="text-slate-600 text-xs">
             Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'Unknown'}
@@ -594,6 +591,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

@@ -1,4 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.19: Fixed gameId prop sync - now correctly loads new game when clicking from menu
+// v7.19: Removed back button from header (home button below grid is sufficient)
 // v7.18: Fixed 5-second game over modal - removed stale closure check, use ref only
 // v7.17: Fixed gold confetti highlighting all cells of winning piece using getPieceCoords
 // v7.15: Removed duplicate pieces bars, chat icon now overlays bottom-right of piece tray
@@ -9,7 +11,7 @@
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Flag, MessageCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -207,6 +209,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
 
   const userId = user?.id;
+  
+  // v7.19: Sync currentGameId with gameId prop when it changes (e.g., clicking different game in menu)
+  useEffect(() => {
+    if (gameId && gameId !== currentGameId) {
+      setCurrentGameId(gameId);
+    }
+  }, [gameId, currentGameId]);
   const hasMovesPlayed = usedPieces.length > 0;
 
   // =========================================================================
@@ -1541,15 +1550,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
-          {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
+          {/* UPDATED: Header with centered title, NO back button (home button below grid) */}
           <div className="flex items-center justify-between mb-2">
-            <button
-              onClick={handleLeave}
-              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
-            >
-              <ArrowLeft size={16} />
-              Menu
-            </button>
+            {/* Left spacer for layout balance */}
+            <div className="w-16" />
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
