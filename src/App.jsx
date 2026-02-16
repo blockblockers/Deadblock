@@ -1,5 +1,6 @@
 // App.jsx - Main application component
-// v7.20: Added Creator Puzzles navigation (PuzzleTypeSelect, CreatorPuzzleSelect)
+// v7.20: Added Creator Puzzles (PuzzleTypeSelect, CreatorPuzzleSelect, CreatorPuzzleGame)
+// v7.19.1: Fixed TDZ error - moved useAuth() before wasAuthenticatedRef
 // v7.19: Sign out now redirects to entry auth screen (reset hasPassedEntryAuth on sign out)
 import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from 'react';
 import { useGameState } from './hooks/useGameState';
@@ -32,14 +33,12 @@ import HowToPlayModal from './components/HowToPlayModal';
 // =============================================================================
 
 // Puzzle components (loaded when entering puzzle mode)
+const PuzzleTypeSelect = lazy(() => import('./components/PuzzleTypeSelect'));
 const PuzzleSelect = lazy(() => import('./components/PuzzleSelect'));
+const CreatorPuzzleSelect = lazy(() => import('./components/CreatorPuzzleSelect'));
+const CreatorPuzzleGame = lazy(() => import('./components/CreatorPuzzleGame'));
 const SpeedPuzzleScreen = lazy(() => import('./components/SpeedPuzzleScreen'));
 const DifficultySelector = lazy(() => import('./components/DifficultySelector'));
-
-// TODO: Re-enable these after deploying component files
-// const PuzzleTypeSelect = lazy(() => import('./components/PuzzleTypeSelect'));
-// const CreatorPuzzleSelect = lazy(() => import('./components/CreatorPuzzleSelect'));
-// const CreatorPuzzleGame = lazy(() => import('./components/CreatorPuzzleGame'));
 
 // Weekly Challenge components (loaded when entering weekly challenge)
 const WeeklyChallengeMenu = lazy(() => import('./components/WeeklyChallengeMenu'));
@@ -97,6 +96,9 @@ function AppContent({ onBgThemeChange }) {
     }
   }, [hasPassedEntryAuth]);
   
+  // Auth state - MUST be before any code that references isAuthenticated (TDZ fix)
+  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser, refreshProfile } = useAuth();
+  
   // v7.19: Track if user was previously authenticated (to detect sign-out)
   const wasAuthenticatedRef = React.useRef(isAuthenticated);
   
@@ -124,10 +126,8 @@ function AppContent({ onBgThemeChange }) {
   // Weekly challenge state
   const [currentWeeklyChallenge, setCurrentWeeklyChallenge] = useState(null);
   
-  // TODO: Re-enable after deploying creator puzzle components
-  // const [currentCreatorPuzzle, setCurrentCreatorPuzzle] = useState(null);
-  
-  const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser, refreshProfile } = useAuth();
+  // Creator puzzle state
+  const [currentCreatorPuzzle, setCurrentCreatorPuzzle] = useState(null);
   
   // Initialize realtime connection when user logs in (optimized - uses only 2 channels)
   useRealtimeConnection();
@@ -336,6 +336,9 @@ function AppContent({ onBgThemeChange }) {
       'matchmaking': 'online',  // Finding opponent
       'puzzle': 'puzzle',       // Puzzle mode
       'puzzle-select': 'puzzle',
+      'puzzle-type-select': 'puzzle',
+      'creator-puzzle-select': 'puzzle',
+      'creator-puzzle': 'puzzle',
       'speed-puzzle': 'puzzle',
       'weekly-menu': 'puzzle',  // Weekly uses puzzle theme
       'weekly-challenge': 'puzzle',
@@ -616,8 +619,6 @@ function AppContent({ onBgThemeChange }) {
     loadPuzzle(puzzle);
   };
 
-  // TODO: Re-enable after deploying creator puzzle components
-  /*
   // Handle creator puzzle selection
   const handleCreatorPuzzleSelect = (puzzle) => {
     setCurrentCreatorPuzzle(puzzle);
@@ -645,7 +646,6 @@ function AppContent({ onBgThemeChange }) {
       setGameMode('creator-puzzle-select');
     }
   };
-  */
 
   // Handle match found
   const handleMatchFound = (game) => {
@@ -1024,7 +1024,7 @@ function AppContent({ onBgThemeChange }) {
       <>
         <MenuScreen
           onStartGame={handleStartGame}
-          onPuzzleSelect={() => setGameMode('puzzle-select')}
+          onPuzzleSelect={() => setGameMode('puzzle-type-select')}
           onWeeklyChallenge={handleWeeklyChallenge}
           showHowToPlay={showHowToPlay}
           onToggleHowToPlay={setShowHowToPlay}
@@ -1262,8 +1262,6 @@ function AppContent({ onBgThemeChange }) {
   // PUZZLE MODES (Lazy loaded with Suspense)
   // =====================================================
 
-  // TODO: Re-enable after deploying creator puzzle components
-  /*
   // Render Puzzle Type Selection Screen (Creator vs Generated)
   if (gameMode === 'puzzle-type-select') {
     return (
@@ -1308,16 +1306,15 @@ function AppContent({ onBgThemeChange }) {
       </LazyWrapper>
     );
   }
-  */
 
-  // Render Puzzle Difficulty Select Screen
+  // Render Generated Puzzle Difficulty Select Screen
   if (gameMode === 'puzzle-select') {
     return (
       <LazyWrapper message="Loading puzzle mode...">
         <PuzzleSelect
           onSelectPuzzle={handlePuzzleSelect}
           onSpeedMode={() => setGameMode('speed-puzzle')}
-          onBack={() => setGameMode(null)}
+          onBack={() => setGameMode('puzzle-type-select')}
         />
       </LazyWrapper>
     );
