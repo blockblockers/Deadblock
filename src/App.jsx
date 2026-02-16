@@ -1,4 +1,5 @@
 // App.jsx - Main application component
+// v7.20: Added Creator Puzzles navigation (PuzzleTypeSelect, CreatorPuzzleSelect)
 // v7.19: Sign out now redirects to entry auth screen (reset hasPassedEntryAuth on sign out)
 import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from 'react';
 import { useGameState } from './hooks/useGameState';
@@ -31,7 +32,9 @@ import HowToPlayModal from './components/HowToPlayModal';
 // =============================================================================
 
 // Puzzle components (loaded when entering puzzle mode)
+const PuzzleTypeSelect = lazy(() => import('./components/PuzzleTypeSelect'));
 const PuzzleSelect = lazy(() => import('./components/PuzzleSelect'));
+const CreatorPuzzleSelect = lazy(() => import('./components/CreatorPuzzleSelect'));
 const SpeedPuzzleScreen = lazy(() => import('./components/SpeedPuzzleScreen'));
 const DifficultySelector = lazy(() => import('./components/DifficultySelector'));
 
@@ -117,6 +120,9 @@ function AppContent({ onBgThemeChange }) {
   
   // Weekly challenge state
   const [currentWeeklyChallenge, setCurrentWeeklyChallenge] = useState(null);
+  
+  // Creator puzzle state
+  const [currentCreatorPuzzle, setCurrentCreatorPuzzle] = useState(null);
   
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser, refreshProfile } = useAuth();
   
@@ -327,6 +333,9 @@ function AppContent({ onBgThemeChange }) {
       'matchmaking': 'online',  // Finding opponent
       'puzzle': 'puzzle',       // Puzzle mode
       'puzzle-select': 'puzzle',
+      'puzzle-type-select': 'puzzle',
+      'creator-puzzle-select': 'puzzle',
+      'creator-puzzle': 'puzzle',
       'speed-puzzle': 'puzzle',
       'weekly-menu': 'puzzle',  // Weekly uses puzzle theme
       'weekly-challenge': 'puzzle',
@@ -605,6 +614,14 @@ function AppContent({ onBgThemeChange }) {
   // Handle puzzle selection
   const handlePuzzleSelect = (puzzle) => {
     loadPuzzle(puzzle);
+  };
+
+  // Handle creator puzzle selection
+  const handleCreatorPuzzleSelect = (puzzle) => {
+    setCurrentCreatorPuzzle(puzzle);
+    // For now, use the existing puzzle mode - can create dedicated CreatorPuzzleGame later
+    setGameMode('creator-puzzle');
+    console.log('[App] Starting creator puzzle:', puzzle.puzzle_number);
   };
 
   // Handle match found
@@ -984,7 +1001,7 @@ function AppContent({ onBgThemeChange }) {
       <>
         <MenuScreen
           onStartGame={handleStartGame}
-          onPuzzleSelect={() => setGameMode('puzzle-select')}
+          onPuzzleSelect={() => setGameMode('puzzle-type-select')}
           onWeeklyChallenge={handleWeeklyChallenge}
           showHowToPlay={showHowToPlay}
           onToggleHowToPlay={setShowHowToPlay}
@@ -1218,14 +1235,71 @@ function AppContent({ onBgThemeChange }) {
     );
   }
 
-  // Render Puzzle Difficulty Select Screen
+  // =====================================================
+  // PUZZLE MODES (Lazy loaded with Suspense)
+  // =====================================================
+
+  // Render Puzzle Type Selection Screen (Creator vs Generated)
+  if (gameMode === 'puzzle-type-select') {
+    return (
+      <LazyWrapper message="Loading puzzles...">
+        <PuzzleTypeSelect
+          onSelectCreator={() => setGameMode('creator-puzzle-select')}
+          onSelectGenerated={() => setGameMode('puzzle-select')}
+          onBack={() => setGameMode(null)}
+        />
+      </LazyWrapper>
+    );
+  }
+
+  // Render Creator Puzzle Selection Screen
+  if (gameMode === 'creator-puzzle-select') {
+    return (
+      <LazyWrapper message="Loading creator puzzles...">
+        <CreatorPuzzleSelect
+          onSelectPuzzle={handleCreatorPuzzleSelect}
+          onBack={() => setGameMode('puzzle-type-select')}
+        />
+      </LazyWrapper>
+    );
+  }
+
+  // Render Creator Puzzle Game Screen
+  if (gameMode === 'creator-puzzle') {
+    // TODO: Create dedicated CreatorPuzzleGame component
+    // For now, redirect back to selection if no puzzle loaded
+    if (!currentCreatorPuzzle) {
+      setGameMode('creator-puzzle-select');
+      return null;
+    }
+    // Placeholder - will need CreatorPuzzleGame component
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-bold text-white mb-4">Creator Puzzle #{currentCreatorPuzzle.puzzle_number}</h2>
+          <p className="text-slate-400 mb-6">{currentCreatorPuzzle.name || 'Loading...'}</p>
+          <button 
+            onClick={() => {
+              setCurrentCreatorPuzzle(null);
+              setGameMode('creator-puzzle-select');
+            }}
+            className="px-6 py-3 bg-amber-500 text-white rounded-xl font-bold"
+          >
+            Back to Puzzles
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Generated Puzzle Difficulty Select Screen
   if (gameMode === 'puzzle-select') {
     return (
       <LazyWrapper message="Loading puzzle mode...">
         <PuzzleSelect
           onSelectPuzzle={handlePuzzleSelect}
           onSpeedMode={() => setGameMode('speed-puzzle')}
-          onBack={() => setGameMode(null)}
+          onBack={() => setGameMode('puzzle-type-select')}
         />
       </LazyWrapper>
     );
