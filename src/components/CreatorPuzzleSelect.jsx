@@ -1,7 +1,7 @@
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
-// v1.3: Difficulty-based tabs, dynamic theming, fixed scrolling, compressed spacing, enhanced completion tracking
-import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Check, Lock, Loader, Sparkles } from 'lucide-react';
+// v1.4: Pagination (25 per page), arrow navigation, enhanced scrolling for all devices
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { ArrowLeft, ArrowRight, Check, Lock, Loader, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
@@ -13,6 +13,9 @@ import FloatingPieces from './FloatingPieces';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Max puzzles per page in grid
+const PUZZLES_PER_PAGE = 25;
+
 // Difficulty tiers with puzzle number ranges
 const DIFFICULTY_TIERS = {
   easy: { min: 1, max: 25, label: 'EASY', count: 25 },
@@ -21,7 +24,7 @@ const DIFFICULTY_TIERS = {
   expert: { min: 86, max: 100, label: 'EXPERT', count: 15 },
 };
 
-// Dramatically different themes for each difficulty (matching PuzzleSelect)
+// Dramatically different themes for each difficulty
 const themes = {
   easy: {
     gridColor: 'rgba(34,197,94,0.4)',
@@ -109,8 +112,9 @@ const CreatorPuzzleSelect = ({
   onSelectPuzzle, 
   onBack,
 }) => {
-  const { needsScroll } = useResponsiveLayout(800);
+  const { needsScroll } = useResponsiveLayout(700);
   const { profile } = useAuth();
+  const scrollContainerRef = useRef(null);
   
   const [puzzles, setPuzzles] = useState([]);
   const [completedPuzzles, setCompletedPuzzles] = useState(new Set());
@@ -118,6 +122,7 @@ const CreatorPuzzleSelect = ({
   const [error, setError] = useState(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState('easy');
   const [selectedPuzzle, setSelectedPuzzle] = useState(null);
+  const [currentPage, setCurrentPage] = useState(0); // Page index within difficulty
 
   // Get current theme
   const theme = themes[selectedDifficulty];
@@ -191,26 +196,35 @@ const CreatorPuzzleSelect = ({
     fetchPuzzlesAndCompletions();
   }, [fetchPuzzlesAndCompletions]);
 
-  // Get puzzle slots for current difficulty tier
-  const currentSlots = [];
+  // Get all puzzle numbers for current difficulty tier
+  const allTierSlots = [];
   for (let i = tier.min; i <= tier.max; i++) {
-    currentSlots.push(i);
+    allTierSlots.push(i);
   }
 
-  // Calculate completion stats for current tier
-  const tierCompletedCount = currentSlots.filter(n => completedPuzzles.has(n)).length;
-  const tierAvailableCount = currentSlots.filter(n => puzzleMap[n]).length;
+  // Calculate pagination
+  const totalPages = Math.ceil(allTierSlots.length / PUZZLES_PER_PAGE);
+  const startIdx = currentPage * PUZZLES_PER_PAGE;
+  const currentSlots = allTierSlots.slice(startIdx, startIdx + PUZZLES_PER_PAGE);
+
+  // Calculate completion stats for entire tier
+  const tierCompletedCount = allTierSlots.filter(n => completedPuzzles.has(n)).length;
+  const tierAvailableCount = allTierSlots.filter(n => puzzleMap[n]).length;
+
+  // Reset page when difficulty changes
+  useEffect(() => {
+    setCurrentPage(0);
+    setSelectedPuzzle(null);
+  }, [selectedDifficulty]);
 
   const handleSelectDifficulty = (diffId) => {
     soundManager.playClickSound('select');
     setSelectedDifficulty(diffId);
-    setSelectedPuzzle(null);
   };
 
   const handleSelectPuzzle = (puzzleNumber) => {
     const puzzle = puzzleMap[puzzleNumber];
     if (!puzzle) {
-      // Puzzle doesn't exist yet - show locked state
       soundManager.playInvalid?.();
       return;
     }
@@ -229,14 +243,39 @@ const CreatorPuzzleSelect = ({
     onBack?.();
   };
 
+  const handlePrevPage = () => {
+    if (currentPage > 0) {
+      soundManager.playClickSound('select');
+      setCurrentPage(prev => prev - 1);
+      setSelectedPuzzle(null);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      soundManager.playClickSound('select');
+      setCurrentPage(prev => prev + 1);
+      setSelectedPuzzle(null);
+    }
+  };
+
   // Total completion stats
   const totalCompleted = completedPuzzles.size;
   const totalAvailable = puzzles.length;
 
+  // Page range display
+  const pageStartNum = currentSlots[0] || tier.min;
+  const pageEndNum = currentSlots[currentSlots.length - 1] || tier.max;
+
   return (
     <div 
+      ref={scrollContainerRef}
       className="min-h-screen bg-slate-950 overflow-y-auto overflow-x-hidden"
-      style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}
+      style={{ 
+        WebkitOverflowScrolling: 'touch', 
+        touchAction: 'pan-y',
+        overscrollBehavior: 'contain',
+      }}
     >
       {/* Themed Grid background */}
       <div 
@@ -250,29 +289,29 @@ const CreatorPuzzleSelect = ({
       {/* Floating pieces background */}
       <FloatingPieces />
 
-      {/* Animated glow orbs - transition with theme */}
+      {/* Animated glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-72 h-72 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow2.pos} w-64 h-64 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow3.pos} w-56 h-56 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
 
       {/* Main Content */}
-      <div className="relative min-h-screen flex flex-col items-center px-4 py-4">
+      <div className="relative min-h-screen flex flex-col items-center px-3 sm:px-4 py-3 sm:py-4">
         <div className="w-full max-w-md">
           
           {/* Title - Compact */}
-          <div className="text-center mb-3">
-            <NeonTitle size="large" />
-            <NeonSubtitle text="CREATOR PUZZLES" size="small" className="mt-1" />
-            <p className={`${colors.text} text-xs mt-1`}>
+          <div className="text-center mb-2 sm:mb-3">
+            <NeonTitle size="medium" />
+            <NeonSubtitle text="CREATOR PUZZLES" size="small" className="mt-0.5" />
+            <p className={`${colors.text} text-[10px] sm:text-xs mt-0.5`}>
               {totalCompleted} / {totalAvailable} completed
             </p>
           </div>
 
           {/* Card with theme */}
-          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-3 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-700`}>
+          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-2.5 sm:p-3 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-700`}>
             
             {/* Difficulty Tab Selector */}
-            <div className="grid grid-cols-4 gap-1.5 mb-3">
+            <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-2 sm:mb-3">
               {Object.entries(DIFFICULTY_TIERS).map(([diffId, diffTier]) => {
                 const isSelected = selectedDifficulty === diffId;
                 const diffColors = difficultyColors[diffId];
@@ -285,17 +324,17 @@ const CreatorPuzzleSelect = ({
                   <button
                     key={diffId}
                     onClick={() => handleSelectDifficulty(diffId)}
-                    className={`py-2 px-1 rounded-lg transition-all text-center ${
+                    className={`py-1.5 sm:py-2 px-1 rounded-lg transition-all text-center ${
                       isSelected 
                         ? `bg-gradient-to-r ${diffColors.gradient} text-white shadow-lg` 
-                        : `${diffColors.bg} ${diffColors.border} border hover:scale-[1.02]`
+                        : `${diffColors.bg} ${diffColors.border} border hover:scale-[1.02] active:scale-[0.98]`
                     }`}
                     style={isSelected ? { boxShadow: `0 0 20px ${diffColors.glow}` } : {}}
                   >
-                    <div className={`text-[10px] font-black tracking-wide ${isSelected ? 'text-white' : diffColors.text}`}>
+                    <div className={`text-[9px] sm:text-[10px] font-black tracking-wide ${isSelected ? 'text-white' : diffColors.text}`}>
                       {diffTier.label}
                     </div>
-                    <div className={`text-[9px] ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                    <div className={`text-[8px] sm:text-[9px] ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
                       {diffCompletedCount}/{diffAvailableCount}
                     </div>
                   </button>
@@ -324,10 +363,60 @@ const CreatorPuzzleSelect = ({
               </div>
             )}
 
-            {/* Puzzle Grid - 5 columns */}
+            {/* Puzzle Grid with Pagination */}
             {!loading && !error && (
               <>
-                <div className="grid grid-cols-5 gap-1.5 mb-3">
+                {/* Page Navigation Header */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mb-2">
+                    <button
+                      onClick={handlePrevPage}
+                      disabled={currentPage === 0}
+                      className={`p-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                        currentPage === 0
+                          ? 'bg-slate-800/30 text-slate-600 cursor-not-allowed'
+                          : `${colors.buttonBg} ${colors.buttonText} border ${colors.buttonBorder} hover:scale-105 active:scale-95`
+                      }`}
+                    >
+                      <ChevronLeft size={16} />
+                      <span className="text-[10px] font-bold hidden sm:inline">PREV</span>
+                    </button>
+                    
+                    <div className="text-center">
+                      <span className={`${colors.text} text-[10px] sm:text-xs font-bold`}>
+                        {pageStartNum} - {pageEndNum}
+                      </span>
+                      <div className="flex items-center justify-center gap-1 mt-0.5">
+                        {Array.from({ length: totalPages }).map((_, idx) => (
+                          <div
+                            key={idx}
+                            className={`w-1.5 h-1.5 rounded-full transition-all ${
+                              idx === currentPage 
+                                ? `${colors.buttonText.replace('text-', 'bg-')}` 
+                                : 'bg-slate-600'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={handleNextPage}
+                      disabled={currentPage >= totalPages - 1}
+                      className={`p-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                        currentPage >= totalPages - 1
+                          ? 'bg-slate-800/30 text-slate-600 cursor-not-allowed'
+                          : `${colors.buttonBg} ${colors.buttonText} border ${colors.buttonBorder} hover:scale-105 active:scale-95`
+                      }`}
+                    >
+                      <span className="text-[10px] font-bold hidden sm:inline">NEXT</span>
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {/* Puzzle Grid - 5 columns */}
+                <div className="grid grid-cols-5 gap-1 sm:gap-1.5 mb-2">
                   {currentSlots.map(puzzleNumber => {
                     const puzzle = puzzleMap[puzzleNumber];
                     const isAvailable = !!puzzle;
@@ -341,24 +430,24 @@ const CreatorPuzzleSelect = ({
                         disabled={!isAvailable}
                         className={`
                           aspect-square rounded-lg flex items-center justify-center
-                          font-bold text-xs transition-all relative overflow-hidden
+                          font-bold text-[10px] sm:text-xs transition-all relative overflow-hidden
                           ${!isAvailable
                             ? 'bg-slate-800/30 text-slate-600 border border-slate-700/30 cursor-not-allowed'
                             : isSelected 
                               ? `bg-gradient-to-br ${colors.gradient} text-white scale-105 shadow-lg` 
                               : isCompleted
                                 ? `${colors.bg} ${colors.buttonText} border ${colors.buttonBorder}`
-                                : `${colors.buttonBg} ${colors.buttonText} border ${colors.buttonBorder} hover:scale-105`
+                                : `${colors.buttonBg} ${colors.buttonText} border ${colors.buttonBorder} hover:scale-105 active:scale-95`
                           }
                         `}
                         style={isSelected ? { boxShadow: `0 0 15px ${colors.glow}` } : {}}
                       >
                         {!isAvailable ? (
-                          <Lock size={12} className="text-slate-600" />
+                          <Lock size={10} className="text-slate-600" />
                         ) : isCompleted && !isSelected ? (
                           <div className="relative">
                             <span className="opacity-50">{puzzleNumber}</span>
-                            <Check size={10} className={`absolute -top-1 -right-1 ${colors.buttonText}`} />
+                            <Check size={8} className={`absolute -top-0.5 -right-0.5 ${colors.buttonText}`} />
                           </div>
                         ) : (
                           puzzleNumber
@@ -369,10 +458,10 @@ const CreatorPuzzleSelect = ({
                 </div>
 
                 {/* Tier Progress */}
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Sparkles size={12} className={colors.buttonText} />
-                  <span className="text-slate-400 text-xs">
-                    {DIFFICULTY_TIERS[selectedDifficulty].label}: {tierCompletedCount} / {tierAvailableCount} completed
+                <div className="flex items-center justify-center gap-1.5 mb-2">
+                  <Sparkles size={10} className={colors.buttonText} />
+                  <span className="text-slate-400 text-[10px] sm:text-xs">
+                    {DIFFICULTY_TIERS[selectedDifficulty].label}: {tierCompletedCount}/{tierAvailableCount}
                   </span>
                 </div>
 
@@ -380,16 +469,16 @@ const CreatorPuzzleSelect = ({
                 {selectedPuzzle && (
                   <div className={`mb-2 p-2 ${colors.bg} rounded-xl border ${colors.border}`}>
                     <div className="flex items-center justify-between mb-0.5">
-                      <h3 className="text-white font-bold text-sm">#{selectedPuzzle.puzzle_number}</h3>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${colors.buttonBg} ${colors.buttonText}`}>
+                      <h3 className="text-white font-bold text-xs sm:text-sm">#{selectedPuzzle.puzzle_number}</h3>
+                      <span className={`px-1.5 py-0.5 rounded text-[8px] sm:text-[10px] font-bold uppercase ${colors.buttonBg} ${colors.buttonText}`}>
                         {selectedPuzzle.difficulty || selectedDifficulty}
                       </span>
                     </div>
                     {selectedPuzzle.name && (
-                      <p className={`${colors.text} text-xs font-medium`}>{selectedPuzzle.name}</p>
+                      <p className={`${colors.text} text-[10px] sm:text-xs font-medium`}>{selectedPuzzle.name}</p>
                     )}
                     {selectedPuzzle.description && (
-                      <p className="text-slate-400 text-[10px] mt-0.5 line-clamp-2">{selectedPuzzle.description}</p>
+                      <p className="text-slate-400 text-[9px] sm:text-[10px] mt-0.5 line-clamp-2">{selectedPuzzle.description}</p>
                     )}
                   </div>
                 )}
@@ -398,7 +487,7 @@ const CreatorPuzzleSelect = ({
                 <button 
                   onClick={handleStartPuzzle}
                   disabled={!selectedPuzzle}
-                  className={`w-full p-2.5 rounded-xl font-black tracking-wider text-sm transition-all flex items-center justify-center gap-2 ${
+                  className={`w-full p-2 sm:p-2.5 rounded-xl font-black tracking-wider text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
                     selectedPuzzle
                       ? `bg-gradient-to-r ${colors.gradient} text-white hover:scale-[1.02] active:scale-[0.98]`
                       : 'bg-slate-700 text-slate-500 cursor-not-allowed'
@@ -413,16 +502,16 @@ const CreatorPuzzleSelect = ({
             {/* Back button - Compact */}
             <button 
               onClick={handleBack}
-              className="w-full mt-2 py-2 px-4 rounded-xl font-bold text-xs text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2"
+              className="w-full mt-2 py-1.5 sm:py-2 px-4 rounded-xl font-bold text-[10px] sm:text-xs text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 active:scale-[0.98]"
             >
-              <ArrowLeft size={14} />
+              <ArrowLeft size={12} />
               BACK TO MENU
             </button>
           </div>
         </div>
         
-        {/* Bottom safe area */}
-        <div className="h-4 flex-shrink-0" />
+        {/* Bottom safe area for iOS */}
+        <div className="flex-shrink-0" style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
       </div>
     </div>
   );
