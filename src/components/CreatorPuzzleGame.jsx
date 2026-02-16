@@ -1,9 +1,12 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v1.0: Initial release - Board display, piece placement, solution validation, completion tracking
+// v1.1: Updated layout to match GameScreen - cyan theme, proper DPad/controls layout
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { ArrowLeft, RotateCcw, Move, FlipHorizontal, Check, X, Trophy, Sparkles, Lightbulb, RefreshCw } from 'lucide-react';
+import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
+import ControlButtons from './ControlButtons';
 import DPad from './DPad';
 import DragOverlay from './DragOverlay';
 import { pieces } from '../utils/pieces';
@@ -28,13 +31,13 @@ const GAME_STATES = {
   FAILED: 'failed',
 };
 
-// Theme - Warm amber/gold for creator puzzles
+// Theme - Cyan for creator puzzles (matching the type select and puzzle select screens)
 const theme = {
-  gridColor: 'rgba(251, 191, 36, 0.3)',
-  glow1: 'bg-amber-500/30',
-  glow2: 'bg-orange-500/25',
-  panelBorder: 'border-amber-500/40',
-  panelShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.3)]',
+  gridColor: 'rgba(34, 211, 238, 0.3)',
+  glow1: 'bg-cyan-500/30',
+  glow2: 'bg-sky-500/25',
+  panelBorder: 'border-cyan-500/40',
+  panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
 };
 
 // D-pad direction deltas
@@ -90,7 +93,7 @@ const parsePuzzleBoard = (puzzleBoard, puzzleBoardPieces) => {
 const PuzzleHeader = memo(({ puzzleNumber, puzzleName, difficulty, onBack }) => {
   const difficultyColors = {
     easy: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/50' },
-    medium: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/50' },
+    medium: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/50' },
     hard: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/50' },
     expert: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' },
   };
@@ -562,6 +565,58 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setAttempts(prev => prev + 1);
   }, [initialBoard, initialBoardPieces]);
   
+  // Cancel current move
+  const cancelMove = useCallback(() => {
+    if (pendingMove) {
+      soundManager.playButtonClick();
+      setSelectedPiece(null);
+      setPendingMove(null);
+    }
+  }, [pendingMove]);
+  
+  // Handle starting drag from a pending piece on the board
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    if (gameState !== GAME_STATES.PLAYING) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // Calculate which cell of the piece was touched
+    if (pendingMove && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const fingerCol = Math.floor((clientX - left) / cellWidth);
+      const fingerRow = Math.floor((clientY - top) / cellHeight);
+      
+      pieceCellOffsetRef.current = {
+        row: fingerRow - pendingMove.row,
+        col: fingerCol - pendingMove.col
+      };
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+    }
+    
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+    
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    
+    soundManager.playPieceSelect();
+    
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameState, pendingMove]);
+  
   // -------------------------------------------------------------------------
   // DRAG AND DROP (simplified from SpeedPuzzleScreen)
   // -------------------------------------------------------------------------
@@ -744,131 +799,135 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   
   return (
     <div 
-      className={`min-h-screen flex flex-col ${needsScroll ? 'overflow-y-auto' : 'overflow-hidden'}`}
-      style={{
-        background: `
-          linear-gradient(to bottom, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.99)),
-          repeating-linear-gradient(0deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px),
-          repeating-linear-gradient(90deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px)
-        `,
-        minHeight: '100vh',
-        minHeight: '100dvh',
-      }}
+      className={needsScroll ? 'min-h-screen bg-transparent' : 'h-screen bg-transparent overflow-hidden'}
+      style={needsScroll ? { 
+        overflowY: 'auto', 
+        overflowX: 'hidden', 
+        WebkitOverflowScrolling: 'touch',
+        touchAction: isDragging ? 'none' : 'pan-y',
+      } : {}}
     >
-      {/* Glow orbs */}
-      <div className={`fixed top-20 right-10 w-64 h-64 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
-      <div className={`fixed bottom-32 left-10 w-56 h-56 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
-      
-      {/* Safe area */}
-      <div className="flex-shrink-0" style={{ height: 'env(safe-area-inset-top)' }} />
-      
-      {/* Header */}
-      <PuzzleHeader
-        puzzleNumber={puzzle.puzzle_number}
-        puzzleName={puzzle.name}
-        difficulty={puzzle.difficulty}
-        onBack={onBack}
-      />
-      
+      {/* Ambient glow effects */}
+      <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
+
       {/* Main content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">
-        {/* Attempt counter */}
-        {attempts > 1 && (
-          <div className="mb-2 px-3 py-1 bg-slate-800/80 rounded-full border border-slate-700/50">
-            <span className="text-slate-400 text-xs">Attempt #{attempts}</span>
-          </div>
-        )}
-        
-        {/* Board container */}
-        <div className="relative w-full max-w-md">
-          <WrongMoveFeedback visible={showWrongMove} />
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
+        <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
           
-          <div ref={boardRef}>
-            <GameBoard
-              board={board}
-              boardPieces={boardPieces}
-              currentPlayer={currentPlayer}
-              pendingMove={pendingMove}
-              onCellClick={handleCellClick}
+          {/* Title */}
+          <div className="text-center mb-2">
+            <NeonTitle size="medium" />
+            <NeonSubtitle text="CREATOR PUZZLE" size="small" className="mt-1" />
+          </div>
+
+          {/* Game Area */}
+          <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
+            
+            {/* Puzzle Info Bar */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
+                {puzzle.name && (
+                  <span className="text-slate-400 text-xs truncate max-w-[120px]">{puzzle.name}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {attempts > 1 && (
+                  <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
+                )}
+                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase bg-cyan-500/20 text-cyan-400 border border-cyan-500/50`}>
+                  {puzzle.difficulty || 'medium'}
+                </span>
+              </div>
+            </div>
+
+            {/* Game Board */}
+            <div className="flex justify-center pb-1 relative">
+              <WrongMoveFeedback visible={showWrongMove} />
+              <div ref={boardRef}>
+                <GameBoard
+                  board={board}
+                  boardPieces={boardPieces}
+                  pendingMove={pendingMove}
+                  rotation={rotation}
+                  flipped={flipped}
+                  gameOver={gameState === GAME_STATES.SUCCESS}
+                  gameMode="puzzle"
+                  currentPlayer={currentPlayer}
+                  onCellClick={handleCellClick}
+                  onPendingPieceDragStart={handleBoardDragStart}
+                  aiAnimatingMove={aiAnimatingMove}
+                  playerAnimatingMove={playerAnimatingMove}
+                  selectedPiece={selectedPiece}
+                  isDragging={isDragging}
+                  dragPreviewCell={dragPreviewCell}
+                  draggedPiece={draggedPiece}
+                  dragRotation={rotation}
+                  dragFlipped={flipped}
+                />
+              </div>
+            </div>
+
+            {/* Off-grid indicator */}
+            {isPieceOffGrid && pendingMove && !isDragging && (
+              <div className="flex justify-center mb-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/60 border border-amber-500/50 rounded-lg">
+                  <Move size={14} className="text-amber-400" />
+                  <span className="text-amber-300 text-xs font-bold">Use D-Pad to reposition</span>
+                </div>
+              </div>
+            )}
+
+            {/* D-Pad and Error Message Layout - matches GameScreen */}
+            {pendingMove && !isDragging && (
+              <div className="flex items-start justify-center gap-3 mb-2">
+                {/* Error message box placeholder */}
+                <div className="flex-shrink-0 w-24" />
+                
+                {/* D-Pad */}
+                <DPad onMove={handleDPadMove} />
+                
+                {/* Spacer for symmetry */}
+                <div className="flex-shrink-0 w-24" />
+              </div>
+            )}
+
+            {/* Control Buttons */}
+            <ControlButtons
               selectedPiece={selectedPiece}
-              rotation={rotation}
-              flipped={flipped}
-              playerAnimatingMove={playerAnimatingMove}
-              aiAnimatingMove={aiAnimatingMove}
-              lastPlacedPiece={null}
-              dragPreviewCell={dragPreviewCell}
-              draggedPiece={draggedPiece}
-              isValidDrop={isValidDrop}
+              pendingMove={pendingMove}
+              canConfirm={canConfirm && !isPieceOffGrid}
+              gameOver={gameState === GAME_STATES.SUCCESS}
+              gameMode="puzzle"
+              currentPlayer={currentPlayer}
+              isGeneratingPuzzle={false}
+              moveCount={0}
+              onRotate={handleRotate}
+              onFlip={handleFlip}
+              onConfirm={confirmMove}
+              onCancel={cancelMove}
+              onReset={resetPuzzle}
+              onRetryPuzzle={resetPuzzle}
+              onMenu={onBack}
             />
           </div>
-        </div>
-        
-        {/* Controls */}
-        <div className="w-full max-w-md mt-4 flex items-center justify-center gap-2">
-          <button
-            onClick={resetPuzzle}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors border border-slate-600"
-          >
-            <RefreshCw size={16} />
-            <span className="text-sm font-medium">Reset</span>
-          </button>
-          
-          <button
-            onClick={handleRotate}
-            disabled={!selectedPiece}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border ${
-              selectedPiece 
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 hover:bg-cyan-500/30' 
-                : 'bg-slate-800 text-slate-600 border-slate-700 cursor-not-allowed'
-            }`}
-          >
-            <RotateCcw size={16} />
-            <span className="text-sm font-medium">Rotate</span>
-          </button>
-          
-          <button
-            onClick={handleFlip}
-            disabled={!selectedPiece}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border ${
-              selectedPiece 
-                ? 'bg-purple-500/20 text-purple-300 border-purple-500/50 hover:bg-purple-500/30' 
-                : 'bg-slate-800 text-slate-600 border-slate-700 cursor-not-allowed'
-            }`}
-          >
-            <FlipHorizontal size={16} />
-            <span className="text-sm font-medium">Flip</span>
-          </button>
-        </div>
-        
-        {/* D-Pad and Confirm */}
-        <div className="w-full max-w-md mt-4 flex items-center justify-between px-4">
-          <DPad onMove={handleDPadMove} disabled={!selectedPiece} />
-          
-          <button
-            onClick={confirmMove}
-            disabled={!canConfirm || isPieceOffGrid}
-            className={`px-8 py-3 rounded-xl font-bold text-lg transition-all ${
-              canConfirm && !isPieceOffGrid
-                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30 hover:from-amber-400 hover:to-orange-500 active:scale-[0.98]'
-                : 'bg-slate-800 text-slate-600 cursor-not-allowed'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <Check size={20} />
-              <span>CONFIRM</span>
-            </div>
-          </button>
-        </div>
-        
-        {/* Piece tray */}
-        <div className={`w-full max-w-md mt-4 p-3 rounded-xl ${theme.panelBorder} border bg-slate-900/80`}>
-          <PieceTray
-            usedPieces={effectiveUsedPieces}
-            selectedPiece={selectedPiece}
-            onSelectPiece={handleSelectPiece}
-            currentPlayer={currentPlayer}
-            getPieceHandlers={getPieceHandlers}
-          />
+
+          {/* Piece Tray */}
+          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
+            <PieceTray
+              usedPieces={effectiveUsedPieces}
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              gameOver={gameState === GAME_STATES.SUCCESS}
+              gameMode="puzzle"
+              currentPlayer={currentPlayer}
+              isMobile={true}
+              isGeneratingPuzzle={false}
+              onSelectPiece={handleSelectPiece}
+              createDragHandlers={getPieceHandlers}
+            />
+          </div>
         </div>
       </div>
       

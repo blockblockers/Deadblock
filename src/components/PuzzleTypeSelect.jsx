@@ -1,38 +1,74 @@
 // PuzzleTypeSelect.jsx - Choose between Creator Puzzles and Generated Puzzles
-// v1.0: Initial release - puzzle type selection screen
+// v1.1: Updated styling to match PuzzleSelect - cyan theme for creator puzzles
 import { useState } from 'react';
-import { ArrowLeft, Sparkles, Cpu, Trophy, Check, Lock } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import FloatingPieces from './FloatingPieces';
 
-// Theme for this screen - cyan/purple gradient for puzzle vibe
+// Cyan theme for creator puzzles screen
 const theme = {
-  gridColor: 'rgba(139, 92, 246, 0.3)',
-  glow1: { color: 'bg-purple-500/30', pos: 'top-20 right-10' },
-  glow2: { color: 'bg-cyan-500/25', pos: 'bottom-32 left-10' },
-  glow3: { color: 'bg-pink-500/20', pos: 'top-1/2 left-1/3' },
+  gridColor: 'rgba(34, 211, 238, 0.3)',
+  glow1: { color: 'bg-cyan-500/35', pos: 'top-20 right-10' },
+  glow2: { color: 'bg-sky-500/30', pos: 'bottom-32 left-10' },
+  glow3: { color: 'bg-teal-500/25', pos: 'top-1/2 left-1/3' },
+  cardBg: 'bg-gradient-to-br from-slate-900/95 via-cyan-950/40 to-slate-900/95',
+  cardBorder: 'border-cyan-500/40',
+  cardShadow: 'shadow-[0_0_60px_rgba(34,211,238,0.3),inset_0_0_30px_rgba(34,211,238,0.1)]',
 };
+
+// Puzzle type options
+const puzzleTypes = [
+  {
+    id: 'creator',
+    name: 'CREATOR',
+    description: 'Hand-crafted puzzles. Find the one winning move!',
+    colors: {
+      gradient: 'from-cyan-500 to-sky-600',
+      glow: 'rgba(34,211,238,0.6)',
+      text: 'text-cyan-300',
+      ring: 'ring-cyan-500/50',
+      bg: 'bg-cyan-900/30',
+      border: 'border-cyan-500/40',
+    }
+  },
+  {
+    id: 'generated',
+    name: 'GENERATED',
+    description: 'AI-generated puzzles with varying difficulty.',
+    colors: {
+      gradient: 'from-purple-500 to-pink-600',
+      glow: 'rgba(168,85,247,0.6)',
+      text: 'text-purple-300',
+      ring: 'ring-purple-500/50',
+      bg: 'bg-purple-900/30',
+      border: 'border-purple-500/40',
+    }
+  },
+];
 
 const PuzzleTypeSelect = ({ 
   onSelectCreator, 
   onSelectGenerated, 
   onBack,
-  creatorPuzzlesCompleted = 0,
-  creatorPuzzlesTotal = 0,
 }) => {
   const { needsScroll } = useResponsiveLayout(700);
-  const [hoveredType, setHoveredType] = useState(null);
+  const [selectedType, setSelectedType] = useState('creator');
 
-  const handleSelectCreator = () => {
-    soundManager.playButtonClick();
-    onSelectCreator?.();
+  const handleSelectType = (typeId) => {
+    soundManager.playClickSound('select');
+    setSelectedType(typeId);
   };
 
-  const handleSelectGenerated = () => {
+  const handleStart = () => {
     soundManager.playButtonClick();
-    onSelectGenerated?.();
+    if (selectedType === 'creator') {
+      onSelectCreator?.();
+    } else {
+      onSelectGenerated?.();
+    }
   };
 
   const handleBack = () => {
@@ -40,23 +76,25 @@ const PuzzleTypeSelect = ({
     onBack?.();
   };
 
-  const completionPercent = creatorPuzzlesTotal > 0 
-    ? Math.round((creatorPuzzlesCompleted / creatorPuzzlesTotal) * 100) 
-    : 0;
+  const selectedTypeData = puzzleTypes.find(t => t.id === selectedType) || puzzleTypes[0];
 
   return (
     <div 
-      className={`min-h-screen flex flex-col ${needsScroll ? 'overflow-y-auto' : 'overflow-hidden'}`}
-      style={{
-        background: `
-          linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.98)),
-          repeating-linear-gradient(0deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px),
-          repeating-linear-gradient(90deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px)
-        `,
-        minHeight: '100vh',
-        minHeight: '100dvh',
-      }}
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
     >
+      {/* Themed Grid background */}
+      <div 
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          background: `
+            linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.98)),
+            repeating-linear-gradient(0deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px),
+            repeating-linear-gradient(90deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px)
+          `,
+        }}
+      />
+      
       {/* Floating pieces background */}
       <FloatingPieces />
 
@@ -65,150 +103,94 @@ const PuzzleTypeSelect = ({
       <div className={`fixed ${theme.glow2.pos} w-64 h-64 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
       <div className={`fixed ${theme.glow3.pos} w-56 h-56 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '5s' }} />
 
-      {/* Safe area top padding */}
-      <div className="flex-shrink-0" style={{ height: 'env(safe-area-inset-top)' }} />
-
-      {/* Header */}
-      <div className="relative z-10 px-4 pt-4 pb-2 flex items-center justify-between flex-shrink-0">
-        <button
-          onClick={handleBack}
-          className="flex items-center gap-2 px-3 py-2 text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-slate-800/50"
-        >
-          <ArrowLeft size={20} />
-          <span className="text-sm font-medium">Back</span>
-        </button>
-      </div>
-
       {/* Main Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 relative z-10">
-        {/* Title */}
-        <div className="mb-8 text-center">
-          <NeonTitle text="PUZZLES" size="large" />
-          <p className="text-slate-400 text-sm mt-2">Choose your challenge</p>
-        </div>
-
-        {/* Puzzle Type Cards */}
-        <div className="w-full max-w-md space-y-4">
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4`}>
+        <div className="w-full max-w-md">
           
-          {/* Creator Puzzles Card */}
-          <button
-            onClick={handleSelectCreator}
-            onMouseEnter={() => setHoveredType('creator')}
-            onMouseLeave={() => setHoveredType(null)}
-            className={`w-full p-5 rounded-2xl border transition-all duration-300 text-left group
-              bg-gradient-to-br from-slate-900/95 via-amber-950/30 to-slate-900/95
-              border-amber-500/40 hover:border-amber-400/60
-              shadow-[0_0_30px_rgba(251,191,36,0.2)] hover:shadow-[0_0_50px_rgba(251,191,36,0.4)]
-              ${hoveredType === 'creator' ? 'scale-[1.02]' : ''}
-            `}
-          >
-            <div className="flex items-start gap-4">
-              {/* Icon */}
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-amber-500/30">
-                <Sparkles size={28} className="text-white" />
-              </div>
-              
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-lg font-bold text-white">Creator Puzzles</h3>
-                  {creatorPuzzlesTotal > 0 && (
-                    <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 text-xs font-bold rounded-full">
-                      {creatorPuzzlesCompleted}/{creatorPuzzlesTotal}
-                    </span>
-                  )}
-                </div>
-                <p className="text-slate-400 text-sm leading-relaxed">
-                  Puzzles developed by Deadblock creators with only one true path to play.
-                </p>
+          {/* Title */}
+          <div className="text-center mb-6">
+            <NeonTitle size="medium" />
+            <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
+          </div>
+
+          {/* Card with theme */}
+          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-700`}>
+            
+            {/* Puzzle Type Selection */}
+            <div className="space-y-2 mb-4">
+              {puzzleTypes.map(type => {
+                const isSelected = selectedType === type.id;
                 
-                {/* Progress bar */}
-                {creatorPuzzlesTotal > 0 && (
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-slate-500">Progress</span>
-                      <span className="text-amber-400 font-bold">{completionPercent}%</span>
+                return (
+                  <button
+                    key={type.id}
+                    onClick={() => handleSelectType(type.id)}
+                    className={`w-full p-4 rounded-xl transition-all relative overflow-hidden ${
+                      isSelected 
+                        ? `bg-gradient-to-r ${type.colors.gradient} text-white shadow-lg` 
+                        : `${type.colors.bg} ${type.colors.border} border hover:scale-[1.02]`
+                    }`}
+                    style={isSelected ? { boxShadow: `0 0 25px ${type.colors.glow}` } : {}}
+                  >
+                    {/* Shine effect for selected */}
+                    {isSelected && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shine" />
+                    )}
+                    
+                    <div className="relative flex items-center justify-between">
+                      <div className="text-left">
+                        <h3 className={`font-black tracking-wide text-lg ${isSelected ? 'text-white' : type.colors.text}`}>
+                          {type.name}
+                        </h3>
+                        <p className={`text-sm mt-1 ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                          {type.description}
+                        </p>
+                      </div>
+                      
+                      {/* Selection indicator */}
+                      <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ml-3 ${
+                        isSelected ? 'border-white bg-white' : 'border-slate-600'
+                      }`}>
+                        {isSelected && <div className="w-3 h-3 rounded-full bg-slate-900" />}
+                      </div>
                     </div>
-                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
-                        style={{ width: `${completionPercent}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Arrow indicator */}
-              <div className="text-amber-500/50 group-hover:text-amber-400 group-hover:translate-x-1 transition-all">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-              </div>
+                  </button>
+                );
+              })}
             </div>
-          </button>
 
-          {/* Generated Puzzles Card */}
-          <button
-            onClick={handleSelectGenerated}
-            onMouseEnter={() => setHoveredType('generated')}
-            onMouseLeave={() => setHoveredType(null)}
-            className={`w-full p-5 rounded-2xl border transition-all duration-300 text-left group
-              bg-gradient-to-br from-slate-900/95 via-cyan-950/30 to-slate-900/95
-              border-cyan-500/40 hover:border-cyan-400/60
-              shadow-[0_0_30px_rgba(34,211,238,0.2)] hover:shadow-[0_0_50px_rgba(34,211,238,0.4)]
-              ${hoveredType === 'generated' ? 'scale-[1.02]' : ''}
-            `}
-          >
-            <div className="flex items-start gap-4">
-              {/* Icon */}
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-lg shadow-cyan-500/30">
-                <Cpu size={28} className="text-white" />
-              </div>
-              
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-lg font-bold text-white">Generated Puzzles</h3>
-                  <span className="px-2 py-0.5 bg-cyan-500/20 text-cyan-300 text-xs font-bold rounded-full">
-                    ∞
-                  </span>
-                </div>
-                <p className="text-slate-400 text-sm leading-relaxed">
-                  Various puzzle difficulties randomly generated by the Deadblock application.
-                </p>
-                
-                {/* Feature tags */}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-lg flex items-center gap-1">
-                    Easy
-                  </span>
-                  <span className="px-2 py-1 bg-amber-500/20 text-amber-300 text-xs rounded-lg flex items-center gap-1">
-                    Medium
-                  </span>
-                  <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-lg flex items-center gap-1">
-                    Hard
-                  </span>
-                  <span className="px-2 py-1 bg-red-500/20 text-red-300 text-xs rounded-lg flex items-center gap-1">
-                    Speed
-                  </span>
-                </div>
-              </div>
-
-              {/* Arrow indicator */}
-              <div className="text-cyan-500/50 group-hover:text-cyan-400 group-hover:translate-x-1 transition-all">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-              </div>
-            </div>
-          </button>
-
+            {/* Start Button */}
+            <button 
+              onClick={handleStart}
+              className={`w-full p-3 rounded-xl font-black tracking-wider text-base transition-all flex items-center justify-center gap-2 bg-gradient-to-r ${selectedTypeData.colors.gradient} text-white hover:scale-[1.02] active:scale-[0.98]`}
+              style={{ boxShadow: `0 0 30px ${selectedTypeData.colors.glow}` }}
+            >
+              START {selectedTypeData.name} PUZZLES
+            </button>
+            
+            {/* Back button - Themed */}
+            <button 
+              onClick={handleBack}
+              className="w-full mt-3 py-2.5 px-4 rounded-xl font-bold text-sm text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(100,116,139,0.2)]"
+            >
+              <ArrowLeft size={16} />
+              BACK TO MENU
+            </button>
+          </div>
         </div>
+        {needsScroll && <div className="h-6 flex-shrink-0" />}
       </div>
-
-      {/* Safe area bottom padding */}
-      <div className="flex-shrink-0" style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
+      
+      {/* Shine animation */}
+      <style>{`
+        @keyframes shine {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
+        .animate-shine {
+          animation: shine 1.5s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 };

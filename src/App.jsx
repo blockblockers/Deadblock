@@ -339,9 +339,9 @@ function AppContent({ onBgThemeChange }) {
       'matchmaking': 'online',  // Finding opponent
       'puzzle': 'puzzle',       // Puzzle mode
       'puzzle-select': 'puzzle',
-      'puzzle-type-select': 'puzzle',
-      'creator-puzzle-select': 'puzzle',
-      'creator-puzzle': 'puzzle',
+      'puzzle-type-select': 'creator',  // Puzzle type select uses creator theme
+      'creator-puzzle-select': 'creator', // Creator puzzles use cyan/creator theme
+      'creator-puzzle': 'creator',        // Creator puzzles use cyan/creator theme
       'speed-puzzle': 'puzzle',
       'weekly-menu': 'puzzle',  // Weekly uses puzzle theme
       'weekly-challenge': 'puzzle',
