@@ -1,4 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.19: Delete Account underlined, footer padding increased to show static Privacy/Terms footer from index.html
 // v7.18: Fixed footer positioning - sits at bottom of screen with proper safe area
 // v7.15: Added account deletion modal for App Store/Play Store compliance
 // Features:
@@ -1150,7 +1151,7 @@ const EntryAuthScreen = ({
         className="relative z-10 text-center px-4 flex-shrink-0"
         style={{
           paddingTop: '8px',
-          paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
+          paddingBottom: 'max(32px, calc(env(safe-area-inset-bottom) + 20px))',
         }}
       >
         <p className="text-slate-600 text-xs mb-2">
@@ -1162,7 +1163,7 @@ const EntryAuthScreen = ({
             soundManager.playButtonClick?.();
             setShowDeleteModal(true);
           }}
-          className="text-slate-600 hover:text-red-400 text-xs transition-colors"
+          className="text-slate-500 hover:text-red-400 text-xs underline transition-colors"
         >
           Delete Account
         </button>

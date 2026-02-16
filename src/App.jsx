@@ -1,3 +1,5 @@
+// App.jsx - Main application component
+// v7.19: Sign out now redirects to entry auth screen (reset hasPassedEntryAuth on sign out)
 import React, { useState, useEffect, lazy, Suspense, useCallback, useMemo } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -88,6 +90,21 @@ function AppContent({ onBgThemeChange }) {
       localStorage.setItem('deadblock_entry_auth_passed', 'true');
     }
   }, [hasPassedEntryAuth]);
+  
+  // v7.19: Track if user was previously authenticated (to detect sign-out)
+  const wasAuthenticatedRef = React.useRef(isAuthenticated);
+  
+  useEffect(() => {
+    // Only reset entry auth if user WAS authenticated and now is NOT (actual sign-out)
+    // This prevents kicking offline users back to entry screen
+    if (wasAuthenticatedRef.current && !isAuthenticated && !authLoading) {
+      setHasPassedEntryAuth(false);
+      setIsOfflineMode(false);
+      setGameMode(null);
+      localStorage.removeItem('deadblock_entry_auth_passed');
+    }
+    wasAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated, authLoading, setGameMode]);
   
   // Check for pending online intent (set before OAuth redirect)
   const [pendingOnlineIntent, setPendingOnlineIntent] = useState(() => {

@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.19: Hide modal when FinalBoardView shown (prevents visual interference), robust mobile scroll
 // v7.18: Fixed scroll - removed flex layout, use explicit overflow-y-auto with max-height
 // v7.12: Added full stats display (AI wins, puzzle stats) for all players
 // v7.12: Added player_stats loading from profiles table
@@ -380,61 +381,66 @@ const ViewPlayerProfile = ({
 
   return (
     <>
-      {/* Backdrop - NO touchAction:none */}
-      <div 
-        className="fixed inset-0 bg-black/80 z-50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      
-      {/* Modal Container - Centered, handles safe areas */}
-      <div 
-        className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
-        style={{
-          padding: '16px',
-          paddingTop: 'max(16px, env(safe-area-inset-top))',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
-        }}
-      >
-        {/* Modal */}
-        <div 
-          className="bg-slate-900 rounded-xl max-w-md w-full border shadow-2xl pointer-events-auto"
-          style={{ 
-            borderColor: hexToRgba(glowColor, 0.3),
-            boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
-            maxHeight: '85vh',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header - Fixed */}
+      {/* Only render ViewPlayerProfile content when FinalBoardView is NOT shown */}
+      {!selectedGameForFinalView && (
+        <>
+          {/* Backdrop - completely separate, no touch interference */}
           <div 
-            className="p-4 border-b flex items-center justify-between"
-            style={{ 
-              borderColor: hexToRgba(glowColor, 0.2),
-              flexShrink: 0,
-            }}
-          >
-            <h2 className="text-lg font-bold text-white">Player Profile</h2>
-            <button
-              onClick={onClose}
-              className="p-1 text-slate-400 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
-          </div>
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+            style={{ zIndex: 50 }}
+            onClick={onClose}
+          />
           
-          {/* Content - Scrollable with explicit overflow */}
+          {/* Modal - fixed positioning with explicit dimensions */}
           <div 
-            className="p-4 overflow-y-auto overscroll-contain"
+            className="fixed bg-slate-900 rounded-xl border shadow-2xl"
             style={{ 
-              flex: '1 1 auto',
-              minHeight: 0,
-              WebkitOverflowScrolling: 'touch',
-              overscrollBehavior: 'contain',
+              zIndex: 51,
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: 'calc(100% - 32px)',
+              maxWidth: '448px',
+              maxHeight: 'calc(100vh - 32px)',
+              maxHeight: 'calc(100dvh - 32px)',
+              borderColor: hexToRgba(glowColor, 0.3),
+              boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {loading ? (
+            {/* Header - Fixed at top */}
+            <div 
+              className="p-4 border-b flex items-center justify-between"
+              style={{ 
+                borderColor: hexToRgba(glowColor, 0.2),
+                flexShrink: 0,
+              }}
+            >
+              <h2 className="text-lg font-bold text-white">Player Profile</h2>
+              <button
+                onClick={onClose}
+                className="p-1 text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            {/* Scrollable Content Area */}
+            <div 
+              className="p-4"
+              style={{ 
+                overflowY: 'scroll',
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
+                touchAction: 'pan-y',
+                flex: '1 1 0%',
+                minHeight: 0,
+              }}
+            >
+              {loading ? (
               <div className="text-center py-8">
                 <Loader size={32} className="animate-spin mx-auto text-cyan-400 mb-3" />
                 <p className="text-slate-400">Loading profile...</p>
@@ -775,7 +781,8 @@ const ViewPlayerProfile = ({
             </div>
           )}
         </div>
-      </div>
+        </>
+      )}
 
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
