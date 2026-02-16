@@ -100,19 +100,8 @@ function AppContent({ onBgThemeChange }) {
   const { isAuthenticated, loading: authLoading, isOnlineEnabled, isOAuthCallback, clearOAuthCallback, profile, isNewUser, clearNewUser, refreshProfile } = useAuth();
   
   // v7.19: Track if user was previously authenticated (to detect sign-out)
+  // NOTE: The useEffect that uses this ref is defined AFTER useGameState() to avoid TDZ with setGameMode
   const wasAuthenticatedRef = React.useRef(isAuthenticated);
-  
-  useEffect(() => {
-    // Only reset entry auth if user WAS authenticated and now is NOT (actual sign-out)
-    // This prevents kicking offline users back to entry screen
-    if (wasAuthenticatedRef.current && !isAuthenticated && !authLoading) {
-      setHasPassedEntryAuth(false);
-      setIsOfflineMode(false);
-      setGameMode(null);
-      localStorage.removeItem('deadblock_entry_auth_passed');
-    }
-    wasAuthenticatedRef.current = isAuthenticated;
-  }, [isAuthenticated, authLoading, setGameMode]);
   
   // Check for pending online intent (set before OAuth redirect)
   const [pendingOnlineIntent, setPendingOnlineIntent] = useState(() => {
@@ -321,6 +310,20 @@ function AppContent({ onBgThemeChange }) {
     flipPiece,
     resetCurrentPuzzle,
   } = useGameState();
+
+  // v7.19: Detect sign-out and reset entry auth state
+  // NOTE: This must be AFTER useGameState() to avoid TDZ error with setGameMode
+  useEffect(() => {
+    // Only reset entry auth if user WAS authenticated and now is NOT (actual sign-out)
+    // This prevents kicking offline users back to entry screen
+    if (wasAuthenticatedRef.current && !isAuthenticated && !authLoading) {
+      setHasPassedEntryAuth(false);
+      setIsOfflineMode(false);
+      setGameMode(null);
+      localStorage.removeItem('deadblock_entry_auth_passed');
+    }
+    wasAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated, authLoading, setGameMode]);
 
   // Update background theme based on current screen/gameMode
   useEffect(() => {
