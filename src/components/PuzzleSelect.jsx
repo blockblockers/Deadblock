@@ -197,7 +197,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
           {/* Title - Centered and Large */}
           <div className="text-center mb-4">
             <NeonTitle size="large" />
-            <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
+            <NeonSubtitle text="GENERATED PUZZLE MODE" size="small" className="mt-1" />
           </div>
 
           {/* Card with dramatic theme */}

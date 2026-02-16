@@ -12,6 +12,7 @@ import DragOverlay from './DragOverlay';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
+import { streakTracker } from '../utils/streakTracker';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { creatorPuzzleService } from '../services/creatorPuzzleService';
@@ -211,6 +212,10 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   const [gameState, setGameState] = useState(GAME_STATES.LOADING);
   const [attempts, setAttempts] = useState(1);
   const [startTime] = useState(Date.now());
+  const [errorMessage, setErrorMessage] = useState(null);
+  
+  // Mobile detection
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
   
   // Board state
   const [board, setBoard] = useState(createEmptyBoard);
@@ -253,6 +258,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   const hasDragStartedRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0 });
+  const endDragRef = useRef(null); // For global touch handlers to access endDrag
+  const dragCellRef = useRef(null); // Synchronous cell tracking for touch handlers
   
   // -------------------------------------------------------------------------
   // DERIVED STATE
@@ -281,6 +288,20 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     return [...new Set([...notAvailable, ...usedPieces])];
   }, [availablePieces, usedPieces]);
   
+  // Show error when placement is invalid (matching GameScreen behavior)
+  useEffect(() => {
+    if (pendingMove && pendingMove.coords) {
+      const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords);
+      if (!isValid) {
+        setErrorMessage('Invalid placement!');
+      } else {
+        setErrorMessage(null);
+      }
+    } else {
+      setErrorMessage(null);
+    }
+  }, [pendingMove, board]);
+  
   // -------------------------------------------------------------------------
   // HELPERS
   // -------------------------------------------------------------------------
@@ -295,32 +316,172 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     return timeoutId;
   }, []);
   
-  // Find a valid AI move - returns { piece, row, col, coords, rotation, flipped } or null
-  const findAIMove = useCallback((currentBoard, aiPiecesList) => {
-    for (const pieceName of aiPiecesList) {
-      const piece = pieces[pieceName];
-      if (!piece) continue;
+  // Get all pieces currently on the board (from initial state + user moves)
+  const getPiecesOnBoard = useCallback((boardPiecesState) => {
+    const onBoard = new Set();
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (boardPiecesState[r][c]) {
+          onBoard.add(boardPiecesState[r][c]);
+        }
+      }
+    }
+    return Array.from(onBoard);
+  }, []);
+  
+  // Get all possible moves for a player given current board state
+  const getAllPossibleMoves = useCallback((currentBoard, availablePiecesList, dedupe = false) => {
+    const moves = [];
+    const seen = dedupe ? new Set() : null;
+    
+    for (const pieceName of availablePiecesList) {
+      if (!pieces[pieceName]) continue;
       
-      // Try all rotations and flips
-      for (const rot of [0, 90, 180, 270]) {
-        for (const flip of [false, true]) {
-          const coords = getPieceCoords(pieceName, rot, flip);
+      for (let flip = 0; flip < 2; flip++) {
+        for (let rot = 0; rot < 4; rot++) {
+          const coords = getPieceCoords(pieceName, rot * 90, flip === 1);
           if (!coords) continue;
           
-          // Try all board positions
           for (let row = 0; row < BOARD_SIZE; row++) {
             for (let col = 0; col < BOARD_SIZE; col++) {
               if (canPlacePiece(currentBoard, row, col, coords)) {
-                return { piece: pieceName, row, col, coords, rotation: rot, flipped: flip };
+                if (dedupe) {
+                  // Create hash for deduplication
+                  const placed = coords.map(([dx, dy]) => `${row + dy},${col + dx}`).sort().join('|');
+                  const hash = pieceName + placed;
+                  if (seen.has(hash)) continue;
+                  seen.add(hash);
+                }
+                moves.push({ 
+                  piece: pieceName, 
+                  row, 
+                  col, 
+                  coords, 
+                  rotation: rot * 90, 
+                  flipped: flip === 1 
+                });
               }
             }
           }
         }
       }
     }
-    
-    return null; // No valid move found
+    return moves;
   }, []);
+  
+  // Apply a move to a board and return new board state
+  const applyMoveToBoard = useCallback((currentBoard, move, player) => {
+    const newBoard = currentBoard.map(r => [...r]);
+    for (const [dx, dy] of move.coords) {
+      newBoard[move.row + dy][move.col + dx] = player;
+    }
+    return newBoard;
+  }, []);
+  
+  // Quick position evaluation (center preference)
+  const quickEval = useCallback((row, col, coords) => {
+    let score = 0;
+    for (const [dx, dy] of coords) {
+      const r = row + dy;
+      const c = col + dx;
+      score += (3.5 - Math.abs(r - 3.5)) + (3.5 - Math.abs(c - 3.5));
+    }
+    return score;
+  }, []);
+  
+  // Count how many pieces can still be placed
+  const countPlaceablePieces = useCallback((currentBoard, availablePiecesList) => {
+    let count = 0;
+    for (const pieceName of availablePiecesList) {
+      if (!pieces[pieceName]) continue;
+      
+      let found = false;
+      for (let flip = 0; flip < 2 && !found; flip++) {
+        for (let rot = 0; rot < 4 && !found; rot++) {
+          const coords = getPieceCoords(pieceName, rot * 90, flip === 1);
+          if (!coords) continue;
+          
+          for (let row = 0; row < BOARD_SIZE && !found; row++) {
+            for (let col = 0; col < BOARD_SIZE && !found; col++) {
+              if (canPlacePiece(currentBoard, row, col, coords)) {
+                count++;
+                found = true;
+              }
+            }
+          }
+        }
+      }
+    }
+    return count;
+  }, []);
+  
+  // Expert AI: Find the best move using minimax-like evaluation
+  // For creator puzzles: Find a move that still allows AI to respond after player's next turn
+  const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
+    console.log('[CreatorPuzzle AI] Finding move. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
+    
+    const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
+    if (aiMoves.length === 0) {
+      console.log('[CreatorPuzzle AI] No valid moves available');
+      return null;
+    }
+    
+    // Score each AI move by checking if AI can still respond after player's best response
+    const scoredMoves = [];
+    
+    for (const aiMove of aiMoves) {
+      const boardAfterAI = applyMoveToBoard(currentBoard, aiMove, 2);
+      const aiPiecesAfterMove = aiAvailablePieces.filter(p => p !== aiMove.piece);
+      
+      // Check all possible player responses
+      const playerMoves = getAllPossibleMoves(boardAfterAI, playerAvailablePieces, true);
+      
+      if (playerMoves.length === 0) {
+        // Player can't respond - this is a winning move for AI
+        scoredMoves.push({ ...aiMove, score: 10000 });
+        continue;
+      }
+      
+      // For each player response, check if AI can still play after
+      let worstCaseScore = Infinity;
+      
+      for (const playerMove of playerMoves.slice(0, 10)) { // Limit for performance
+        const boardAfterPlayer = applyMoveToBoard(boardAfterAI, playerMove, 1);
+        const playerPiecesAfterMove = playerAvailablePieces.filter(p => p !== playerMove.piece);
+        
+        // Can AI respond after player's move?
+        const aiResponseMoves = getAllPossibleMoves(boardAfterPlayer, aiPiecesAfterMove, false);
+        
+        // Score based on AI's options after player responds
+        const score = aiResponseMoves.length > 0 
+          ? countPlaceablePieces(boardAfterPlayer, aiPiecesAfterMove)
+          : -1000; // AI gets blocked after this player response
+        
+        worstCaseScore = Math.min(worstCaseScore, score);
+      }
+      
+      // Add position preference
+      const positionBonus = quickEval(aiMove.row, aiMove.col, aiMove.coords) * 0.1;
+      scoredMoves.push({ ...aiMove, score: worstCaseScore + positionBonus });
+    }
+    
+    // Sort by score (highest first)
+    scoredMoves.sort((a, b) => b.score - a.score);
+    
+    console.log('[CreatorPuzzle AI] Top moves:', scoredMoves.slice(0, 3).map(m => 
+      `${m.piece} at (${m.row},${m.col}) score=${m.score.toFixed(1)}`
+    ));
+    
+    // If best move has very negative score (AI will get blocked), just pick any valid move
+    // This indicates player made a good move
+    if (scoredMoves[0].score < -500) {
+      console.log('[CreatorPuzzle AI] Player made a strong move, AI has no good response');
+      // Return any valid move so player can win on next turn
+      return aiMoves[0];
+    }
+    
+    return scoredMoves[0];
+  }, [getAllPossibleMoves, applyMoveToBoard, quickEval, countPlaceablePieces]);
   
   // -------------------------------------------------------------------------
   // INITIALIZE PUZZLE
@@ -411,13 +572,19 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     const [dRow, dCol] = DIRECTION_DELTAS[direction] || [0, 0];
     
+    // Allow anchor to be positioned outside board for pieces that extend
+    // This matches the EXTENSION_MARGIN in calculateBoardCell
+    const EXTENSION_MARGIN = 4;
+    const minPos = -EXTENSION_MARGIN;
+    const maxPos = BOARD_SIZE - 1 + EXTENSION_MARGIN;
+    
     if (pendingMove) {
-      const newRow = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.row + dRow));
-      const newCol = Math.max(0, Math.min(BOARD_SIZE - 1, pendingMove.col + dCol));
+      const newRow = Math.max(minPos, Math.min(maxPos, pendingMove.row + dRow));
+      const newCol = Math.max(minPos, Math.min(maxPos, pendingMove.col + dCol));
       setPendingMove({ ...pendingMove, row: newRow, col: newCol });
     } else {
       const coords = getPieceCoords(selectedPiece, rotation, flipped);
-      setPendingMove({ row: Math.max(0, 3 + dRow), col: Math.max(0, 3 + dCol), coords, piece: selectedPiece });
+      setPendingMove({ row: Math.max(minPos, 3 + dRow), col: Math.max(minPos, 3 + dCol), coords, piece: selectedPiece });
     }
     
     soundManager.playClickSound?.('move');
@@ -465,9 +632,18 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     // Clear player animation after delay
     safeSetTimeout(() => setPlayerAnimatingMove(null), ANIMATION_CLEAR_DELAY_MS);
     
-    // Check if AI can play
-    const aiPiecesList = puzzle.ai_pieces || [];
-    const aiMove = findAIMove(newBoard, aiPiecesList);
+    // Calculate available pieces for AI
+    // AI pieces = puzzle.ai_pieces minus pieces already on the board
+    const piecesOnBoard = getPiecesOnBoard(newBoardPieces);
+    const aiPiecesList = (puzzle.ai_pieces || []).filter(p => !piecesOnBoard.includes(p));
+    const playerPiecesRemaining = availablePieces.filter(p => !newUsedPieces.includes(p));
+    
+    console.log('[CreatorPuzzleGame] Pieces on board:', piecesOnBoard);
+    console.log('[CreatorPuzzleGame] AI can use:', aiPiecesList);
+    console.log('[CreatorPuzzleGame] Player can use:', playerPiecesRemaining);
+    
+    // Use expert AI to find best move
+    const aiMove = findExpertAIMove(newBoard, aiPiecesList, playerPiecesRemaining);
     
     safeSetTimeout(() => {
       if (!aiMove) {
@@ -475,6 +651,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         console.log('[CreatorPuzzleGame] AI blocked - User wins!');
         soundManager.playWin();
         setGameState(GAME_STATES.SUCCESS);
+        
+        // Record daily play for streak tracking (creator puzzle completed)
+        streakTracker.recordPlay();
         
         // Record completion
         if (profile?.id && puzzle?.id) {
@@ -488,7 +667,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           ).catch(err => console.error('[CreatorPuzzleGame] Failed to record completion:', err));
         }
       } else {
-        // AI can play - this means user made wrong move (or it's a multi-move puzzle)
+        // AI can play - check if this is a "forced" move (player made good move)
+        // If AI's score was very negative, player made a winning move - let them continue
         console.log('[CreatorPuzzleGame] AI plays:', aiMove.piece, 'at', aiMove.row, aiMove.col);
         
         // Place AI's piece on the board
@@ -502,6 +682,13 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           boardAfterAI[r][c] = aiPlayer;
           boardPiecesAfterAI[r][c] = aiMove.piece;
         }
+        
+        // Check if player can still play after AI's move
+        const piecesOnBoardAfterAI = getPiecesOnBoard(boardPiecesAfterAI);
+        const playerPiecesAfterAI = availablePieces.filter(p => 
+          !newUsedPieces.includes(p) && !piecesOnBoardAfterAI.includes(p)
+        );
+        const playerCanContinue = getAllPossibleMoves(boardAfterAI, playerPiecesAfterAI, false).length > 0;
         
         // Show AI's move with animation
         setAiAnimatingMove({
@@ -518,33 +705,39 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         setBoardPieces(boardPiecesAfterAI);
         soundManager.playPiecePlace();
         
-        // Clear AI animation and show wrong move feedback
+        // Clear AI animation
         safeSetTimeout(() => {
           setAiAnimatingMove(null);
           
-          // Show wrong move feedback
-          console.log('[CreatorPuzzleGame] Wrong move - AI still has moves');
-          soundManager.playInvalid();
-          setShowWrongMove(true);
-          
-          // Reset after showing the wrong move
-          safeSetTimeout(() => {
-            setShowWrongMove(false);
-            // Reset to initial state
-            if (initialBoard && initialBoardPieces) {
-              setBoard(initialBoard.map(row => [...row]));
-              setBoardPieces(initialBoardPieces.map(row => [...row]));
-            }
-            setUsedPieces([]);
-            setSelectedPiece(null);
-            setPendingMove(null);
-            setMoveIndex(0);
-            setAttempts(prev => prev + 1);
-          }, WRONG_MOVE_DISPLAY_MS);
+          if (playerCanContinue) {
+            // Player can continue - this is a multi-move puzzle or player made good move
+            console.log('[CreatorPuzzleGame] Player can continue playing');
+            // Don't reset - let player make another move
+          } else {
+            // Player cannot continue after AI's response - wrong move
+            console.log('[CreatorPuzzleGame] Wrong move - Player blocked');
+            soundManager.playInvalid();
+            setShowWrongMove(true);
+            
+            // Reset after showing the wrong move
+            safeSetTimeout(() => {
+              setShowWrongMove(false);
+              // Reset to initial state
+              if (initialBoard && initialBoardPieces) {
+                setBoard(initialBoard.map(row => [...row]));
+                setBoardPieces(initialBoardPieces.map(row => [...row]));
+              }
+              setUsedPieces([]);
+              setSelectedPiece(null);
+              setPendingMove(null);
+              setMoveIndex(0);
+              setAttempts(prev => prev + 1);
+            }, WRONG_MOVE_DISPLAY_MS);
+          }
         }, ANIMATION_CLEAR_DELAY_MS);
       }
     }, SUCCESS_DELAY_MS);
-  }, [pendingMove, selectedPiece, board, boardPieces, rotation, flipped, gameState, puzzle, usedPieces, currentPlayer, safeSetTimeout, initialBoard, initialBoardPieces, profile, startTime, attempts, findAIMove]);
+  }, [pendingMove, selectedPiece, board, boardPieces, rotation, flipped, gameState, puzzle, usedPieces, availablePieces, currentPlayer, safeSetTimeout, initialBoard, initialBoardPieces, profile, startTime, attempts, findExpertAIMove, getPiecesOnBoard, getAllPossibleMoves]);
   
   // -------------------------------------------------------------------------
   // RESET PUZZLE
@@ -574,19 +767,163 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     }
   }, [pendingMove]);
   
-  // Handle starting drag from a pending piece on the board
-  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
-    if (gameState !== GAME_STATES.PLAYING) return;
-    if (!pendingMove || pendingMove.piece !== piece) return;
+  // -------------------------------------------------------------------------
+  // DRAG AND DROP - Matching GameScreen implementation exactly
+  // -------------------------------------------------------------------------
+  
+  // Calculate which board cell the drag position is over
+  // Allow positions outside the board for pieces that extend beyond their anchor
+  const calculateBoardCell = useCallback((clientX, clientY) => {
+    if (!boardBoundsRef.current) return null;
     
+    const { left, top, width, height } = boardBoundsRef.current;
+    const cellWidth = width / BOARD_SIZE;
+    const cellHeight = height / BOARD_SIZE;
+    
+    // Match DragOverlay fingerOffset - piece is shown above finger
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    const fingerOffset = isMobile ? 40 : 20;
+    
+    // Adjust Y position to match where piece visually appears
+    const relX = clientX - left;
+    const relY = (clientY - fingerOffset) - top;
+    
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
+    
+    // Allow anchor position up to 4 cells outside board for piece extension
+    const EXTENSION_MARGIN = 4;
+    if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+        col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+      return { row, col };
+    }
+    return null;
+  }, []);
+
+  // Attach global touch handlers synchronously (critical for mobile drag)
+  const attachGlobalTouchHandlers = useCallback(() => {
+    const handleGlobalTouchMove = (e) => {
+      if (!isDraggingRef.current) return;
+      
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
+      setDragPosition({ x: touch.clientX, y: touch.clientY });
+      
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      if (boardBoundsRef.current && draggedPieceRef.current) {
+        const { left, top, width, height } = boardBoundsRef.current;
+        const cellWidth = width / BOARD_SIZE;
+        const cellHeight = height / BOARD_SIZE;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+        const fingerOffset = isMobile ? 40 : 20;
+        
+        const relX = touch.clientX - left;
+        const relY = (touch.clientY - fingerOffset) - top;
+        
+        const col = Math.floor(relX / cellWidth);
+        const row = Math.floor(relY / cellHeight);
+        
+        const EXTENSION_MARGIN = 4;
+        if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+            col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+          const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
+          
+          const minX = Math.min(...coords.map(([x]) => x));
+          const maxX = Math.max(...coords.map(([x]) => x));
+          const minY = Math.min(...coords.map(([, y]) => y));
+          const maxY = Math.max(...coords.map(([, y]) => y));
+          
+          const centerOffsetCol = Math.floor((maxX + minX) / 2);
+          const centerOffsetRow = Math.floor((maxY + minY) / 2);
+          
+          const adjustedRow = row - centerOffsetRow;
+          const adjustedCol = col - centerOffsetCol;
+          
+          dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+          setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+          
+          const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+          setIsValidDrop(valid);
+        } else {
+          dragCellRef.current = null;
+          setDragPreviewCell(null);
+          setIsValidDrop(false);
+        }
+      }
+      
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleGlobalTouchEnd = () => {
+      if (!isDraggingRef.current) return;
+      endDragRef.current?.();
+      
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+    
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalTouchEnd);
+    window.addEventListener('touchcancel', handleGlobalTouchEnd);
+  }, [rotation, flipped, board]);
+
+  // Start drag from piece tray
+  const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
+    if (hasDragStartedRef.current) return;
+    if (gameState !== GAME_STATES.PLAYING) return;
+    if (effectiveUsedPieces.includes(piece)) return;
+    
+    hasDragStartedRef.current = true;
     isDraggingRef.current = true;
     draggedPieceRef.current = piece;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    attachGlobalTouchHandlers();
     
     if (boardRef.current) {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    // Calculate which cell of the piece was touched
+    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
+    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    setPieceCellOffset({ row: 0, col: 0 });
+    setSelectedPiece(piece);
+    setPendingMove(null);
+    
+    soundManager.playPieceSelect();
+    
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameState, effectiveUsedPieces, attachGlobalTouchHandlers]);
+
+  // Handle starting drag from a pending piece on the board
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    if (hasDragStartedRef.current) return;
+    if (gameState !== GAME_STATES.PLAYING) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    
+    attachGlobalTouchHandlers();
+    
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
     if (pendingMove && boardBoundsRef.current) {
       const { left, top, width, height } = boardBoundsRef.current;
       const cellWidth = width / BOARD_SIZE;
@@ -595,12 +932,15 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       const fingerCol = Math.floor((clientX - left) / cellWidth);
       const fingerRow = Math.floor((clientY - top) / cellHeight);
       
-      pieceCellOffsetRef.current = {
+      const offset = {
         row: fingerRow - pendingMove.row,
         col: fingerCol - pendingMove.col
       };
+      pieceCellOffsetRef.current = offset;
+      setPieceCellOffset(offset);
     } else {
       pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
     }
     
     const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
@@ -615,175 +955,198 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameState, pendingMove]);
-  
-  // -------------------------------------------------------------------------
-  // DRAG AND DROP (simplified from SpeedPuzzleScreen)
-  // -------------------------------------------------------------------------
-  const DRAG_THRESHOLD = 10;
-  
+  }, [gameState, pendingMove, attachGlobalTouchHandlers]);
+
+  // Update drag position (for mouse events)
   const updateDrag = useCallback((clientX, clientY) => {
     if (!isDraggingRef.current || !draggedPieceRef.current) return;
     
     setDragPosition({ x: clientX, y: clientY });
     
-    if (boardBoundsRef.current) {
-      const { left, top, width, height } = boardBoundsRef.current;
-      const cellWidth = width / BOARD_SIZE;
-      const cellHeight = height / BOARD_SIZE;
-      
-      const offsetRow = pieceCellOffsetRef.current?.row || 0;
-      const offsetCol = pieceCellOffsetRef.current?.col || 0;
-      
-      const col = Math.floor((clientX - left) / cellWidth) - offsetCol;
-      const row = Math.floor((clientY - top) / cellHeight) - offsetRow;
-      
-      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
-      const isValid = canPlacePiece(board, row, col, coords);
-      
-      setIsValidDrop(isValid);
-      setDragPreviewCell({ row, col });
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
-  }, [rotation, flipped, board]);
-  
+    
+    const cell = calculateBoardCell(clientX, clientY);
+    
+    if (cell) {
+      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
+      
+      const minX = Math.min(...coords.map(([x]) => x));
+      const maxX = Math.max(...coords.map(([x]) => x));
+      const minY = Math.min(...coords.map(([, y]) => y));
+      const maxY = Math.max(...coords.map(([, y]) => y));
+      
+      const centerOffsetCol = Math.floor((maxX + minX) / 2);
+      const centerOffsetRow = Math.floor((maxY + minY) / 2);
+      
+      const adjustedRow = cell.row - centerOffsetRow;
+      const adjustedCol = cell.col - centerOffsetCol;
+      
+      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+      setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+      
+      const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+      setIsValidDrop(valid);
+    } else {
+      dragCellRef.current = null;
+      setDragPreviewCell(null);
+      setIsValidDrop(false);
+    }
+  }, [rotation, flipped, board, calculateBoardCell]);
+
+  // End drag
   const endDrag = useCallback(() => {
-    if (!isDraggingRef.current) return;
+    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
+    if (!wasDragging) return;
     
-    const piece = draggedPieceRef.current;
-    const previewRow = dragPreviewCell?.row;
-    const previewCol = dragPreviewCell?.col;
+    const piece = draggedPiece || draggedPieceRef.current;
+    const cell = dragCellRef.current || dragPreviewCell;
     
-    if (piece && previewRow !== undefined && previewCol !== undefined && isValidDrop) {
+    if (cell && piece) {
       const coords = getPieceCoords(piece, rotation, flipped);
-      setPendingMove({ row: previewRow, col: previewCol, coords, piece });
+      setPendingMove({ piece, row: cell.row, col: cell.col, coords });
     }
     
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
     hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    dragCellRef.current = null;
     
     setIsDragging(false);
     setDraggedPiece(null);
+    setDragPosition({ x: 0, y: 0 });
+    setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
     setDragPreviewCell(null);
+    setPieceCellOffset({ row: 0, col: 0 });
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [dragPreviewCell, isValidDrop, rotation, flipped]);
-  
+  }, [isDragging, dragPreviewCell, draggedPiece, rotation, flipped]);
+
+  // Keep endDragRef current for global touch handlers
+  endDragRef.current = endDrag;
+
+  // Create drag handlers for PieceTray
   const getPieceHandlers = useCallback((piece) => {
     if (gameState !== GAME_STATES.PLAYING) return {};
     if (effectiveUsedPieces.includes(piece)) return {};
-    
-    const handleStart = (clientX, clientY, elementRect) => {
+
+    let elementRect = null;
+
+    const handleTouchStart = (e) => {
       if (hasDragStartedRef.current) return;
       
-      hasDragStartedRef.current = true;
-      isDraggingRef.current = true;
-      draggedPieceRef.current = piece;
-      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      const touch = e.touches[0];
+      elementRect = e.currentTarget.getBoundingClientRect();
       
       if (boardRef.current) {
         boardBoundsRef.current = boardRef.current.getBoundingClientRect();
       }
       
-      setIsDragging(true);
-      setDraggedPiece(piece);
-      setSelectedPiece(piece);
-      setPendingMove(null);
-      setDragPosition({ x: clientX, y: clientY });
-      setDragOffset({ x: 0, y: 0 });
-      
-      document.body.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
-      
-      soundManager.playPieceSelect();
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
     };
-    
-    const handleTouchStart = (e) => {
-      const touch = e.touches?.[0];
-      if (!touch) return;
-      dragStartRef.current = { x: touch.clientX, y: touch.clientY };
-    };
-    
+
     const handleTouchMove = (e) => {
-      if (!e.touches?.[0]) return;
-      const touch = e.touches[0];
-      const dx = Math.abs(touch.clientX - dragStartRef.current.x);
-      const dy = Math.abs(touch.clientY - dragStartRef.current.y);
-      
-      if (!hasDragStartedRef.current && (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD)) {
-        const rect = e.currentTarget.getBoundingClientRect();
-        handleStart(touch.clientX, touch.clientY, rect);
-      }
-      
-      if (isDraggingRef.current) {
-        updateDrag(touch.clientX, touch.clientY);
-        if (e.cancelable) e.preventDefault();
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
-    
-    const handleTouchEnd = () => {
-      if (isDraggingRef.current) {
+
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
         endDrag();
-      } else if (!hasDragStartedRef.current) {
-        handleSelectPiece(piece);
       }
-      hasDragStartedRef.current = false;
     };
-    
+
     const handleMouseDown = (e) => {
-      const rect = e.currentTarget.getBoundingClientRect();
-      handleStart(e.clientX, e.clientY, rect);
+      if (e.button !== 0) return;
+      if (hasDragStartedRef.current) return;
+      
+      elementRect = e.currentTarget.getBoundingClientRect();
+      
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      startDrag(piece, e.clientX, e.clientY, elementRect);
     };
-    
+
     return {
-      onMouseDown: handleMouseDown,
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
+      onMouseDown: handleMouseDown,
     };
-  }, [gameState, effectiveUsedPieces, handleSelectPiece, updateDrag, endDrag]);
-  
-  // Global mouse handlers for drag
+  }, [gameState, effectiveUsedPieces, startDrag, updateDrag, endDrag]);
+
+  // Global mouse move/up handlers for desktop drag
   useEffect(() => {
     if (!isDragging) return;
-    
-    const handleGlobalMove = (e) => updateDrag(e.clientX, e.clientY);
-    const handleGlobalEnd = () => endDrag();
-    
-    window.addEventListener('mousemove', handleGlobalMove);
-    window.addEventListener('mouseup', handleGlobalEnd);
-    
-    return () => {
-      window.removeEventListener('mousemove', handleGlobalMove);
-      window.removeEventListener('mouseup', handleGlobalEnd);
+
+    const handleMouseMove = (e) => {
+      updateDrag(e.clientX, e.clientY);
     };
-  }, [isDragging, updateDrag, endDrag]);
-  
-  // Global touch handlers
-  useEffect(() => {
-    if (!isDragging) return;
-    
-    const handleTouchMove = (e) => {
-      if (e.touches?.[0]) {
-        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
-        if (e.cancelable) e.preventDefault();
+
+    const handleMouseUp = () => {
+      endDrag();
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        endDrag();
+        cancelMove();
       }
     };
-    
-    const handleTouchEnd = () => endDrag();
-    
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDragging, updateDrag, endDrag, cancelMove]);
+
+  // Global touch handlers for drag (backup for board drag on mobile)
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches[0]) {
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      endDrag();
+    };
+
     window.addEventListener('touchmove', handleTouchMove, { passive: false });
     window.addEventListener('touchend', handleTouchEnd);
-    window.addEventListener('touchcancel', handleTouchEnd);
-    
+
     return () => {
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
-      window.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [isDragging, updateDrag, endDrag]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, []);
   
   // -------------------------------------------------------------------------
   // RENDER
@@ -842,31 +1205,83 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               </div>
             </div>
 
+            {/* Player Bar - matches GameScreen layout */}
+            <div className="flex items-center justify-center gap-2 mb-3 py-2">
+              {/* Player 1 - YOU */}
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
+                currentPlayer === 1 
+                  ? `bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]` 
+                  : 'bg-slate-800/50 border border-slate-700/50'
+              }`}>
+                <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                  currentPlayer === 1 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] animate-pulse' : 'bg-slate-600'
+                }`} />
+                <span className={`text-xs font-bold tracking-wide ${currentPlayer === 1 ? 'text-cyan-300' : 'text-slate-500'}`}>
+                  YOU
+                </span>
+              </div>
+              
+              {/* Difficulty Badge */}
+              <div 
+                className={`px-3 py-1 rounded-full bg-gradient-to-r ${
+                  puzzle.difficulty === 'easy' ? 'from-green-600 to-emerald-600' :
+                  puzzle.difficulty === 'hard' ? 'from-purple-500 to-pink-600' :
+                  puzzle.difficulty === 'expert' ? 'from-red-500 to-rose-600' :
+                  'from-cyan-500 to-sky-600'
+                } border border-white/20`}
+                style={{ 
+                  boxShadow: `0 0 15px ${
+                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.6)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(168,85,247,0.6)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(239,68,68,0.6)' :
+                    'rgba(34,211,238,0.6)'
+                  }` 
+                }}
+              >
+                <span className="text-white text-[10px] font-black tracking-wider uppercase">
+                  {puzzle.difficulty || 'MEDIUM'}
+                </span>
+              </div>
+              
+              {/* Player 2 - AI */}
+              <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
+                currentPlayer === 2 
+                  ? `bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]` 
+                  : 'bg-slate-800/50 border border-slate-700/50'
+              }`}>
+                <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                  currentPlayer === 2 ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse' : 'bg-slate-600'
+                }`} />
+                <span className={`text-xs font-bold tracking-wide ${currentPlayer === 2 ? 'text-pink-300' : 'text-slate-500'}`}>
+                  AI
+                </span>
+              </div>
+            </div>
+
             {/* Game Board */}
             <div className="flex justify-center pb-1 relative">
               <WrongMoveFeedback visible={showWrongMove} />
-              <div ref={boardRef}>
-                <GameBoard
-                  board={board}
-                  boardPieces={boardPieces}
-                  pendingMove={pendingMove}
-                  rotation={rotation}
-                  flipped={flipped}
-                  gameOver={gameState === GAME_STATES.SUCCESS}
-                  gameMode="puzzle"
-                  currentPlayer={currentPlayer}
-                  onCellClick={handleCellClick}
-                  onPendingPieceDragStart={handleBoardDragStart}
-                  aiAnimatingMove={aiAnimatingMove}
-                  playerAnimatingMove={playerAnimatingMove}
-                  selectedPiece={selectedPiece}
-                  isDragging={isDragging}
-                  dragPreviewCell={dragPreviewCell}
-                  draggedPiece={draggedPiece}
-                  dragRotation={rotation}
-                  dragFlipped={flipped}
-                />
-              </div>
+              <GameBoard
+                ref={boardRef}
+                board={board}
+                boardPieces={boardPieces}
+                pendingMove={pendingMove}
+                rotation={rotation}
+                flipped={flipped}
+                gameOver={gameState === GAME_STATES.SUCCESS}
+                gameMode="puzzle"
+                currentPlayer={currentPlayer}
+                onCellClick={handleCellClick}
+                onPendingPieceDragStart={handleBoardDragStart}
+                aiAnimatingMove={aiAnimatingMove}
+                playerAnimatingMove={playerAnimatingMove}
+                selectedPiece={selectedPiece}
+                isDragging={isDragging}
+                dragPreviewCell={dragPreviewCell}
+                draggedPiece={draggedPiece}
+                dragRotation={rotation}
+                dragFlipped={flipped}
+              />
             </div>
 
             {/* Off-grid indicator */}
@@ -882,8 +1297,16 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             {/* D-Pad and Error Message Layout - matches GameScreen */}
             {pendingMove && !isDragging && (
               <div className="flex items-start justify-center gap-3 mb-2">
-                {/* Error message box placeholder */}
-                <div className="flex-shrink-0 w-24" />
+                {/* Error message box */}
+                <div className="flex-shrink-0 w-24">
+                  {errorMessage && (
+                    <div className="error-message-box bg-red-900/80 border border-red-500/60 rounded-lg p-2 text-center shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                      <span className="text-red-300 text-xs font-bold leading-tight block">
+                        {errorMessage}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 
                 {/* D-Pad */}
                 <DPad onMove={handleDPadMove} />
@@ -922,7 +1345,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               gameOver={gameState === GAME_STATES.SUCCESS}
               gameMode="puzzle"
               currentPlayer={currentPlayer}
-              isMobile={true}
+              isMobile={isMobile}
               isGeneratingPuzzle={false}
               onSelectPiece={handleSelectPiece}
               createDragHandlers={getPieceHandlers}
@@ -934,6 +1357,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       {/* Drag overlay */}
       {isDragging && draggedPiece && (
         <DragOverlay
+          isDragging={isDragging}
           piece={draggedPiece}
           position={dragPosition}
           offset={dragOffset}

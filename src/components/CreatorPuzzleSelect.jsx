@@ -1,5 +1,5 @@
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
-// v1.1: Updated styling - cyan theme, removed header buttons, proper title/subtitle
+// v1.2: Full grid with 100 puzzle slots, completion tracking, cyan theme
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Check, Lock, Loader, ChevronLeft, ChevronRight } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -24,7 +24,7 @@ const theme = {
   cardShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.2)]',
 };
 
-// Difficulty colors
+// Difficulty colors - all using cyan variants
 const difficultyColors = {
   easy: {
     bg: 'bg-green-500/20',
@@ -52,8 +52,10 @@ const difficultyColors = {
   },
 };
 
+// Total puzzle slots to show
+const TOTAL_PUZZLE_SLOTS = 100;
 // Puzzles per page for pagination
-const PUZZLES_PER_PAGE = 20;
+const PUZZLES_PER_PAGE = 25;
 
 const CreatorPuzzleSelect = ({ 
   onSelectPuzzle, 
@@ -68,6 +70,12 @@ const CreatorPuzzleSelect = ({
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedPuzzle, setSelectedPuzzle] = useState(null);
+
+  // Create puzzle slots map from actual puzzles
+  const puzzleMap = {};
+  puzzles.forEach(p => {
+    puzzleMap[p.puzzle_number] = p;
+  });
 
   // Fetch puzzles and completion status
   useEffect(() => {
@@ -122,7 +130,13 @@ const CreatorPuzzleSelect = ({
     fetchPuzzles();
   }, [profile?.id]);
 
-  const handleSelectPuzzle = (puzzle) => {
+  const handleSelectPuzzle = (puzzleNumber) => {
+    const puzzle = puzzleMap[puzzleNumber];
+    if (!puzzle) {
+      // Puzzle doesn't exist yet - show locked state
+      soundManager.playInvalid?.();
+      return;
+    }
     soundManager.playClickSound('select');
     setSelectedPuzzle(puzzle);
   };
@@ -141,19 +155,27 @@ const CreatorPuzzleSelect = ({
   const handlePrevPage = () => {
     soundManager.playClickSound('select');
     setCurrentPage(p => Math.max(0, p - 1));
+    setSelectedPuzzle(null);
   };
 
   const handleNextPage = () => {
     soundManager.playClickSound('select');
-    const maxPage = Math.ceil(puzzles.length / PUZZLES_PER_PAGE) - 1;
+    const maxPage = Math.ceil(TOTAL_PUZZLE_SLOTS / PUZZLES_PER_PAGE) - 1;
     setCurrentPage(p => Math.min(maxPage, p + 1));
+    setSelectedPuzzle(null);
   };
 
-  // Get puzzles for current page
+  // Get puzzle slots for current page
   const startIdx = currentPage * PUZZLES_PER_PAGE;
-  const paginatedPuzzles = puzzles.slice(startIdx, startIdx + PUZZLES_PER_PAGE);
-  const totalPages = Math.ceil(puzzles.length / PUZZLES_PER_PAGE);
+  const endIdx = startIdx + PUZZLES_PER_PAGE;
+  const currentSlots = [];
+  for (let i = startIdx + 1; i <= endIdx && i <= TOTAL_PUZZLE_SLOTS; i++) {
+    currentSlots.push(i);
+  }
+  
+  const totalPages = Math.ceil(TOTAL_PUZZLE_SLOTS / PUZZLES_PER_PAGE);
   const completedCount = completedPuzzles.size;
+  const availableCount = puzzles.length;
 
   return (
     <div 
@@ -186,13 +208,11 @@ const CreatorPuzzleSelect = ({
           
           {/* Title */}
           <div className="text-center mb-4">
-            <NeonTitle size="medium" />
+            <NeonTitle size="large" />
             <NeonSubtitle text="CREATOR PUZZLES" size="small" className="mt-1" />
-            {puzzles.length > 0 && (
-              <p className="text-cyan-400/80 text-sm mt-2">
-                {completedCount} / {puzzles.length} completed
-              </p>
-            )}
+            <p className="text-cyan-400/80 text-sm mt-2">
+              {completedCount} / {availableCount} completed
+            </p>
           </div>
 
           {/* Card with theme */}
@@ -219,36 +239,43 @@ const CreatorPuzzleSelect = ({
               </div>
             )}
 
-            {/* Puzzle Grid */}
+            {/* Puzzle Grid - 5x5 = 25 per page */}
             {!loading && !error && (
               <>
                 <div className="grid grid-cols-5 gap-2 mb-4">
-                  {paginatedPuzzles.map(puzzle => {
-                    const isCompleted = completedPuzzles.has(puzzle.puzzle_number);
-                    const isSelected = selectedPuzzle?.id === puzzle.id;
-                    const difficulty = puzzle.difficulty || 'medium';
+                  {currentSlots.map(puzzleNumber => {
+                    const puzzle = puzzleMap[puzzleNumber];
+                    const isAvailable = !!puzzle;
+                    const isCompleted = completedPuzzles.has(puzzleNumber);
+                    const isSelected = selectedPuzzle?.puzzle_number === puzzleNumber;
+                    const difficulty = puzzle?.difficulty || 'medium';
                     const colors = difficultyColors[difficulty] || difficultyColors.medium;
                     
                     return (
                       <button
-                        key={puzzle.id}
-                        onClick={() => handleSelectPuzzle(puzzle)}
+                        key={puzzleNumber}
+                        onClick={() => handleSelectPuzzle(puzzleNumber)}
+                        disabled={!isAvailable}
                         className={`
                           aspect-square rounded-lg flex items-center justify-center
                           font-bold text-sm transition-all relative overflow-hidden
-                          ${isSelected 
-                            ? `bg-gradient-to-br ${colors.gradient} text-white scale-105 shadow-lg` 
-                            : isCompleted
-                              ? 'bg-slate-700/50 text-slate-400 border border-slate-600/50'
-                              : `${colors.bg} ${colors.text} border ${colors.border} hover:scale-105`
+                          ${!isAvailable
+                            ? 'bg-slate-800/30 text-slate-600 border border-slate-700/30 cursor-not-allowed'
+                            : isSelected 
+                              ? `bg-gradient-to-br ${colors.gradient} text-white scale-105 shadow-lg` 
+                              : isCompleted
+                                ? 'bg-cyan-900/40 text-cyan-400 border border-cyan-500/30 hover:border-cyan-400/50'
+                                : `${colors.bg} ${colors.text} border ${colors.border} hover:scale-105`
                           }
                         `}
                         style={isSelected ? { boxShadow: '0 0 20px rgba(34,211,238,0.5)' } : {}}
                       >
-                        {isCompleted && !isSelected ? (
-                          <Check size={16} className="text-green-400" />
+                        {!isAvailable ? (
+                          <Lock size={14} className="text-slate-600" />
+                        ) : isCompleted && !isSelected ? (
+                          <Check size={16} className="text-cyan-400" />
                         ) : (
-                          puzzle.puzzle_number
+                          puzzleNumber
                         )}
                       </button>
                     );
@@ -266,7 +293,7 @@ const CreatorPuzzleSelect = ({
                       <ChevronLeft size={20} />
                     </button>
                     <span className="text-slate-400 text-sm">
-                      Page {currentPage + 1} of {totalPages}
+                      {currentPage * PUZZLES_PER_PAGE + 1}-{Math.min((currentPage + 1) * PUZZLES_PER_PAGE, TOTAL_PUZZLE_SLOTS)} of {TOTAL_PUZZLE_SLOTS}
                     </span>
                     <button
                       onClick={handleNextPage}
@@ -281,7 +308,7 @@ const CreatorPuzzleSelect = ({
                 {/* Selected Puzzle Info */}
                 {selectedPuzzle && (
                   <div className="mb-4 p-3 bg-slate-800/50 rounded-xl border border-cyan-500/30">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-1">
                       <h3 className="text-white font-bold">Puzzle #{selectedPuzzle.puzzle_number}</h3>
                       <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
                         difficultyColors[selectedPuzzle.difficulty || 'medium'].bg
@@ -290,7 +317,10 @@ const CreatorPuzzleSelect = ({
                       </span>
                     </div>
                     {selectedPuzzle.name && (
-                      <p className="text-slate-400 text-sm">{selectedPuzzle.name}</p>
+                      <p className="text-cyan-300 text-sm font-medium">{selectedPuzzle.name}</p>
+                    )}
+                    {selectedPuzzle.description && (
+                      <p className="text-slate-400 text-xs mt-1">{selectedPuzzle.description}</p>
                     )}
                   </div>
                 )}

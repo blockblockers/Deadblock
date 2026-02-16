@@ -107,9 +107,9 @@ const PuzzleTypeSelect = ({
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4`}>
         <div className="w-full max-w-md">
           
-          {/* Title */}
-          <div className="text-center mb-6">
-            <NeonTitle size="medium" />
+          {/* Title - Centered and Large */}
+          <div className="text-center mb-4">
+            <NeonTitle size="large" />
             <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
           </div>
 
