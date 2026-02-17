@@ -311,7 +311,7 @@ const CreatorPuzzleSelect = ({
           <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-2.5 sm:p-3 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-700`}>
             
             {/* Difficulty Tab Selector */}
-            <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-2 sm:mb-3">
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-2 mb-2.5 sm:mb-3">
               {Object.entries(DIFFICULTY_TIERS).map(([diffId, diffTier]) => {
                 const isSelected = selectedDifficulty === diffId;
                 const diffColors = difficultyColors[diffId];
@@ -324,17 +324,17 @@ const CreatorPuzzleSelect = ({
                   <button
                     key={diffId}
                     onClick={() => handleSelectDifficulty(diffId)}
-                    className={`py-1.5 sm:py-2 px-1 rounded-lg transition-all text-center ${
+                    className={`py-2 sm:py-2.5 px-1.5 rounded-lg transition-all text-center ${
                       isSelected 
                         ? `bg-gradient-to-r ${diffColors.gradient} text-white shadow-lg` 
                         : `${diffColors.bg} ${diffColors.border} border hover:scale-[1.02] active:scale-[0.98]`
                     }`}
                     style={isSelected ? { boxShadow: `0 0 20px ${diffColors.glow}` } : {}}
                   >
-                    <div className={`text-[9px] sm:text-[10px] font-black tracking-wide ${isSelected ? 'text-white' : diffColors.text}`}>
+                    <div className={`text-[10px] sm:text-xs font-black tracking-wide ${isSelected ? 'text-white' : diffColors.text}`}>
                       {diffTier.label}
                     </div>
-                    <div className={`text-[8px] sm:text-[9px] ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                    <div className={`text-[9px] sm:text-[10px] ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
                       {diffCompletedCount}/{diffAvailableCount}
                     </div>
                   </button>
@@ -483,7 +483,7 @@ const CreatorPuzzleSelect = ({
                   </div>
                 )}
 
-                {/* Start Button - Compact */}
+                {/* Start Button */}
                 <button 
                   onClick={handleStartPuzzle}
                   disabled={!selectedPuzzle}
@@ -499,12 +499,12 @@ const CreatorPuzzleSelect = ({
               </>
             )}
             
-            {/* Back button - Compact */}
+            {/* Back button - Same size as Start button */}
             <button 
               onClick={handleBack}
-              className="w-full mt-2 py-1.5 sm:py-2 px-4 rounded-xl font-bold text-[10px] sm:text-xs text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 active:scale-[0.98]"
+              className="w-full mt-2 p-2 sm:p-2.5 rounded-xl font-black tracking-wider text-xs sm:text-sm text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all border border-slate-600/50 hover:border-slate-500/50 flex items-center justify-center gap-2 active:scale-[0.98]"
             >
-              <ArrowLeft size={12} />
+              <ArrowLeft size={14} />
               BACK TO MENU
             </button>
           </div>

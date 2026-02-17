@@ -422,12 +422,20 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }, [pendingMove]);
   
   // Compute effective used pieces for PieceTray
-  // This includes all pieces NOT in availablePieces + actually placed pieces
+  // This includes all pieces currently on the board (player AND AI pieces)
   const effectiveUsedPieces = useMemo(() => {
-    const allPieceNames = Object.keys(pieces);
-    const notAvailable = allPieceNames.filter(p => !availablePieces.includes(p));
-    return [...new Set([...notAvailable, ...usedPieces])];
-  }, [availablePieces, usedPieces]);
+    const onBoard = new Set();
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (boardPieces[r][c]) {
+          onBoard.add(boardPieces[r][c]);
+        }
+      }
+    }
+    // Also include any pieces player has placed this session
+    usedPieces.forEach(p => onBoard.add(p));
+    return Array.from(onBoard);
+  }, [boardPieces, usedPieces]);
   
   // Show error when placement is invalid (matching GameScreen behavior)
   useEffect(() => {
@@ -1104,22 +1112,18 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     const currentDraggedPiece = draggedPieceRef.current || draggedPiece;
     const currentDragCell = dragCellRef.current || dragPreviewCell;
     
+    // Always set pendingMove when dropping on a cell - even if invalid
+    // This allows the ghost preview to show with red outline for invalid positions
+    // User can then use D-pad to adjust or cancel
     if (currentDragCell && currentDraggedPiece) {
       const coords = getPieceCoords(currentDraggedPiece, rotation, flipped);
-      const valid = canPlacePiece(board, currentDragCell.row, currentDragCell.col, coords);
-      
-      if (valid) {
-        setPendingMove({
-          row: currentDragCell.row,
-          col: currentDragCell.col,
-          coords,
-          piece: currentDraggedPiece,
-        });
-        setSelectedPiece(currentDraggedPiece);
-      } else {
-        setSelectedPiece(null);
-        setPendingMove(null);
-      }
+      setPendingMove({
+        row: currentDragCell.row,
+        col: currentDragCell.col,
+        coords,
+        piece: currentDraggedPiece,
+      });
+      setSelectedPiece(currentDraggedPiece);
     } else {
       setSelectedPiece(null);
       setPendingMove(null);
@@ -1138,7 +1142,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, draggedPiece, dragPreviewCell, rotation, flipped, board]);
+  }, [isDragging, draggedPiece, dragPreviewCell, rotation, flipped]);
 
   // Store endDrag ref for global handlers
   useEffect(() => {
@@ -1378,6 +1382,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 isDragging={isDragging}
                 dragPreviewCell={dragPreviewCell}
                 draggedPiece={draggedPiece}
+                isValidDrop={isValidDrop}
                 dragRotation={rotation}
                 dragFlipped={flipped}
               />
