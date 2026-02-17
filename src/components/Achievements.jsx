@@ -51,7 +51,8 @@ const getCategoryIcon = (category) => {
     puzzle: '🧩',
     special: '💎',
     speed: '⚡',
-    weekly: '📅'
+    weekly: '📅',
+    creator: '✨'
   };
   return icons[category] || '🎮';
 };

@@ -19,6 +19,7 @@ import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
 import DPad from './DPad';
 import DragOverlay from './DragOverlay';
+import NeonTitle from './NeonTitle';
 import { pieces } from '../utils/pieces';
 import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, createEmptyBoard, BOARD_SIZE } from '../utils/gameLogic';
 import { getSpeedPuzzle } from '../utils/puzzleGenerator';
@@ -1700,7 +1701,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         <div className="w-full max-w-md mb-2 flex-shrink-0">
           <div className="flex items-center justify-center">
             <div className="text-center">
-              <div className="speed-subtitle font-black tracking-[0.2em] text-base sm:text-lg">
+              <NeonTitle size="medium" />
+              <div className="speed-subtitle font-black tracking-[0.2em] text-base sm:text-lg mt-1">
                 ⚡ SPEED MODE ⚡
               </div>
             </div>

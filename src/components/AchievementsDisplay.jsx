@@ -235,11 +235,12 @@ const AchievementsDisplay = ({ compact = false }) => {
   }
   
   // Full view - all categories
-  const categoryOrder = ['weekly', 'speed', 'puzzle', 'online', 'ai', 'general'];
+  const categoryOrder = ['weekly', 'speed', 'puzzle', 'creator', 'online', 'ai', 'general'];
   const categoryTitles = {
     weekly: 'Weekly Challenges',
     speed: 'Speed Puzzle',
     puzzle: 'Puzzle Mode',
+    creator: 'Creator Puzzles',
     online: 'Online Matches',
     ai: 'VS AI',
     general: 'General'

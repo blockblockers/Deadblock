@@ -5,11 +5,12 @@
 // Place in src/components/PlayerStatsModal.jsx
 
 import { useState, useEffect, useRef } from 'react';
-import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal, Hash } from 'lucide-react';
+import { X, User, Trophy, Target, Zap, Bot, Users, Globe, Flame, Award, TrendingUp, Gamepad2, Clock, Edit2, Check, ChevronDown, ChevronUp, Loader, Medal, Hash, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { statsService } from '../utils/statsService';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
 import { streakService } from '../services/streakService';
+import { creatorPuzzleService } from '../services/creatorPuzzleService';
 import { getRankInfo } from '../utils/rankUtils';
 import { soundManager } from '../utils/soundManager';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
@@ -122,6 +123,16 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   // Weekly challenge stats
   const [weeklyStats, setWeeklyStats] = useState({ first: 0, second: 0, third: 0, total: 0 });
   
+  // Creator puzzle stats
+  const [creatorStats, setCreatorStats] = useState({
+    easy: { completed: 0, total: 25 },
+    medium: { completed: 0, total: 35 },
+    hard: { completed: 0, total: 25 },
+    expert: { completed: 0, total: 15 },
+    totalCompleted: 0,
+    totalPuzzles: 100
+  });
+  
   const scrollContainerRef = useRef(null);
   
   // Get tier info for theming
@@ -133,6 +144,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       loadStats();
       loadPlayStreak();
       loadLeaderboardRank();
+      loadCreatorPuzzleStats();
     }
   }, [isOpen, isOffline]);
   
@@ -210,6 +222,63 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       }
     } catch (err) {
       console.warn('[PlayerStatsModal] Error loading leaderboard rank:', err);
+    }
+  };
+  
+  const loadCreatorPuzzleStats = async () => {
+    if (!profile?.id) return;
+    
+    try {
+      // Try RPC first for accurate counts
+      const { data, error } = await supabase.rpc('get_creator_puzzle_stats', {
+        p_user_id: profile.id
+      });
+      
+      if (!error && data && data.length > 0) {
+        const stats = data[0];
+        setCreatorStats({
+          easy: { completed: stats.easy_completed || 0, total: stats.easy_total || 25 },
+          medium: { completed: stats.medium_completed || 0, total: stats.medium_total || 35 },
+          hard: { completed: stats.hard_completed || 0, total: stats.hard_total || 25 },
+          expert: { completed: stats.expert_completed || 0, total: stats.expert_total || 15 },
+          totalCompleted: stats.total_completed || 0,
+          totalPuzzles: stats.total_puzzles || 100
+        });
+      } else {
+        // Fallback: Use creatorPuzzleService
+        const completions = await creatorPuzzleService.getUserCompletions(profile.id);
+        const puzzles = await creatorPuzzleService.getAllPuzzles();
+        
+        // Count by difficulty
+        const puzzleDifficultyMap = {};
+        puzzles.forEach(p => { puzzleDifficultyMap[p.puzzle_number] = p.difficulty; });
+        
+        const counts = { easy: 0, medium: 0, hard: 0, expert: 0 };
+        completions.forEach(c => {
+          const diff = puzzleDifficultyMap[c.puzzle_number];
+          if (diff && counts[diff] !== undefined) {
+            counts[diff]++;
+          }
+        });
+        
+        const totals = { easy: 0, medium: 0, hard: 0, expert: 0 };
+        puzzles.forEach(p => {
+          if (p.difficulty && totals[p.difficulty] !== undefined) {
+            totals[p.difficulty]++;
+          }
+        });
+        
+        setCreatorStats({
+          easy: { completed: counts.easy, total: totals.easy || 25 },
+          medium: { completed: counts.medium, total: totals.medium || 35 },
+          hard: { completed: counts.hard, total: totals.hard || 25 },
+          expert: { completed: counts.expert, total: totals.expert || 15 },
+          totalCompleted: completions.length,
+          totalPuzzles: puzzles.length
+        });
+      }
+    } catch (err) {
+      console.warn('[PlayerStatsModal] Error loading creator puzzle stats:', err);
     }
   };
   
@@ -541,6 +610,108 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 {weeklyStats.total > 0 && (
                   <div className="mt-2 text-center text-sm text-slate-400">
                     {weeklyStats.total} podium finish{weeklyStats.total !== 1 ? 'es' : ''} total
+                  </div>
+                )}
+              </Section>
+              
+              {/* Creator Puzzles Section */}
+              <Section 
+                id="creator" 
+                title="Creator Puzzles" 
+                icon={Sparkles} 
+                color="cyan"
+                expanded={expandedSection === 'creator'}
+                onToggle={handleSectionToggle}
+              >
+                {/* Progress bar */}
+                <div className="mb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-slate-400">Overall Progress</span>
+                    <span className="text-xs text-cyan-400 font-bold">
+                      {creatorStats.totalCompleted}/{creatorStats.totalPuzzles}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                
+                {/* Difficulty breakdown */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Easy */}
+                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-green-400 text-xs font-bold">Easy</span>
+                      <span className="text-xs text-slate-400">
+                        {creatorStats.easy.completed}/{creatorStats.easy.total}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-green-500 rounded-full"
+                        style={{ width: `${(creatorStats.easy.completed / creatorStats.easy.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Medium */}
+                  <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-cyan-400 text-xs font-bold">Medium</span>
+                      <span className="text-xs text-slate-400">
+                        {creatorStats.medium.completed}/{creatorStats.medium.total}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-cyan-500 rounded-full"
+                        style={{ width: `${(creatorStats.medium.completed / creatorStats.medium.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Hard */}
+                  <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-red-400 text-xs font-bold">Hard</span>
+                      <span className="text-xs text-slate-400">
+                        {creatorStats.hard.completed}/{creatorStats.hard.total}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-red-500 rounded-full"
+                        style={{ width: `${(creatorStats.hard.completed / creatorStats.hard.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Expert */}
+                  <div className="p-2 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/20">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-fuchsia-400 text-xs font-bold">Expert</span>
+                      <span className="text-xs text-slate-400">
+                        {creatorStats.expert.completed}/{creatorStats.expert.total}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-fuchsia-500 rounded-full"
+                        style={{ width: `${(creatorStats.expert.completed / creatorStats.expert.total) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Completion message */}
+                {creatorStats.totalCompleted === creatorStats.totalPuzzles && creatorStats.totalPuzzles > 0 && (
+                  <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-center">
+                    <span className="text-amber-400 text-sm font-medium">
+                      🏆 All puzzles completed! You're a Creator Puzzle Master!
+                    </span>
                   </div>
                 )}
               </Section>

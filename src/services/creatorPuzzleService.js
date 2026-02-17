@@ -1,16 +1,44 @@
 // creatorPuzzleService.js - Service for Creator Puzzles
+// v2.0: Fixed auth token retrieval and added better error logging
 // Handles fetching puzzles, completions, and stats
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Get the correct localStorage key for auth token
+// Supabase uses format: sb-{project-ref}-auth-token
+const getAuthStorageKey = () => {
+  if (!SUPABASE_URL) return null;
+  try {
+    // Extract project ref from URL: https://xxxxx.supabase.co -> xxxxx
+    const match = SUPABASE_URL.match(/https:\/\/([^.]+)\.supabase\.co/);
+    if (match && match[1]) {
+      return `sb-${match[1]}-auth-token`;
+    }
+  } catch (e) {
+    console.warn('[CreatorPuzzleService] Could not parse Supabase URL:', e);
+  }
+  return null;
+};
+
 // Get auth token from localStorage
 const getAuthToken = () => {
   try {
-    const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+    const authKey = getAuthStorageKey();
+    if (!authKey) {
+      console.warn('[CreatorPuzzleService] No auth storage key found');
+      return ANON_KEY;
+    }
+    
     const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
-    return authData?.access_token || ANON_KEY;
-  } catch {
+    if (authData?.access_token) {
+      return authData.access_token;
+    }
+    
+    // Fallback: user might not be logged in, use anon key
+    return ANON_KEY;
+  } catch (e) {
+    console.warn('[CreatorPuzzleService] Error getting auth token:', e);
     return ANON_KEY;
   }
 };
@@ -115,12 +143,28 @@ export const creatorPuzzleService = {
    * @returns {Promise<Object>} Completion record
    */
   async markCompleted(userId, puzzleId, puzzleNumber, timeToCompleteMs = null, attempts = 1) {
+    console.log('[CreatorPuzzleService] markCompleted called with:', { userId, puzzleId, puzzleNumber, timeToCompleteMs, attempts });
+    
     if (!userId || !puzzleId) {
+      console.error('[CreatorPuzzleService] Missing required params:', { userId, puzzleId });
       throw new Error('User ID and Puzzle ID required');
     }
 
+    const body = {
+      user_id: userId,
+      puzzle_id: puzzleId,
+      puzzle_number: puzzleNumber,
+      time_to_complete_ms: timeToCompleteMs,
+      attempts: attempts,
+      completed_at: new Date().toISOString(),
+    };
+
+    console.log('[CreatorPuzzleService] Request body:', body);
+    console.log('[CreatorPuzzleService] Auth storage key:', getAuthStorageKey());
+
     try {
       // Use upsert to handle re-completions (update attempts count)
+      // NOTE: This requires a unique constraint on (user_id, puzzle_number) in the database
       const response = await fetch(
         `${SUPABASE_URL}/rest/v1/creator_puzzle_completions`,
         {
@@ -129,26 +173,33 @@ export const creatorPuzzleService = {
             ...getHeaders(),
             'Prefer': 'resolution=merge-duplicates,return=representation',
           },
-          body: JSON.stringify({
-            user_id: userId,
-            puzzle_id: puzzleId,
-            puzzle_number: puzzleNumber,
-            time_to_complete_ms: timeToCompleteMs,
-            attempts: attempts,
-            completed_at: new Date().toISOString(),
-          }),
+          body: JSON.stringify(body),
         }
       );
       
+      const responseText = await response.text();
+      console.log('[CreatorPuzzleService] Response status:', response.status, response.statusText);
+      console.log('[CreatorPuzzleService] Response body:', responseText);
+      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[CreatorPuzzleService] Mark completed error:', errorText);
-        throw new Error(`Failed to mark completed: ${response.status}`);
+        console.error('[CreatorPuzzleService] Mark completed error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: responseText
+        });
+        throw new Error(`Failed to mark completed: ${response.status} - ${responseText}`);
       }
       
-      const result = await response.json();
-      console.log('[CreatorPuzzleService] Marked puzzle completed:', puzzleNumber);
-      return result[0];
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.warn('[CreatorPuzzleService] Could not parse response as JSON');
+        result = [];
+      }
+      
+      console.log('[CreatorPuzzleService] Successfully marked puzzle completed:', puzzleNumber, result);
+      return result[0] || result;
     } catch (error) {
       console.error('[CreatorPuzzleService] Error marking completed:', error);
       throw error;

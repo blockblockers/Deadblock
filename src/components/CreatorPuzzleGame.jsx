@@ -16,6 +16,7 @@ import { streakTracker } from '../utils/streakTracker';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { creatorPuzzleService } from '../services/creatorPuzzleService';
+import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 // ============================================================================
 // CONSTANTS
@@ -235,17 +236,28 @@ const SuccessOverlay = memo(({ puzzleNumber, puzzleName, difficulty, onContinue,
             SOLVED!
           </h2>
           
-          <p className="text-slate-400 mb-1">
-            Puzzle #{puzzleNumber} completed!
-          </p>
-          {puzzleName && (
-            <p className={`${theme.badgeText} text-sm font-medium mb-4`}>"{puzzleName}"</p>
-          )}
+          {/* Puzzle info - themed */}
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span className={`text-sm font-black tracking-wide ${theme.badgeText}`}>
+              #{puzzleNumber}
+            </span>
+            {puzzleName && (
+              <>
+                <span className={`${theme.badgeText} opacity-50`}>•</span>
+                <span className={`text-sm font-bold tracking-wide ${theme.badgeText}`}>
+                  {puzzleName}
+                </span>
+              </>
+            )}
+          </div>
           
-          {/* Difficulty badge */}
-          <div className="flex justify-center mb-6">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder}`}>
-              {difficulty || 'Medium'} Difficulty
+          {/* Difficulty badge - themed */}
+          <div className="flex justify-center mb-6 mt-3">
+            <span 
+              className={`px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder}`}
+              style={{ boxShadow: `0 0 10px ${theme.glow}` }}
+            >
+              {difficulty || 'Medium'}
             </span>
           </div>
           
@@ -294,17 +306,32 @@ const FailureOverlay = memo(({ puzzleNumber, puzzleName, difficulty, attempts, o
             BLOCKED!
           </h2>
           
-          <p className="text-slate-400 mb-1">
-            The AI blocked your moves.
-          </p>
-          <p className="text-slate-500 text-sm mb-4">
-            Attempts: {attempts}
+          {/* Puzzle info - themed */}
+          <div className="flex items-center justify-center gap-2 mb-1">
+            <span className={`text-sm font-black tracking-wide ${theme.badgeText}`}>
+              #{puzzleNumber}
+            </span>
+            {puzzleName && (
+              <>
+                <span className={`${theme.badgeText} opacity-50`}>•</span>
+                <span className={`text-sm font-bold tracking-wide ${theme.badgeText}`}>
+                  {puzzleName}
+                </span>
+              </>
+            )}
+          </div>
+          
+          <p className="text-slate-500 text-sm mb-3">
+            Attempt #{attempts}
           </p>
           
-          {/* Difficulty badge */}
+          {/* Difficulty badge - themed */}
           <div className="flex justify-center mb-6">
-            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder}`}>
-              {difficulty || 'Medium'} Difficulty
+            <span 
+              className={`px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder}`}
+              style={{ boxShadow: `0 0 10px ${theme.glow}` }}
+            >
+              {difficulty || 'Medium'}
             </span>
           </div>
           
@@ -688,9 +715,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setRotation(0);
     setFlipped(false);
     
-    // Create initial pending move at center
-    const coords = getPieceCoords(pieceName, 0, false);
-    setPendingMove({ row: 3, col: 3, coords, piece: pieceName });
+    // Clear any existing pending move - user will tap board to place
+    setPendingMove(null);
   }, [gameState, effectiveUsedPieces]);
   
   // -------------------------------------------------------------------------
@@ -825,15 +851,40 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         streakTracker.recordPlay();
         
         // Record completion
+        console.log('[CreatorPuzzleGame] Recording completion - profile.id:', profile?.id, 'puzzle.id:', puzzle?.id, 'puzzle_number:', puzzle?.puzzle_number);
         if (profile?.id && puzzle?.id) {
           const timeToComplete = Date.now() - startTime;
+          console.log('[CreatorPuzzleGame] Calling markCompleted with:', {
+            userId: profile.id,
+            puzzleId: puzzle.id,
+            puzzleNumber: puzzle.puzzle_number,
+            timeToComplete,
+            attempts
+          });
           creatorPuzzleService.markCompleted(
             profile.id,
             puzzle.id,
             puzzle.puzzle_number,
             timeToComplete,
             attempts
-          ).catch(err => console.error('[CreatorPuzzleGame] Failed to record completion:', err));
+          ).then((result) => {
+            console.log('[CreatorPuzzleGame] markCompleted success:', result);
+            // Check for creator puzzle achievements
+            if (isSupabaseConfigured()) {
+              supabase.rpc('check_creator_puzzle_achievements', { p_user_id: profile.id })
+                .then(({ data, error }) => {
+                  if (!error && data) {
+                    const newAchievements = data.filter(a => a.newly_awarded);
+                    if (newAchievements.length > 0) {
+                      console.log('[CreatorPuzzleGame] New achievements unlocked:', newAchievements.map(a => a.achievement_id));
+                    }
+                  }
+                })
+                .catch(err => console.warn('[CreatorPuzzleGame] Achievement check failed:', err));
+            }
+          }).catch(err => console.error('[CreatorPuzzleGame] Failed to record completion:', err));
+        } else {
+          console.warn('[CreatorPuzzleGame] Missing profile.id or puzzle.id - completion not recorded');
         }
         
         // Also save to localStorage for non-logged-in users
@@ -1049,6 +1100,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     isDraggingRef.current = true;
     draggedPieceRef.current = piece;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
+    dragCellRef.current = null; // Reset to ensure clean state for tap detection
     
     attachGlobalTouchHandlers();
     
@@ -1112,9 +1164,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     const currentDraggedPiece = draggedPieceRef.current || draggedPiece;
     const currentDragCell = dragCellRef.current || dragPreviewCell;
     
-    // Always set pendingMove when dropping on a cell - even if invalid
-    // This allows the ghost preview to show with red outline for invalid positions
-    // User can then use D-pad to adjust or cancel
+    // If user dragged to a position on the board, create pending move there
     if (currentDragCell && currentDraggedPiece) {
       const coords = getPieceCoords(currentDraggedPiece, rotation, flipped);
       setPendingMove({
@@ -1124,6 +1174,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         piece: currentDraggedPiece,
       });
       setSelectedPiece(currentDraggedPiece);
+    } else if (currentDraggedPiece) {
+      // User tapped/clicked without dragging - just select the piece
+      // They can then tap on the board to place it
+      // Note: Sound already played in startDrag
+      setSelectedPiece(currentDraggedPiece);
+      setPendingMove(null);
     } else {
       setSelectedPiece(null);
       setPendingMove(null);
@@ -1293,28 +1349,32 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           <div className="text-center mb-2">
             <NeonTitle size="medium" />
             <NeonSubtitle text="CREATOR PUZZLE" size="small" className="mt-1" />
+            
+            {/* Centered Puzzle Number & Title */}
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <span className={`text-sm font-black tracking-wide ${theme.badgeText}`}>
+                #{puzzle.puzzle_number}
+              </span>
+              {puzzle.name && (
+                <>
+                  <span className={`${theme.badgeText} opacity-50`}>•</span>
+                  <span className={`text-sm font-bold tracking-wide ${theme.badgeText}`}>
+                    {puzzle.name}
+                  </span>
+                </>
+              )}
+            </div>
+            
+            {/* Attempt counter */}
+            {attempts > 1 && (
+              <span className="text-slate-500 text-xs mt-1 block">
+                Attempt #{attempts}
+              </span>
+            )}
           </div>
 
           {/* Game Area */}
           <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
-            
-            {/* Puzzle Info Bar */}
-            <div className="flex items-center justify-between mb-2 px-1">
-              <div className="flex items-center gap-2">
-                <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
-                {puzzle.name && (
-                  <span className="text-slate-400 text-xs truncate max-w-[120px]">{puzzle.name}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {attempts > 1 && (
-                  <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
-                )}
-                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder}`}>
-                  {puzzle.difficulty || 'medium'}
-                </span>
-              </div>
-            </div>
 
             {/* Player Bar - themed by difficulty */}
             <div className="flex items-center justify-center gap-2 mb-3 py-2">
@@ -1336,12 +1396,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 </span>
               </div>
               
-              {/* Difficulty Badge */}
+              {/* Difficulty Badge - themed style */}
               <div 
-                className={`px-3 py-1 rounded-full bg-gradient-to-r ${theme.gradient} border border-white/20`}
+                className={`px-3 py-1 rounded-lg ${theme.badgeBg} border ${theme.badgeBorder}`}
                 style={{ boxShadow: `0 0 15px ${theme.glow}` }}
               >
-                <span className="text-white text-[10px] font-black tracking-wider uppercase">
+                <span className={`text-[10px] font-black tracking-wider uppercase ${theme.badgeText}`}>
                   {puzzle.difficulty || 'MEDIUM'}
                 </span>
               </div>
