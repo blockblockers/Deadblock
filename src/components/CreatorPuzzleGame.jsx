@@ -1,4 +1,8 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
+// v1.5: Attempt persistence - loads/saves attempts to database across sessions
+// v1.4: Removed duplicate "New" button (creator puzzles don't generate new puzzles)
+// v1.3: Difficulty-based background theming, centered puzzle info, cleaned up UI
 // v1.2: Enhanced Expert AI - better trap detection, blocking scoring, deterministic tiebreakers
 // v1.1: Updated layout to match GameScreen - cyan theme, proper DPad/controls layout
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
@@ -33,13 +37,41 @@ const GAME_STATES = {
   FAILED: 'failed',
 };
 
-// Theme - Cyan for creator puzzles (matching the type select and puzzle select screens)
-const theme = {
-  gridColor: 'rgba(34, 211, 238, 0.3)',
-  glow1: 'bg-cyan-500/30',
-  glow2: 'bg-sky-500/25',
-  panelBorder: 'border-cyan-500/40',
-  panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
+// Difficulty-based themes for background and UI styling
+const difficultyThemes = {
+  easy: {
+    gridColor: 'rgba(34, 197, 94, 0.3)',
+    glow1: 'bg-green-500/30',
+    glow2: 'bg-emerald-500/25',
+    panelBorder: 'border-green-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(34,197,94,0.3)]',
+  },
+  medium: {
+    gridColor: 'rgba(34, 211, 238, 0.3)',
+    glow1: 'bg-cyan-500/30',
+    glow2: 'bg-sky-500/25',
+    panelBorder: 'border-cyan-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
+  },
+  hard: {
+    gridColor: 'rgba(168, 85, 247, 0.3)',
+    glow1: 'bg-purple-500/30',
+    glow2: 'bg-pink-500/25',
+    panelBorder: 'border-purple-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
+  },
+  expert: {
+    gridColor: 'rgba(239, 68, 68, 0.3)',
+    glow1: 'bg-red-500/30',
+    glow2: 'bg-rose-500/25',
+    panelBorder: 'border-red-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
+  },
+};
+
+// Get theme based on puzzle difficulty
+const getTheme = (difficulty) => {
+  return difficultyThemes[difficulty] || difficultyThemes.medium;
 };
 
 // D-pad direction deltas
@@ -267,6 +299,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   // -------------------------------------------------------------------------
   const currentPlayer = puzzle?.current_player || 1;
   
+  // Get theme based on puzzle difficulty
+  const theme = useMemo(() => getTheme(puzzle?.difficulty), [puzzle?.difficulty]);
+  
   const canConfirm = useMemo(() => {
     if (!pendingMove) return false;
     return canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords);
@@ -420,7 +455,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   // For creator puzzles: Find a move that still allows AI to respond after player's next turn
   // v1.1: Enhanced for Expert puzzles - more thorough evaluation, blocking scoring
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
-    console.log('[CreatorPuzzle AI] Finding move. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
+    console.log('[CreatorPuzzle AI] Finding optimal move. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
     
     const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
     if (aiMoves.length === 0) {
@@ -428,92 +463,127 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       return null;
     }
     
-    // Count player's current winning moves BEFORE AI plays
-    const countPlayerWinningMoves = (board, playerPieces) => {
+    // Helper: Count player's winning moves from a given board state
+    // A "winning move" = player plays, then AI has NO valid response
+    const countPlayerWinningMoves = (board, playerPieces, aiPieces) => {
       const pMoves = getAllPossibleMoves(board, playerPieces, true);
       let winCount = 0;
-      for (const pm of pMoves.slice(0, 15)) {
+      
+      // Check all player moves (more thorough for puzzle accuracy)
+      for (const pm of pMoves) {
         const afterPlayer = applyMoveToBoard(board, pm, 1);
-        const aiResponses = getAllPossibleMoves(afterPlayer, aiAvailablePieces.filter(p => p !== pm.piece), false);
-        if (aiResponses.length === 0) winCount++;
+        const playerPiecesAfter = playerPieces.filter(p => p !== pm.piece);
+        
+        // AI responds - does AI have any valid moves?
+        const aiResponses = getAllPossibleMoves(afterPlayer, aiPieces, false);
+        
+        if (aiResponses.length === 0) {
+          // Player wins with this move
+          winCount++;
+        }
       }
       return winCount;
     };
     
-    const playerWinningMovesBefore = countPlayerWinningMoves(currentBoard, playerAvailablePieces);
-    console.log('[CreatorPuzzle AI] Player has', playerWinningMovesBefore, 'winning moves before AI plays');
+    // Count player's winning moves BEFORE AI plays
+    const playerWinningMovesBefore = countPlayerWinningMoves(currentBoard, playerAvailablePieces, aiAvailablePieces);
+    console.log('[CreatorPuzzle AI] Player has', playerWinningMovesBefore, 'winning moves BEFORE AI plays');
     
-    // Score each AI move
+    // Score each possible AI move
     const scoredMoves = [];
     
     for (const aiMove of aiMoves) {
       const boardAfterAI = applyMoveToBoard(currentBoard, aiMove, 2);
       const aiPiecesAfterMove = aiAvailablePieces.filter(p => p !== aiMove.piece);
       
-      // Check all possible player responses
+      // Check player's options after this AI move
       const playerMoves = getAllPossibleMoves(boardAfterAI, playerAvailablePieces, true);
       
+      // PRIORITY 1: AI wins immediately (player has no moves)
       if (playerMoves.length === 0) {
-        // Player can't respond - this is a winning move for AI (highest priority)
-        scoredMoves.push({ ...aiMove, score: 100000, reason: 'wins' });
+        scoredMoves.push({ ...aiMove, score: 100000, reason: 'wins', playerWinsAfter: 0 });
+        console.log(`[CreatorPuzzle AI] ${aiMove.piece} WINS (blocks all player moves)`);
         continue;
       }
       
-      // Count player winning moves AFTER this AI move
-      const playerWinningMovesAfter = countPlayerWinningMoves(boardAfterAI, playerAvailablePieces);
+      // Count player's winning moves AFTER this AI move (with reduced AI pieces)
+      const playerWinningMovesAfter = countPlayerWinningMoves(boardAfterAI, playerAvailablePieces, aiPiecesAfterMove);
       const blockedWinningMoves = playerWinningMovesBefore - playerWinningMovesAfter;
       
-      // For each player response, check if AI can still play after
-      // Check more responses for harder puzzles
-      let worstCaseScore = Infinity;
-      const responsesToCheck = Math.min(playerMoves.length, 20);
+      // PRIORITY 2: Minimize player's winning moves
+      // Heavily penalize moves that INCREASE player's winning options
+      // Reward moves that DECREASE player's winning options
+      let score = 0;
       
-      for (const playerMove of playerMoves.slice(0, responsesToCheck)) {
+      // Big bonus for blocking winning moves
+      score += blockedWinningMoves * 2000;
+      
+      // Heavy penalty for leaving player with winning moves
+      score -= playerWinningMovesAfter * 1000;
+      
+      // Penalty for total player options (prefer constraining player)
+      score -= playerMoves.length * 10;
+      
+      // PRIORITY 3: Look ahead - can AI survive all player responses?
+      let aiCanAlwaysRespond = true;
+      let minAIResponseOptions = Infinity;
+      
+      for (const playerMove of playerMoves) {
         const boardAfterPlayer = applyMoveToBoard(boardAfterAI, playerMove, 1);
         const playerPiecesAfterMove = playerAvailablePieces.filter(p => p !== playerMove.piece);
         
-        // Can AI respond after player's move?
+        // Can AI respond to this player move?
         const aiResponseMoves = getAllPossibleMoves(boardAfterPlayer, aiPiecesAfterMove, false);
         
-        // Score based on AI's options after player responds
-        const score = aiResponseMoves.length > 0 
-          ? countPlaceablePieces(boardAfterPlayer, aiPiecesAfterMove)
-          : -1000; // AI gets blocked after this player response
+        if (aiResponseMoves.length === 0) {
+          // This player move would win for player (AI blocked)
+          aiCanAlwaysRespond = false;
+        }
         
-        worstCaseScore = Math.min(worstCaseScore, score);
+        minAIResponseOptions = Math.min(minAIResponseOptions, aiResponseMoves.length);
       }
       
-      // Scoring formula:
-      // 1. Blocking player winning moves is highest priority (after winning itself)
-      // 2. Worst-case scenario for AI continuation
-      // 3. Position preference as tiebreaker
-      const blockingScore = blockedWinningMoves * 500;
-      const positionBonus = quickEval(aiMove.row, aiMove.col, aiMove.coords) * 0.1;
+      // Bonus if AI can respond to ALL player moves
+      if (aiCanAlwaysRespond) {
+        score += 500;
+      }
       
-      // Deterministic tiebreaker: piece name + position
-      const tiebreaker = aiMove.piece.charCodeAt(0) * 0.001 + aiMove.row * 0.0001 + aiMove.col * 0.00001;
+      // Small bonus for AI flexibility
+      score += minAIResponseOptions * 5;
       
-      const finalScore = worstCaseScore + blockingScore + positionBonus + tiebreaker;
-      scoredMoves.push({ ...aiMove, score: finalScore, blocked: blockedWinningMoves, worst: worstCaseScore });
+      // PRIORITY 4: Position preference (center is slightly better)
+      const positionBonus = quickEval(aiMove.row, aiMove.col, aiMove.coords) * 0.5;
+      score += positionBonus;
+      
+      // Deterministic tiebreaker for consistency
+      const tiebreaker = aiMove.piece.charCodeAt(0) * 0.01 + aiMove.row * 0.001 + aiMove.col * 0.0001;
+      score += tiebreaker;
+      
+      scoredMoves.push({ 
+        ...aiMove, 
+        score, 
+        blocked: blockedWinningMoves, 
+        playerWinsAfter: playerWinningMovesAfter,
+        playerMoves: playerMoves.length,
+        canSurvive: aiCanAlwaysRespond
+      });
     }
     
-    // Sort by score (highest first)
+    // Sort by score (highest = best for AI)
     scoredMoves.sort((a, b) => b.score - a.score);
     
-    console.log('[CreatorPuzzle AI] Top moves:', scoredMoves.slice(0, 5).map(m => 
-      `${m.piece} at (${m.row},${m.col}) score=${m.score.toFixed(1)} blocked=${m.blocked || 0} worst=${m.worst || '-'}`
-    ));
+    // Log top moves for debugging
+    console.log('[CreatorPuzzle AI] Top 5 moves:');
+    scoredMoves.slice(0, 5).forEach((m, i) => {
+      console.log(`  ${i+1}. ${m.piece} at (${m.row},${m.col}) score=${m.score.toFixed(0)} ` +
+        `blocked=${m.blocked} playerWins=${m.playerWinsAfter} survive=${m.canSurvive}`);
+    });
     
-    // If best move has very negative score (AI will get blocked), just pick any valid move
-    // This indicates player made a good move
-    if (scoredMoves[0].score < -500 && !scoredMoves[0].reason) {
-      console.log('[CreatorPuzzle AI] Player made a strong move, AI has no good response');
-      // Return any valid move so player can win on next turn
-      return aiMoves[0];
-    }
+    const bestMove = scoredMoves[0];
+    console.log(`[CreatorPuzzle AI] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col})`);
     
-    return scoredMoves[0];
-  }, [getAllPossibleMoves, applyMoveToBoard, quickEval, countPlaceablePieces]);
+    return bestMove;
+  }, [getAllPossibleMoves, applyMoveToBoard, quickEval]);
   
   // -------------------------------------------------------------------------
   // INITIALIZE PUZZLE
@@ -539,13 +609,32 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setUsedPieces([]);
     setMoveIndex(0);
     
+    // Load previous attempts from database (if user is logged in)
+    if (profile?.id && puzzle?.id) {
+      creatorPuzzleService.getProgress(profile.id, puzzle.id)
+        .then(progress => {
+          if (progress?.attempts) {
+            console.log('[CreatorPuzzleGame] Loaded previous attempts:', progress.attempts);
+            setAttempts(progress.attempts);
+          } else {
+            setAttempts(1);
+          }
+        })
+        .catch(err => {
+          console.warn('[CreatorPuzzleGame] Failed to load progress:', err);
+          setAttempts(1);
+        });
+    } else {
+      setAttempts(1);
+    }
+    
     setGameState(GAME_STATES.PLAYING);
     
     return () => {
       mountedRef.current = false;
       pendingTimeoutsRef.current.forEach(clearTimeout);
     };
-  }, [puzzle]);
+  }, [puzzle, profile?.id]);
   
   // -------------------------------------------------------------------------
   // PIECE SELECTION & MOVEMENT
@@ -763,7 +852,21 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               setSelectedPiece(null);
               setPendingMove(null);
               setMoveIndex(0);
-              setAttempts(prev => prev + 1);
+              
+              // Increment attempts and save to database
+              setAttempts(prev => {
+                const newAttempts = prev + 1;
+                // Save progress to database (non-blocking)
+                if (profile?.id && puzzle?.id) {
+                  creatorPuzzleService.saveProgress(
+                    profile.id, 
+                    puzzle.id, 
+                    puzzle.puzzle_number, 
+                    newAttempts
+                  ).catch(err => console.warn('[CreatorPuzzleGame] Failed to save progress:', err));
+                }
+                return newAttempts;
+              });
             }, WRONG_MOVE_DISPLAY_MS);
           }
         }, ANIMATION_CLEAR_DELAY_MS);
@@ -787,8 +890,22 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setFlipped(false);
     setMoveIndex(0);
     setGameState(GAME_STATES.PLAYING);
-    setAttempts(prev => prev + 1);
-  }, [initialBoard, initialBoardPieces]);
+    
+    // Increment attempts and save to database
+    setAttempts(prev => {
+      const newAttempts = prev + 1;
+      // Save progress to database (non-blocking)
+      if (profile?.id && puzzle?.id) {
+        creatorPuzzleService.saveProgress(
+          profile.id, 
+          puzzle.id, 
+          puzzle.puzzle_number, 
+          newAttempts
+        ).catch(err => console.warn('[CreatorPuzzleGame] Failed to save progress:', err));
+      }
+      return newAttempts;
+    });
+  }, [initialBoard, initialBoardPieces, profile?.id, puzzle?.id, puzzle?.puzzle_number]);
   
   // Cancel current move
   const cancelMove = useCallback(() => {
@@ -1219,21 +1336,22 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Game Area */}
           <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
             
-            {/* Puzzle Info Bar */}
-            <div className="flex items-center justify-between mb-2 px-1">
-              <div className="flex items-center gap-2">
+            {/* Puzzle Info Bar - Centered */}
+            <div className="flex items-center justify-center mb-2 px-1">
+              <div className="flex items-center gap-2 text-center">
                 <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
                 {puzzle.name && (
-                  <span className="text-slate-400 text-xs truncate max-w-[120px]">{puzzle.name}</span>
+                  <>
+                    <span className="text-slate-500">•</span>
+                    <span className="text-slate-400 text-sm">{puzzle.name}</span>
+                  </>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
                 {attempts > 1 && (
-                  <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
+                  <>
+                    <span className="text-slate-500">•</span>
+                    <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
+                  </>
                 )}
-                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase bg-cyan-500/20 text-cyan-400 border border-cyan-500/50`}>
-                  {puzzle.difficulty || 'medium'}
-                </span>
               </div>
             </div>
 
@@ -1348,7 +1466,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               </div>
             )}
 
-            {/* Control Buttons */}
+            {/* Control Buttons - No "New" button for creator puzzles */}
             <ControlButtons
               selectedPiece={selectedPiece}
               pendingMove={pendingMove}
@@ -1362,7 +1480,6 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               onFlip={handleFlip}
               onConfirm={confirmMove}
               onCancel={cancelMove}
-              onReset={resetPuzzle}
               onRetryPuzzle={resetPuzzle}
               onMenu={onBack}
             />
