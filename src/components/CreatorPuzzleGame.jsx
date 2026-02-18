@@ -1,7 +1,8 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v1.2: Dynamic difficulty theming, proper win/loss modals matching other puzzle modes
+// v1.2: Enhanced Expert AI - better trap detection, blocking scoring, deterministic tiebreakers
+// v1.1: Updated layout to match GameScreen - cyan theme, proper DPad/controls layout
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { ArrowLeft, RotateCcw, Move, FlipHorizontal, Check, X, Trophy, Sparkles, Lightbulb, RefreshCw, Frown } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Move, FlipHorizontal, Check, X, Trophy, Sparkles, Lightbulb, RefreshCw } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
@@ -16,7 +17,6 @@ import { streakTracker } from '../utils/streakTracker';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { creatorPuzzleService } from '../services/creatorPuzzleService';
-import { supabase, isSupabaseConfigured } from '../utils/supabase';
 
 // ============================================================================
 // CONSTANTS
@@ -33,76 +33,13 @@ const GAME_STATES = {
   FAILED: 'failed',
 };
 
-// Dynamic themes based on difficulty
-const difficultyThemes = {
-  easy: {
-    gridColor: 'rgba(34,197,94,0.3)',
-    glow1: 'bg-green-500/30',
-    glow2: 'bg-emerald-500/25',
-    panelBorder: 'border-green-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(34,197,94,0.3)]',
-    badgeBg: 'bg-green-500/20',
-    badgeText: 'text-green-400',
-    badgeBorder: 'border-green-500/50',
-    gradient: 'from-green-600 to-emerald-600',
-    glow: 'rgba(34,197,94,0.6)',
-    playerGlow: 'rgba(34,197,94,0.4)',
-    playerBg: 'bg-green-500/20',
-    playerBorder: 'border-green-400/50',
-    playerDot: 'bg-green-400',
-    playerText: 'text-green-300',
-  },
-  medium: {
-    gridColor: 'rgba(34,211,238,0.3)',
-    glow1: 'bg-cyan-500/30',
-    glow2: 'bg-sky-500/25',
-    panelBorder: 'border-cyan-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
-    badgeBg: 'bg-cyan-500/20',
-    badgeText: 'text-cyan-400',
-    badgeBorder: 'border-cyan-500/50',
-    gradient: 'from-cyan-500 to-sky-600',
-    glow: 'rgba(34,211,238,0.6)',
-    playerGlow: 'rgba(34,211,238,0.4)',
-    playerBg: 'bg-cyan-500/20',
-    playerBorder: 'border-cyan-400/50',
-    playerDot: 'bg-cyan-400',
-    playerText: 'text-cyan-300',
-  },
-  hard: {
-    gridColor: 'rgba(239,68,68,0.3)',
-    glow1: 'bg-red-500/30',
-    glow2: 'bg-rose-500/25',
-    panelBorder: 'border-red-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
-    badgeBg: 'bg-red-500/20',
-    badgeText: 'text-red-400',
-    badgeBorder: 'border-red-500/50',
-    gradient: 'from-red-500 to-rose-600',
-    glow: 'rgba(239,68,68,0.6)',
-    playerGlow: 'rgba(239,68,68,0.4)',
-    playerBg: 'bg-red-500/20',
-    playerBorder: 'border-red-400/50',
-    playerDot: 'bg-red-400',
-    playerText: 'text-red-300',
-  },
-  expert: {
-    gridColor: 'rgba(236,72,153,0.3)',
-    glow1: 'bg-fuchsia-500/30',
-    glow2: 'bg-pink-500/25',
-    panelBorder: 'border-fuchsia-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(236,72,153,0.3)]',
-    badgeBg: 'bg-fuchsia-500/20',
-    badgeText: 'text-fuchsia-400',
-    badgeBorder: 'border-fuchsia-500/50',
-    gradient: 'from-fuchsia-500 to-pink-600',
-    glow: 'rgba(236,72,153,0.6)',
-    playerGlow: 'rgba(236,72,153,0.4)',
-    playerBg: 'bg-fuchsia-500/20',
-    playerBorder: 'border-fuchsia-400/50',
-    playerDot: 'bg-fuchsia-400',
-    playerText: 'text-fuchsia-300',
-  },
+// Theme - Cyan for creator puzzles (matching the type select and puzzle select screens)
+const theme = {
+  gridColor: 'rgba(34, 211, 238, 0.3)',
+  glow1: 'bg-cyan-500/30',
+  glow2: 'bg-sky-500/25',
+  panelBorder: 'border-cyan-500/40',
+  panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
 };
 
 // D-pad direction deltas
@@ -159,8 +96,8 @@ const PuzzleHeader = memo(({ puzzleNumber, puzzleName, difficulty, onBack }) => 
   const difficultyColors = {
     easy: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/50' },
     medium: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/50' },
-    hard: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' },
-    expert: { bg: 'bg-fuchsia-500/20', text: 'text-fuchsia-400', border: 'border-fuchsia-500/50' },
+    hard: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/50' },
+    expert: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' },
   };
   
   const colors = difficultyColors[difficulty] || difficultyColors.medium;
@@ -215,150 +152,50 @@ const WrongMoveFeedback = memo(({ visible }) => {
 
 WrongMoveFeedback.displayName = 'WrongMoveFeedback';
 
-// Success overlay - matching other puzzle modes
-const SuccessOverlay = memo(({ puzzleNumber, puzzleName, difficulty, onContinue, onBack }) => {
-  const theme = difficultyThemes[difficulty] || difficultyThemes.medium;
-  
-  return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85"
-      style={{ backdropFilter: 'blur(4px)' }}
-    >
-      <div className="bg-gradient-to-br from-slate-900 via-amber-950/30 to-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border-2 border-amber-500/50 shadow-[0_0_60px_rgba(251,191,36,0.4)]">
-        <div className="text-center">
-          {/* Trophy icon */}
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/50 animate-bounce">
-            <Trophy size={40} className="text-white" />
-          </div>
+// Success overlay
+const SuccessOverlay = memo(({ puzzleNumber, onContinue, onBack }) => (
+  <div 
+    className="fixed inset-0 z-50 flex items-center justify-center bg-black/85"
+    style={{ backdropFilter: 'blur(4px)' }}
+  >
+    <div className="bg-gradient-to-br from-slate-900 via-amber-950/30 to-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border-2 border-amber-500/50 shadow-[0_0_60px_rgba(251,191,36,0.4)]">
+      <div className="text-center">
+        {/* Trophy icon */}
+        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/50">
+          <Trophy size={40} className="text-white" />
+        </div>
+        
+        {/* Title */}
+        <h2 className="text-3xl font-black text-amber-400 mb-2" style={{ textShadow: '0 0 20px rgba(251,191,36,0.5)' }}>
+          SOLVED!
+        </h2>
+        
+        <p className="text-slate-400 mb-6">
+          Puzzle #{puzzleNumber} completed!
+        </p>
+        
+        {/* Buttons */}
+        <div className="space-y-3">
+          <button
+            onClick={onContinue}
+            className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all shadow-lg shadow-amber-500/30 active:scale-[0.98]"
+          >
+            NEXT PUZZLE
+          </button>
           
-          {/* Title */}
-          <h2 className="text-3xl font-black text-amber-400 mb-2" style={{ textShadow: '0 0 20px rgba(251,191,36,0.5)' }}>
-            SOLVED!
-          </h2>
-          
-          {/* Puzzle info - themed */}
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <span className={`text-sm font-black tracking-wide ${theme.badgeText}`}>
-              #{puzzleNumber}
-            </span>
-            {puzzleName && (
-              <>
-                <span className={`${theme.badgeText} opacity-50`}>•</span>
-                <span className={`text-sm font-bold tracking-wide ${theme.badgeText}`}>
-                  {puzzleName}
-                </span>
-              </>
-            )}
-          </div>
-          
-          {/* Difficulty badge - themed */}
-          <div className="flex justify-center mb-6 mt-3">
-            <span 
-              className={`px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder}`}
-              style={{ boxShadow: `0 0 10px ${theme.glow}` }}
-            >
-              {difficulty || 'Medium'}
-            </span>
-          </div>
-          
-          {/* Buttons */}
-          <div className="space-y-3">
-            <button
-              onClick={onContinue}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all shadow-lg shadow-amber-500/30 active:scale-[0.98]"
-            >
-              NEXT PUZZLE
-            </button>
-            
-            <button
-              onClick={onBack}
-              className="w-full py-3 bg-slate-800 text-slate-300 font-bold rounded-xl hover:bg-slate-700 transition-all border border-slate-600"
-            >
-              Back to Puzzles
-            </button>
-          </div>
+          <button
+            onClick={onBack}
+            className="w-full py-3 bg-slate-800 text-slate-300 font-bold rounded-xl hover:bg-slate-700 transition-all border border-slate-600"
+          >
+            Back to Puzzles
+          </button>
         </div>
       </div>
     </div>
-  );
-});
+  </div>
+));
 
 SuccessOverlay.displayName = 'SuccessOverlay';
-
-// Failure overlay - new component matching other puzzle modes
-const FailureOverlay = memo(({ puzzleNumber, puzzleName, difficulty, attempts, onRetry, onBack }) => {
-  const theme = difficultyThemes[difficulty] || difficultyThemes.medium;
-  
-  return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85"
-      style={{ backdropFilter: 'blur(4px)' }}
-    >
-      <div className="bg-gradient-to-br from-slate-900 via-red-950/30 to-slate-900 rounded-2xl p-6 max-w-sm w-full mx-4 border-2 border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.4)]">
-        <div className="text-center">
-          {/* Sad icon */}
-          <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shadow-lg shadow-red-500/50">
-            <Frown size={40} className="text-white" />
-          </div>
-          
-          {/* Title */}
-          <h2 className="text-3xl font-black text-red-400 mb-2" style={{ textShadow: '0 0 20px rgba(239,68,68,0.5)' }}>
-            BLOCKED!
-          </h2>
-          
-          {/* Puzzle info - themed */}
-          <div className="flex items-center justify-center gap-2 mb-1">
-            <span className={`text-sm font-black tracking-wide ${theme.badgeText}`}>
-              #{puzzleNumber}
-            </span>
-            {puzzleName && (
-              <>
-                <span className={`${theme.badgeText} opacity-50`}>•</span>
-                <span className={`text-sm font-bold tracking-wide ${theme.badgeText}`}>
-                  {puzzleName}
-                </span>
-              </>
-            )}
-          </div>
-          
-          <p className="text-slate-500 text-sm mb-3">
-            Attempt #{attempts}
-          </p>
-          
-          {/* Difficulty badge - themed */}
-          <div className="flex justify-center mb-6">
-            <span 
-              className={`px-3 py-1 rounded-lg text-xs font-black tracking-wider uppercase ${theme.badgeBg} ${theme.badgeText} border ${theme.badgeBorder}`}
-              style={{ boxShadow: `0 0 10px ${theme.glow}` }}
-            >
-              {difficulty || 'Medium'}
-            </span>
-          </div>
-          
-          {/* Buttons */}
-          <div className="space-y-3">
-            <button
-              onClick={onRetry}
-              className="w-full py-3 bg-gradient-to-r from-red-500 to-rose-600 text-white font-bold rounded-xl hover:from-red-400 hover:to-rose-500 transition-all shadow-lg shadow-red-500/30 active:scale-[0.98] flex items-center justify-center gap-2"
-            >
-              <RefreshCw size={18} />
-              TRY AGAIN
-            </button>
-            
-            <button
-              onClick={onBack}
-              className="w-full py-3 bg-slate-800 text-slate-300 font-bold rounded-xl hover:bg-slate-700 transition-all border border-slate-600"
-            >
-              Back to Puzzles
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
-
-FailureOverlay.displayName = 'FailureOverlay';
 
 // ============================================================================
 // MAIN COMPONENT
@@ -367,10 +204,6 @@ FailureOverlay.displayName = 'FailureOverlay';
 const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   const { profile } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
-  
-  // Get theme based on puzzle difficulty
-  const difficulty = puzzle?.difficulty || 'medium';
-  const theme = difficultyThemes[difficulty] || difficultyThemes.medium;
   
   // -------------------------------------------------------------------------
   // STATE
@@ -449,20 +282,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }, [pendingMove]);
   
   // Compute effective used pieces for PieceTray
-  // This includes all pieces currently on the board (player AND AI pieces)
+  // This includes all pieces NOT in availablePieces + actually placed pieces
   const effectiveUsedPieces = useMemo(() => {
-    const onBoard = new Set();
-    for (let r = 0; r < BOARD_SIZE; r++) {
-      for (let c = 0; c < BOARD_SIZE; c++) {
-        if (boardPieces[r][c]) {
-          onBoard.add(boardPieces[r][c]);
-        }
-      }
-    }
-    // Also include any pieces player has placed this session
-    usedPieces.forEach(p => onBoard.add(p));
-    return Array.from(onBoard);
-  }, [boardPieces, usedPieces]);
+    const allPieceNames = Object.keys(pieces);
+    const notAvailable = allPieceNames.filter(p => !availablePieces.includes(p));
+    return [...new Set([...notAvailable, ...usedPieces])];
+  }, [availablePieces, usedPieces]);
   
   // Show error when placement is invalid (matching GameScreen behavior)
   useEffect(() => {
@@ -580,8 +405,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           for (let row = 0; row < BOARD_SIZE && !found; row++) {
             for (let col = 0; col < BOARD_SIZE && !found; col++) {
               if (canPlacePiece(currentBoard, row, col, coords)) {
-                found = true;
                 count++;
+                found = true;
               }
             }
           }
@@ -591,67 +416,104 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     return count;
   }, []);
   
-  // -------------------------------------------------------------------------
-  // EXPERT AI MOVE FINDER
-  // -------------------------------------------------------------------------
-  const findExpertAIMove = useCallback((currentBoard, aiPiecesList, playerPiecesList) => {
-    // Get all AI possible moves
-    const aiMoves = getAllPossibleMoves(currentBoard, aiPiecesList, true);
+  // Expert AI: Find the best move using minimax-like evaluation
+  // For creator puzzles: Find a move that still allows AI to respond after player's next turn
+  // v1.1: Enhanced for Expert puzzles - more thorough evaluation, blocking scoring
+  const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
+    console.log('[CreatorPuzzle AI] Finding move. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
     
+    const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
     if (aiMoves.length === 0) {
-      return null; // AI is blocked
+      console.log('[CreatorPuzzle AI] No valid moves available');
+      return null;
     }
     
-    // Evaluate each AI move by considering player's best response
-    let bestMove = null;
-    let bestScore = -Infinity;
+    // Count player's current winning moves BEFORE AI plays
+    const countPlayerWinningMoves = (board, playerPieces) => {
+      const pMoves = getAllPossibleMoves(board, playerPieces, true);
+      let winCount = 0;
+      for (const pm of pMoves.slice(0, 15)) {
+        const afterPlayer = applyMoveToBoard(board, pm, 1);
+        const aiResponses = getAllPossibleMoves(afterPlayer, aiAvailablePieces.filter(p => p !== pm.piece), false);
+        if (aiResponses.length === 0) winCount++;
+      }
+      return winCount;
+    };
+    
+    const playerWinningMovesBefore = countPlayerWinningMoves(currentBoard, playerAvailablePieces);
+    console.log('[CreatorPuzzle AI] Player has', playerWinningMovesBefore, 'winning moves before AI plays');
+    
+    // Score each AI move
+    const scoredMoves = [];
     
     for (const aiMove of aiMoves) {
-      // Apply AI's move
       const boardAfterAI = applyMoveToBoard(currentBoard, aiMove, 2);
+      const aiPiecesAfterMove = aiAvailablePieces.filter(p => p !== aiMove.piece);
       
-      // Get player's possible responses
-      const playerResponses = getAllPossibleMoves(boardAfterAI, playerPiecesList, true);
+      // Check all possible player responses
+      const playerMoves = getAllPossibleMoves(boardAfterAI, playerAvailablePieces, true);
       
-      if (playerResponses.length === 0) {
-        // This move blocks the player! Best possible outcome for AI
-        return aiMove;
+      if (playerMoves.length === 0) {
+        // Player can't respond - this is a winning move for AI (highest priority)
+        scoredMoves.push({ ...aiMove, score: 100000, reason: 'wins' });
+        continue;
       }
       
-      // Evaluate worst-case (player's best response)
-      let worstCaseForAI = Infinity;
+      // Count player winning moves AFTER this AI move
+      const playerWinningMovesAfter = countPlayerWinningMoves(boardAfterAI, playerAvailablePieces);
+      const blockedWinningMoves = playerWinningMovesBefore - playerWinningMovesAfter;
       
-      for (const playerMove of playerResponses) {
+      // For each player response, check if AI can still play after
+      // Check more responses for harder puzzles
+      let worstCaseScore = Infinity;
+      const responsesToCheck = Math.min(playerMoves.length, 20);
+      
+      for (const playerMove of playerMoves.slice(0, responsesToCheck)) {
         const boardAfterPlayer = applyMoveToBoard(boardAfterAI, playerMove, 1);
+        const playerPiecesAfterMove = playerAvailablePieces.filter(p => p !== playerMove.piece);
         
-        // Score this state (positive = good for AI)
-        // Count remaining moves for each side
-        const aiRemainingPieces = aiPiecesList.filter(p => p !== aiMove.piece);
-        const playerRemainingPieces = playerPiecesList.filter(p => p !== playerMove.piece);
+        // Can AI respond after player's move?
+        const aiResponseMoves = getAllPossibleMoves(boardAfterPlayer, aiPiecesAfterMove, false);
         
-        const aiCanPlace = countPlaceablePieces(boardAfterPlayer, aiRemainingPieces);
-        const playerCanPlace = countPlaceablePieces(boardAfterPlayer, playerRemainingPieces);
+        // Score based on AI's options after player responds
+        const score = aiResponseMoves.length > 0 
+          ? countPlaceablePieces(boardAfterPlayer, aiPiecesAfterMove)
+          : -1000; // AI gets blocked after this player response
         
-        // Score favors AI having more options and player having fewer
-        const stateScore = aiCanPlace - playerCanPlace * 1.5;
-        
-        if (stateScore < worstCaseForAI) {
-          worstCaseForAI = stateScore;
-        }
+        worstCaseScore = Math.min(worstCaseScore, score);
       }
       
-      // Add position bonus
+      // Scoring formula:
+      // 1. Blocking player winning moves is highest priority (after winning itself)
+      // 2. Worst-case scenario for AI continuation
+      // 3. Position preference as tiebreaker
+      const blockingScore = blockedWinningMoves * 500;
       const positionBonus = quickEval(aiMove.row, aiMove.col, aiMove.coords) * 0.1;
-      const moveScore = worstCaseForAI + positionBonus;
       
-      if (moveScore > bestScore) {
-        bestScore = moveScore;
-        bestMove = aiMove;
-      }
+      // Deterministic tiebreaker: piece name + position
+      const tiebreaker = aiMove.piece.charCodeAt(0) * 0.001 + aiMove.row * 0.0001 + aiMove.col * 0.00001;
+      
+      const finalScore = worstCaseScore + blockingScore + positionBonus + tiebreaker;
+      scoredMoves.push({ ...aiMove, score: finalScore, blocked: blockedWinningMoves, worst: worstCaseScore });
     }
     
-    return bestMove;
-  }, [getAllPossibleMoves, applyMoveToBoard, countPlaceablePieces, quickEval]);
+    // Sort by score (highest first)
+    scoredMoves.sort((a, b) => b.score - a.score);
+    
+    console.log('[CreatorPuzzle AI] Top moves:', scoredMoves.slice(0, 5).map(m => 
+      `${m.piece} at (${m.row},${m.col}) score=${m.score.toFixed(1)} blocked=${m.blocked || 0} worst=${m.worst || '-'}`
+    ));
+    
+    // If best move has very negative score (AI will get blocked), just pick any valid move
+    // This indicates player made a good move
+    if (scoredMoves[0].score < -500 && !scoredMoves[0].reason) {
+      console.log('[CreatorPuzzle AI] Player made a strong move, AI has no good response');
+      // Return any valid move so player can win on next turn
+      return aiMoves[0];
+    }
+    
+    return scoredMoves[0];
+  }, [getAllPossibleMoves, applyMoveToBoard, quickEval, countPlaceablePieces]);
   
   // -------------------------------------------------------------------------
   // INITIALIZE PUZZLE
@@ -659,73 +521,49 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   useEffect(() => {
     if (!puzzle) return;
     
-    console.log('[CreatorPuzzleGame] Initializing puzzle:', puzzle);
+    console.log('[CreatorPuzzleGame] Loading puzzle:', puzzle.puzzle_number);
     
-    // Parse the puzzle board
     const { board: parsedBoard, boardPieces: parsedBoardPieces } = parsePuzzleBoard(
       puzzle.board,
       puzzle.board_pieces
     );
     
-    // Set initial state
     setBoard(parsedBoard);
     setBoardPieces(parsedBoardPieces);
     setInitialBoard(parsedBoard.map(row => [...row]));
     setInitialBoardPieces(parsedBoardPieces.map(row => [...row]));
     
     // Set available pieces for the player
-    setAvailablePieces(puzzle.player_pieces || []);
+    const playerPieces = puzzle.player_pieces || [];
+    setAvailablePieces(playerPieces);
     setUsedPieces([]);
-    setSelectedPiece(null);
-    setPendingMove(null);
-    setRotation(0);
-    setFlipped(false);
     setMoveIndex(0);
-    setAttempts(1);
+    
     setGameState(GAME_STATES.PLAYING);
     
-    console.log('[CreatorPuzzleGame] Player pieces:', puzzle.player_pieces);
-    console.log('[CreatorPuzzleGame] AI pieces:', puzzle.ai_pieces);
-    console.log('[CreatorPuzzleGame] Initial board:', parsedBoard);
-    
-    // Cleanup
     return () => {
+      mountedRef.current = false;
       pendingTimeoutsRef.current.forEach(clearTimeout);
-      pendingTimeoutsRef.current.clear();
     };
   }, [puzzle]);
   
-  // Set mounted ref
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
-  
   // -------------------------------------------------------------------------
-  // PIECE SELECTION
+  // PIECE SELECTION & MOVEMENT
   // -------------------------------------------------------------------------
-  const handleSelectPiece = useCallback((pieceName) => {
+  const handleSelectPiece = useCallback((piece) => {
     if (gameState !== GAME_STATES.PLAYING) return;
-    if (effectiveUsedPieces.includes(pieceName)) return;
+    if (effectiveUsedPieces.includes(piece)) return;
     
-    soundManager.playClickSound('select');
-    setSelectedPiece(pieceName);
+    soundManager.playPieceSelect();
+    setSelectedPiece(piece);
     setRotation(0);
     setFlipped(false);
-    
-    // Clear any existing pending move - user will tap board to place
     setPendingMove(null);
   }, [gameState, effectiveUsedPieces]);
   
-  // -------------------------------------------------------------------------
-  // ROTATION / FLIP
-  // -------------------------------------------------------------------------
   const handleRotate = useCallback(() => {
     if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;
-    
-    soundManager.playClickSound('rotate');
+    soundManager.playRotate();
     const newRotation = (rotation + 90) % 360;
     setRotation(newRotation);
     
@@ -737,8 +575,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   
   const handleFlip = useCallback(() => {
     if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;
-    
-    soundManager.playClickSound('flip');
+    soundManager.playRotate();
     const newFlipped = !flipped;
     setFlipped(newFlipped);
     
@@ -851,51 +688,15 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         streakTracker.recordPlay();
         
         // Record completion
-        console.log('[CreatorPuzzleGame] Recording completion - profile.id:', profile?.id, 'puzzle.id:', puzzle?.id, 'puzzle_number:', puzzle?.puzzle_number);
         if (profile?.id && puzzle?.id) {
           const timeToComplete = Date.now() - startTime;
-          console.log('[CreatorPuzzleGame] Calling markCompleted with:', {
-            userId: profile.id,
-            puzzleId: puzzle.id,
-            puzzleNumber: puzzle.puzzle_number,
-            timeToComplete,
-            attempts
-          });
           creatorPuzzleService.markCompleted(
             profile.id,
             puzzle.id,
             puzzle.puzzle_number,
             timeToComplete,
             attempts
-          ).then((result) => {
-            console.log('[CreatorPuzzleGame] markCompleted success:', result);
-            // Check for creator puzzle achievements
-            if (isSupabaseConfigured()) {
-              supabase.rpc('check_creator_puzzle_achievements', { p_user_id: profile.id })
-                .then(({ data, error }) => {
-                  if (!error && data) {
-                    const newAchievements = data.filter(a => a.newly_awarded);
-                    if (newAchievements.length > 0) {
-                      console.log('[CreatorPuzzleGame] New achievements unlocked:', newAchievements.map(a => a.achievement_id));
-                    }
-                  }
-                })
-                .catch(err => console.warn('[CreatorPuzzleGame] Achievement check failed:', err));
-            }
-          }).catch(err => console.error('[CreatorPuzzleGame] Failed to record completion:', err));
-        } else {
-          console.warn('[CreatorPuzzleGame] Missing profile.id or puzzle.id - completion not recorded');
-        }
-        
-        // Also save to localStorage for non-logged-in users
-        try {
-          const localCompletions = JSON.parse(localStorage.getItem('creator_puzzle_completions') || '[]');
-          if (!localCompletions.includes(puzzle.puzzle_number)) {
-            localCompletions.push(puzzle.puzzle_number);
-            localStorage.setItem('creator_puzzle_completions', JSON.stringify(localCompletions));
-          }
-        } catch (e) {
-          console.error('[CreatorPuzzleGame] Failed to save local completion:', e);
+          ).catch(err => console.error('[CreatorPuzzleGame] Failed to record completion:', err));
         }
       } else {
         // AI can play - check if this is a "forced" move (player made good move)
@@ -945,10 +746,25 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             console.log('[CreatorPuzzleGame] Player can continue playing');
             // Don't reset - let player make another move
           } else {
-            // Player cannot continue after AI's response - show failure modal
+            // Player cannot continue after AI's response - wrong move
             console.log('[CreatorPuzzleGame] Wrong move - Player blocked');
             soundManager.playInvalid();
-            setGameState(GAME_STATES.FAILED);
+            setShowWrongMove(true);
+            
+            // Reset after showing the wrong move
+            safeSetTimeout(() => {
+              setShowWrongMove(false);
+              // Reset to initial state
+              if (initialBoard && initialBoardPieces) {
+                setBoard(initialBoard.map(row => [...row]));
+                setBoardPieces(initialBoardPieces.map(row => [...row]));
+              }
+              setUsedPieces([]);
+              setSelectedPiece(null);
+              setPendingMove(null);
+              setMoveIndex(0);
+              setAttempts(prev => prev + 1);
+            }, WRONG_MOVE_DISPLAY_MS);
           }
         }, ANIMATION_CLEAR_DELAY_MS);
       }
@@ -1100,7 +916,6 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     isDraggingRef.current = true;
     draggedPieceRef.current = piece;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
-    dragCellRef.current = null; // Reset to ensure clean state for tap detection
     
     attachGlobalTouchHandlers();
     
@@ -1115,17 +930,68 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setDragPosition({ x: clientX, y: clientY });
     setDragOffset({ x: offsetX, y: offsetY });
     setIsDragging(true);
-    setSelectedPiece(piece);
     setPieceCellOffset({ row: 0, col: 0 });
-    soundManager.playClickSound('select');
+    setSelectedPiece(piece);
+    setPendingMove(null);
+    
+    soundManager.playPieceSelect();
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
   }, [gameState, effectiveUsedPieces, attachGlobalTouchHandlers]);
 
-  // Update drag position
+  // Handle starting drag from a pending piece on the board
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    if (hasDragStartedRef.current) return;
+    if (gameState !== GAME_STATES.PLAYING) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    
+    attachGlobalTouchHandlers();
+    
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    if (pendingMove && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const fingerCol = Math.floor((clientX - left) / cellWidth);
+      const fingerRow = Math.floor((clientY - top) / cellHeight);
+      
+      const offset = {
+        row: fingerRow - pendingMove.row,
+        col: fingerCol - pendingMove.col
+      };
+      pieceCellOffsetRef.current = offset;
+      setPieceCellOffset(offset);
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
+    }
+    
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+    
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    
+    soundManager.playPieceSelect();
+    
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameState, pendingMove, attachGlobalTouchHandlers]);
+
+  // Update drag position (for mouse events)
   const updateDrag = useCallback((clientX, clientY) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current || !draggedPieceRef.current) return;
     
     setDragPosition({ x: clientX, y: clientY });
     
@@ -1134,8 +1000,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     }
     
     const cell = calculateBoardCell(clientX, clientY);
-    if (cell && draggedPiece) {
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+    
+    if (cell) {
+      const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
       
       const minX = Math.min(...coords.map(([x]) => x));
       const maxX = Math.max(...coords.map(([x]) => x));
@@ -1148,110 +1015,108 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       const adjustedRow = cell.row - centerOffsetRow;
       const adjustedCol = cell.col - centerOffsetCol;
       
+      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
       setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+      
       const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
+      dragCellRef.current = null;
       setDragPreviewCell(null);
       setIsValidDrop(false);
     }
-  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+  }, [rotation, flipped, board, calculateBoardCell]);
 
   // End drag
   const endDrag = useCallback(() => {
-    if (!isDragging && !isDraggingRef.current) return;
+    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
+    if (!wasDragging) return;
     
-    const currentDraggedPiece = draggedPieceRef.current || draggedPiece;
-    const currentDragCell = dragCellRef.current || dragPreviewCell;
+    const piece = draggedPiece || draggedPieceRef.current;
+    const cell = dragCellRef.current || dragPreviewCell;
     
-    // If user dragged to a position on the board, create pending move there
-    if (currentDragCell && currentDraggedPiece) {
-      const coords = getPieceCoords(currentDraggedPiece, rotation, flipped);
-      setPendingMove({
-        row: currentDragCell.row,
-        col: currentDragCell.col,
-        coords,
-        piece: currentDraggedPiece,
-      });
-      setSelectedPiece(currentDraggedPiece);
-    } else if (currentDraggedPiece) {
-      // User tapped/clicked without dragging - just select the piece
-      // They can then tap on the board to place it
-      // Note: Sound already played in startDrag
-      setSelectedPiece(currentDraggedPiece);
-      setPendingMove(null);
-    } else {
-      setSelectedPiece(null);
-      setPendingMove(null);
+    if (cell && piece) {
+      const coords = getPieceCoords(piece, rotation, flipped);
+      setPendingMove({ piece, row: cell.row, col: cell.col, coords });
     }
     
-    // Reset all drag state
     isDraggingRef.current = false;
     draggedPieceRef.current = null;
     hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
     dragCellRef.current = null;
     
     setIsDragging(false);
     setDraggedPiece(null);
-    setDragPreviewCell(null);
+    setDragPosition({ x: 0, y: 0 });
+    setDragOffset({ x: 0, y: 0 });
     setIsValidDrop(false);
+    setDragPreviewCell(null);
+    setPieceCellOffset({ row: 0, col: 0 });
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-  }, [isDragging, draggedPiece, dragPreviewCell, rotation, flipped]);
+  }, [isDragging, dragPreviewCell, draggedPiece, rotation, flipped]);
 
-  // Store endDrag ref for global handlers
-  useEffect(() => {
-    endDragRef.current = endDrag;
-  }, [endDrag]);
+  // Keep endDragRef current for global touch handlers
+  endDragRef.current = endDrag;
 
-  // Start drag from board (existing pending piece)
-  const handleBoardDragStart = useCallback((clientX, clientY) => {
-    if (!pendingMove || !selectedPiece || gameState !== GAME_STATES.PLAYING) return;
-    if (hasDragStartedRef.current) return;
-    
-    hasDragStartedRef.current = true;
-    isDraggingRef.current = true;
-    draggedPieceRef.current = selectedPiece;
-    
-    attachGlobalTouchHandlers();
-    
-    if (boardRef.current) {
-      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
-    }
-    
-    setDraggedPiece(selectedPiece);
-    setDragPosition({ x: clientX, y: clientY });
-    setDragOffset({ x: 0, y: 0 });
-    setIsDragging(true);
-    
-    document.body.style.overflow = 'hidden';
-    document.body.style.touchAction = 'none';
-  }, [pendingMove, selectedPiece, gameState, attachGlobalTouchHandlers]);
-
-  // Create piece handlers
+  // Create drag handlers for PieceTray
   const getPieceHandlers = useCallback((piece) => {
     if (gameState !== GAME_STATES.PLAYING) return {};
     if (effectiveUsedPieces.includes(piece)) return {};
-    
-    return {
-      onMouseDown: (e) => {
-        e.preventDefault();
-        dragStartRef.current = { x: e.clientX, y: e.clientY };
-        const rect = e.currentTarget.getBoundingClientRect();
-        startDrag(piece, e.clientX, e.clientY, rect);
-      },
-      onTouchStart: (e) => {
-        if (e.touches.length !== 1) return;
-        const touch = e.touches[0];
-        dragStartRef.current = { x: touch.clientX, y: touch.clientY };
-        const rect = e.currentTarget.getBoundingClientRect();
-        startDrag(piece, touch.clientX, touch.clientY, rect);
-      },
-    };
-  }, [gameState, effectiveUsedPieces, startDrag]);
 
-  // Global mouse/touch handlers for drag
+    let elementRect = null;
+
+    const handleTouchStart = (e) => {
+      if (hasDragStartedRef.current) return;
+      
+      const touch = e.touches[0];
+      elementRect = e.currentTarget.getBoundingClientRect();
+      
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
+    };
+
+    const handleTouchMove = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        endDrag();
+      }
+    };
+
+    const handleMouseDown = (e) => {
+      if (e.button !== 0) return;
+      if (hasDragStartedRef.current) return;
+      
+      elementRect = e.currentTarget.getBoundingClientRect();
+      
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      startDrag(piece, e.clientX, e.clientY, elementRect);
+    };
+
+    return {
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
+      onMouseDown: handleMouseDown,
+    };
+  }, [gameState, effectiveUsedPieces, startDrag, updateDrag, endDrag]);
+
+  // Global mouse move/up handlers for desktop drag
   useEffect(() => {
     if (!isDragging) return;
 
@@ -1337,9 +1202,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         touchAction: isDragging ? 'none' : 'pan-y',
       } : {}}
     >
-      {/* Ambient glow effects - themed by difficulty */}
-      <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
-      <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none transition-all duration-500`} />
+      {/* Ambient glow effects */}
+      <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
       {/* Main content */}
       <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
@@ -1349,59 +1214,63 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           <div className="text-center mb-2">
             <NeonTitle size="medium" />
             <NeonSubtitle text="CREATOR PUZZLE" size="small" className="mt-1" />
-            
-            {/* Centered Puzzle Number & Title */}
-            <div className="flex items-center justify-center gap-2 mt-2">
-              <span className={`text-sm font-black tracking-wide ${theme.badgeText}`}>
-                #{puzzle.puzzle_number}
-              </span>
-              {puzzle.name && (
-                <>
-                  <span className={`${theme.badgeText} opacity-50`}>•</span>
-                  <span className={`text-sm font-bold tracking-wide ${theme.badgeText}`}>
-                    {puzzle.name}
-                  </span>
-                </>
-              )}
-            </div>
-            
-            {/* Attempt counter */}
-            {attempts > 1 && (
-              <span className="text-slate-500 text-xs mt-1 block">
-                Attempt #{attempts}
-              </span>
-            )}
           </div>
 
           {/* Game Area */}
           <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
+            
+            {/* Puzzle Info Bar */}
+            <div className="flex items-center justify-between mb-2 px-1">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
+                {puzzle.name && (
+                  <span className="text-slate-400 text-xs truncate max-w-[120px]">{puzzle.name}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {attempts > 1 && (
+                  <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
+                )}
+                <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase bg-cyan-500/20 text-cyan-400 border border-cyan-500/50`}>
+                  {puzzle.difficulty || 'medium'}
+                </span>
+              </div>
+            </div>
 
-            {/* Player Bar - themed by difficulty */}
+            {/* Player Bar - matches GameScreen layout */}
             <div className="flex items-center justify-center gap-2 mb-3 py-2">
               {/* Player 1 - YOU */}
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
                 currentPlayer === 1 
-                  ? `${theme.playerBg} border ${theme.playerBorder}` 
+                  ? `bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]` 
                   : 'bg-slate-800/50 border border-slate-700/50'
-              }`}
-              style={currentPlayer === 1 ? { boxShadow: `0 0 15px ${theme.playerGlow}` } : {}}
-              >
+              }`}>
                 <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                  currentPlayer === 1 ? `${theme.playerDot} animate-pulse` : 'bg-slate-600'
-                }`}
-                style={currentPlayer === 1 ? { boxShadow: `0 0 10px ${theme.glow}` } : {}}
-                />
-                <span className={`text-xs font-bold tracking-wide ${currentPlayer === 1 ? theme.playerText : 'text-slate-500'}`}>
+                  currentPlayer === 1 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] animate-pulse' : 'bg-slate-600'
+                }`} />
+                <span className={`text-xs font-bold tracking-wide ${currentPlayer === 1 ? 'text-cyan-300' : 'text-slate-500'}`}>
                   YOU
                 </span>
               </div>
               
-              {/* Difficulty Badge - themed style */}
+              {/* Difficulty Badge */}
               <div 
-                className={`px-3 py-1 rounded-lg ${theme.badgeBg} border ${theme.badgeBorder}`}
-                style={{ boxShadow: `0 0 15px ${theme.glow}` }}
+                className={`px-3 py-1 rounded-full bg-gradient-to-r ${
+                  puzzle.difficulty === 'easy' ? 'from-green-600 to-emerald-600' :
+                  puzzle.difficulty === 'hard' ? 'from-purple-500 to-pink-600' :
+                  puzzle.difficulty === 'expert' ? 'from-red-500 to-rose-600' :
+                  'from-cyan-500 to-sky-600'
+                } border border-white/20`}
+                style={{ 
+                  boxShadow: `0 0 15px ${
+                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.6)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(168,85,247,0.6)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(239,68,68,0.6)' :
+                    'rgba(34,211,238,0.6)'
+                  }` 
+                }}
               >
-                <span className={`text-[10px] font-black tracking-wider uppercase ${theme.badgeText}`}>
+                <span className="text-white text-[10px] font-black tracking-wider uppercase">
                   {puzzle.difficulty || 'MEDIUM'}
                 </span>
               </div>
@@ -1431,7 +1300,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 pendingMove={pendingMove}
                 rotation={rotation}
                 flipped={flipped}
-                gameOver={gameState === GAME_STATES.SUCCESS || gameState === GAME_STATES.FAILED}
+                gameOver={gameState === GAME_STATES.SUCCESS}
                 gameMode="puzzle"
                 currentPlayer={currentPlayer}
                 onCellClick={handleCellClick}
@@ -1442,7 +1311,6 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 isDragging={isDragging}
                 dragPreviewCell={dragPreviewCell}
                 draggedPiece={draggedPiece}
-                isValidDrop={isValidDrop}
                 dragRotation={rotation}
                 dragFlipped={flipped}
               />
@@ -1485,7 +1353,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               selectedPiece={selectedPiece}
               pendingMove={pendingMove}
               canConfirm={canConfirm && !isPieceOffGrid}
-              gameOver={gameState === GAME_STATES.SUCCESS || gameState === GAME_STATES.FAILED}
+              gameOver={gameState === GAME_STATES.SUCCESS}
               gameMode="puzzle"
               currentPlayer={currentPlayer}
               isGeneratingPuzzle={false}
@@ -1506,7 +1374,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               usedPieces={effectiveUsedPieces}
               selectedPiece={selectedPiece}
               pendingMove={pendingMove}
-              gameOver={gameState === GAME_STATES.SUCCESS || gameState === GAME_STATES.FAILED}
+              gameOver={gameState === GAME_STATES.SUCCESS}
               gameMode="puzzle"
               currentPlayer={currentPlayer}
               isMobile={isMobile}
@@ -1536,21 +1404,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       {gameState === GAME_STATES.SUCCESS && (
         <SuccessOverlay
           puzzleNumber={puzzle.puzzle_number}
-          puzzleName={puzzle.name}
-          difficulty={puzzle.difficulty}
           onContinue={() => onNextPuzzle?.(puzzle.puzzle_number + 1)}
-          onBack={onBack}
-        />
-      )}
-      
-      {/* Failure overlay */}
-      {gameState === GAME_STATES.FAILED && (
-        <FailureOverlay
-          puzzleNumber={puzzle.puzzle_number}
-          puzzleName={puzzle.name}
-          difficulty={puzzle.difficulty}
-          attempts={attempts}
-          onRetry={resetPuzzle}
           onBack={onBack}
         />
       )}
