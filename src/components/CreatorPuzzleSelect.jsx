@@ -1,9 +1,9 @@
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
-// v1.2: Fixed difficulty colors - Easy=green, Medium=amber, Hard=red, Expert=purple
-// v1.1: Fixed auth token for completions fetch (was using ANON_KEY instead of user token)
+// v1.3: Difficulty tabs at top, amber/orange theme, auth token fix for completions
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Check, Lock, Trophy, Sparkles, Loader, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Check, Lock, Loader, Trophy } from 'lucide-react';
 import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,24 +13,9 @@ import FloatingPieces from './FloatingPieces';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Get auth token from localStorage - tries multiple possible key formats
+// Get auth token from localStorage
 const getAuthToken = () => {
   try {
-    // Try the standard Supabase auth key patterns
-    const possibleKeys = [
-      `sb-${new URL(SUPABASE_URL).hostname.split('.')[0]}-auth-token`,
-      'supabase.auth.token',
-      'sb-auth-token'
-    ];
-    
-    for (const key of possibleKeys) {
-      const authData = JSON.parse(localStorage.getItem(key) || 'null');
-      if (authData?.access_token) {
-        return authData.access_token;
-      }
-    }
-    
-    // Fallback: search for any Supabase auth key
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && key.includes('auth-token')) {
@@ -40,55 +25,74 @@ const getAuthToken = () => {
         }
       }
     }
-    
     return null;
   } catch {
     return null;
   }
 };
 
-// Theme - warm amber/gold for creator puzzles
+// Amber/Orange theme for creator puzzles
 const theme = {
   gridColor: 'rgba(251, 191, 36, 0.2)',
   glow1: { color: 'bg-amber-500/30', pos: 'top-20 right-10' },
   glow2: { color: 'bg-orange-500/25', pos: 'bottom-32 left-10' },
   glow3: { color: 'bg-yellow-500/20', pos: 'top-1/2 left-1/4' },
+  cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/20 to-slate-900/95',
+  cardBorder: 'border-amber-500/30',
+  cardShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.15)]',
 };
 
-// Difficulty colors
-const difficultyColors = {
-  easy: {
-    bg: 'bg-green-500/20',
-    border: 'border-green-500/50',
-    text: 'text-green-400',
-    glow: 'shadow-green-500/30',
-    gradient: 'from-green-600 to-emerald-600',
+// Difficulty tiers with colors
+const difficultyTiers = [
+  { 
+    id: 'easy', 
+    label: 'BEGINNER', 
+    range: [1, 25],
+    color: {
+      bg: 'bg-green-500/20',
+      border: 'border-green-500/50',
+      text: 'text-green-400',
+      gradient: 'from-green-600 to-emerald-600',
+      glow: 'rgba(34,197,94,0.6)',
+    }
   },
-  medium: {
-    bg: 'bg-amber-500/20',
-    border: 'border-amber-500/50',
-    text: 'text-amber-400',
-    glow: 'shadow-amber-500/30',
-    gradient: 'from-amber-500 to-orange-600',
+  { 
+    id: 'medium', 
+    label: 'INTERMEDIATE', 
+    range: [26, 60],
+    color: {
+      bg: 'bg-amber-500/20',
+      border: 'border-amber-500/50',
+      text: 'text-amber-400',
+      gradient: 'from-amber-500 to-orange-600',
+      glow: 'rgba(251,191,36,0.6)',
+    }
   },
-  hard: {
-    bg: 'bg-red-500/20',
-    border: 'border-red-500/50',
-    text: 'text-red-400',
-    glow: 'shadow-red-500/30',
-    gradient: 'from-red-500 to-rose-600',
+  { 
+    id: 'hard', 
+    label: 'HARD', 
+    range: [61, 85],
+    color: {
+      bg: 'bg-red-500/20',
+      border: 'border-red-500/50',
+      text: 'text-red-400',
+      gradient: 'from-red-500 to-rose-600',
+      glow: 'rgba(239,68,68,0.6)',
+    }
   },
-  expert: {
-    bg: 'bg-purple-500/20',
-    border: 'border-purple-500/50',
-    text: 'text-purple-400',
-    glow: 'shadow-purple-500/30',
-    gradient: 'from-purple-500 to-pink-600',
+  { 
+    id: 'expert', 
+    label: 'EXPERT', 
+    range: [86, 100],
+    color: {
+      bg: 'bg-purple-500/20',
+      border: 'border-purple-500/50',
+      text: 'text-purple-400',
+      gradient: 'from-purple-500 to-pink-600',
+      glow: 'rgba(168,85,247,0.6)',
+    }
   },
-};
-
-// Puzzles per page for pagination
-const PUZZLES_PER_PAGE = 25;
+];
 
 const CreatorPuzzleSelect = ({ 
   onSelectPuzzle, 
@@ -101,8 +105,14 @@ const CreatorPuzzleSelect = ({
   const [completedPuzzles, setCompletedPuzzles] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(0);
+  const [selectedTier, setSelectedTier] = useState(difficultyTiers[0]);
   const [selectedPuzzle, setSelectedPuzzle] = useState(null);
+
+  // Create puzzle slots map from actual puzzles
+  const puzzleMap = {};
+  puzzles.forEach(p => {
+    puzzleMap[p.puzzle_number] = p;
+  });
 
   // Fetch puzzles and completion status
   useEffect(() => {
@@ -118,26 +128,28 @@ const CreatorPuzzleSelect = ({
             headers: {
               'apikey': ANON_KEY,
               'Authorization': `Bearer ${ANON_KEY}`,
-            },
+            }
           }
         );
         
-        if (!puzzlesRes.ok) throw new Error('Failed to fetch puzzles');
+        if (!puzzlesRes.ok) {
+          throw new Error('Failed to fetch puzzles');
+        }
+        
         const puzzlesData = await puzzlesRes.json();
-        setPuzzles(puzzlesData);
-
-        // Fetch user's completions if logged in - USE USER'S AUTH TOKEN
+        setPuzzles(puzzlesData || []);
+        
+        // If user is logged in, fetch their completions with proper auth token
         if (profile?.id) {
           const authToken = getAuthToken();
           if (authToken) {
-            console.log('[CreatorPuzzleSelect] Fetching completions for user:', profile.id);
             const completionsRes = await fetch(
               `${SUPABASE_URL}/rest/v1/creator_puzzle_completions?user_id=eq.${profile.id}&select=puzzle_number`,
               {
                 headers: {
                   'apikey': ANON_KEY,
-                  'Authorization': `Bearer ${authToken}`,  // Use user's token, not ANON_KEY
-                },
+                  'Authorization': `Bearer ${authToken}`,
+                }
               }
             );
             
@@ -145,16 +157,12 @@ const CreatorPuzzleSelect = ({
               const completionsData = await completionsRes.json();
               console.log('[CreatorPuzzleSelect] Loaded completions:', completionsData.length);
               setCompletedPuzzles(new Set(completionsData.map(c => c.puzzle_number)));
-            } else {
-              console.warn('[CreatorPuzzleSelect] Failed to fetch completions:', completionsRes.status);
             }
-          } else {
-            console.warn('[CreatorPuzzleSelect] No auth token available');
           }
         }
       } catch (err) {
-        console.error('Error fetching creator puzzles:', err);
-        setError('Failed to load puzzles. Please try again.');
+        console.error('[CreatorPuzzleSelect] Error:', err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -163,41 +171,26 @@ const CreatorPuzzleSelect = ({
     fetchPuzzles();
   }, [profile?.id]);
 
-  // Calculate total pages
-  const totalPuzzles = puzzles.length || 100;
-  const totalPages = Math.ceil(totalPuzzles / PUZZLES_PER_PAGE);
-
-  // Get puzzles for current page
-  const getCurrentPagePuzzles = () => {
-    const startNum = currentPage * PUZZLES_PER_PAGE + 1;
-    const endNum = Math.min(startNum + PUZZLES_PER_PAGE - 1, 100);
-    
-    const pageItems = [];
-    for (let num = startNum; num <= endNum; num++) {
-      const puzzle = puzzles.find(p => p.puzzle_number === num);
-      pageItems.push({
-        number: num,
-        puzzle: puzzle || null,
-        isCompleted: completedPuzzles.has(num),
-        isLocked: !puzzle,
-      });
-    }
-    return pageItems;
+  const handleSelectTier = (tier) => {
+    soundManager.playClickSound('select');
+    setSelectedTier(tier);
+    setSelectedPuzzle(null);
   };
 
-  const handleSelectPuzzle = (item) => {
-    if (item.isLocked) {
-      soundManager.playClickSound?.('error');
+  const handleSelectPuzzle = (puzzleNumber) => {
+    const puzzle = puzzleMap[puzzleNumber];
+    if (!puzzle) {
+      soundManager.playInvalid?.();
       return;
     }
-    soundManager.playButtonClick();
-    setSelectedPuzzle(item);
+    soundManager.playClickSound('select');
+    setSelectedPuzzle(puzzle);
   };
 
   const handleStartPuzzle = () => {
-    if (!selectedPuzzle?.puzzle) return;
+    if (!selectedPuzzle) return;
     soundManager.playButtonClick();
-    onSelectPuzzle?.(selectedPuzzle.puzzle);
+    onSelectPuzzle?.(selectedPuzzle);
   };
 
   const handleBack = () => {
@@ -209,213 +202,229 @@ const CreatorPuzzleSelect = ({
     }
   };
 
-  const handlePageChange = (direction) => {
-    soundManager.playClickSound?.('click');
-    if (direction === 'prev' && currentPage > 0) {
-      setCurrentPage(prev => prev - 1);
-    } else if (direction === 'next' && currentPage < totalPages - 1) {
-      setCurrentPage(prev => prev + 1);
-    }
-  };
+  // Get puzzle slots for current tier
+  const [rangeStart, rangeEnd] = selectedTier.range;
+  const currentSlots = [];
+  for (let i = rangeStart; i <= rangeEnd; i++) {
+    currentSlots.push(i);
+  }
 
-  // Get difficulty tier info
-  const getDifficultyTier = (puzzleNumber) => {
-    if (puzzleNumber <= 25) return 'easy';
-    if (puzzleNumber <= 60) return 'medium';
-    if (puzzleNumber <= 85) return 'hard';
-    return 'expert';
-  };
-
-  const getPageDifficulty = () => {
-    const startNum = currentPage * PUZZLES_PER_PAGE + 1;
-    return getDifficultyTier(startNum);
-  };
-
-  const pageColors = difficultyColors[getPageDifficulty()];
-
-  // Calculate completion stats
-  const totalCompleted = completedPuzzles.size;
-  const totalAvailable = puzzles.length;
-  const completionPercent = totalAvailable > 0 ? Math.round((totalCompleted / totalAvailable) * 100) : 0;
+  // Stats
+  const completedCount = completedPuzzles.size;
+  const availableCount = puzzles.length;
+  
+  // Tier-specific stats
+  const tierCompleted = currentSlots.filter(n => completedPuzzles.has(n)).length;
+  const tierAvailable = currentSlots.filter(n => puzzleMap[n]).length;
 
   return (
-    <div className={`${needsScroll ? 'min-h-screen' : 'h-screen'} bg-slate-950 text-white flex flex-col overflow-hidden`}>
-      {/* Animated background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <FloatingPieces />
-        <div className={`absolute ${theme.glow1.pos} w-64 h-64 ${theme.glow1.color} rounded-full blur-3xl`} />
-        <div className={`absolute ${theme.glow2.pos} w-48 h-48 ${theme.glow2.color} rounded-full blur-3xl`} />
-        <div className={`absolute ${theme.glow3.pos} w-32 h-32 ${theme.glow3.color} rounded-full blur-2xl`} />
-      </div>
+    <div 
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+    >
+      {/* Themed Grid background */}
+      <div 
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          background: `
+            linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.98)),
+            repeating-linear-gradient(0deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px),
+            repeating-linear-gradient(90deg, transparent, transparent 40px, ${theme.gridColor} 40px, ${theme.gridColor} 41px)
+          `,
+        }}
+      />
+      
+      {/* Floating pieces background */}
+      <FloatingPieces />
 
-      {/* Header */}
-      <div className="relative z-10 flex-shrink-0 px-4 pt-4">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 px-3 py-2 text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-slate-800/50"
-          >
-            <ArrowLeft size={20} />
-            <span className="text-sm font-medium">Back</span>
-          </button>
-          
-          {/* Completion stats */}
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50">
-            <Trophy size={14} className="text-amber-400" />
-            <span className="text-sm text-slate-300">
-              {totalCompleted}/{totalAvailable}
-            </span>
-            <span className="text-xs text-slate-500">({completionPercent}%)</span>
-          </div>
-        </div>
-
-        <div className="text-center mb-4">
-          <NeonTitle size="medium" />
-          <p className="text-amber-400/80 text-sm font-medium mt-1">
-            <Sparkles size={14} className="inline mr-1" />
-            Creator Puzzles
-          </p>
-        </div>
-      </div>
+      {/* Animated glow orbs */}
+      <div className={`fixed ${theme.glow1.pos} w-72 h-72 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '4s' }} />
+      <div className={`fixed ${theme.glow2.pos} w-64 h-64 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
+      <div className={`fixed ${theme.glow3.pos} w-56 h-56 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '5s' }} />
 
       {/* Main Content */}
-      <div className="relative z-10 flex-1 flex flex-col px-4 overflow-hidden">
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader className="w-8 h-8 text-amber-400 animate-spin" />
-          </div>
-        ) : error ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center p-6 bg-red-900/20 rounded-xl border border-red-500/30">
-              <p className="text-red-400">{error}</p>
-              <button 
-                onClick={() => window.location.reload()}
-                className="mt-3 px-4 py-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30"
-              >
-                Retry
-              </button>
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center px-4 py-6`}>
+        <div className="w-full max-w-md">
+          
+          {/* Back Button */}
+          <button
+            onClick={handleBack}
+            className="flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors"
+          >
+            <ArrowLeft size={20} />
+            <span>{selectedPuzzle ? 'Back to Grid' : 'Back'}</span>
+          </button>
+          
+          {/* Title */}
+          <div className="text-center mb-4">
+            <NeonTitle size="large" />
+            <NeonSubtitle text="CREATOR PUZZLES" size="small" className="mt-1" />
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <Trophy size={16} className="text-amber-400" />
+              <p className="text-amber-400/80 text-sm">
+                {completedCount} / {availableCount} completed
+              </p>
             </div>
           </div>
-        ) : (
-          <>
-            {/* Page Navigation */}
-            <div className="flex items-center justify-between mb-3">
-              <button
-                onClick={() => handlePageChange('prev')}
-                disabled={currentPage === 0}
-                className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 disabled:opacity-30 hover:bg-slate-700/50 transition-colors"
-              >
-                <ChevronLeft size={20} />
-              </button>
-              
-              <div className="text-center">
-                <span className={`text-sm font-bold ${pageColors.text}`}>
-                  {getPageDifficulty().toUpperCase()}
-                </span>
-                <span className="text-slate-500 text-xs ml-2">
-                  ({currentPage * PUZZLES_PER_PAGE + 1}-{Math.min((currentPage + 1) * PUZZLES_PER_PAGE, 100)})
-                </span>
-              </div>
-              
-              <button
-                onClick={() => handlePageChange('next')}
-                disabled={currentPage >= totalPages - 1}
-                className="p-2 rounded-lg bg-slate-800/50 border border-slate-700/50 disabled:opacity-30 hover:bg-slate-700/50 transition-colors"
-              >
-                <ChevronRight size={20} />
-              </button>
-            </div>
 
-            {/* Puzzle Grid */}
-            <div className="flex-1 overflow-auto pb-4">
+          {/* Difficulty Tabs */}
+          <div className="grid grid-cols-4 gap-2 mb-4">
+            {difficultyTiers.map(tier => {
+              const isSelected = selectedTier.id === tier.id;
+              const tierPuzzleCount = tier.range[1] - tier.range[0] + 1;
+              const tierCompletedCount = Array.from({ length: tierPuzzleCount }, (_, i) => tier.range[0] + i)
+                .filter(n => completedPuzzles.has(n)).length;
+              
+              return (
+                <button
+                  key={tier.id}
+                  onClick={() => handleSelectTier(tier)}
+                  className={`py-2 px-1 rounded-lg transition-all text-center ${
+                    isSelected 
+                      ? `bg-gradient-to-r ${tier.color.gradient} text-white shadow-lg` 
+                      : `${tier.color.bg} ${tier.color.border} border hover:scale-105`
+                  }`}
+                  style={isSelected ? { boxShadow: `0 0 20px ${tier.color.glow}` } : {}}
+                >
+                  <div className={`text-xs font-black tracking-wide ${isSelected ? 'text-white' : tier.color.text}`}>
+                    {tier.label}
+                  </div>
+                  <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
+                    {tierCompletedCount}/{tierPuzzleCount}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Card with theme */}
+          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow}`}>
+            
+            {/* Tier Header */}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={`font-bold ${selectedTier.color.text}`}>
+                {selectedTier.label} ({rangeStart}-{rangeEnd})
+              </h3>
+              <span className="text-slate-400 text-sm">
+                {tierCompleted}/{tierAvailable} ✓
+              </span>
+            </div>
+            
+            {/* Loading State */}
+            {loading && (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader size={32} className="text-amber-400 animate-spin" />
+                <p className="text-slate-400 mt-3">Loading puzzles...</p>
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+              <div className="text-center py-8">
+                <p className="text-red-400 mb-4">{error}</p>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* Puzzle Grid - 5 columns */}
+            {!loading && !error && (
               <div className="grid grid-cols-5 gap-2">
-                {getCurrentPagePuzzles().map((item) => {
-                  const difficulty = getDifficultyTier(item.number);
-                  const colors = difficultyColors[difficulty];
+                {currentSlots.map(puzzleNumber => {
+                  const puzzle = puzzleMap[puzzleNumber];
+                  const isAvailable = !!puzzle;
+                  const isCompleted = completedPuzzles.has(puzzleNumber);
+                  const isSelected = selectedPuzzle?.puzzle_number === puzzleNumber;
+                  const colors = selectedTier.color;
                   
                   return (
                     <button
-                      key={item.number}
-                      onClick={() => handleSelectPuzzle(item)}
-                      disabled={item.isLocked}
+                      key={puzzleNumber}
+                      onClick={() => handleSelectPuzzle(puzzleNumber)}
+                      disabled={!isAvailable}
                       className={`
-                        aspect-square rounded-xl flex flex-col items-center justify-center
-                        transition-all duration-200 relative
-                        ${item.isLocked 
-                          ? 'bg-slate-800/30 border border-slate-700/30 cursor-not-allowed' 
-                          : item.isCompleted
-                            ? `${colors.bg} border-2 ${colors.border} shadow-lg ${colors.glow}`
-                            : `bg-slate-800/50 border border-slate-700/50 hover:${colors.bg} hover:border-${difficulty}-500/50 hover:scale-105`
+                        aspect-square rounded-xl flex flex-col items-center justify-center relative
+                        transition-all duration-200 border-2
+                        ${!isAvailable 
+                          ? 'bg-slate-800/50 border-slate-700/50 cursor-not-allowed' 
+                          : isCompleted
+                            ? `${colors.bg} ${colors.border} hover:scale-105`
+                            : `bg-slate-800/80 border-slate-600/50 hover:border-amber-500/50 hover:scale-105`
                         }
-                        ${selectedPuzzle?.number === item.number ? 'ring-2 ring-amber-400 scale-105' : ''}
+                        ${isSelected ? 'ring-2 ring-amber-400 scale-105' : ''}
                       `}
                     >
-                      {item.isLocked ? (
-                        <Lock size={16} className="text-slate-600" />
+                      {/* Puzzle number */}
+                      <span className={`text-lg font-bold ${
+                        !isAvailable 
+                          ? 'text-slate-600' 
+                          : isCompleted 
+                            ? colors.text 
+                            : 'text-white'
+                      }`}>
+                        {puzzleNumber}
+                      </span>
+                      
+                      {/* Status indicator */}
+                      {!isAvailable ? (
+                        <Lock size={10} className="text-slate-600 mt-0.5" />
+                      ) : isCompleted ? (
+                        <Check size={12} className={`${colors.text} mt-0.5`} />
                       ) : (
-                        <>
-                          <span className={`text-lg font-bold ${item.isCompleted ? colors.text : 'text-white'}`}>
-                            {item.number}
-                          </span>
-                          {item.isCompleted && (
-                            <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gradient-to-r ${colors.gradient} flex items-center justify-center shadow-lg`}>
-                              <Check size={12} className="text-white" />
-                            </div>
-                          )}
-                        </>
+                        <div className="w-1.5 h-1.5 rounded-full mt-1 bg-amber-400/60" />
                       )}
                     </button>
                   );
                 })}
               </div>
-            </div>
-          </>
-        )}
+            )}
+          </div>
 
-        {/* Selected Puzzle Info */}
-        {selectedPuzzle && selectedPuzzle.puzzle && (
-          <div className="flex-shrink-0 p-4 bg-slate-900/80 rounded-xl border border-amber-500/30 mb-4 backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                  <span className="text-amber-400">#{selectedPuzzle.number}</span>
-                  {selectedPuzzle.puzzle.name}
-                </h3>
-                <p className="text-sm text-slate-400">{selectedPuzzle.puzzle.description}</p>
-              </div>
-              <div className={`px-3 py-1 rounded-lg bg-gradient-to-r ${difficultyColors[getDifficultyTier(selectedPuzzle.number)].gradient}`}>
-                <span className="text-white text-xs font-bold uppercase">
-                  {getDifficultyTier(selectedPuzzle.number)}
+          {/* Selected Puzzle Info */}
+          {selectedPuzzle && (
+            <div className="mt-4 p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 shadow-lg">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-white">
+                    Puzzle #{selectedPuzzle.puzzle_number}
+                  </h3>
+                  {selectedPuzzle.name && (
+                    <p className="text-amber-400/80 text-sm">{selectedPuzzle.name}</p>
+                  )}
+                </div>
+                
+                {/* Difficulty badge */}
+                <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase bg-gradient-to-r ${selectedTier.color.gradient} text-white`}>
+                  {selectedTier.label}
                 </span>
               </div>
+              
+              {selectedPuzzle.description && (
+                <p className="text-slate-400 text-sm mb-4">{selectedPuzzle.description}</p>
+              )}
+              
+              {/* Completion status */}
+              {completedPuzzles.has(selectedPuzzle.puzzle_number) && (
+                <div className="flex items-center gap-2 mb-4 text-green-400 text-sm">
+                  <Check size={16} />
+                  <span>Completed</span>
+                </div>
+              )}
+              
+              <button
+                onClick={handleStartPuzzle}
+                className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all shadow-lg shadow-amber-500/30 active:scale-[0.98]"
+              >
+                {completedPuzzles.has(selectedPuzzle.puzzle_number) ? 'PLAY AGAIN' : 'START PUZZLE'}
+              </button>
             </div>
-            
-            <button
-              onClick={handleStartPuzzle}
-              className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all shadow-lg shadow-amber-500/30 active:scale-[0.98]"
-            >
-              {selectedPuzzle.isCompleted ? 'PLAY AGAIN' : 'START PUZZLE'}
-            </button>
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && !error && puzzles.length === 0 && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center p-6 bg-slate-900/50 rounded-2xl border border-slate-700/50">
-              <Sparkles size={48} className="text-amber-400/50 mx-auto mb-3" />
-              <h3 className="text-lg font-bold text-white mb-2">Coming Soon!</h3>
-              <p className="text-slate-400 text-sm">
-                Creator puzzles are being crafted.<br />
-                Check back soon!
-              </p>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-
-      {/* Safe area padding */}
-      <div className="flex-shrink-0" style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
     </div>
   );
 };

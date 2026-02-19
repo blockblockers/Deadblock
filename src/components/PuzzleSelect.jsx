@@ -50,7 +50,7 @@ const themes = {
 const difficulties = [
   { 
     id: PUZZLE_DIFFICULTY.EASY, 
-    name: 'EASY', 
+    name: 'BEGINNER', 
     moves: 1, 
     description: '1 move to win. But watch out for traps!', 
     theme: 'easy',
@@ -65,7 +65,7 @@ const difficulties = [
   },
   { 
     id: PUZZLE_DIFFICULTY.MEDIUM, 
-    name: 'MEDIUM', 
+    name: 'INTERMEDIATE', 
     moves: 3, 
     description: '3 moves to solve. A solid challenge.', 
     theme: 'medium',

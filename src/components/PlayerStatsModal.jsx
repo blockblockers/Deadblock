@@ -644,7 +644,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                   {/* Easy */}
                   <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-green-400 text-xs font-bold">Easy</span>
+                      <span className="text-green-400 text-xs font-bold">Beginner</span>
                       <span className="text-xs text-slate-400">
                         {creatorStats.easy.completed}/{creatorStats.easy.total}
                       </span>
@@ -660,7 +660,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                   {/* Medium */}
                   <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-cyan-400 text-xs font-bold">Medium</span>
+                      <span className="text-amber-400 text-xs font-bold">Intermediate</span>
                       <span className="text-xs text-slate-400">
                         {creatorStats.medium.completed}/{creatorStats.medium.total}
                       </span>

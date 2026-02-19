@@ -105,8 +105,8 @@ const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty,
     }
     if (isPuzzle) {
       switch (puzzleDifficulty) {
-        case PUZZLE_DIFFICULTY.EASY: return { text: 'EASY', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
-        case PUZZLE_DIFFICULTY.MEDIUM: return { text: 'MEDIUM', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+        case PUZZLE_DIFFICULTY.EASY: return { text: 'BEGINNER', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
+        case PUZZLE_DIFFICULTY.MEDIUM: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
         case PUZZLE_DIFFICULTY.HARD: return { text: 'HARD', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
         default: return { text: 'PUZZLE', color: 'from-cyan-500 to-blue-600', glow: 'rgba(34,211,238,0.6)' };
       }

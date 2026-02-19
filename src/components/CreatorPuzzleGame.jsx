@@ -1439,7 +1439,10 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 }}
               >
                 <span className="text-white text-xs font-black tracking-wider uppercase drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
-                  {puzzle.difficulty || 'MEDIUM'}
+                  {puzzle.difficulty === 'easy' ? 'BEGINNER' : 
+                   puzzle.difficulty === 'medium' ? 'INTERMEDIATE' : 
+                   puzzle.difficulty === 'hard' ? 'HARD' : 
+                   puzzle.difficulty === 'expert' ? 'EXPERT' : 'INTERMEDIATE'}
                 </span>
               </div>
               
