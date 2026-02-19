@@ -132,13 +132,17 @@ const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty,
         </span>
       </div>
       
-      {/* Difficulty Badge (for AI or Puzzle mode) or VS text */}
+      {/* Difficulty Badge - Neon Glow Square (for AI or Puzzle mode) or VS text */}
       {(isVsAI || isPuzzle) && difficultyInfo ? (
         <div 
-          className={`px-3 py-1 rounded-full bg-gradient-to-r ${difficultyInfo.color} border border-white/20`}
-          style={{ boxShadow: `0 0 15px ${difficultyInfo.glow}` }}
+          className={`px-4 py-1.5 rounded-lg bg-gradient-to-r ${difficultyInfo.color} border border-white/30`}
+          style={{ 
+            boxShadow: `0 0 20px ${difficultyInfo.glow}, inset 0 1px 0 rgba(255,255,255,0.2)` 
+          }}
         >
-          <span className="text-white text-[10px] font-black tracking-wider">{difficultyInfo.text}</span>
+          <span className="text-white text-xs font-black tracking-wider drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+            {difficultyInfo.text}
+          </span>
         </div>
       ) : (
         <span className="text-slate-600 font-bold text-sm">VS</span>

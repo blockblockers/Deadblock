@@ -1,4 +1,6 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v1.8: Fixed difficulty colors - Easy=green, Medium=amber, Hard=red, Expert=purple
+// v1.7: Neon glow square badge, theme-colored puzzle info, fixed AI piece removal from tray
 // v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
 // v1.5: Attempt persistence - loads/saves attempts to database across sessions
 // v1.4: Removed duplicate "New" button (creator puzzles don't generate new puzzles)
@@ -47,25 +49,25 @@ const difficultyThemes = {
     panelShadow: 'shadow-[0_0_40px_rgba(34,197,94,0.3)]',
   },
   medium: {
-    gridColor: 'rgba(34, 211, 238, 0.3)',
-    glow1: 'bg-cyan-500/30',
-    glow2: 'bg-sky-500/25',
-    panelBorder: 'border-cyan-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
+    gridColor: 'rgba(251, 191, 36, 0.3)',
+    glow1: 'bg-amber-500/30',
+    glow2: 'bg-orange-500/25',
+    panelBorder: 'border-amber-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.3)]',
   },
   hard: {
-    gridColor: 'rgba(168, 85, 247, 0.3)',
-    glow1: 'bg-purple-500/30',
-    glow2: 'bg-pink-500/25',
-    panelBorder: 'border-purple-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
-  },
-  expert: {
     gridColor: 'rgba(239, 68, 68, 0.3)',
     glow1: 'bg-red-500/30',
     glow2: 'bg-rose-500/25',
     panelBorder: 'border-red-500/40',
     panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
+  },
+  expert: {
+    gridColor: 'rgba(168, 85, 247, 0.3)',
+    glow1: 'bg-purple-500/30',
+    glow2: 'bg-pink-500/25',
+    panelBorder: 'border-purple-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
   },
 };
 
@@ -317,12 +319,25 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }, [pendingMove]);
   
   // Compute effective used pieces for PieceTray
-  // This includes all pieces NOT in availablePieces + actually placed pieces
+  // This includes all pieces NOT in availablePieces + actually placed pieces + pieces currently on board
   const effectiveUsedPieces = useMemo(() => {
     const allPieceNames = Object.keys(pieces);
     const notAvailable = allPieceNames.filter(p => !availablePieces.includes(p));
-    return [...new Set([...notAvailable, ...usedPieces])];
-  }, [availablePieces, usedPieces]);
+    
+    // Also include any pieces currently on the board (handles AI pieces)
+    const piecesOnBoard = new Set();
+    if (boardPieces) {
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+          if (boardPieces[r]?.[c]) {
+            piecesOnBoard.add(boardPieces[r][c]);
+          }
+        }
+      }
+    }
+    
+    return [...new Set([...notAvailable, ...usedPieces, ...piecesOnBoard])];
+  }, [availablePieces, usedPieces, boardPieces]);
   
   // Show error when placement is invalid (matching GameScreen behavior)
   useEffect(() => {
@@ -1336,19 +1351,49 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Game Area */}
           <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
             
-            {/* Puzzle Info Bar - Centered */}
+            {/* Puzzle Info Bar - Centered with theme glow */}
             <div className="flex items-center justify-center mb-2 px-1">
-              <div className="flex items-center gap-2 text-center">
-                <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
+              <div 
+                className={`flex items-center gap-2 text-center px-4 py-1.5 rounded-lg border ${
+                  puzzle.difficulty === 'easy' ? 'bg-green-500/10 border-green-500/30' :
+                  puzzle.difficulty === 'hard' ? 'bg-red-500/10 border-red-500/30' :
+                  puzzle.difficulty === 'expert' ? 'bg-purple-500/10 border-purple-500/30' :
+                  'bg-amber-500/10 border-amber-500/30'
+                }`}
+                style={{
+                  boxShadow: `0 0 20px ${
+                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.25)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.25)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.25)' :
+                    'rgba(251,191,36,0.25)'
+                  }`
+                }}
+              >
+                <span className={`font-bold text-sm ${
+                  puzzle.difficulty === 'easy' ? 'text-green-400' :
+                  puzzle.difficulty === 'hard' ? 'text-red-400' :
+                  puzzle.difficulty === 'expert' ? 'text-purple-400' :
+                  'text-amber-400'
+                }`}>#{puzzle.puzzle_number}</span>
                 {puzzle.name && (
                   <>
-                    <span className="text-slate-500">•</span>
-                    <span className="text-slate-400 text-sm">{puzzle.name}</span>
+                    <span className={`${
+                      puzzle.difficulty === 'easy' ? 'text-green-500/50' :
+                      puzzle.difficulty === 'hard' ? 'text-red-500/50' :
+                      puzzle.difficulty === 'expert' ? 'text-purple-500/50' :
+                      'text-amber-500/50'
+                    }`}>•</span>
+                    <span className={`text-sm font-medium ${
+                      puzzle.difficulty === 'easy' ? 'text-green-300/80' :
+                      puzzle.difficulty === 'hard' ? 'text-red-300/80' :
+                      puzzle.difficulty === 'expert' ? 'text-purple-300/80' :
+                      'text-amber-300/80'
+                    }`}>{puzzle.name}</span>
                   </>
                 )}
                 {attempts > 1 && (
                   <>
-                    <span className="text-slate-500">•</span>
+                    <span className="text-slate-600">•</span>
                     <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
                   </>
                 )}
@@ -1371,24 +1416,29 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 </span>
               </div>
               
-              {/* Difficulty Badge */}
+              {/* Difficulty Badge - Neon Glow Square */}
               <div 
-                className={`px-3 py-1 rounded-full bg-gradient-to-r ${
+                className={`px-4 py-1.5 rounded-lg bg-gradient-to-r ${
                   puzzle.difficulty === 'easy' ? 'from-green-600 to-emerald-600' :
-                  puzzle.difficulty === 'hard' ? 'from-purple-500 to-pink-600' :
-                  puzzle.difficulty === 'expert' ? 'from-red-500 to-rose-600' :
-                  'from-cyan-500 to-sky-600'
-                } border border-white/20`}
+                  puzzle.difficulty === 'hard' ? 'from-red-500 to-rose-600' :
+                  puzzle.difficulty === 'expert' ? 'from-purple-500 to-pink-600' :
+                  'from-amber-500 to-orange-600'
+                } border ${
+                  puzzle.difficulty === 'easy' ? 'border-green-400/60' :
+                  puzzle.difficulty === 'hard' ? 'border-red-400/60' :
+                  puzzle.difficulty === 'expert' ? 'border-purple-400/60' :
+                  'border-amber-400/60'
+                }`}
                 style={{ 
-                  boxShadow: `0 0 15px ${
-                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.6)' :
-                    puzzle.difficulty === 'hard' ? 'rgba(168,85,247,0.6)' :
-                    puzzle.difficulty === 'expert' ? 'rgba(239,68,68,0.6)' :
-                    'rgba(34,211,238,0.6)'
-                  }` 
+                  boxShadow: `0 0 20px ${
+                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.7)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.7)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.7)' :
+                    'rgba(251,191,36,0.7)'
+                  }, inset 0 1px 0 rgba(255,255,255,0.2)` 
                 }}
               >
-                <span className="text-white text-[10px] font-black tracking-wider uppercase">
+                <span className="text-white text-xs font-black tracking-wider uppercase drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
                   {puzzle.difficulty || 'MEDIUM'}
                 </span>
               </div>
