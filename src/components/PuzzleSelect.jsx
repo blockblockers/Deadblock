@@ -80,7 +80,7 @@ const difficulties = [
   },
   { 
     id: PUZZLE_DIFFICULTY.HARD, 
-    name: 'HARD', 
+    name: 'EXPERT', 
     moves: 5, 
     description: '5 moves to solve. For puzzle masters.', 
     theme: 'hard',

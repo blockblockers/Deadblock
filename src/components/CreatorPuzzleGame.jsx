@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v1.9: Cyberpunk neon styled puzzle info bar with glowing text
 // v1.8: Fixed difficulty colors - Easy=green, Medium=amber, Hard=red, Expert=purple
 // v1.7: Neon glow square badge, theme-colored puzzle info, fixed AI piece removal from tray
 // v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
@@ -1351,50 +1352,98 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Game Area */}
           <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
             
-            {/* Puzzle Info Bar - Centered with theme glow */}
+            {/* Puzzle Info Bar - Cyberpunk Neon Style */}
             <div className="flex items-center justify-center mb-2 px-1">
               <div 
-                className={`flex items-center gap-2 text-center px-4 py-1.5 rounded-lg border ${
-                  puzzle.difficulty === 'easy' ? 'bg-green-500/10 border-green-500/30' :
-                  puzzle.difficulty === 'hard' ? 'bg-red-500/10 border-red-500/30' :
-                  puzzle.difficulty === 'expert' ? 'bg-purple-500/10 border-purple-500/30' :
-                  'bg-amber-500/10 border-amber-500/30'
-                }`}
+                className="relative flex items-center gap-3 px-5 py-2 rounded-lg bg-slate-900/80 border overflow-hidden"
                 style={{
-                  boxShadow: `0 0 20px ${
-                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.25)' :
-                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.25)' :
-                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.25)' :
-                    'rgba(251,191,36,0.25)'
+                  borderColor: puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.5)' :
+                               puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.5)' :
+                               puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.5)' :
+                               'rgba(251,191,36,0.5)',
+                  boxShadow: `0 0 25px ${
+                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.4)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.4)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.4)' :
+                    'rgba(251,191,36,0.4)'
+                  }, inset 0 0 20px ${
+                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.1)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.1)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.1)' :
+                    'rgba(251,191,36,0.1)'
                   }`
                 }}
               >
-                <span className={`font-bold text-sm ${
-                  puzzle.difficulty === 'easy' ? 'text-green-400' :
-                  puzzle.difficulty === 'hard' ? 'text-red-400' :
-                  puzzle.difficulty === 'expert' ? 'text-purple-400' :
-                  'text-amber-400'
-                }`}>#{puzzle.puzzle_number}</span>
+                {/* Animated scan line */}
+                <div 
+                  className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent animate-pulse"
+                  style={{ animationDuration: '3s' }}
+                />
+                
+                {/* Puzzle Number - Glowing */}
+                <span 
+                  className="relative font-black text-lg tracking-wider"
+                  style={{
+                    color: puzzle.difficulty === 'easy' ? '#4ade80' :
+                           puzzle.difficulty === 'hard' ? '#f87171' :
+                           puzzle.difficulty === 'expert' ? '#c084fc' :
+                           '#fbbf24',
+                    textShadow: `0 0 10px ${
+                      puzzle.difficulty === 'easy' ? 'rgba(74,222,128,0.8)' :
+                      puzzle.difficulty === 'hard' ? 'rgba(248,113,113,0.8)' :
+                      puzzle.difficulty === 'expert' ? 'rgba(192,132,252,0.8)' :
+                      'rgba(251,191,36,0.8)'
+                    }, 0 0 20px ${
+                      puzzle.difficulty === 'easy' ? 'rgba(74,222,128,0.5)' :
+                      puzzle.difficulty === 'hard' ? 'rgba(248,113,113,0.5)' :
+                      puzzle.difficulty === 'expert' ? 'rgba(192,132,252,0.5)' :
+                      'rgba(251,191,36,0.5)'
+                    }`
+                  }}
+                >
+                  #{puzzle.puzzle_number}
+                </span>
+                
                 {puzzle.name && (
                   <>
-                    <span className={`${
-                      puzzle.difficulty === 'easy' ? 'text-green-500/50' :
-                      puzzle.difficulty === 'hard' ? 'text-red-500/50' :
-                      puzzle.difficulty === 'expert' ? 'text-purple-500/50' :
-                      'text-amber-500/50'
-                    }`}>•</span>
-                    <span className={`text-sm font-medium ${
-                      puzzle.difficulty === 'easy' ? 'text-green-300/80' :
-                      puzzle.difficulty === 'hard' ? 'text-red-300/80' :
-                      puzzle.difficulty === 'expert' ? 'text-purple-300/80' :
-                      'text-amber-300/80'
-                    }`}>{puzzle.name}</span>
+                    {/* Separator - Neon line */}
+                    <div 
+                      className="w-px h-4"
+                      style={{
+                        background: `linear-gradient(to bottom, transparent, ${
+                          puzzle.difficulty === 'easy' ? 'rgba(74,222,128,0.6)' :
+                          puzzle.difficulty === 'hard' ? 'rgba(248,113,113,0.6)' :
+                          puzzle.difficulty === 'expert' ? 'rgba(192,132,252,0.6)' :
+                          'rgba(251,191,36,0.6)'
+                        }, transparent)`
+                      }}
+                    />
+                    
+                    {/* Puzzle Name - Cyberpunk style */}
+                    <span 
+                      className="relative text-sm font-bold tracking-wide uppercase"
+                      style={{
+                        color: puzzle.difficulty === 'easy' ? '#86efac' :
+                               puzzle.difficulty === 'hard' ? '#fca5a5' :
+                               puzzle.difficulty === 'expert' ? '#d8b4fe' :
+                               '#fcd34d',
+                        textShadow: `0 0 8px ${
+                          puzzle.difficulty === 'easy' ? 'rgba(134,239,172,0.6)' :
+                          puzzle.difficulty === 'hard' ? 'rgba(252,165,165,0.6)' :
+                          puzzle.difficulty === 'expert' ? 'rgba(216,180,254,0.6)' :
+                          'rgba(252,211,77,0.6)'
+                        }`
+                      }}
+                    >
+                      {puzzle.name}
+                    </span>
                   </>
                 )}
+                
                 {attempts > 1 && (
                   <>
-                    <span className="text-slate-600">•</span>
-                    <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
+                    <div className="w-px h-3 bg-slate-600/50" />
+                    <span className="text-slate-400 text-xs font-mono">ATT:{attempts}</span>
                   </>
                 )}
               </div>

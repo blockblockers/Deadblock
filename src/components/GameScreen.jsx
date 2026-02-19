@@ -53,6 +53,17 @@ const difficultyThemes = {
     labelGlow: 'shadow-[0_0_30px_rgba(168,85,247,0.8)]',
     labelBorder: 'border-purple-400/50',
   },
+  hard: {
+    gridColor: 'rgba(168,85,247,0.4)',
+    glow1: 'bg-purple-500/30',
+    glow2: 'bg-pink-400/20',
+    panelBorder: 'border-purple-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
+    label: 'EXPERT',
+    labelBg: 'from-purple-600 via-pink-500 to-purple-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(168,85,247,0.8)]',
+    labelBorder: 'border-purple-400/50',
+  },
   default: {
     gridColor: 'rgba(34,211,238,0.3)',
     glow1: 'bg-cyan-500/20',
@@ -79,7 +90,7 @@ const getTheme = (gameMode, aiDifficulty, puzzleDifficulty) => {
     switch (puzzleDifficulty) {
       case PUZZLE_DIFFICULTY.EASY: return difficultyThemes.beginner;
       case PUZZLE_DIFFICULTY.MEDIUM: return difficultyThemes.intermediate;
-      case PUZZLE_DIFFICULTY.HARD: return difficultyThemes.expert;
+      case PUZZLE_DIFFICULTY.HARD: return difficultyThemes.hard;
       default: return difficultyThemes.beginner;
     }
   }
@@ -107,7 +118,7 @@ const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty,
       switch (puzzleDifficulty) {
         case PUZZLE_DIFFICULTY.EASY: return { text: 'BEGINNER', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
         case PUZZLE_DIFFICULTY.MEDIUM: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
-        case PUZZLE_DIFFICULTY.HARD: return { text: 'HARD', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
+        case PUZZLE_DIFFICULTY.HARD: return { text: 'EXPERT', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
         default: return { text: 'PUZZLE', color: 'from-cyan-500 to-blue-600', glow: 'rgba(34,211,238,0.6)' };
       }
     }

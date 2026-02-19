@@ -1,11 +1,10 @@
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
-// v1.3: Difficulty tabs at top, amber/orange theme, auth token fix for completions
+// v1.4: Compact grid, difficulty-themed cells, larger buttons, fits on screen
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Check, Lock, Loader, Trophy } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
-import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAuth } from '../contexts/AuthContext';
 import FloatingPieces from './FloatingPieces';
 
@@ -42,11 +41,40 @@ const theme = {
   cardShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.15)]',
 };
 
+// Difficulty colors for individual cells
+const difficultyColors = {
+  easy: {
+    bg: 'bg-green-500/20',
+    border: 'border-green-500/50',
+    text: 'text-green-400',
+    dot: 'bg-green-400/60',
+  },
+  medium: {
+    bg: 'bg-amber-500/20',
+    border: 'border-amber-500/50',
+    text: 'text-amber-400',
+    dot: 'bg-amber-400/60',
+  },
+  hard: {
+    bg: 'bg-red-500/20',
+    border: 'border-red-500/50',
+    text: 'text-red-400',
+    dot: 'bg-red-400/60',
+  },
+  expert: {
+    bg: 'bg-purple-500/20',
+    border: 'border-purple-500/50',
+    text: 'text-purple-400',
+    dot: 'bg-purple-400/60',
+  },
+};
+
 // Difficulty tiers with colors
 const difficultyTiers = [
   { 
     id: 'easy', 
-    label: 'BEGINNER', 
+    label: 'BEG', 
+    fullLabel: 'BEGINNER',
     range: [1, 25],
     color: {
       bg: 'bg-green-500/20',
@@ -58,7 +86,8 @@ const difficultyTiers = [
   },
   { 
     id: 'medium', 
-    label: 'INTERMEDIATE', 
+    label: 'INT', 
+    fullLabel: 'INTERMEDIATE',
     range: [26, 60],
     color: {
       bg: 'bg-amber-500/20',
@@ -70,7 +99,8 @@ const difficultyTiers = [
   },
   { 
     id: 'hard', 
-    label: 'HARD', 
+    label: 'HRD', 
+    fullLabel: 'HARD',
     range: [61, 85],
     color: {
       bg: 'bg-red-500/20',
@@ -82,7 +112,8 @@ const difficultyTiers = [
   },
   { 
     id: 'expert', 
-    label: 'EXPERT', 
+    label: 'EXP', 
+    fullLabel: 'EXPERT',
     range: [86, 100],
     color: {
       bg: 'bg-purple-500/20',
@@ -98,7 +129,6 @@ const CreatorPuzzleSelect = ({
   onSelectPuzzle, 
   onBack,
 }) => {
-  const { needsScroll } = useResponsiveLayout(800);
   const { profile } = useAuth();
   
   const [puzzles, setPuzzles] = useState([]);
@@ -155,7 +185,6 @@ const CreatorPuzzleSelect = ({
             
             if (completionsRes.ok) {
               const completionsData = await completionsRes.json();
-              console.log('[CreatorPuzzleSelect] Loaded completions:', completionsData.length);
               setCompletedPuzzles(new Set(completionsData.map(c => c.puzzle_number)));
             }
           }
@@ -217,11 +246,14 @@ const CreatorPuzzleSelect = ({
   const tierCompleted = currentSlots.filter(n => completedPuzzles.has(n)).length;
   const tierAvailable = currentSlots.filter(n => puzzleMap[n]).length;
 
+  // Get colors for a puzzle based on its actual difficulty
+  const getPuzzleColors = (puzzle) => {
+    if (!puzzle) return null;
+    return difficultyColors[puzzle.difficulty] || difficultyColors.medium;
+  };
+
   return (
-    <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
-    >
+    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden">
       {/* Themed Grid background */}
       <div 
         className="fixed inset-0 pointer-events-none"
@@ -238,191 +270,179 @@ const CreatorPuzzleSelect = ({
       <FloatingPieces />
 
       {/* Animated glow orbs */}
-      <div className={`fixed ${theme.glow1.pos} w-72 h-72 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '4s' }} />
-      <div className={`fixed ${theme.glow2.pos} w-64 h-64 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
-      <div className={`fixed ${theme.glow3.pos} w-56 h-56 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '5s' }} />
+      <div className={`fixed ${theme.glow1.pos} w-48 h-48 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '4s' }} />
+      <div className={`fixed ${theme.glow2.pos} w-40 h-40 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
 
-      {/* Main Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center px-4 py-6`}>
-        <div className="w-full max-w-md">
-          
-          {/* Back Button */}
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors"
-          >
-            <ArrowLeft size={20} />
-            <span>{selectedPuzzle ? 'Back to Grid' : 'Back'}</span>
-          </button>
-          
-          {/* Title */}
-          <div className="text-center mb-4">
-            <NeonTitle size="large" />
-            <NeonSubtitle text="CREATOR PUZZLES" size="small" className="mt-1" />
-            <div className="flex items-center justify-center gap-2 mt-2">
-              <Trophy size={16} className="text-amber-400" />
-              <p className="text-amber-400/80 text-sm">
-                {completedCount} / {availableCount} completed
-              </p>
-            </div>
-          </div>
-
-          {/* Difficulty Tabs */}
-          <div className="grid grid-cols-4 gap-2 mb-4">
-            {difficultyTiers.map(tier => {
-              const isSelected = selectedTier.id === tier.id;
-              const tierPuzzleCount = tier.range[1] - tier.range[0] + 1;
-              const tierCompletedCount = Array.from({ length: tierPuzzleCount }, (_, i) => tier.range[0] + i)
-                .filter(n => completedPuzzles.has(n)).length;
-              
-              return (
-                <button
-                  key={tier.id}
-                  onClick={() => handleSelectTier(tier)}
-                  className={`py-2 px-1 rounded-lg transition-all text-center ${
-                    isSelected 
-                      ? `bg-gradient-to-r ${tier.color.gradient} text-white shadow-lg` 
-                      : `${tier.color.bg} ${tier.color.border} border hover:scale-105`
-                  }`}
-                  style={isSelected ? { boxShadow: `0 0 20px ${tier.color.glow}` } : {}}
-                >
-                  <div className={`text-xs font-black tracking-wide ${isSelected ? 'text-white' : tier.color.text}`}>
-                    {tier.label}
-                  </div>
-                  <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
-                    {tierCompletedCount}/{tierPuzzleCount}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Card with theme */}
-          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow}`}>
+      {/* Main Content - Scrollable if needed */}
+      <div className="relative flex-1 flex flex-col overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex-1 flex flex-col items-center px-3 py-4">
+          <div className="w-full max-w-sm">
             
-            {/* Tier Header */}
-            <div className="flex items-center justify-between mb-3">
-              <h3 className={`font-bold ${selectedTier.color.text}`}>
-                {selectedTier.label} ({rangeStart}-{rangeEnd})
-              </h3>
-              <span className="text-slate-400 text-sm">
-                {tierCompleted}/{tierAvailable} ✓
-              </span>
-            </div>
+            {/* Back Button - Compact */}
+            <button
+              onClick={handleBack}
+              className="flex items-center gap-1 text-slate-400 hover:text-white mb-2 transition-colors text-sm"
+            >
+              <ArrowLeft size={16} />
+              <span>{selectedPuzzle ? 'Back' : 'Back'}</span>
+            </button>
             
-            {/* Loading State */}
-            {loading && (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader size={32} className="text-amber-400 animate-spin" />
-                <p className="text-slate-400 mt-3">Loading puzzles...</p>
+            {/* Title - Compact */}
+            <div className="text-center mb-3">
+              <NeonTitle size="small" />
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <Trophy size={14} className="text-amber-400" />
+                <p className="text-amber-400/80 text-xs">
+                  {completedCount}/{availableCount} completed
+                </p>
               </div>
-            )}
+            </div>
 
-            {/* Error State */}
-            {error && !loading && (
-              <div className="text-center py-8">
-                <p className="text-red-400 mb-4">{error}</p>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {/* Puzzle Grid - 5 columns */}
-            {!loading && !error && (
-              <div className="grid grid-cols-5 gap-2">
-                {currentSlots.map(puzzleNumber => {
-                  const puzzle = puzzleMap[puzzleNumber];
-                  const isAvailable = !!puzzle;
-                  const isCompleted = completedPuzzles.has(puzzleNumber);
-                  const isSelected = selectedPuzzle?.puzzle_number === puzzleNumber;
-                  const colors = selectedTier.color;
-                  
-                  return (
-                    <button
-                      key={puzzleNumber}
-                      onClick={() => handleSelectPuzzle(puzzleNumber)}
-                      disabled={!isAvailable}
-                      className={`
-                        aspect-square rounded-xl flex flex-col items-center justify-center relative
-                        transition-all duration-200 border-2
-                        ${!isAvailable 
-                          ? 'bg-slate-800/50 border-slate-700/50 cursor-not-allowed' 
-                          : isCompleted
-                            ? `${colors.bg} ${colors.border} hover:scale-105`
-                            : `bg-slate-800/80 border-slate-600/50 hover:border-amber-500/50 hover:scale-105`
-                        }
-                        ${isSelected ? 'ring-2 ring-amber-400 scale-105' : ''}
-                      `}
-                    >
-                      {/* Puzzle number */}
-                      <span className={`text-lg font-bold ${
-                        !isAvailable 
-                          ? 'text-slate-600' 
-                          : isCompleted 
-                            ? colors.text 
-                            : 'text-white'
-                      }`}>
-                        {puzzleNumber}
-                      </span>
-                      
-                      {/* Status indicator */}
-                      {!isAvailable ? (
-                        <Lock size={10} className="text-slate-600 mt-0.5" />
-                      ) : isCompleted ? (
-                        <Check size={12} className={`${colors.text} mt-0.5`} />
-                      ) : (
-                        <div className="w-1.5 h-1.5 rounded-full mt-1 bg-amber-400/60" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Selected Puzzle Info */}
-          {selectedPuzzle && (
-            <div className="mt-4 p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 shadow-lg">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="text-lg font-bold text-white">
-                    Puzzle #{selectedPuzzle.puzzle_number}
-                  </h3>
-                  {selectedPuzzle.name && (
-                    <p className="text-amber-400/80 text-sm">{selectedPuzzle.name}</p>
-                  )}
-                </div>
+            {/* Difficulty Tabs - Larger buttons */}
+            <div className="grid grid-cols-4 gap-1.5 mb-3">
+              {difficultyTiers.map(tier => {
+                const isSelected = selectedTier.id === tier.id;
+                const tierPuzzleCount = tier.range[1] - tier.range[0] + 1;
+                const tierCompletedCount = Array.from({ length: tierPuzzleCount }, (_, i) => tier.range[0] + i)
+                  .filter(n => completedPuzzles.has(n)).length;
                 
-                {/* Difficulty badge */}
-                <span className={`px-3 py-1 rounded-lg text-xs font-bold uppercase bg-gradient-to-r ${selectedTier.color.gradient} text-white`}>
-                  {selectedTier.label}
+                return (
+                  <button
+                    key={tier.id}
+                    onClick={() => handleSelectTier(tier)}
+                    className={`py-2.5 px-2 rounded-lg transition-all text-center ${
+                      isSelected 
+                        ? `bg-gradient-to-r ${tier.color.gradient} text-white shadow-lg` 
+                        : `${tier.color.bg} ${tier.color.border} border hover:scale-105`
+                    }`}
+                    style={isSelected ? { boxShadow: `0 0 15px ${tier.color.glow}` } : {}}
+                  >
+                    <div className={`text-[10px] font-black tracking-wide ${isSelected ? 'text-white' : tier.color.text}`}>
+                      {tier.label}
+                    </div>
+                    <div className={`text-[9px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-slate-500'}`}>
+                      {tierCompletedCount}/{tierPuzzleCount}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Card with puzzle grid */}
+            <div className={`${theme.cardBg} backdrop-blur-md rounded-xl p-3 border ${theme.cardBorder} ${theme.cardShadow}`}>
+              
+              {/* Tier Header - Compact */}
+              <div className="flex items-center justify-between mb-2">
+                <h3 className={`text-sm font-bold ${selectedTier.color.text}`}>
+                  {selectedTier.fullLabel} ({rangeStart}-{rangeEnd})
+                </h3>
+                <span className="text-slate-400 text-xs">
+                  {tierCompleted}/{tierAvailable} ✓
                 </span>
               </div>
               
-              {selectedPuzzle.description && (
-                <p className="text-slate-400 text-sm mb-4">{selectedPuzzle.description}</p>
-              )}
-              
-              {/* Completion status */}
-              {completedPuzzles.has(selectedPuzzle.puzzle_number) && (
-                <div className="flex items-center gap-2 mb-4 text-green-400 text-sm">
-                  <Check size={16} />
-                  <span>Completed</span>
+              {/* Loading State */}
+              {loading && (
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader size={24} className="text-amber-400 animate-spin" />
+                  <p className="text-slate-400 mt-2 text-sm">Loading...</p>
                 </div>
               )}
-              
-              <button
-                onClick={handleStartPuzzle}
-                className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-xl hover:from-amber-400 hover:to-orange-500 transition-all shadow-lg shadow-amber-500/30 active:scale-[0.98]"
-              >
-                {completedPuzzles.has(selectedPuzzle.puzzle_number) ? 'PLAY AGAIN' : 'START PUZZLE'}
-              </button>
+
+              {/* Error State */}
+              {error && !loading && (
+                <div className="text-center py-6">
+                  <p className="text-red-400 mb-3 text-sm">{error}</p>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="px-3 py-1.5 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors text-sm"
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+
+              {/* Puzzle Grid - Compact cells themed by difficulty */}
+              {!loading && !error && (
+                <div className="grid grid-cols-5 gap-1.5">
+                  {currentSlots.map(puzzleNumber => {
+                    const puzzle = puzzleMap[puzzleNumber];
+                    const isAvailable = !!puzzle;
+                    const isCompleted = completedPuzzles.has(puzzleNumber);
+                    const isSelected = selectedPuzzle?.puzzle_number === puzzleNumber;
+                    const colors = getPuzzleColors(puzzle) || selectedTier.color;
+                    
+                    return (
+                      <button
+                        key={puzzleNumber}
+                        onClick={() => handleSelectPuzzle(puzzleNumber)}
+                        disabled={!isAvailable}
+                        className={`
+                          w-full aspect-square rounded-lg flex flex-col items-center justify-center relative
+                          transition-all duration-150 border
+                          ${!isAvailable 
+                            ? 'bg-slate-800/50 border-slate-700/30 cursor-not-allowed' 
+                            : isCompleted
+                              ? `${colors.bg} ${colors.border} hover:scale-105`
+                              : `bg-slate-800/70 ${colors.border} border-opacity-30 hover:border-opacity-100 hover:scale-105`
+                          }
+                          ${isSelected ? 'ring-2 ring-amber-400 scale-105' : ''}
+                        `}
+                      >
+                        {/* Puzzle number */}
+                        <span className={`text-sm font-bold ${
+                          !isAvailable 
+                            ? 'text-slate-600' 
+                            : isCompleted 
+                              ? colors.text 
+                              : 'text-slate-300'
+                        }`}>
+                          {puzzleNumber}
+                        </span>
+                        
+                        {/* Status indicator */}
+                        {!isAvailable ? (
+                          <Lock size={8} className="text-slate-600 mt-0.5" />
+                        ) : isCompleted ? (
+                          <Check size={10} className={`${colors.text} mt-0.5`} />
+                        ) : (
+                          <div className={`w-1 h-1 rounded-full mt-0.5 ${colors.dot}`} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Selected Puzzle Info - Compact */}
+            {selectedPuzzle && (
+              <div className="mt-3 p-3 rounded-xl bg-slate-900/90 border border-amber-500/30">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-bold text-white">#{selectedPuzzle.puzzle_number}</span>
+                      {selectedPuzzle.name && (
+                        <span className="text-amber-400/80 text-sm truncate">{selectedPuzzle.name}</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Completion badge */}
+                  {completedPuzzles.has(selectedPuzzle.puzzle_number) && (
+                    <Check size={16} className="text-green-400 flex-shrink-0" />
+                  )}
+                </div>
+                
+                <button
+                  onClick={handleStartPuzzle}
+                  className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold rounded-lg hover:from-amber-400 hover:to-orange-500 transition-all shadow-lg shadow-amber-500/30 active:scale-[0.98] text-sm"
+                >
+                  {completedPuzzles.has(selectedPuzzle.puzzle_number) ? 'PLAY AGAIN' : 'START PUZZLE'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
