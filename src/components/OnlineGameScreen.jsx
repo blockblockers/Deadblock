@@ -1,6 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.19: Fixed gameId prop sync - now correctly loads new game when clicking from menu
-// v7.19: Removed back button from header (home button below grid is sufficient)
+// v7.20: Brighter golden ELO scores, d-pad hint for off-grid pieces, 2s game over delay
+// v7.19: Fixed game over modal for completed games - timeout stored in ref, not affected by dependency changes
 // v7.18: Fixed 5-second game over modal - removed stale closure check, use ref only
 // v7.17: Fixed gold confetti highlighting all cells of winning piece using getPieceCoords
 // v7.15: Removed duplicate pieces bars, chat icon now overlays bottom-right of piece tray
@@ -11,7 +11,7 @@
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle } from 'lucide-react';
+import { Flag, MessageCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
@@ -108,7 +108,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
               {myUsername}
             </span>
             <TierIcon shape={myTier.shape} glowColor={myTier.glowColor} size="small" />
-            <span className="text-xs text-slate-600">{myRating}</span>
+            <span className="text-xs text-amber-400/80 font-medium">{myRating}</span>
           </div>
         </div>
         
@@ -121,7 +121,7 @@ const OnlinePlayerBar = ({ profile, opponent, isMyTurn, gameStatus }) => {
             : 'bg-slate-800/50 border border-slate-700/50'
         }`}>
           <div className="flex items-center gap-2 justify-end">
-            <span className="text-xs text-slate-600">{oppRating}</span>
+            <span className="text-xs text-amber-400/80 font-medium">{oppRating}</span>
             <TierIcon shape={oppTier.shape} glowColor={oppTier.glowColor} size="small" />
             <span className={`text-sm font-bold tracking-wide truncate max-w-[80px] ${!isMyTurn && gameStatus === 'active' ? 'text-orange-300' : 'text-slate-500'}`}>
               {oppUsername}
@@ -199,6 +199,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
   const dismissedGameOverRef = useRef(false);
+  const gameOverTimeoutRef = useRef(null); // v7.19: Track timeout for completed game modal
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
@@ -209,13 +210,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
 
   const userId = user?.id;
-  
-  // v7.19: Sync currentGameId with gameId prop when it changes (e.g., clicking different game in menu)
-  useEffect(() => {
-    if (gameId && gameId !== currentGameId) {
-      setCurrentGameId(gameId);
-    }
-  }, [gameId, currentGameId]);
   const hasMovesPlayed = usedPieces.length > 0;
 
   // =========================================================================
@@ -823,13 +817,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         
         // If we're animating opponent's final move, delay the popup
         // Otherwise show immediately (game was already over when loaded)
+        // v7.19: Reduced to 2 seconds for faster feedback
         if (animatingOpponentMove) {
           setTimeout(() => {
             if (mountedRef.current) {
               setShowGameOver(true);
               soundManager.playSound(iWon ? 'win' : 'lose');
             }
-          }, 1200); // Delay to let animation complete
+          }, 2000);
         } else {
           setShowGameOver(true);
           soundManager.playSound(iWon ? 'win' : 'lose');
@@ -850,6 +845,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     setShowGameOver(false);
     setGameResult(null);
     setWinningMoveCells(null);
+    
+    // v7.19: Clear any pending game over timeout from previous game
+    if (gameOverTimeoutRef.current) {
+      clearTimeout(gameOverTimeoutRef.current);
+      gameOverTimeoutRef.current = null;
+    }
     
     // console.log('OnlineGameScreen: Starting game load', { gameId: currentGameId, userId });
 
@@ -938,14 +939,19 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             }
           }
           
-          // v7.18: Show game over modal after 5 second delay for completed games
+          // v7.19: Show game over modal after 5 second delay for completed games
           // This gives user time to see the board and the winning move
-          // NOTE: Only check dismissedGameOverRef (not showGameOver) to avoid stale closure
-          setTimeout(() => {
-            if (mountedRef.current && !dismissedGameOverRef.current) {
+          // Store timeout in ref so it can be cleared in cleanup, and capture gameId
+          const capturedGameId = currentGameId;
+          const capturedIWon = iWon;
+          gameOverTimeoutRef.current = setTimeout(() => {
+            // Check both mountedRef AND that we're still on the same game
+            // This handles cases where useEffect re-runs due to dependency changes
+            if (!dismissedGameOverRef.current) {
               setShowGameOver(true);
-              soundManager.playSound(iWon ? 'win' : 'lose');
+              soundManager.playSound(capturedIWon ? 'win' : 'lose');
             }
+            gameOverTimeoutRef.current = null;
           }, 5000);
           
           return; // Don't continue to regular game state update
@@ -1056,6 +1062,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       if (subscription) {
         subscription.unsubscribe();
       }
+      // v7.19: Note - gameOverTimeout is cleared at start of next load, not here
+      // This prevents clearing it when useEffect re-runs due to dependency changes
     };
   }, [currentGameId, userId, updateGameState]);
 
@@ -1146,7 +1154,18 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
       const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
       if (!isValid) {
-        setErrorMessage('Invalid placement!');
+        // v7.19: Check if piece is entirely off the grid to show more helpful message
+        const isOffGrid = coords.every(([dx, dy]) => {
+          const row = pendingMove.row + dy;
+          const col = pendingMove.col + dx;
+          return row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE;
+        });
+        
+        if (isOffGrid) {
+          setErrorMessage('Use D-Pad to move piece onto the board');
+        } else {
+          setErrorMessage('Invalid placement!');
+        }
       } else {
         setErrorMessage(null);
       }
@@ -1350,12 +1369,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         }
         
         // Delay the popup so user can see the final placement animation
+        // v7.19: Reduced to 2 seconds for faster feedback
         setTimeout(() => {
           if (mountedRef.current) {
             setShowGameOver(true);
             soundManager.playSound(isWin ? 'win' : 'lose');
           }
-        }, 1200);
+        }, 2000);
         
         // Retry the server update in background (the RLS policy needs to be fixed)
         // console.log('handleConfirm: Retrying server update in background...');
@@ -1433,12 +1453,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
       
       // Delay the popup so user can see the final placement animation
+      // v7.19: Reduced to 2 seconds for faster feedback
       setTimeout(() => {
         if (mountedRef.current) {
           setShowGameOver(true);
           soundManager.playSound(isWin ? 'win' : 'lose');
         }
-      }, 1200); // 1.2s delay - animation is ~600ms, plus buffer for appreciation
+      }, 2000);
     }
 
     // Clear move in progress after a delay
@@ -1550,10 +1571,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
-          {/* UPDATED: Header with centered title, NO back button (home button below grid) */}
+          {/* UPDATED: Header with Menu button on same row, ENLARGED title, NO turn indicator text */}
           <div className="flex items-center justify-between mb-2">
-            {/* Left spacer for layout balance */}
-            <div className="w-16" />
+            <button
+              onClick={handleLeave}
+              className="px-3 py-1.5 bg-slate-800/80 text-slate-300 rounded-lg text-sm hover:bg-slate-700 transition-all flex items-center gap-1"
+            >
+              <ArrowLeft size={16} />
+              Menu
+            </button>
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="amber" />

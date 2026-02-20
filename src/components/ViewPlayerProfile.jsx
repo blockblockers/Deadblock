@@ -1,17 +1,17 @@
 // ViewPlayerProfile - View another player's profile
+// v7.21: Enhanced stats display with all non-online stats (AI breakdown, puzzles, streak, weekly, creator)
+// v7.20: Refactored - FinalBoardView now handled by parent OnlineMenu via onViewGame callback
 // v7.19: Hide modal when FinalBoardView shown (prevents visual interference), robust mobile scroll
 // v7.18: Fixed scroll - removed flex layout, use explicit overflow-y-auto with max-height
 // v7.12: Added full stats display (AI wins, puzzle stats) for all players
 // v7.12: Added player_stats loading from profiles table
 // v7.12: Final Board View now fetches moves for full replay functionality
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame } from 'lucide-react';
+import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, ChevronDown, ChevronUp, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame, Medal } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import achievementService from '../services/achievementService';
 import TierIcon from './TierIcon';
-import FinalBoardView from './FinalBoardView';
-import StreakDisplay from './StreakDisplay';
 import { soundManager } from '../utils/soundManager';
 
 // Supabase config for direct fetch
@@ -126,7 +126,8 @@ const ViewPlayerProfile = ({
   currentUserId, 
   onInviteToGame, 
   onClose,
-  onViewPlayer 
+  onViewPlayer,
+  onViewGame
 }) => {
   const [profile, setProfile] = useState(playerData || null);
   const [loading, setLoading] = useState(!playerData);
@@ -139,10 +140,14 @@ const ViewPlayerProfile = ({
   const [showAchievements, setShowAchievements] = useState(false);
   const [calculatedStats, setCalculatedStats] = useState({ wins: 0, totalGames: 0 });
   const [headToHead, setHeadToHead] = useState(null);
-  const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
-  const [loadingMoves, setLoadingMoves] = useState(false);
-  const [gameMoves, setGameMoves] = useState([]);
   const [playerStats, setPlayerStats] = useState(null); // v7.12: Full stats from profiles table
+  
+  // v7.21: Additional stats matching PlayerStatsModal
+  const [showAIDetails, setShowAIDetails] = useState(false);
+  const [showPuzzleDetails, setShowPuzzleDetails] = useState(false);
+  const [playStreak, setPlayStreak] = useState({ current: 0, longest: 0 });
+  const [weeklyStats, setWeeklyStats] = useState({ first: 0, second: 0, third: 0, total: 0 });
+  const [creatorStats, setCreatorStats] = useState({ totalCompleted: 0, totalPuzzles: 100 });
 
   // Use calculated stats from actual games (more accurate than profile.games_won)
   const displayWins = calculatedStats.totalGames > 0 ? calculatedStats.wins : (profile?.games_won || 0);
@@ -160,6 +165,11 @@ const ViewPlayerProfile = ({
       setRecentGames([]);
       setHeadToHead(null);
       setPlayerStats(null);
+      setShowAIDetails(false);
+      setShowPuzzleDetails(false);
+      setPlayStreak({ current: 0, longest: 0 });
+      setWeeklyStats({ first: 0, second: 0, third: 0, total: 0 });
+      setCreatorStats({ totalCompleted: 0, totalPuzzles: 100 });
       loadPlayerData();
     }
   }, [playerId]);
@@ -303,28 +313,72 @@ const ViewPlayerProfile = ({
           console.log('Friend status not available');
         }
       }
+      
+      // v7.21: Fetch additional stats (play streak, weekly challenge, creator puzzles)
+      const headers = getAuthHeaders();
+      if (headers) {
+        // Play streak
+        try {
+          const streakRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/play_streaks?user_id=eq.${playerId}&select=current_streak,longest_streak`,
+            { headers }
+          );
+          if (streakRes.ok) {
+            const streakData = await streakRes.json();
+            if (streakData && streakData.length > 0) {
+              setPlayStreak({
+                current: streakData[0].current_streak || 0,
+                longest: streakData[0].longest_streak || 0
+              });
+            }
+          }
+        } catch (e) {
+          console.log('Play streak not available');
+        }
+        
+        // Weekly challenge stats - count podium finishes
+        try {
+          const weeklyRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/weekly_submissions?user_id=eq.${playerId}&final_rank=lte.3&select=final_rank`,
+            { headers }
+          );
+          if (weeklyRes.ok) {
+            const weeklyData = await weeklyRes.json();
+            const counts = { first: 0, second: 0, third: 0, total: 0 };
+            weeklyData.forEach(sub => {
+              if (sub.final_rank === 1) counts.first++;
+              else if (sub.final_rank === 2) counts.second++;
+              else if (sub.final_rank === 3) counts.third++;
+              counts.total++;
+            });
+            setWeeklyStats(counts);
+          }
+        } catch (e) {
+          console.log('Weekly stats not available');
+        }
+        
+        // Creator puzzle completions
+        try {
+          const creatorRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/creator_puzzle_completions?user_id=eq.${playerId}&select=puzzle_number`,
+            { headers }
+          );
+          if (creatorRes.ok) {
+            const creatorData = await creatorRes.json();
+            setCreatorStats({
+              totalCompleted: creatorData?.length || 0,
+              totalPuzzles: 100
+            });
+          }
+        } catch (e) {
+          console.log('Creator puzzle stats not available');
+        }
+      }
     } catch (err) {
       console.error('Error loading player data:', err);
     }
     
     setLoading(false);
-  };
-
-  // Handle opening Final Board View - fetch moves first (v7.12)
-  const handleOpenFinalBoardView = async (game) => {
-    soundManager.playButtonClick();
-    setLoadingMoves(true);
-    setSelectedGameForFinalView(game);
-    
-    try {
-      const moves = await fetchGameMoves(game.id);
-      setGameMoves(moves);
-    } catch (err) {
-      console.error('Error fetching moves:', err);
-      setGameMoves([]);
-    }
-    
-    setLoadingMoves(false);
   };
 
   const handleSendFriendRequest = async () => {
@@ -381,43 +435,40 @@ const ViewPlayerProfile = ({
 
   return (
     <>
-      {/* Only render ViewPlayerProfile content when FinalBoardView is NOT shown */}
-      {!selectedGameForFinalView && (
-        <>
-          {/* Backdrop - completely separate, no touch interference */}
-          <div 
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm"
-            style={{ zIndex: 50 }}
-            onClick={onClose}
-          />
-          
-          {/* Modal - fixed positioning with explicit dimensions */}
-          <div 
-            className="fixed bg-slate-900 rounded-xl border shadow-2xl"
-            style={{ 
-              zIndex: 51,
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 'calc(100% - 32px)',
-              maxWidth: '448px',
-              maxHeight: 'calc(100vh - 32px)',
-              maxHeight: 'calc(100dvh - 32px)',
-              borderColor: hexToRgba(glowColor, 0.3),
-              boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Header - Fixed at top */}
-            <div 
-              className="p-4 border-b flex items-center justify-between"
-              style={{ 
-                borderColor: hexToRgba(glowColor, 0.2),
-                flexShrink: 0,
-              }}
+      {/* Backdrop - completely separate, no touch interference */}
+      <div 
+        className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+        style={{ zIndex: 50 }}
+        onClick={onClose}
+      />
+      
+      {/* Modal - fixed positioning with explicit dimensions */}
+      <div 
+        className="fixed bg-slate-900 rounded-xl border shadow-2xl"
+        style={{ 
+          zIndex: 51,
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 'calc(100% - 32px)',
+          maxWidth: '448px',
+          maxHeight: 'calc(100vh - 32px)',
+          maxHeight: 'calc(100dvh - 32px)',
+          borderColor: hexToRgba(glowColor, 0.3),
+          boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header - Fixed at top */}
+        <div 
+          className="p-4 border-b flex items-center justify-between"
+          style={{ 
+            borderColor: hexToRgba(glowColor, 0.2),
+            flexShrink: 0,
+          }}
             >
               <h2 className="text-lg font-bold text-white">Player Profile</h2>
               <button
@@ -509,13 +560,8 @@ const ViewPlayerProfile = ({
                   </div>
                 </div>
 
-                {/* v7.12: Play Streak */}
-                <div className="mb-4">
-                  <StreakDisplay userId={playerId} variant="badge" />
-                </div>
-
-                {/* v7.12: Full Stats Section - Always visible */}
-                {playerStats && (totalAiGames > 0 || totalPuzzlesSolved > 0 || playerStats.speed_best_streak > 0) && (
+                {/* v7.21: Full Stats Section - Enhanced with dropdowns */}
+                {playerStats && (
                   <div 
                     className="rounded-xl p-4 mb-4"
                     style={{ 
@@ -527,67 +573,156 @@ const ViewPlayerProfile = ({
                       <Target size={16} className="text-cyan-400" />
                       <span className="font-bold text-white">Player Stats</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* AI Stats */}
-                      {totalAiGames > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Bot size={14} className="text-purple-400" />
-                            <span className="text-slate-400 text-xs">AI Battles</span>
-                          </div>
-                          <div className="text-white font-bold">{totalAiWins} / {totalAiGames}</div>
-                          <div className="text-slate-500 text-xs">wins</div>
+                    
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      {/* AI Battles */}
+                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Bot size={12} className="text-purple-400" />
+                          <span className="text-slate-400 text-[10px]">AI Battles</span>
                         </div>
-                      )}
+                        <div className="text-white font-bold text-sm">{totalAiWins} / {totalAiGames}</div>
+                        <div className="text-slate-500 text-[10px]">wins</div>
+                      </div>
                       
-                      {/* Puzzle Stats */}
-                      {totalPuzzlesSolved > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Zap size={14} className="text-green-400" />
-                            <span className="text-slate-400 text-xs">Puzzles</span>
-                          </div>
-                          <div className="text-white font-bold">{totalPuzzlesSolved}</div>
-                          <div className="text-slate-500 text-xs">solved</div>
+                      {/* Puzzles Solved (generated + creator) */}
+                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Zap size={12} className="text-green-400" />
+                          <span className="text-slate-400 text-[10px]">Puzzles</span>
                         </div>
-                      )}
+                        <div className="text-white font-bold text-sm">{totalPuzzlesSolved + creatorStats.totalCompleted}</div>
+                        <div className="text-slate-500 text-[10px]">solved</div>
+                      </div>
                       
-                      {/* Speed Streak */}
-                      {playerStats.speed_best_streak > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Flame size={14} className="text-orange-400" />
-                            <span className="text-slate-400 text-xs">Speed Streak</span>
-                          </div>
-                          <div className="text-white font-bold">{playerStats.speed_best_streak}</div>
-                          <div className="text-slate-500 text-xs">best</div>
+                      {/* Speed Best */}
+                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Zap size={12} className="text-orange-400" />
+                          <span className="text-slate-400 text-[10px]">Speed Best</span>
                         </div>
-                      )}
+                        <div className="text-white font-bold text-sm">{playerStats.speed_best_streak || 0}</div>
+                        <div className="text-slate-500 text-[10px]">streak</div>
+                      </div>
                       
-                      {/* Local Games */}
-                      {playerStats.local_games_played > 0 && (
-                        <div 
-                          className="rounded-lg p-3"
-                          style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <Gamepad2 size={14} className="text-pink-400" />
-                            <span className="text-slate-400 text-xs">Local Games</span>
-                          </div>
-                          <div className="text-white font-bold">{playerStats.local_games_played}</div>
-                          <div className="text-slate-500 text-xs">played</div>
+                      {/* Play Streak */}
+                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Flame size={12} className="text-red-400" />
+                          <span className="text-slate-400 text-[10px]">Play Streak</span>
                         </div>
-                      )}
+                        <div className="text-white font-bold text-sm">{playStreak.current} / {playStreak.longest}</div>
+                        <div className="text-slate-500 text-[10px]">current / best</div>
+                      </div>
                     </div>
+                    
+                    {/* AI Wins Dropdown */}
+                    {totalAiGames > 0 && (
+                      <>
+                        <button
+                          onClick={() => setShowAIDetails(!showAIDetails)}
+                          className="w-full flex items-center justify-between p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
+                        >
+                          <span className="text-purple-400 text-xs font-medium">AI Wins by Difficulty</span>
+                          {showAIDetails ? <ChevronUp size={14} className="text-purple-400" /> : <ChevronDown size={14} className="text-purple-400" />}
+                        </button>
+                        {showAIDetails && (
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                              <div className="text-green-400 text-sm font-bold">{playerStats.ai_easy_wins || 0}</div>
+                              <div className="text-[10px] text-slate-500">Beginner</div>
+                              <div className="text-[9px] text-slate-600">{(playerStats.ai_easy_wins || 0) + (playerStats.ai_easy_losses || 0)} games</div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                              <div className="text-amber-400 text-sm font-bold">{playerStats.ai_medium_wins || 0}</div>
+                              <div className="text-[10px] text-slate-500">Intermediate</div>
+                              <div className="text-[9px] text-slate-600">{(playerStats.ai_medium_wins || 0) + (playerStats.ai_medium_losses || 0)} games</div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                              <div className="text-purple-400 text-sm font-bold">{playerStats.ai_hard_wins || 0}</div>
+                              <div className="text-[10px] text-slate-500">Expert</div>
+                              <div className="text-[9px] text-slate-600">{(playerStats.ai_hard_wins || 0) + (playerStats.ai_hard_losses || 0)} games</div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Generated Puzzles Dropdown */}
+                    {totalPuzzlesSolved > 0 && (
+                      <>
+                        <button
+                          onClick={() => setShowPuzzleDetails(!showPuzzleDetails)}
+                          className="w-full mt-2 flex items-center justify-between p-2 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                        >
+                          <span className="text-green-400 text-xs font-medium">Generated Puzzles by Difficulty</span>
+                          {showPuzzleDetails ? <ChevronUp size={14} className="text-green-400" /> : <ChevronDown size={14} className="text-green-400" />}
+                        </button>
+                        {showPuzzleDetails && (
+                          <div className="mt-2 grid grid-cols-3 gap-2">
+                            <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                              <div className="text-green-400 text-sm font-bold">{playerStats.puzzles_easy_solved || 0}</div>
+                              <div className="text-[10px] text-slate-500">Beginner</div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                              <div className="text-amber-400 text-sm font-bold">{playerStats.puzzles_medium_solved || 0}</div>
+                              <div className="text-[10px] text-slate-500">Intermediate</div>
+                            </div>
+                            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                              <div className="text-purple-400 text-sm font-bold">{playerStats.puzzles_hard_solved || 0}</div>
+                              <div className="text-[10px] text-slate-500">Expert</div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Weekly Challenge */}
+                    {weeklyStats.total > 0 && (
+                      <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Clock size={12} className="text-amber-400" />
+                          <span className="text-amber-400 text-xs font-medium">Weekly Challenge Podiums</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="text-center">
+                            <Medal size={14} className="text-amber-400 mx-auto mb-0.5" />
+                            <div className="text-amber-400 font-bold text-sm">{weeklyStats.first}</div>
+                            <div className="text-[9px] text-slate-500">1st</div>
+                          </div>
+                          <div className="text-center">
+                            <Medal size={14} className="text-slate-300 mx-auto mb-0.5" />
+                            <div className="text-slate-300 font-bold text-sm">{weeklyStats.second}</div>
+                            <div className="text-[9px] text-slate-500">2nd</div>
+                          </div>
+                          <div className="text-center">
+                            <Medal size={14} className="text-amber-600 mx-auto mb-0.5" />
+                            <div className="text-amber-600 font-bold text-sm">{weeklyStats.third}</div>
+                            <div className="text-[9px] text-slate-500">3rd</div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Creator Puzzles */}
+                    {creatorStats.totalCompleted > 0 && (
+                      <div className="mt-3 p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <LayoutGrid size={12} className="text-cyan-400" />
+                            <span className="text-cyan-400 text-xs font-medium">Creator Puzzles</span>
+                          </div>
+                          <span className="text-cyan-400 text-xs font-bold">{creatorStats.totalCompleted}/{creatorStats.totalPuzzles}</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-700/80 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-cyan-500 to-sky-500 transition-all"
+                            style={{ width: `${(creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -692,7 +827,7 @@ const ViewPlayerProfile = ({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleOpenFinalBoardView(game);
+                                  onViewGame?.(game);
                                 }}
                                 className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 rounded-md hover:bg-purple-500/30 transition-colors text-xs"
                                 title="View final board"
@@ -781,32 +916,6 @@ const ViewPlayerProfile = ({
             </div>
           )}
         </div>
-        </>
-      )}
-
-      {/* Final Board View Modal */}
-      {selectedGameForFinalView && (
-        <FinalBoardView
-          onClose={() => {
-            setSelectedGameForFinalView(null);
-            setGameMoves([]);
-          }}
-          board={selectedGameForFinalView.board}
-          boardPieces={selectedGameForFinalView.board_pieces}
-          moveHistory={gameMoves}
-          isLoadingMoves={loadingMoves}
-          player1={selectedGameForFinalView.player1}
-          player2={selectedGameForFinalView.player2}
-          player1Name={selectedGameForFinalView.player1?.username || selectedGameForFinalView.player1?.display_name || 'Player 1'}
-          player2Name={selectedGameForFinalView.player2?.username || selectedGameForFinalView.player2?.display_name || 'Player 2'}
-          player1Rating={selectedGameForFinalView.player1?.rating || selectedGameForFinalView.player1?.elo_rating || 1200}
-          player2Rating={selectedGameForFinalView.player2?.rating || selectedGameForFinalView.player2?.elo_rating || 1200}
-          winner={selectedGameForFinalView.winner_id === selectedGameForFinalView.player1_id ? 'player1' : 
-                  selectedGameForFinalView.winner_id === selectedGameForFinalView.player2_id ? 'player2' : null}
-          winnerId={selectedGameForFinalView.winner_id}
-          gameDate={selectedGameForFinalView.updated_at || selectedGameForFinalView.created_at}
-        />
-      )}
     </>
   );
 };

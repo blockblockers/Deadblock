@@ -1,7 +1,8 @@
 // Welcome Modal for new users
+// v7.13: Added Game Modes step with Creator Puzzles, Online, and VS AI info
 // v7.12: Added onComplete callback to chain to HowToPlayModal tutorial
 import React, { useState } from 'react';
-import { X, Sparkles, User, Gamepad2, Trophy, Puzzle, Users, Pencil, ChevronRight, Zap } from 'lucide-react';
+import { X, Sparkles, User, Gamepad2, Trophy, Puzzle, Users, Pencil, ChevronRight, Zap, LayoutGrid } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 
 const WelcomeModal = ({ username, onClose, onEditUsername, onComplete }) => {
@@ -22,6 +23,42 @@ const WelcomeModal = ({ username, onClose, onEditUsername, onComplete }) => {
             <p className="text-sm text-slate-400">
               Your goal: <span className="text-white font-medium">Place pieces strategically to block your opponent</span> from making any moves.
             </p>
+          </div>
+        </div>
+      )
+    },
+    {
+      icon: Gamepad2,
+      iconColor: 'text-purple-400',
+      iconBg: 'from-purple-500 to-pink-600',
+      title: 'Game Modes',
+      content: (
+        <div className="space-y-3">
+          <p className="text-slate-300 text-sm">
+            Choose your challenge:
+          </p>
+          <div className="space-y-2">
+            <div className="bg-slate-800/50 rounded-lg p-3 border border-cyan-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <Users size={14} className="text-cyan-400" />
+                <span className="text-cyan-400 font-bold text-sm">Online</span>
+              </div>
+              <p className="text-xs text-slate-400">Battle players worldwide in ranked matches</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-3 border border-purple-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <Puzzle size={14} className="text-purple-400" />
+                <span className="text-purple-400 font-bold text-sm">Creator Puzzles</span>
+              </div>
+              <p className="text-xs text-slate-400">100 hand-crafted puzzles with exactly one winning move</p>
+            </div>
+            <div className="bg-slate-800/50 rounded-lg p-3 border border-green-500/20">
+              <div className="flex items-center gap-2 mb-1">
+                <Zap size={14} className="text-green-400" />
+                <span className="text-green-400 font-bold text-sm">VS A.I. & Puzzles</span>
+              </div>
+              <p className="text-xs text-slate-400">Practice against AI or solve generated puzzles</p>
+            </div>
           </div>
         </div>
       )

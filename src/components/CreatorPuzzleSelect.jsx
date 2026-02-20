@@ -1,7 +1,7 @@
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
 // v1.5: Enhanced layout - larger title, subtitle, pagination, themed puzzle info
 import { useState, useEffect } from 'react';
-import { Check, Lock, Loader, Trophy, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, Lock, Loader, Trophy, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
@@ -468,8 +468,9 @@ const CreatorPuzzleSelect = ({
             {/* Back to Menu Button */}
             <button
               onClick={handleBack}
-              className="w-full mt-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-all border border-slate-500/50 text-sm"
+              className="w-full mt-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-all border border-slate-500/50 text-sm flex items-center justify-center gap-2"
             >
+              <ArrowLeft size={16} />
               BACK TO MENU
             </button>
           </div>

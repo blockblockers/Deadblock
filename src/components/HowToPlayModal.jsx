@@ -1,8 +1,9 @@
 // HowToPlayModal.jsx - Tutorial modal for new players
+// v7.12: Added Creator Puzzles step explaining 100 hand-crafted puzzles
 // v7.11: Shows game rules and how to play when new user joins via invite
 // UPDATED: Removed "Control the center early" strategy tip
 import { useState } from 'react';
-import { X, ChevronLeft, ChevronRight, Gamepad2, Target, RotateCcw, Move, Trophy, Lightbulb } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Gamepad2, Target, RotateCcw, Move, Trophy, Lightbulb, Puzzle } from 'lucide-react';
 
 const TUTORIAL_STEPS = [
   {
@@ -104,6 +105,31 @@ const TUTORIAL_STEPS = [
             <span>Save flexible pieces for later</span>
           </div>
         </div>
+      </div>
+    )
+  },
+  {
+    title: "Creator Puzzles",
+    icon: Puzzle,
+    color: "purple",
+    content: (
+      <div className="space-y-3">
+        <p>Test your skills with <span className="text-purple-300 font-semibold">100 hand-crafted puzzles</span>!</p>
+        <div className="bg-slate-800/50 rounded-lg p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-purple-400">•</span>
+            <span>Each puzzle has <strong>exactly one winning move</strong></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-purple-400">•</span>
+            <span>4 difficulty tiers: Beginner → Expert</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-purple-400">•</span>
+            <span>Find the move that blocks the AI completely</span>
+          </div>
+        </div>
+        <p className="text-sm text-slate-400">Access from Single Player → Creator Puzzles</p>
       </div>
     )
   },

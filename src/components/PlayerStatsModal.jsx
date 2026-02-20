@@ -1,4 +1,5 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
+// v7.20: Fixed double # in rank, added AI/puzzle detail dropdowns, puzzles solved includes both types
 // v7.19: Fixed scroll - separate backdrop from modal container for proper touch handling
 // v7.17: Improved scroll with touchAction, backdrop click to close
 // v7.14: Added play streak display, leaderboard rank, fixed scroll
@@ -132,6 +133,10 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
     totalCompleted: 0,
     totalPuzzles: 100
   });
+  
+  // Dropdown states for detailed breakdowns
+  const [showAIDetails, setShowAIDetails] = useState(false);
+  const [showPuzzleDetails, setShowPuzzleDetails] = useState(false);
   
   const scrollContainerRef = useRef(null);
   
@@ -429,7 +434,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 {leaderboardRank && (
                   <span className="flex items-center gap-1 text-amber-400 text-xs">
                     <Hash size={12} />
-                    #{leaderboardRank} Global
+                    {leaderboardRank} Global
                   </span>
                 )}
               </div>
@@ -498,7 +503,8 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                   <StatCard 
                     icon={Target} 
                     label="Puzzles Solved" 
-                    value={stats?.puzzleTotalSolved || 0}
+                    value={(stats?.puzzleTotalSolved || 0) + (creatorStats.totalCompleted || 0)}
+                    subValue="generated + creator"
                     color="green"
                   />
                   <StatCard 
@@ -516,6 +522,59 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     color="orange"
                   />
                 </div>
+                
+                {/* AI Wins Dropdown */}
+                <button
+                  onClick={() => setShowAIDetails(!showAIDetails)}
+                  className="w-full mt-3 flex items-center justify-between p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
+                >
+                  <span className="text-purple-400 text-xs font-medium">AI Wins by Difficulty</span>
+                  {showAIDetails ? <ChevronUp size={14} className="text-purple-400" /> : <ChevronDown size={14} className="text-purple-400" />}
+                </button>
+                {showAIDetails && (
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                      <div className="text-green-400 text-sm font-bold">{stats?.ai_easy_wins || 0}</div>
+                      <div className="text-[10px] text-slate-500">Beginner</div>
+                      <div className="text-[9px] text-slate-600">{(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)} games</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                      <div className="text-amber-400 text-sm font-bold">{stats?.ai_medium_wins || 0}</div>
+                      <div className="text-[10px] text-slate-500">Intermediate</div>
+                      <div className="text-[9px] text-slate-600">{(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)} games</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                      <div className="text-purple-400 text-sm font-bold">{stats?.ai_hard_wins || 0}</div>
+                      <div className="text-[10px] text-slate-500">Expert</div>
+                      <div className="text-[9px] text-slate-600">{(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)} games</div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Generated Puzzles Dropdown */}
+                <button
+                  onClick={() => setShowPuzzleDetails(!showPuzzleDetails)}
+                  className="w-full mt-3 flex items-center justify-between p-2 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                >
+                  <span className="text-green-400 text-xs font-medium">Generated Puzzles by Difficulty</span>
+                  {showPuzzleDetails ? <ChevronUp size={14} className="text-green-400" /> : <ChevronDown size={14} className="text-green-400" />}
+                </button>
+                {showPuzzleDetails && (
+                  <div className="mt-2 grid grid-cols-3 gap-2">
+                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                      <div className="text-green-400 text-sm font-bold">{stats?.puzzles_easy_solved || 0}</div>
+                      <div className="text-[10px] text-slate-500">Beginner</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                      <div className="text-amber-400 text-sm font-bold">{stats?.puzzles_medium_solved || 0}</div>
+                      <div className="text-[10px] text-slate-500">Intermediate</div>
+                    </div>
+                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                      <div className="text-purple-400 text-sm font-bold">{stats?.puzzles_hard_solved || 0}</div>
+                      <div className="text-[10px] text-slate-500">Expert</div>
+                    </div>
+                  </div>
+                )}
               </Section>
               
               {/* Play Streak Section - NEW */}

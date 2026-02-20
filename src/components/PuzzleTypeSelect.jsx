@@ -98,47 +98,50 @@ const PentominoShowcase = () => {
 
   return (
     <div className="flex flex-col items-center mb-4">
-      {/* Piece display area */}
-      <div 
-        className={`relative p-4 rounded-xl bg-slate-900/60 border border-slate-700/50 transition-all duration-300 ${
-          isTransitioning ? 'opacity-0 scale-90' : 'opacity-100 scale-100'
-        }`}
-        style={{
-          boxShadow: `0 0 30px ${piece.color}40, inset 0 0 20px ${piece.color}20`
-        }}
-      >
-        {/* Piece grid */}
+      {/* Fixed-size container to prevent layout shift */}
+      <div className="w-24 h-24 flex items-center justify-center">
+        {/* Piece display area */}
         <div 
-          className="grid gap-0.5"
-          style={{ 
-            gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
-            gridTemplateRows: `repeat(${rows}, ${cellSize}px)`
+          className={`relative p-4 rounded-xl bg-slate-900/60 border border-slate-700/50 transition-all duration-300 ${
+            isTransitioning ? 'opacity-0 scale-90' : 'opacity-100 scale-100'
+          }`}
+          style={{
+            boxShadow: `0 0 30px ${piece.color}40, inset 0 0 20px ${piece.color}20`
           }}
         >
-          {piece.shape.flatMap((row, rowIdx) => 
-            row.map((cell, colIdx) => (
-              <div
-                key={`${rowIdx}-${colIdx}`}
-                className="rounded-sm transition-all"
-                style={{
-                  width: cellSize,
-                  height: cellSize,
-                  backgroundColor: cell ? piece.color : 'transparent',
-                  boxShadow: cell ? `0 0 8px ${piece.color}, inset 0 0 4px rgba(255,255,255,0.3)` : 'none',
-                }}
-              />
-            ))
-          )}
-        </div>
+          {/* Piece grid */}
+          <div 
+            className="grid gap-0.5"
+            style={{ 
+              gridTemplateColumns: `repeat(${cols}, ${cellSize}px)`,
+              gridTemplateRows: `repeat(${rows}, ${cellSize}px)`
+            }}
+          >
+            {piece.shape.flatMap((row, rowIdx) => 
+              row.map((cell, colIdx) => (
+                <div
+                  key={`${rowIdx}-${colIdx}`}
+                  className="rounded-sm transition-all"
+                  style={{
+                    width: cellSize,
+                    height: cellSize,
+                    backgroundColor: cell ? piece.color : 'transparent',
+                    boxShadow: cell ? `0 0 8px ${piece.color}, inset 0 0 4px rgba(255,255,255,0.3)` : 'none',
+                  }}
+                />
+              ))
+            )}
+          </div>
 
-        {/* Glowing ring animation */}
-        <div 
-          className="absolute inset-0 rounded-xl animate-pulse"
-          style={{ 
-            boxShadow: `0 0 20px ${piece.color}60`,
-            animationDuration: '2s'
-          }}
-        />
+          {/* Glowing ring animation */}
+          <div 
+            className="absolute inset-0 rounded-xl animate-pulse"
+            style={{ 
+              boxShadow: `0 0 20px ${piece.color}60`,
+              animationDuration: '2s'
+            }}
+          />
+        </div>
       </div>
 
       {/* Piece name */}

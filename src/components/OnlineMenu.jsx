@@ -702,7 +702,8 @@ const OnlineMenu = ({
       ]);
       
       setReceivedInvites(received.data || []);
-      setSentInvites(sent.data || []);
+      // v7.19: Filter sent invites to only show truly pending ones (not accepted/with game_id)
+      setSentInvites((sent.data || []).filter(i => i.status === 'pending' && !i.game_id));
       // inviteService now returns properly formatted data with recipientName and inviteLink
       // Filter out links that have a game_id (game already started)
       const activeLinks = (links.data || []).filter(link => !link.game_id);
@@ -2692,6 +2693,7 @@ const OnlineMenu = ({
           playerId={viewingPlayerId}
           playerData={viewingPlayerData}
           currentUserId={profile?.id}
+          onViewGame={handleOpenFinalBoardView}
           onInviteToGame={async (player) => {
             const { error } = await inviteService.sendInvite(profile.id, player.id);
             if (!error) {

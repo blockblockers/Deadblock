@@ -1,4 +1,5 @@
 // GameOverModal.jsx - Game over modal with animations
+// v7.8: Removed duplicate opponent name badge (already in subtitle)
 // v7.7: REMOVED View Final Board button from all game modes
 // Shows AI difficulty level for AI games
 import { useState, useEffect, useMemo } from 'react';
@@ -375,14 +376,7 @@ const GameOverModal = ({
           </div>
         )}
 
-        {/* Opponent name badge for online games */}
-        {isOnline && opponentName && (
-          <div className="flex justify-center mb-4">
-            <div className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/30 text-amber-300 border border-amber-500/50">
-              vs {opponentName}
-            </div>
-          </div>
-        )}
+        {/* v7.8: Removed duplicate opponent name badge - already shown in subtitle */}
 
         {/* Buttons */}
         <div className="space-y-2">
