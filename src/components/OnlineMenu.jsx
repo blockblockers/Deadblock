@@ -1,4 +1,6 @@
 // Online Menu - Hub for online features
+// v7.21: Hide ViewPlayerProfile when FinalBoardView is open (fixes spacing issue from profile path)
+// v7.20: Added real-time subscription for sent invites - fixes pending invites not clearing when accepted
 // v7.18: Fixed lost game click - immediate state update, delayed navigation, user-specific viewed games
 // v7.17: Fixed Active Games modal scroll, user-specific localStorage keys, accurate game count
 // v7.15: Compact player profile card matching main menu, removed sign out/refresh buttons, replaced achievements button with leaderboard
@@ -683,10 +685,46 @@ const OnlineMenu = ({
       )
       .subscribe();
     
+    // v7.20: Subscribe to SENT invites being updated (accepted/declined)
+    // This fixes the issue where sent invites stay in "pending" after opponent accepts
+    // The inviteService subscription only handles RECEIVED invites, not sent ones
+    const sentInvitesChannel = supabase
+      .channel(`menu-sent-invites-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'game_invites',
+          filter: `from_user_id=eq.${profile.id}`
+        },
+        (payload) => {
+          const invite = payload.new;
+          const oldInvite = payload.old;
+          
+          // Only act on status changes
+          if (invite?.status !== oldInvite?.status) {
+            console.log('[OnlineMenu] Sent invite status changed:', oldInvite?.status, '->', invite?.status);
+            
+            // Refresh invites to remove from pending list
+            loadInvites();
+            
+            // If accepted, also refresh games to show the new active game
+            if (invite?.status === 'accepted') {
+              console.log('[OnlineMenu] Sent invite accepted, refreshing games');
+              loadGames();
+              soundManager.playSound('notification');
+            }
+          }
+        }
+      )
+      .subscribe();
+    
     return () => {
       player1Channel.unsubscribe();
       player2Channel.unsubscribe();
       newGamesChannel.unsubscribe();
+      sentInvitesChannel.unsubscribe();
     };
   }, [sessionReady, profile?.id]);
 
@@ -2687,8 +2725,8 @@ const OnlineMenu = ({
         />
       )}
       
-      {/* View Player Profile Modal */}
-      {viewingPlayerId && (
+      {/* View Player Profile Modal - v7.21: Hide when FinalBoardView is open to prevent layout interference */}
+      {viewingPlayerId && !selectedGameForFinalView && (
         <ViewPlayerProfile
           playerId={viewingPlayerId}
           playerData={viewingPlayerData}

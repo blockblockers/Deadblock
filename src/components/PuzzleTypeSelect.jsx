@@ -1,4 +1,5 @@
 // PuzzleTypeSelect.jsx - Choose between Creator Puzzles and Generated Puzzles
+// v2.1: Compressed spacing for smaller screens
 // v2.0: Animated pentomino showcase + expanded mode comparison cards
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Sparkles, Cpu, Trophy, Zap, Target, Infinity } from 'lucide-react';
@@ -97,7 +98,7 @@ const PentominoShowcase = () => {
   const cols = Math.max(...piece.shape.map(row => row.length));
 
   return (
-    <div className="flex flex-col items-center mb-4">
+    <div className="flex flex-col items-center mb-3">
       {/* Fixed-size container to prevent layout shift */}
       <div className="w-24 h-24 flex items-center justify-center">
         {/* Piece display area */}
@@ -280,11 +281,11 @@ const PuzzleTypeSelect = ({
       <div className={`fixed ${theme.glow3.pos} w-48 h-48 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '5s' }} />
 
       {/* Main Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 py-6`}>
+      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 py-4`}>
         <div className="w-full max-w-md">
           
           {/* Title */}
-          <div className="text-center mb-3">
+          <div className="text-center mb-2">
             <NeonTitle size="large" />
             <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
           </div>
@@ -293,7 +294,7 @@ const PuzzleTypeSelect = ({
           <PentominoShowcase />
 
           {/* Mode Selection Cards */}
-          <div className="space-y-3 mb-4">
+          <div className="space-y-2 mb-3">
             {puzzleTypes.map(type => {
               const isSelected = selectedType === type.id;
               
@@ -301,7 +302,7 @@ const PuzzleTypeSelect = ({
                 <button
                   key={type.id}
                   onClick={() => handleSelectType(type.id)}
-                  className={`w-full p-4 rounded-xl transition-all relative overflow-hidden text-left ${
+                  className={`w-full p-3 rounded-xl transition-all relative overflow-hidden text-left ${
                     isSelected 
                       ? `${type.colors.bg} border-2 ${type.colors.border}` 
                       : 'bg-slate-900/60 border border-slate-700/50 hover:border-slate-600'
@@ -309,9 +310,9 @@ const PuzzleTypeSelect = ({
                   style={isSelected ? { boxShadow: `0 0 25px ${type.colors.glow}, inset 0 0 30px ${type.colors.glow}20` } : {}}
                 >
                   {/* Header */}
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-1.5">
                     <div>
-                      <h3 className={`font-black tracking-wide text-lg ${isSelected ? type.colors.text : 'text-slate-300'}`}>
+                      <h3 className={`font-black tracking-wide text-base ${isSelected ? type.colors.text : 'text-slate-300'}`}>
                         {type.name}
                       </h3>
                       <p className={`text-xs font-medium ${isSelected ? type.colors.featureText : 'text-slate-500'}`}>
@@ -333,22 +334,22 @@ const PuzzleTypeSelect = ({
                   </div>
 
                   {/* Description */}
-                  <p className={`text-sm mb-3 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                  <p className={`text-xs mb-2 ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
                     {type.description}
                   </p>
 
                   {/* Features */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {type.features.map((feature, idx) => (
                       <div 
                         key={idx}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${
                           isSelected 
                             ? `bg-slate-900/50 ${type.colors.featureText}` 
                             : 'bg-slate-800/50 text-slate-500'
                         }`}
                       >
-                        <feature.icon size={12} />
+                        <feature.icon size={11} />
                         <span>{feature.text}</span>
                       </div>
                     ))}
@@ -371,7 +372,7 @@ const PuzzleTypeSelect = ({
           {/* Start Button */}
           <button 
             onClick={handleStart}
-            className={`w-full p-3 rounded-xl font-black tracking-wider text-sm transition-all flex items-center justify-center gap-2 bg-gradient-to-r ${selectedTypeData.colors.gradient} text-white hover:scale-[1.02] active:scale-[0.98]`}
+            className={`w-full p-2.5 rounded-xl font-black tracking-wider text-sm transition-all flex items-center justify-center gap-2 bg-gradient-to-r ${selectedTypeData.colors.gradient} text-white hover:scale-[1.02] active:scale-[0.98]`}
             style={{ boxShadow: `0 0 25px ${selectedTypeData.colors.glow}` }}
           >
             START {selectedTypeData.name} PUZZLES
@@ -380,7 +381,7 @@ const PuzzleTypeSelect = ({
           {/* Back button */}
           <button 
             onClick={handleBack}
-            className="w-full mt-3 py-2.5 px-4 rounded-xl font-bold text-sm text-slate-400 bg-slate-800/60 hover:bg-slate-700/60 transition-all border border-slate-700/50 hover:border-slate-600/50 flex items-center justify-center gap-2"
+            className="w-full mt-2 py-2 px-4 rounded-xl font-bold text-sm text-slate-400 bg-slate-800/60 hover:bg-slate-700/60 transition-all border border-slate-700/50 hover:border-slate-600/50 flex items-center justify-center gap-2"
           >
             <ArrowLeft size={16} />
             BACK TO MENU
