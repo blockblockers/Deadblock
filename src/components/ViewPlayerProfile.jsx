@@ -1,5 +1,5 @@
 // ViewPlayerProfile - View another player's profile
-// v7.22: Fixed stats fetching - removed calls to non-existent tables (play_streaks, weekly_submissions)
+// v7.22: Removed API calls to non-existent tables (play_streaks, weekly_submissions) - fixes 404 errors
 // v7.21: Enhanced stats display with all non-online stats (AI breakdown, puzzles, streak, weekly, creator)
 // v7.20: Refactored - FinalBoardView now handled by parent OnlineMenu via onViewGame callback
 // v7.19: Hide modal when FinalBoardView shown (prevents visual interference), robust mobile scroll
@@ -315,34 +315,11 @@ const ViewPlayerProfile = ({
         }
       }
       
-      // v7.22: Stats are now pulled from profiles table (player_stats column)
-      // The play_streaks and weekly_submissions tables don't exist
-      // Creator puzzle completions are fetched separately
+      // v7.22: Removed fetches to non-existent tables (play_streaks, weekly_submissions)
+      // These stats will show as 0/default until proper tables are created
+      // Only fetch creator puzzle completions which has a real table
       const headers = getAuthHeaders();
-      if (headers && profileData) {
-        // Play streak - use profiles table data if available
-        // Note: streak data comes from the player_stats JSONB column or dedicated columns
-        const streakCurrent = profileData.current_streak || profileData.player_stats?.current_streak || 0;
-        const streakLongest = profileData.longest_streak || profileData.player_stats?.longest_streak || 0;
-        if (streakCurrent > 0 || streakLongest > 0) {
-          setPlayStreak({
-            current: streakCurrent,
-            longest: streakLongest
-          });
-        }
-        
-        // Weekly challenge stats - check if data exists in profile
-        // Note: weekly_challenge_podiums might be stored in player_stats
-        const weeklyPodiums = profileData.weekly_podiums || profileData.player_stats?.weekly_podiums;
-        if (weeklyPodiums) {
-          setWeeklyStats({
-            first: weeklyPodiums.first || 0,
-            second: weeklyPodiums.second || 0,
-            third: weeklyPodiums.third || 0,
-            total: (weeklyPodiums.first || 0) + (weeklyPodiums.second || 0) + (weeklyPodiums.third || 0)
-          });
-        }
-        
+      if (headers) {
         // Creator puzzle completions - this table exists
         try {
           const creatorRes = await fetch(
@@ -357,7 +334,7 @@ const ViewPlayerProfile = ({
             });
           }
         } catch (e) {
-          // Silently fail - creator stats not critical
+          // Silently fail - stats not critical
         }
       }
     } catch (err) {
