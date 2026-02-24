@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.23: Fixed stats fetching - use streakService and weeklyChallengeService (same as PlayerStatsModal)
 // v7.22: Removed API calls to non-existent tables (play_streaks, weekly_submissions) - fixes 404 errors
 // v7.21: Enhanced stats display with all non-online stats (AI breakdown, puzzles, streak, weekly, creator)
 // v7.20: Refactored - FinalBoardView now handled by parent OnlineMenu via onViewGame callback
@@ -12,6 +13,8 @@ import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, C
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import achievementService from '../services/achievementService';
+import { streakService } from '../services/streakService';
+import { weeklyChallengeService } from '../services/weeklyChallengeService';
 import TierIcon from './TierIcon';
 import { soundManager } from '../utils/soundManager';
 
@@ -315,12 +318,38 @@ const ViewPlayerProfile = ({
         }
       }
       
-      // v7.22: Removed fetches to non-existent tables (play_streaks, weekly_submissions)
-      // These stats will show as 0/default until proper tables are created
-      // Only fetch creator puzzle completions which has a real table
+      // v7.23: Use proper services for stats (same as PlayerStatsModal)
+      // Play streak - use streakService
+      try {
+        const streakResult = await streakService.getStreak(playerId);
+        if (streakResult?.data && !streakResult.error) {
+          setPlayStreak({
+            current: streakResult.data.current_streak || 0,
+            longest: streakResult.data.longest_streak || 0
+          });
+        }
+      } catch (e) {
+        // Silently fail - streak data not critical
+      }
+      
+      // Weekly challenge stats - use weeklyChallengeService
+      try {
+        const weeklyResult = await weeklyChallengeService.getUserPodiumBreakdown?.(playerId);
+        if (weeklyResult) {
+          setWeeklyStats({
+            first: weeklyResult.first || 0,
+            second: weeklyResult.second || 0,
+            third: weeklyResult.third || 0,
+            total: (weeklyResult.first || 0) + (weeklyResult.second || 0) + (weeklyResult.third || 0)
+          });
+        }
+      } catch (e) {
+        // Silently fail - weekly data not critical
+      }
+      
+      // Creator puzzle completions - direct fetch (table exists)
       const headers = getAuthHeaders();
       if (headers) {
-        // Creator puzzle completions - this table exists
         try {
           const creatorRes = await fetch(
             `${SUPABASE_URL}/rest/v1/creator_puzzle_completions?user_id=eq.${playerId}&select=puzzle_number`,
@@ -334,7 +363,7 @@ const ViewPlayerProfile = ({
             });
           }
         } catch (e) {
-          // Silently fail - stats not critical
+          // Silently fail - creator stats not critical
         }
       }
     } catch (err) {

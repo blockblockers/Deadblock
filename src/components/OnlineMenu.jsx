@@ -1,5 +1,5 @@
 // Online Menu - Hub for online features
-// v7.22: Fixed FinalBoardView spacing - fully close ViewPlayerProfile before opening (restore on close)
+// v7.22: Fixed FinalBoardView spacing - wait for ViewPlayerProfile unmount with double RAF before mounting
 // v7.21: Hide ViewPlayerProfile when FinalBoardView is open (fixes spacing issue from profile path)
 // v7.20: Added real-time subscription for sent invites - fixes pending invites not clearing when accepted
 // v7.18: Fixed lost game click - immediate state update, delayed navigation, user-specific viewed games
@@ -295,23 +295,36 @@ const OnlineMenu = ({
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
   const [gameMoves, setGameMoves] = useState([]);
   const [loadingMoves, setLoadingMoves] = useState(false);
-  // v7.22: Save viewing player when opening FinalBoardView from profile (to restore on close)
-  const [savedViewingPlayer, setSavedViewingPlayer] = useState(null);
+  // v7.22: Track player being viewed when FinalBoardView opens from profile (restore on close)
+  const savedViewingPlayerRef = useRef(null);
 
   // Handle opening Final Board View - fetch moves first (v7.15.1)
-  // v7.22: Fully close ViewPlayerProfile to prevent any layout interference
+  // v7.22: If coming from ViewPlayerProfile, close it FIRST and wait for DOM update
+  // This ensures FinalBoardView mounts in a clean state without layout interference
   const handleOpenFinalBoardView = async (game) => {
     soundManager.playButtonClick();
-    setLoadingMoves(true);
     
-    // v7.22: If opening from ViewPlayerProfile, save and close it completely
-    // This prevents any CSS/layout interference between the two modals
+    // If ViewPlayerProfile is open, we need to close it and wait for unmount
+    // before opening FinalBoardView to prevent layout calculation issues
     if (viewingPlayerId) {
-      setSavedViewingPlayer({ id: viewingPlayerId, data: viewingPlayerData });
+      // Save the player info to restore when FinalBoardView closes
+      savedViewingPlayerRef.current = { id: viewingPlayerId, data: viewingPlayerData };
+      
+      // Close ViewPlayerProfile
       setViewingPlayerId(null);
       setViewingPlayerData(null);
+      
+      // Wait for DOM to update (ViewPlayerProfile to fully unmount)
+      // Double RAF ensures we've passed through a full paint cycle
+      await new Promise(resolve => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(resolve);
+        });
+      });
     }
     
+    // Now open FinalBoardView
+    setLoadingMoves(true);
     setSelectedGameForFinalView(game);
     
     try {
@@ -2738,7 +2751,7 @@ const OnlineMenu = ({
         />
       )}
       
-      {/* View Player Profile Modal - v7.22: Now fully closed when FinalBoardView opens (savedViewingPlayer restores on close) */}
+      {/* View Player Profile Modal - v7.22: Explicitly closed before FinalBoardView opens */}
       {viewingPlayerId && (
         <ViewPlayerProfile
           playerId={viewingPlayerId}
@@ -2796,10 +2809,10 @@ const OnlineMenu = ({
             setSelectedGameForFinalView(null);
             setGameMoves([]);
             // v7.22: Restore ViewPlayerProfile if we came from there
-            if (savedViewingPlayer) {
-              setViewingPlayerId(savedViewingPlayer.id);
-              setViewingPlayerData(savedViewingPlayer.data);
-              setSavedViewingPlayer(null);
+            if (savedViewingPlayerRef.current) {
+              setViewingPlayerId(savedViewingPlayerRef.current.id);
+              setViewingPlayerData(savedViewingPlayerRef.current.data);
+              savedViewingPlayerRef.current = null;
             }
           }}
           board={selectedGameForFinalView.board}
