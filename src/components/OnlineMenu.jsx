@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.23: Added key prop to FinalBoardView to force clean remount from different paths
 // v7.22: Fixed FinalBoardView spacing - wait for ViewPlayerProfile unmount with double RAF before mounting
 // v7.21: Hide ViewPlayerProfile when FinalBoardView is open (fixes spacing issue from profile path)
 // v7.20: Added real-time subscription for sent invites - fixes pending invites not clearing when accepted
@@ -2804,6 +2805,8 @@ const OnlineMenu = ({
       {/* Final Board View Modal */}
       {selectedGameForFinalView && (
         <FinalBoardView
+          // v7.22: Key forces complete remount, preventing layout issues from previous modal state
+          key={`fbv-${selectedGameForFinalView.id}-${savedViewingPlayerRef.current ? 'profile' : 'direct'}`}
           isOpen={true}
           onClose={() => {
             setSelectedGameForFinalView(null);

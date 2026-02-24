@@ -1,4 +1,6 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.21 - Added FloatingPieces background animation (purple theme)
+// v7.20 - Enhanced glow orbs (higher opacity), enlarged title to medium
 // v7.19 - Added animated glow orbs for consistent cyberpunk aesthetic across all views
 // v7.18 - Added cyberpunk grid background, controls directly under board, more header padding
 // v7.17 - Full screen takeover with z-[60], fully opaque background
@@ -22,6 +24,7 @@ import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
 import NeonTitle from './NeonTitle';
+import FloatingPieces from './FloatingPieces';
 
 const FinalBoardView = ({ 
   board, 
@@ -314,10 +317,13 @@ const FinalBoardView = ({
         backgroundColor: '#0f172a',
       }}
     >
-      {/* v7.19: Animated glow orbs for cyberpunk aesthetic - matches OnlineMenu */}
-      <div className="fixed top-10 right-10 w-64 h-64 bg-purple-500/30 rounded-full blur-3xl pointer-events-none animate-glow-pulse-1" />
-      <div className="fixed bottom-20 left-10 w-56 h-56 bg-cyan-500/25 rounded-full blur-3xl pointer-events-none animate-glow-pulse-2" />
-      <div className="fixed top-1/3 left-1/4 w-48 h-48 bg-pink-500/20 rounded-full blur-3xl pointer-events-none animate-glow-pulse-3" />
+      {/* v7.21: Floating pentomino pieces background - matches other screens */}
+      <FloatingPieces theme="purple" />
+      
+      {/* v7.20: Enhanced animated glow orbs - increased opacity for visibility */}
+      <div className="fixed top-10 right-10 w-64 h-64 bg-purple-500/40 rounded-full blur-3xl pointer-events-none animate-glow-pulse-1" />
+      <div className="fixed bottom-20 left-10 w-56 h-56 bg-cyan-500/35 rounded-full blur-3xl pointer-events-none animate-glow-pulse-2" />
+      <div className="fixed top-1/3 left-1/4 w-48 h-48 bg-pink-500/30 rounded-full blur-3xl pointer-events-none animate-glow-pulse-3" />
       
       {/* v7.18: Extra padding at top for iPhone notch/dynamic island */}
       <div 
@@ -339,9 +345,9 @@ const FinalBoardView = ({
           <span className="text-xs">Back</span>
         </button>
         
-        {/* Centered Deadblock Title */}
+        {/* Centered Deadblock Title - v7.20: enlarged to medium */}
         <div className="absolute left-1/2 transform -translate-x-1/2">
-          <NeonTitle text="DEADBLOCK" size="small" />
+          <NeonTitle text="DEADBLOCK" size="medium" />
         </div>
         
         {/* Speed control - compact */}
@@ -603,16 +609,16 @@ const FinalBoardView = ({
           50% { box-shadow: 0 0 25px rgba(251, 191, 36, 0.9), inset 0 0 12px rgba(255, 255, 255, 0.5); }
         }
         @keyframes glow-pulse-1 {
-          0%, 100% { opacity: 0.3; transform: scale(1) translate(0, 0); }
-          50% { opacity: 0.5; transform: scale(1.1) translate(-10px, 10px); }
+          0%, 100% { opacity: 0.4; transform: scale(1) translate(0, 0); }
+          50% { opacity: 0.6; transform: scale(1.1) translate(-10px, 10px); }
         }
         @keyframes glow-pulse-2 {
-          0%, 100% { opacity: 0.25; transform: scale(1) translate(0, 0); }
-          50% { opacity: 0.4; transform: scale(1.15) translate(15px, -5px); }
+          0%, 100% { opacity: 0.35; transform: scale(1) translate(0, 0); }
+          50% { opacity: 0.5; transform: scale(1.15) translate(15px, -5px); }
         }
         @keyframes glow-pulse-3 {
-          0%, 100% { opacity: 0.2; transform: scale(1) translate(0, 0); }
-          50% { opacity: 0.35; transform: scale(1.05) translate(-5px, -10px); }
+          0%, 100% { opacity: 0.3; transform: scale(1) translate(0, 0); }
+          50% { opacity: 0.45; transform: scale(1.05) translate(-5px, -10px); }
         }
         .animate-glow-pulse-1 { animation: glow-pulse-1 8s ease-in-out infinite; }
         .animate-glow-pulse-2 { animation: glow-pulse-2 10s ease-in-out infinite; animation-delay: 2s; }

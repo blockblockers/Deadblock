@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.24: Fixed weekly stats - check for .data property in response (matches PlayerStatsModal)
 // v7.23: Fixed stats fetching - use streakService and weeklyChallengeService (same as PlayerStatsModal)
 // v7.22: Removed API calls to non-existent tables (play_streaks, weekly_submissions) - fixes 404 errors
 // v7.21: Enhanced stats display with all non-online stats (AI breakdown, puzzles, streak, weekly, creator)
@@ -335,7 +336,16 @@ const ViewPlayerProfile = ({
       // Weekly challenge stats - use weeklyChallengeService
       try {
         const weeklyResult = await weeklyChallengeService.getUserPodiumBreakdown?.(playerId);
-        if (weeklyResult) {
+        // v7.24: Match PlayerStatsModal response handling - check for .data property
+        if (weeklyResult?.data) {
+          setWeeklyStats({
+            first: weeklyResult.data.first || 0,
+            second: weeklyResult.data.second || 0,
+            third: weeklyResult.data.third || 0,
+            total: (weeklyResult.data.first || 0) + (weeklyResult.data.second || 0) + (weeklyResult.data.third || 0)
+          });
+        } else if (weeklyResult) {
+          // Fallback for direct response format
           setWeeklyStats({
             first: weeklyResult.first || 0,
             second: weeklyResult.second || 0,
