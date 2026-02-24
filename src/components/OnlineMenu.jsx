@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.22: Fixed FinalBoardView spacing from profile path - fully close/restore ViewPlayerProfile instead of hiding
 // v7.21: Hide ViewPlayerProfile when FinalBoardView is open (fixes spacing issue from profile path)
 // v7.20: Added real-time subscription for sent invites - fixes pending invites not clearing when accepted
 // v7.18: Fixed lost game click - immediate state update, delayed navigation, user-specific viewed games
@@ -294,11 +295,22 @@ const OnlineMenu = ({
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
   const [gameMoves, setGameMoves] = useState([]);
   const [loadingMoves, setLoadingMoves] = useState(false);
+  // v7.22: Track player being viewed when FinalBoardView opens (to restore on close)
+  const [savedViewingPlayer, setSavedViewingPlayer] = useState(null);
 
   // Handle opening Final Board View - fetch moves first (v7.15.1)
+  // v7.22: Also close ViewPlayerProfile to prevent layout interference
   const handleOpenFinalBoardView = async (game) => {
     soundManager.playButtonClick();
     setLoadingMoves(true);
+    
+    // v7.22: Save and close ViewPlayerProfile to prevent any CSS interference
+    if (viewingPlayerId) {
+      setSavedViewingPlayer({ id: viewingPlayerId, data: viewingPlayerData });
+      setViewingPlayerId(null);
+      setViewingPlayerData(null);
+    }
+    
     setSelectedGameForFinalView(game);
     
     try {
@@ -2725,8 +2737,8 @@ const OnlineMenu = ({
         />
       )}
       
-      {/* View Player Profile Modal - v7.21: Hide when FinalBoardView is open to prevent layout interference */}
-      {viewingPlayerId && !selectedGameForFinalView && (
+      {/* View Player Profile Modal - v7.22: Now fully closes when FinalBoardView opens (restores on close) */}
+      {viewingPlayerId && (
         <ViewPlayerProfile
           playerId={viewingPlayerId}
           playerData={viewingPlayerData}
@@ -2782,6 +2794,12 @@ const OnlineMenu = ({
           onClose={() => {
             setSelectedGameForFinalView(null);
             setGameMoves([]);
+            // v7.22: Restore ViewPlayerProfile if we came from there
+            if (savedViewingPlayer) {
+              setViewingPlayerId(savedViewingPlayer.id);
+              setViewingPlayerData(savedViewingPlayer.data);
+              setSavedViewingPlayer(null);
+            }
           }}
           board={selectedGameForFinalView.board}
           boardPieces={selectedGameForFinalView.board_pieces}

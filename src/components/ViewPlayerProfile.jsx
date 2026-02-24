@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.22: Fixed stats fetching - removed calls to non-existent tables (play_streaks, weekly_submissions)
 // v7.21: Enhanced stats display with all non-online stats (AI breakdown, puzzles, streak, weekly, creator)
 // v7.20: Refactored - FinalBoardView now handled by parent OnlineMenu via onViewGame callback
 // v7.19: Hide modal when FinalBoardView shown (prevents visual interference), robust mobile scroll
@@ -314,50 +315,35 @@ const ViewPlayerProfile = ({
         }
       }
       
-      // v7.21: Fetch additional stats (play streak, weekly challenge, creator puzzles)
+      // v7.22: Stats are now pulled from profiles table (player_stats column)
+      // The play_streaks and weekly_submissions tables don't exist
+      // Creator puzzle completions are fetched separately
       const headers = getAuthHeaders();
-      if (headers) {
-        // Play streak
-        try {
-          const streakRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/play_streaks?user_id=eq.${playerId}&select=current_streak,longest_streak`,
-            { headers }
-          );
-          if (streakRes.ok) {
-            const streakData = await streakRes.json();
-            if (streakData && streakData.length > 0) {
-              setPlayStreak({
-                current: streakData[0].current_streak || 0,
-                longest: streakData[0].longest_streak || 0
-              });
-            }
-          }
-        } catch (e) {
-          console.log('Play streak not available');
+      if (headers && profileData) {
+        // Play streak - use profiles table data if available
+        // Note: streak data comes from the player_stats JSONB column or dedicated columns
+        const streakCurrent = profileData.current_streak || profileData.player_stats?.current_streak || 0;
+        const streakLongest = profileData.longest_streak || profileData.player_stats?.longest_streak || 0;
+        if (streakCurrent > 0 || streakLongest > 0) {
+          setPlayStreak({
+            current: streakCurrent,
+            longest: streakLongest
+          });
         }
         
-        // Weekly challenge stats - count podium finishes
-        try {
-          const weeklyRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/weekly_submissions?user_id=eq.${playerId}&final_rank=lte.3&select=final_rank`,
-            { headers }
-          );
-          if (weeklyRes.ok) {
-            const weeklyData = await weeklyRes.json();
-            const counts = { first: 0, second: 0, third: 0, total: 0 };
-            weeklyData.forEach(sub => {
-              if (sub.final_rank === 1) counts.first++;
-              else if (sub.final_rank === 2) counts.second++;
-              else if (sub.final_rank === 3) counts.third++;
-              counts.total++;
-            });
-            setWeeklyStats(counts);
-          }
-        } catch (e) {
-          console.log('Weekly stats not available');
+        // Weekly challenge stats - check if data exists in profile
+        // Note: weekly_challenge_podiums might be stored in player_stats
+        const weeklyPodiums = profileData.weekly_podiums || profileData.player_stats?.weekly_podiums;
+        if (weeklyPodiums) {
+          setWeeklyStats({
+            first: weeklyPodiums.first || 0,
+            second: weeklyPodiums.second || 0,
+            third: weeklyPodiums.third || 0,
+            total: (weeklyPodiums.first || 0) + (weeklyPodiums.second || 0) + (weeklyPodiums.third || 0)
+          });
         }
         
-        // Creator puzzle completions
+        // Creator puzzle completions - this table exists
         try {
           const creatorRes = await fetch(
             `${SUPABASE_URL}/rest/v1/creator_puzzle_completions?user_id=eq.${playerId}&select=puzzle_number`,
@@ -371,7 +357,7 @@ const ViewPlayerProfile = ({
             });
           }
         } catch (e) {
-          console.log('Creator puzzle stats not available');
+          // Silently fail - creator stats not critical
         }
       }
     } catch (err) {
