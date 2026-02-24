@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.25: Fixed stats - ALWAYS fetch full profile from DB (passed playerData may have limited fields)
 // v7.24: Fixed weekly stats - check for .data property in response (matches PlayerStatsModal)
 // v7.23: Fixed stats fetching - use streakService and weeklyChallengeService (same as PlayerStatsModal)
 // v7.22: Removed API calls to non-existent tables (play_streaks, weekly_submissions) - fixes 404 errors
@@ -183,36 +184,37 @@ const ViewPlayerProfile = ({
     setLoading(true);
     
     try {
-      // Load profile with ALL stats from profiles table (v7.12: expanded select)
-      let profileData = playerData;
-      if (!profileData) {
-        const { data } = await dbSelect('profiles', {
-          select: `id,username,display_name,avatar_url,rating,games_won,games_played,created_at,
-                   puzzles_easy_solved,puzzles_easy_attempted,puzzles_medium_solved,puzzles_medium_attempted,
-                   puzzles_hard_solved,puzzles_hard_attempted,speed_best_streak,speed_total_puzzles,
-                   ai_easy_wins,ai_easy_losses,ai_medium_wins,ai_medium_losses,ai_hard_wins,ai_hard_losses,
-                   local_games_played`,
-          eq: { id: playerId },
-          single: true
-        });
-        profileData = data;
-      }
+      // v7.25: ALWAYS fetch full profile data from database for complete stats
+      // The passed playerData may only have basic fields (id, username, rating)
+      const { data: fullProfileData } = await dbSelect('profiles', {
+        select: `id,username,display_name,avatar_url,rating,games_won,games_played,created_at,
+                 puzzles_easy_solved,puzzles_easy_attempted,puzzles_medium_solved,puzzles_medium_attempted,
+                 puzzles_hard_solved,puzzles_hard_attempted,speed_best_streak,speed_total_puzzles,
+                 ai_easy_wins,ai_easy_losses,ai_medium_wins,ai_medium_losses,ai_hard_wins,ai_hard_losses,
+                 local_games_played`,
+        eq: { id: playerId },
+        single: true
+      });
+      
+      // Use fetched data, fall back to passed playerData for display name only
+      const profileData = fullProfileData || playerData;
       
       if (profileData) {
         setProfile(profileData);
-        // v7.12: Set player stats from the profile data
+        // v7.25: Use fullProfileData for stats (has all fields)
+        const statsSource = fullProfileData || {};
         setPlayerStats({
-          puzzles_easy_solved: profileData.puzzles_easy_solved || 0,
-          puzzles_medium_solved: profileData.puzzles_medium_solved || 0,
-          puzzles_hard_solved: profileData.puzzles_hard_solved || 0,
-          ai_easy_wins: profileData.ai_easy_wins || 0,
-          ai_medium_wins: profileData.ai_medium_wins || 0,
-          ai_hard_wins: profileData.ai_hard_wins || 0,
-          ai_easy_losses: profileData.ai_easy_losses || 0,
-          ai_medium_losses: profileData.ai_medium_losses || 0,
-          ai_hard_losses: profileData.ai_hard_losses || 0,
-          speed_best_streak: profileData.speed_best_streak || 0,
-          local_games_played: profileData.local_games_played || 0
+          puzzles_easy_solved: statsSource.puzzles_easy_solved || 0,
+          puzzles_medium_solved: statsSource.puzzles_medium_solved || 0,
+          puzzles_hard_solved: statsSource.puzzles_hard_solved || 0,
+          ai_easy_wins: statsSource.ai_easy_wins || 0,
+          ai_medium_wins: statsSource.ai_medium_wins || 0,
+          ai_hard_wins: statsSource.ai_hard_wins || 0,
+          ai_easy_losses: statsSource.ai_easy_losses || 0,
+          ai_medium_losses: statsSource.ai_medium_losses || 0,
+          ai_hard_losses: statsSource.ai_hard_losses || 0,
+          speed_best_streak: statsSource.speed_best_streak || 0,
+          local_games_played: statsSource.local_games_played || 0
         });
       }
 

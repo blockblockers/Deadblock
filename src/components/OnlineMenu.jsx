@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
+// v7.24: Simplified FinalBoardView opening - removed RAF, use conditional hide + key for clean state
 // v7.23: Added key prop to FinalBoardView to force clean remount from different paths
-// v7.22: Fixed FinalBoardView spacing - wait for ViewPlayerProfile unmount with double RAF before mounting
 // v7.21: Hide ViewPlayerProfile when FinalBoardView is open (fixes spacing issue from profile path)
 // v7.20: Added real-time subscription for sent invites - fixes pending invites not clearing when accepted
 // v7.18: Fixed lost game click - immediate state update, delayed navigation, user-specific viewed games
@@ -300,31 +300,17 @@ const OnlineMenu = ({
   const savedViewingPlayerRef = useRef(null);
 
   // Handle opening Final Board View - fetch moves first (v7.15.1)
-  // v7.22: If coming from ViewPlayerProfile, close it FIRST and wait for DOM update
-  // This ensures FinalBoardView mounts in a clean state without layout interference
+  // v7.24: Simplified - save viewing player, then open FinalBoardView
+  // The key prop on FinalBoardView forces clean remount
   const handleOpenFinalBoardView = async (game) => {
     soundManager.playButtonClick();
     
-    // If ViewPlayerProfile is open, we need to close it and wait for unmount
-    // before opening FinalBoardView to prevent layout calculation issues
+    // If ViewPlayerProfile is open, save player info to restore later
     if (viewingPlayerId) {
-      // Save the player info to restore when FinalBoardView closes
       savedViewingPlayerRef.current = { id: viewingPlayerId, data: viewingPlayerData };
-      
-      // Close ViewPlayerProfile
-      setViewingPlayerId(null);
-      setViewingPlayerData(null);
-      
-      // Wait for DOM to update (ViewPlayerProfile to fully unmount)
-      // Double RAF ensures we've passed through a full paint cycle
-      await new Promise(resolve => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(resolve);
-        });
-      });
     }
     
-    // Now open FinalBoardView
+    // Open FinalBoardView immediately
     setLoadingMoves(true);
     setSelectedGameForFinalView(game);
     
@@ -2752,8 +2738,8 @@ const OnlineMenu = ({
         />
       )}
       
-      {/* View Player Profile Modal - v7.22: Explicitly closed before FinalBoardView opens */}
-      {viewingPlayerId && (
+      {/* View Player Profile Modal - v7.24: Hidden when FinalBoardView is open */}
+      {viewingPlayerId && !selectedGameForFinalView && (
         <ViewPlayerProfile
           playerId={viewingPlayerId}
           playerData={viewingPlayerData}

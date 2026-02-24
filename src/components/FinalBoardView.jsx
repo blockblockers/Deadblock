@@ -1,4 +1,6 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.23 - Enhanced grid background opacity (0.03 -> 0.06) for better visibility
+// v7.22 - FloatingPieces with immediateStart and maxDelay=0 for instant smooth animation
 // v7.21 - Added FloatingPieces background animation (purple theme)
 // v7.20 - Enhanced glow orbs (higher opacity), enlarged title to medium
 // v7.19 - Added animated glow orbs for consistent cyberpunk aesthetic across all views
@@ -308,17 +310,17 @@ const FinalBoardView = ({
     <div 
       className="fixed inset-0 z-[60] flex flex-col overflow-hidden"
       style={{
-        // v7.18: Cyberpunk grid background pattern
+        // v7.23: Enhanced cyberpunk grid background - increased opacity for visibility
         background: `
-          linear-gradient(to bottom, rgba(15, 23, 42, 0.97), rgba(15, 23, 42, 0.99)),
-          repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.03) 40px, rgba(139, 92, 246, 0.03) 41px),
-          repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.03) 40px, rgba(139, 92, 246, 0.03) 41px)
+          linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.98)),
+          repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.06) 40px, rgba(139, 92, 246, 0.06) 41px),
+          repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.06) 40px, rgba(139, 92, 246, 0.06) 41px)
         `,
         backgroundColor: '#0f172a',
       }}
     >
-      {/* v7.21: Floating pentomino pieces background - matches other screens */}
-      <FloatingPieces theme="purple" />
+      {/* v7.22: Floating pentomino pieces - immediate start, no delay for instant animation */}
+      <FloatingPieces theme="purple" immediateStart={true} maxDelay={0} />
       
       {/* v7.20: Enhanced animated glow orbs - increased opacity for visibility */}
       <div className="fixed top-10 right-10 w-64 h-64 bg-purple-500/40 rounded-full blur-3xl pointer-events-none animate-glow-pulse-1" />

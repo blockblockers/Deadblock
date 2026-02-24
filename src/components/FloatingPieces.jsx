@@ -1,4 +1,5 @@
 // FloatingPieces.jsx - Animated floating pentomino pieces background
+// v2.0: Added immediateStart and maxDelay props (defaults preserve original behavior)
 // Reusable component with theme support - matches original MenuScreen quality
 import { useMemo, useEffect, useState } from 'react';
 import { pieces } from '../utils/pieces';
@@ -153,20 +154,25 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
  * @param {number} count - Number of floating pieces (default: 15)
  * @param {number} minOpacity - Minimum opacity (default: 0.25)
  * @param {number} maxOpacity - Maximum opacity (default: 0.55)
+ * @param {boolean} immediateStart - Skip initial delay, start animating immediately (default: false)
+ * @param {number} maxDelay - Maximum animation delay in seconds (default: 6, use 0 for immediate)
  */
 function FloatingPieces({ 
   theme = 'mixed',
   count = 15,
   minOpacity = 0.25,
   maxOpacity = 0.55,
+  immediateStart = false,
+  maxDelay = 6,
 }) {
-  // Add a small delay before rendering to prevent hydration issues
-  const [isReady, setIsReady] = useState(false);
+  // Add a small delay before rendering to prevent hydration issues (skipped if immediateStart)
+  const [isReady, setIsReady] = useState(immediateStart);
   
   useEffect(() => {
+    if (immediateStart) return;
     const timer = setTimeout(() => setIsReady(true), 50);
     return () => clearTimeout(timer);
-  }, []);
+  }, [immediateStart]);
 
   const floatingPieces = useMemo(() => {
     const pieceNames = Object.keys(pieces);
@@ -183,7 +189,7 @@ function FloatingPieces({
         piece: pieceNames[Math.floor(pseudoRandom(1) * pieceNames.length)],
         startX: pseudoRandom(2) * 95 + 2.5, // Keep away from edges
         startY: pseudoRandom(3) * 90 + 5,
-        delay: pseudoRandom(4) * 6,
+        delay: pseudoRandom(4) * maxDelay,
         duration: 20 + pseudoRandom(5) * 15, // Slower, smoother animation
         color: colorSet.color,
         glowColor: colorSet.glow,
@@ -194,7 +200,7 @@ function FloatingPieces({
         floatY: (pseudoRandom(10) - 0.5) * 60,
       };
     });
-  }, [theme, count, minOpacity, maxOpacity]);
+  }, [theme, count, minOpacity, maxOpacity, maxDelay]);
 
   if (!isReady) return null;
 
