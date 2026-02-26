@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.25: FinalBoardView spacing fix - explicitly clear viewingPlayerId before opening
 // v7.24: Simplified FinalBoardView opening - removed RAF, use conditional hide + key for clean state
 // v7.23: Added key prop to FinalBoardView to force clean remount from different paths
 // v7.21: Hide ViewPlayerProfile when FinalBoardView is open (fixes spacing issue from profile path)
@@ -300,17 +301,19 @@ const OnlineMenu = ({
   const savedViewingPlayerRef = useRef(null);
 
   // Handle opening Final Board View - fetch moves first (v7.15.1)
-  // v7.24: Simplified - save viewing player, then open FinalBoardView
-  // The key prop on FinalBoardView forces clean remount
+  // v7.25: Explicitly clear viewingPlayerId to force ViewPlayerProfile unmount before FinalBoardView
   const handleOpenFinalBoardView = async (game) => {
     soundManager.playButtonClick();
     
     // If ViewPlayerProfile is open, save player info to restore later
     if (viewingPlayerId) {
       savedViewingPlayerRef.current = { id: viewingPlayerId, data: viewingPlayerData };
+      // v7.25: Explicitly clear to force unmount
+      setViewingPlayerId(null);
+      setViewingPlayerData(null);
     }
     
-    // Open FinalBoardView immediately
+    // Open FinalBoardView
     setLoadingMoves(true);
     setSelectedGameForFinalView(game);
     
@@ -2738,8 +2741,8 @@ const OnlineMenu = ({
         />
       )}
       
-      {/* View Player Profile Modal - v7.24: Hidden when FinalBoardView is open */}
-      {viewingPlayerId && !selectedGameForFinalView && (
+      {/* View Player Profile Modal - v7.25: State explicitly cleared when FinalBoardView opens */}
+      {viewingPlayerId && (
         <ViewPlayerProfile
           playerId={viewingPlayerId}
           playerData={viewingPlayerData}

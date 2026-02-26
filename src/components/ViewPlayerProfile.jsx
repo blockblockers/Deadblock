@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.26: Stats as separate sections (not dropdowns), fixed select query encoding
 // v7.25: Fixed stats - ALWAYS fetch full profile from DB (passed playerData may have limited fields)
 // v7.24: Fixed weekly stats - check for .data property in response (matches PlayerStatsModal)
 // v7.23: Fixed stats fetching - use streakService and weeklyChallengeService (same as PlayerStatsModal)
@@ -11,7 +12,7 @@
 // v7.12: Added player_stats loading from profiles table
 // v7.12: Final Board View now fetches moves for full replay functionality
 import { useState, useEffect } from 'react';
-import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, ChevronDown, ChevronUp, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame, Medal } from 'lucide-react';
+import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame, Medal } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import achievementService from '../services/achievementService';
@@ -149,8 +150,7 @@ const ViewPlayerProfile = ({
   const [playerStats, setPlayerStats] = useState(null); // v7.12: Full stats from profiles table
   
   // v7.21: Additional stats matching PlayerStatsModal
-  const [showAIDetails, setShowAIDetails] = useState(false);
-  const [showPuzzleDetails, setShowPuzzleDetails] = useState(false);
+  // v7.26: Removed showAIDetails/showPuzzleDetails - now using separate sections instead of dropdowns
   const [playStreak, setPlayStreak] = useState({ current: 0, longest: 0 });
   const [weeklyStats, setWeeklyStats] = useState({ first: 0, second: 0, third: 0, total: 0 });
   const [creatorStats, setCreatorStats] = useState({ totalCompleted: 0, totalPuzzles: 100 });
@@ -184,14 +184,9 @@ const ViewPlayerProfile = ({
     setLoading(true);
     
     try {
-      // v7.25: ALWAYS fetch full profile data from database for complete stats
-      // The passed playerData may only have basic fields (id, username, rating)
+      // v7.26: ALWAYS fetch full profile - single line select to avoid encoding issues
       const { data: fullProfileData } = await dbSelect('profiles', {
-        select: `id,username,display_name,avatar_url,rating,games_won,games_played,created_at,
-                 puzzles_easy_solved,puzzles_easy_attempted,puzzles_medium_solved,puzzles_medium_attempted,
-                 puzzles_hard_solved,puzzles_hard_attempted,speed_best_streak,speed_total_puzzles,
-                 ai_easy_wins,ai_easy_losses,ai_medium_wins,ai_medium_losses,ai_hard_wins,ai_hard_losses,
-                 local_games_played`,
+        select: 'id,username,display_name,avatar_url,rating,games_won,games_played,created_at,puzzles_easy_solved,puzzles_easy_attempted,puzzles_medium_solved,puzzles_medium_attempted,puzzles_hard_solved,puzzles_hard_attempted,speed_best_streak,speed_total_puzzles,ai_easy_wins,ai_easy_losses,ai_medium_wins,ai_medium_losses,ai_hard_wins,ai_hard_losses,local_games_played',
         eq: { id: playerId },
         single: true
       });
@@ -564,169 +559,154 @@ const ViewPlayerProfile = ({
                   </div>
                 </div>
 
-                {/* v7.21: Full Stats Section - Enhanced with dropdowns */}
-                {playerStats && (
+                {/* v7.26: AI Battles - Own Section */}
+                {playerStats && totalAiGames > 0 && (
                   <div 
                     className="rounded-xl p-4 mb-4"
                     style={{ 
                       backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                      border: '1px solid rgba(168, 85, 247, 0.3)'
                     }}
                   >
                     <div className="flex items-center gap-2 mb-3">
-                      <Target size={16} className="text-cyan-400" />
-                      <span className="font-bold text-white">Player Stats</span>
+                      <Bot size={16} className="text-purple-400" />
+                      <span className="font-bold text-white">AI Battles</span>
+                      <span className="ml-auto text-purple-400 text-sm font-bold">{totalAiWins} / {totalAiGames} wins</span>
                     </div>
-                    
-                    {/* Stats Grid */}
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      {/* AI Battles */}
-                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Bot size={12} className="text-purple-400" />
-                          <span className="text-slate-400 text-[10px]">AI Battles</span>
-                        </div>
-                        <div className="text-white font-bold text-sm">{totalAiWins} / {totalAiGames}</div>
-                        <div className="text-slate-500 text-[10px]">wins</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-2.5 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                        <div className="text-green-400 text-lg font-bold">{playerStats.ai_easy_wins || 0}</div>
+                        <div className="text-[10px] text-slate-400">Beginner</div>
+                        <div className="text-[9px] text-slate-500">{(playerStats.ai_easy_wins || 0) + (playerStats.ai_easy_losses || 0)} games</div>
                       </div>
-                      
-                      {/* Puzzles Solved (generated + creator) */}
-                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Zap size={12} className="text-green-400" />
-                          <span className="text-slate-400 text-[10px]">Puzzles</span>
-                        </div>
-                        <div className="text-white font-bold text-sm">{totalPuzzlesSolved + creatorStats.totalCompleted}</div>
-                        <div className="text-slate-500 text-[10px]">solved</div>
+                      <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                        <div className="text-amber-400 text-lg font-bold">{playerStats.ai_medium_wins || 0}</div>
+                        <div className="text-[10px] text-slate-400">Intermediate</div>
+                        <div className="text-[9px] text-slate-500">{(playerStats.ai_medium_wins || 0) + (playerStats.ai_medium_losses || 0)} games</div>
                       </div>
-                      
-                      {/* Speed Best */}
-                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Zap size={12} className="text-orange-400" />
-                          <span className="text-slate-400 text-[10px]">Speed Best</span>
-                        </div>
-                        <div className="text-white font-bold text-sm">{playerStats.speed_best_streak || 0}</div>
-                        <div className="text-slate-500 text-[10px]">streak</div>
-                      </div>
-                      
-                      {/* Play Streak */}
-                      <div className="rounded-lg p-2.5" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <Flame size={12} className="text-red-400" />
-                          <span className="text-slate-400 text-[10px]">Play Streak</span>
-                        </div>
-                        <div className="text-white font-bold text-sm">{playStreak.current} / {playStreak.longest}</div>
-                        <div className="text-slate-500 text-[10px]">current / best</div>
+                      <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                        <div className="text-purple-400 text-lg font-bold">{playerStats.ai_hard_wins || 0}</div>
+                        <div className="text-[10px] text-slate-400">Expert</div>
+                        <div className="text-[9px] text-slate-500">{(playerStats.ai_hard_wins || 0) + (playerStats.ai_hard_losses || 0)} games</div>
                       </div>
                     </div>
-                    
-                    {/* AI Wins Dropdown */}
-                    {totalAiGames > 0 && (
-                      <>
-                        <button
-                          onClick={() => setShowAIDetails(!showAIDetails)}
-                          className="w-full flex items-center justify-between p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
-                        >
-                          <span className="text-purple-400 text-xs font-medium">AI Wins by Difficulty</span>
-                          {showAIDetails ? <ChevronUp size={14} className="text-purple-400" /> : <ChevronDown size={14} className="text-purple-400" />}
-                        </button>
-                        {showAIDetails && (
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                              <div className="text-green-400 text-sm font-bold">{playerStats.ai_easy_wins || 0}</div>
-                              <div className="text-[10px] text-slate-500">Beginner</div>
-                              <div className="text-[9px] text-slate-600">{(playerStats.ai_easy_wins || 0) + (playerStats.ai_easy_losses || 0)} games</div>
-                            </div>
-                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                              <div className="text-amber-400 text-sm font-bold">{playerStats.ai_medium_wins || 0}</div>
-                              <div className="text-[10px] text-slate-500">Intermediate</div>
-                              <div className="text-[9px] text-slate-600">{(playerStats.ai_medium_wins || 0) + (playerStats.ai_medium_losses || 0)} games</div>
-                            </div>
-                            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
-                              <div className="text-purple-400 text-sm font-bold">{playerStats.ai_hard_wins || 0}</div>
-                              <div className="text-[10px] text-slate-500">Expert</div>
-                              <div className="text-[9px] text-slate-600">{(playerStats.ai_hard_wins || 0) + (playerStats.ai_hard_losses || 0)} games</div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    
-                    {/* Generated Puzzles Dropdown */}
-                    {totalPuzzlesSolved > 0 && (
-                      <>
-                        <button
-                          onClick={() => setShowPuzzleDetails(!showPuzzleDetails)}
-                          className="w-full mt-2 flex items-center justify-between p-2 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
-                        >
-                          <span className="text-green-400 text-xs font-medium">Generated Puzzles by Difficulty</span>
-                          {showPuzzleDetails ? <ChevronUp size={14} className="text-green-400" /> : <ChevronDown size={14} className="text-green-400" />}
-                        </button>
-                        {showPuzzleDetails && (
-                          <div className="mt-2 grid grid-cols-3 gap-2">
-                            <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                              <div className="text-green-400 text-sm font-bold">{playerStats.puzzles_easy_solved || 0}</div>
-                              <div className="text-[10px] text-slate-500">Beginner</div>
-                            </div>
-                            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                              <div className="text-amber-400 text-sm font-bold">{playerStats.puzzles_medium_solved || 0}</div>
-                              <div className="text-[10px] text-slate-500">Intermediate</div>
-                            </div>
-                            <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
-                              <div className="text-purple-400 text-sm font-bold">{playerStats.puzzles_hard_solved || 0}</div>
-                              <div className="text-[10px] text-slate-500">Expert</div>
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                    
-                    {/* Weekly Challenge */}
-                    {weeklyStats.total > 0 && (
-                      <div className="mt-3 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <Clock size={12} className="text-amber-400" />
-                          <span className="text-amber-400 text-xs font-medium">Weekly Challenge Podiums</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="text-center">
-                            <Medal size={14} className="text-amber-400 mx-auto mb-0.5" />
-                            <div className="text-amber-400 font-bold text-sm">{weeklyStats.first}</div>
-                            <div className="text-[9px] text-slate-500">1st</div>
-                          </div>
-                          <div className="text-center">
-                            <Medal size={14} className="text-slate-300 mx-auto mb-0.5" />
-                            <div className="text-slate-300 font-bold text-sm">{weeklyStats.second}</div>
-                            <div className="text-[9px] text-slate-500">2nd</div>
-                          </div>
-                          <div className="text-center">
-                            <Medal size={14} className="text-amber-600 mx-auto mb-0.5" />
-                            <div className="text-amber-600 font-bold text-sm">{weeklyStats.third}</div>
-                            <div className="text-[9px] text-slate-500">3rd</div>
-                          </div>
-                        </div>
+                  </div>
+                )}
+
+                {/* v7.26: Generated Puzzles - Own Section */}
+                {playerStats && totalPuzzlesSolved > 0 && (
+                  <div 
+                    className="rounded-xl p-4 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <Zap size={16} className="text-green-400" />
+                      <span className="font-bold text-white">Generated Puzzles</span>
+                      <span className="ml-auto text-green-400 text-sm font-bold">{totalPuzzlesSolved} solved</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-2.5 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                        <div className="text-green-400 text-lg font-bold">{playerStats.puzzles_easy_solved || 0}</div>
+                        <div className="text-[10px] text-slate-400">Beginner</div>
                       </div>
-                    )}
-                    
-                    {/* Creator Puzzles */}
-                    {creatorStats.totalCompleted > 0 && (
-                      <div className="mt-3 p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <LayoutGrid size={12} className="text-cyan-400" />
-                            <span className="text-cyan-400 text-xs font-medium">Creator Puzzles</span>
-                          </div>
-                          <span className="text-cyan-400 text-xs font-bold">{creatorStats.totalCompleted}/{creatorStats.totalPuzzles}</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-700/80 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-gradient-to-r from-cyan-500 to-sky-500 transition-all"
-                            style={{ width: `${(creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100}%` }}
-                          />
-                        </div>
+                      <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                        <div className="text-amber-400 text-lg font-bold">{playerStats.puzzles_medium_solved || 0}</div>
+                        <div className="text-[10px] text-slate-400">Intermediate</div>
                       </div>
-                    )}
+                      <div className="p-2.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                        <div className="text-purple-400 text-lg font-bold">{playerStats.puzzles_hard_solved || 0}</div>
+                        <div className="text-[10px] text-slate-400">Expert</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* v7.26: Weekly Challenge - Own Section */}
+                {weeklyStats.total > 0 && (
+                  <div 
+                    className="rounded-xl p-4 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: '1px solid rgba(251, 191, 36, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <Clock size={16} className="text-amber-400" />
+                      <span className="font-bold text-white">Weekly Challenge</span>
+                      <span className="ml-auto text-amber-400 text-sm font-bold">{weeklyStats.total} podiums</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                        <Medal size={16} className="text-amber-400 mx-auto mb-1" />
+                        <div className="text-amber-400 text-lg font-bold">{weeklyStats.first}</div>
+                        <div className="text-[10px] text-slate-400">1st Place</div>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-slate-500/10 border border-slate-400/20 text-center">
+                        <Medal size={16} className="text-slate-300 mx-auto mb-1" />
+                        <div className="text-slate-300 text-lg font-bold">{weeklyStats.second}</div>
+                        <div className="text-[10px] text-slate-400">2nd Place</div>
+                      </div>
+                      <div className="p-2.5 rounded-lg bg-amber-700/10 border border-amber-600/20 text-center">
+                        <Medal size={16} className="text-amber-600 mx-auto mb-1" />
+                        <div className="text-amber-600 text-lg font-bold">{weeklyStats.third}</div>
+                        <div className="text-[10px] text-slate-400">3rd Place</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* v7.26: Creator Puzzles - Own Section */}
+                {creatorStats.totalCompleted > 0 && (
+                  <div 
+                    className="rounded-xl p-4 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: '1px solid rgba(34, 211, 238, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <LayoutGrid size={16} className="text-cyan-400" />
+                      <span className="font-bold text-white">Creator Puzzles</span>
+                      <span className="ml-auto text-cyan-400 text-sm font-bold">{creatorStats.totalCompleted}/{creatorStats.totalPuzzles}</span>
+                    </div>
+                    <div className="h-2 bg-slate-700/80 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-cyan-500 to-sky-500 transition-all"
+                        style={{ width: `${(creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100}%` }}
+                      />
+                    </div>
+                    <div className="text-center mt-2 text-slate-400 text-xs">
+                      {Math.round((creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100)}% complete
+                    </div>
+                  </div>
+                )}
+
+                {/* v7.26: Play Streak - Own Section */}
+                {(playStreak.current > 0 || playStreak.longest > 0) && (
+                  <div 
+                    className="rounded-xl p-4 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: '1px solid rgba(249, 115, 22, 0.3)'
+                    }}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <Flame size={16} className="text-orange-400" />
+                      <span className="font-bold text-white">Play Streak</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-500/20 text-center">
+                        <div className="text-orange-400 text-2xl font-bold">{playStreak.current}</div>
+                        <div className="text-xs text-slate-400">Current</div>
+                      </div>
+                      <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                        <div className="text-amber-400 text-2xl font-bold">{playStreak.longest}</div>
+                        <div className="text-xs text-slate-400">Best</div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
