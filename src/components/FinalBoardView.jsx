@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.24 - Fixed spacing (justify-start instead of center), increased grid opacity (0.12), larger board (420px max)
 // v7.23 - Enhanced grid background opacity (0.03 -> 0.06) for better visibility
 // v7.22 - FloatingPieces with immediateStart and maxDelay=0 for instant smooth animation
 // v7.21 - Added FloatingPieces background animation (purple theme)
@@ -310,11 +311,11 @@ const FinalBoardView = ({
     <div 
       className="fixed inset-0 z-[60] flex flex-col overflow-hidden"
       style={{
-        // v7.23: Enhanced cyberpunk grid background - increased opacity for visibility
+        // v7.24: Enhanced cyberpunk grid background - increased opacity to 0.12 for better visibility
         background: `
-          linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.98)),
-          repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.06) 40px, rgba(139, 92, 246, 0.06) 41px),
-          repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.06) 40px, rgba(139, 92, 246, 0.06) 41px)
+          linear-gradient(to bottom, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.95)),
+          repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px),
+          repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px)
         `,
         backgroundColor: '#0f172a',
       }}
@@ -433,8 +434,8 @@ const FinalBoardView = ({
         )}
       </div>
 
-      {/* BOARD + CONTROLS AREA - Centered together */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-2 min-h-0">
+      {/* BOARD + CONTROLS AREA - v7.24: Start from top with padding for better spacing */}
+      <div className="flex-1 flex flex-col items-center justify-start pt-4 sm:pt-8 px-4 py-2 min-h-0">
         {isLoadingMoves ? (
           <div className="text-center">
             <Loader size={32} className="text-purple-400 animate-spin mx-auto mb-2" />
@@ -448,11 +449,11 @@ const FinalBoardView = ({
               style={{
                 background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))',
                 boxShadow: '0 0 30px rgba(139, 92, 246, 0.15), inset 0 0 20px rgba(0,0,0,0.3)',
-                // Board sizing - leaves room for controls below
-                width: 'min(calc(100vw - 32px), calc(100dvh - 320px), calc(100vh - 320px))',
-                height: 'min(calc(100vw - 32px), calc(100dvh - 320px), calc(100vh - 320px))',
-                maxWidth: '340px',
-                maxHeight: '340px',
+                // v7.24: Increased board size for desktop, responsive sizing
+                width: 'min(calc(100vw - 32px), calc(100dvh - 280px), calc(100vh - 280px))',
+                height: 'min(calc(100vw - 32px), calc(100dvh - 280px), calc(100vh - 280px))',
+                maxWidth: '420px',
+                maxHeight: '420px',
               }}
             >
             {currentState.board.map((row, rowIdx) =>

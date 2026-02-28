@@ -1,4 +1,5 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
+// v7.21: Performance - parallel loading with Promise.all for faster modal open
 // v7.20: Fixed double # in rank, added AI/puzzle detail dropdowns, puzzles solved includes both types
 // v7.19: Fixed scroll - separate backdrop from modal container for proper touch handling
 // v7.17: Improved scroll with touchAction, backdrop click to close
@@ -146,10 +147,14 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   
   useEffect(() => {
     if (isOpen && !isOffline) {
-      loadStats();
-      loadPlayStreak();
-      loadLeaderboardRank();
-      loadCreatorPuzzleStats();
+      // v7.21: Use Promise.all for parallel loading
+      setLoading(true);
+      Promise.all([
+        loadStats(),
+        loadPlayStreak(),
+        loadLeaderboardRank(),
+        loadCreatorPuzzleStats()
+      ]).finally(() => setLoading(false));
     }
   }, [isOpen, isOffline]);
   
@@ -167,7 +172,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   }, [isOpen]);
   
   const loadStats = async () => {
-    setLoading(true);
+    // v7.21: Loading state now managed by Promise.all in useEffect
     const data = await statsService.getStats();
     if (data) {
       setStats(statsService.calculateDerivedStats(data));
@@ -187,8 +192,6 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         console.warn('[PlayerStatsModal] Error loading weekly stats:', err);
       }
     }
-    
-    setLoading(false);
   };
   
   const loadPlayStreak = async () => {

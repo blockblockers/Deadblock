@@ -1,4 +1,6 @@
 // Online Menu - Hub for online features
+// v7.27: Performance - parallel loading with Promise.all for faster init and refresh
+// v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
 // v7.25: FinalBoardView spacing fix - explicitly clear viewingPlayerId before opening
 // v7.24: Simplified FinalBoardView opening - removed RAF, use conditional hide + key for clean state
 // v7.23: Added key prop to FinalBoardView to force clean remount from different paths
@@ -469,17 +471,17 @@ const OnlineMenu = ({
     // Set loading only on initial load
     setLoading(true);
     
+    // v7.27: Parallel initial load for faster startup
     const load = async () => {
-      await loadGames();
-      await loadInvites();
+      await Promise.all([loadGames(), loadInvites()]);
     };
     
     load();
     
     // Periodic refresh every 45 seconds (reduced from 15s to save battery/CPU)
     const refreshInterval = setInterval(() => {
-      loadGames();
-      loadInvites();
+      // v7.27: Parallel refresh
+      Promise.all([loadGames(), loadInvites()]);
     }, 45000);
     
     // Also refresh when tab becomes visible again (but throttle)
@@ -489,8 +491,7 @@ const OnlineMenu = ({
         // Only refresh if more than 10 seconds since last refresh
         if (Date.now() - lastRefresh > 10000) {
           lastRefresh = Date.now();
-          loadGames();
-          loadInvites();
+          Promise.all([loadGames(), loadInvites()]);
         }
       }
     };
@@ -501,8 +502,7 @@ const OnlineMenu = ({
       // Only refresh if more than 10 seconds since last refresh
       if (Date.now() - lastRefresh > 10000) {
         lastRefresh = Date.now();
-        loadGames();
-        loadInvites();
+        Promise.all([loadGames(), loadInvites()]);
       }
     };
     window.addEventListener('focus', handleFocus);
@@ -832,12 +832,12 @@ const OnlineMenu = ({
     if (refreshing) return;
     setRefreshing(true);
     soundManager.playButtonClick();
-    // Refresh profile to get latest data
-    if (refreshProfile) {
-      await refreshProfile();
-    }
-    await loadGames();
-    await loadInvites();
+    // v7.27: Parallel refresh for faster response
+    await Promise.all([
+      refreshProfile ? refreshProfile() : Promise.resolve(),
+      loadGames(),
+      loadInvites()
+    ]);
     setRefreshing(false);
   };
 
@@ -2675,9 +2675,20 @@ const OnlineMenu = ({
             onClick={async () => {
               soundManager.playButtonClick();
               setSendingInvite(opponent.id);
-              const { error } = await inviteService.sendInvite(profile.id, opponent.id);
+              const { data, error } = await inviteService.sendInvite(profile.id, opponent.id);
               setSendingInvite(null);
-              if (!error) {
+              
+              if (error) {
+                console.error('Error sending invite from recent games:', error);
+              } else if (data?.game) {
+                // v7.26: If the other user had already invited us, a game was created
+                soundManager.playSound('win');
+                setShowRecentGames(false);
+                onResumeGame(data.game);
+              } else {
+                // v7.26: Invite sent successfully - refresh pending invites and play sound
+                soundManager.playClickSound('confirm');
+                await loadInvites();
                 setShowRecentGames(false);
               }
             }}
@@ -2722,10 +2733,20 @@ const OnlineMenu = ({
           onInviteFriend={async (friend) => {
             // Send game invite to friend
             setSendingInvite(friend.id);
-            const { error } = await inviteService.sendInvite(profile.id, friend.id);
+            const { data, error } = await inviteService.sendInvite(profile.id, friend.id);
             setSendingInvite(null);
-            if (!error) {
+            
+            if (error) {
+              console.error('Error sending invite to friend:', error);
+            } else if (data?.game) {
+              // v7.26: If the other user had already invited us, a game was created
+              soundManager.playSound('win');
+              setShowFriendsList(false);
+              onResumeGame(data.game);
+            } else {
+              // v7.26: Invite sent successfully - refresh pending invites
               soundManager.playSound('success');
+              await loadInvites();
               setShowFriendsList(false);
             }
           }}
@@ -2749,9 +2770,20 @@ const OnlineMenu = ({
           currentUserId={profile?.id}
           onViewGame={handleOpenFinalBoardView}
           onInviteToGame={async (player) => {
-            const { error } = await inviteService.sendInvite(profile.id, player.id);
-            if (!error) {
+            const { data, error } = await inviteService.sendInvite(profile.id, player.id);
+            
+            if (error) {
+              console.error('Error sending invite from profile:', error);
+            } else if (data?.game) {
+              // v7.26: If the other user had already invited us, a game was created
+              soundManager.playSound('win');
+              setViewingPlayerId(null);
+              setViewingPlayerData(null);
+              onResumeGame(data.game);
+            } else {
+              // v7.26: Invite sent successfully - refresh pending invites
               soundManager.playSound('success');
+              await loadInvites();
               setViewingPlayerId(null);
               setViewingPlayerData(null);
             }
