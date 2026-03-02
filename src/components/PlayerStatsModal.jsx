@@ -1,4 +1,6 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
+// v7.23: Performance - Single RPC call (get_my_stats) replaces 4+ API calls, with fallback
+// v7.22: AI Battles and Generated Puzzles as independent sections (not sub-dropdowns in Overview)
 // v7.21: Performance - parallel loading with Promise.all for faster modal open
 // v7.20: Fixed double # in rank, added AI/puzzle detail dropdowns, puzzles solved includes both types
 // v7.19: Fixed scroll - separate backdrop from modal container for proper touch handling
@@ -136,8 +138,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   });
   
   // Dropdown states for detailed breakdowns
-  const [showAIDetails, setShowAIDetails] = useState(false);
-  const [showPuzzleDetails, setShowPuzzleDetails] = useState(false);
+  // v7.22: Removed showAIDetails/showPuzzleDetails - now independent sections
   
   const scrollContainerRef = useRef(null);
   
@@ -147,14 +148,93 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   
   useEffect(() => {
     if (isOpen && !isOffline) {
-      // v7.21: Use Promise.all for parallel loading
+      // v7.23: Try single RPC call first (much faster), fall back to parallel loading
       setLoading(true);
-      Promise.all([
-        loadStats(),
-        loadPlayStreak(),
-        loadLeaderboardRank(),
-        loadCreatorPuzzleStats()
-      ]).finally(() => setLoading(false));
+      
+      const loadAllStats = async () => {
+        // Try RPC first
+        if (profile?.id && isSupabaseConfigured()) {
+          try {
+            const { data, error } = await supabase.rpc('get_my_stats', {
+              p_user_id: profile.id
+            });
+            
+            if (!error && data) {
+              // Process profile stats
+              if (data.profile) {
+                const p = data.profile;
+                setStats(statsService.calculateDerivedStats({
+                  games_won: p.games_won,
+                  games_played: p.games_played,
+                  puzzles_easy_solved: p.puzzles_easy_solved,
+                  puzzles_medium_solved: p.puzzles_medium_solved,
+                  puzzles_hard_solved: p.puzzles_hard_solved,
+                  ai_easy_wins: p.ai_easy_wins,
+                  ai_easy_losses: p.ai_easy_losses,
+                  ai_medium_wins: p.ai_medium_wins,
+                  ai_medium_losses: p.ai_medium_losses,
+                  ai_hard_wins: p.ai_hard_wins,
+                  ai_hard_losses: p.ai_hard_losses,
+                  speed_best_streak: p.speed_best_streak,
+                  local_games_played: p.local_games_played
+                }));
+              }
+              
+              // Process streak
+              if (data.streak) {
+                setPlayStreak({
+                  current: data.streak.current_streak || 0,
+                  longest: data.streak.longest_streak || 0,
+                  status: data.streak.streak_status || 'none'
+                });
+              }
+              
+              // Process weekly
+              if (data.weekly) {
+                setWeeklyStats({
+                  first: data.weekly.first || 0,
+                  second: data.weekly.second || 0,
+                  third: data.weekly.third || 0,
+                  total: data.weekly.total || 0
+                });
+              }
+              
+              // Process creator stats
+              if (data.creator) {
+                setCreatorStats({
+                  easy: { completed: data.creator.easy_completed || 0, total: data.creator.easy_total || 25 },
+                  medium: { completed: data.creator.medium_completed || 0, total: data.creator.medium_total || 35 },
+                  hard: { completed: data.creator.hard_completed || 0, total: data.creator.hard_total || 25 },
+                  expert: { completed: data.creator.expert_completed || 0, total: data.creator.expert_total || 15 },
+                  totalCompleted: data.creator.total_completed || 0,
+                  totalPuzzles: data.creator.total_puzzles || 100
+                });
+              }
+              
+              // Process leaderboard rank
+              if (data.leaderboard_rank) {
+                setLeaderboardRank(data.leaderboard_rank);
+              }
+              
+              setLoading(false);
+              return; // Success - skip fallback
+            }
+          } catch (rpcError) {
+            console.log('[PlayerStatsModal] RPC not available, using fallback:', rpcError.message);
+          }
+        }
+        
+        // Fallback: parallel loading
+        await Promise.all([
+          loadStats(),
+          loadPlayStreak(),
+          loadLeaderboardRank(),
+          loadCreatorPuzzleStats()
+        ]);
+        setLoading(false);
+      };
+      
+      loadAllStats();
     }
   }, [isOpen, isOffline]);
   
@@ -172,7 +252,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   }, [isOpen]);
   
   const loadStats = async () => {
-    // v7.21: Loading state now managed by Promise.all in useEffect
+    // v7.23: Fallback only - RPC is preferred path
     const data = await statsService.getStats();
     if (data) {
       setStats(statsService.calculateDerivedStats(data));
@@ -525,62 +605,93 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                     color="orange"
                   />
                 </div>
-                
-                {/* AI Wins Dropdown */}
-                <button
-                  onClick={() => setShowAIDetails(!showAIDetails)}
-                  className="w-full mt-3 flex items-center justify-between p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-colors"
-                >
-                  <span className="text-purple-400 text-xs font-medium">AI Wins by Difficulty</span>
-                  {showAIDetails ? <ChevronUp size={14} className="text-purple-400" /> : <ChevronDown size={14} className="text-purple-400" />}
-                </button>
-                {showAIDetails && (
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                      <div className="text-green-400 text-sm font-bold">{stats?.ai_easy_wins || 0}</div>
-                      <div className="text-[10px] text-slate-500">Beginner</div>
-                      <div className="text-[9px] text-slate-600">{(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)} games</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                      <div className="text-amber-400 text-sm font-bold">{stats?.ai_medium_wins || 0}</div>
-                      <div className="text-[10px] text-slate-500">Intermediate</div>
-                      <div className="text-[9px] text-slate-600">{(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)} games</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
-                      <div className="text-purple-400 text-sm font-bold">{stats?.ai_hard_wins || 0}</div>
-                      <div className="text-[10px] text-slate-500">Expert</div>
-                      <div className="text-[9px] text-slate-600">{(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)} games</div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Generated Puzzles Dropdown */}
-                <button
-                  onClick={() => setShowPuzzleDetails(!showPuzzleDetails)}
-                  className="w-full mt-3 flex items-center justify-between p-2 rounded-lg bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
-                >
-                  <span className="text-green-400 text-xs font-medium">Generated Puzzles by Difficulty</span>
-                  {showPuzzleDetails ? <ChevronUp size={14} className="text-green-400" /> : <ChevronDown size={14} className="text-green-400" />}
-                </button>
-                {showPuzzleDetails && (
-                  <div className="mt-2 grid grid-cols-3 gap-2">
-                    <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                      <div className="text-green-400 text-sm font-bold">{stats?.puzzles_easy_solved || 0}</div>
-                      <div className="text-[10px] text-slate-500">Beginner</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                      <div className="text-amber-400 text-sm font-bold">{stats?.puzzles_medium_solved || 0}</div>
-                      <div className="text-[10px] text-slate-500">Intermediate</div>
-                    </div>
-                    <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
-                      <div className="text-purple-400 text-sm font-bold">{stats?.puzzles_hard_solved || 0}</div>
-                      <div className="text-[10px] text-slate-500">Expert</div>
-                    </div>
-                  </div>
-                )}
               </Section>
               
-              {/* Play Streak Section - NEW */}
+              {/* v7.22: AI Battles Section - Independent */}
+              <Section 
+                id="ai_battles" 
+                title="AI Battles" 
+                icon={Bot} 
+                color="purple"
+                expanded={expandedSection === 'ai_battles'}
+                onToggle={handleSectionToggle}
+              >
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <StatCard 
+                    icon={Trophy} 
+                    label="Total Wins" 
+                    value={stats?.aiTotalWins || 0}
+                    subValue={`of ${stats?.aiTotalGames || 0} games`}
+                    color="purple"
+                  />
+                  <StatCard 
+                    icon={Target} 
+                    label="Win Rate" 
+                    value={stats?.aiTotalGames > 0 ? Math.round((stats?.aiTotalWins / stats?.aiTotalGames) * 100) : 0}
+                    subValue="%"
+                    color="cyan"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                    <div className="text-green-400 text-sm font-bold">{stats?.ai_easy_wins || 0}</div>
+                    <div className="text-[10px] text-slate-500">Beginner</div>
+                    <div className="text-[9px] text-slate-600">{(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)} games</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                    <div className="text-amber-400 text-sm font-bold">{stats?.ai_medium_wins || 0}</div>
+                    <div className="text-[10px] text-slate-500">Intermediate</div>
+                    <div className="text-[9px] text-slate-600">{(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)} games</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                    <div className="text-purple-400 text-sm font-bold">{stats?.ai_hard_wins || 0}</div>
+                    <div className="text-[10px] text-slate-500">Expert</div>
+                    <div className="text-[9px] text-slate-600">{(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)} games</div>
+                  </div>
+                </div>
+              </Section>
+              
+              {/* v7.22: Generated Puzzles Section - Independent */}
+              <Section 
+                id="gen_puzzles" 
+                title="Generated Puzzles" 
+                icon={Zap} 
+                color="green"
+                expanded={expandedSection === 'gen_puzzles'}
+                onToggle={handleSectionToggle}
+              >
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <StatCard 
+                    icon={Target} 
+                    label="Total Solved" 
+                    value={stats?.puzzleTotalSolved || 0}
+                    color="green"
+                  />
+                  <StatCard 
+                    icon={Zap} 
+                    label="Speed Best" 
+                    value={stats?.speed_best_streak || 0}
+                    subValue="in a row"
+                    color="orange"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                    <div className="text-green-400 text-sm font-bold">{stats?.puzzles_easy_solved || 0}</div>
+                    <div className="text-[10px] text-slate-500">Beginner</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                    <div className="text-amber-400 text-sm font-bold">{stats?.puzzles_medium_solved || 0}</div>
+                    <div className="text-[10px] text-slate-500">Intermediate</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                    <div className="text-purple-400 text-sm font-bold">{stats?.puzzles_hard_solved || 0}</div>
+                    <div className="text-[10px] text-slate-500">Expert</div>
+                  </div>
+                </div>
+              </Section>
+              
+              {/* Play Streak Section */}
               <Section 
                 id="streak" 
                 title="Play Streak" 
