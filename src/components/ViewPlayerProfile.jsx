@@ -501,12 +501,12 @@ const ViewPlayerProfile = ({
       }
       
       // Creator puzzle completions
-      const headers = getAuthHeaders();
-      if (headers) {
+      const creatorHeaders = getAuthHeaders();
+      if (creatorHeaders) {
         try {
           const creatorRes = await fetch(
             `${SUPABASE_URL}/rest/v1/creator_puzzle_completions?user_id=eq.${playerId}&select=puzzle_number`,
-            { headers }
+            { headers: creatorHeaders }
           );
           if (creatorRes.ok) {
             const creatorData = await creatorRes.json();
