@@ -1,5 +1,4 @@
 // Game Sync Service - Real-time game state management
-// v7.15.4: Fixed getMatchmakingCount URL encoding for date parameter
 // FIXED: 
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
@@ -487,8 +486,9 @@ class GameSyncService {
     }
   }
 
-  // v7.15.2: Get active games + unviewed completed games (losses/wins the user hasn't seen yet)
-  // Uses localStorage to track which completed games have been viewed
+  // v7.16: Get active games + unviewed completed games (losses/wins the user hasn't seen yet)
+  // Now uses database columns (player1_viewed_at, player2_viewed_at) instead of localStorage
+  // Falls back to localStorage if columns don't exist yet
   async getActiveAndUnviewedGames(userId) {
     if (!supabase || !userId) return { data: [], error: null };
 
@@ -498,37 +498,54 @@ class GameSyncService {
     }
 
     try {
-      // Get viewed games from localStorage
-      const viewedGames = this.getViewedGames();
-
-      // Fetch active games
+      // Fetch active games (in_progress status)
       const activeResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.active&order=updated_at.desc&select=*`,
+        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=in.(in_progress,active)&order=updated_at.desc&select=*`,
         { headers }
       );
 
-      // Fetch ALL completed games (we'll filter by viewed status client-side)
-      // Limit to last 50 to avoid fetching entire history
+      // v7.16: Fetch completed games with viewed_at columns
+      // Filter for unviewed games directly in the query
       const completedResponse = await fetch(
-        `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.completed&order=updated_at.desc&limit=50&select=*`,
+        `${SUPABASE_URL}/rest/v1/games?or=(and(player1_id.eq.${userId},player1_viewed_at.is.null),and(player2_id.eq.${userId},player2_viewed_at.is.null))&status=eq.completed&order=updated_at.desc&limit=20&select=*`,
         { headers }
       );
 
-      if (!activeResponse.ok || !completedResponse.ok) {
+      if (!activeResponse.ok) {
         return { data: [], error: { message: 'Failed to fetch games' } };
       }
 
       const activeGames = await activeResponse.json();
-      const completedGames = await completedResponse.json();
+      let unviewedCompleted = [];
 
-      // Filter completed games to only include unviewed ones (no time limit)
-      const unviewedCompleted = completedGames.filter(game => !viewedGames.includes(game.id));
-
-      // Mark unviewed completed games with flags
-      unviewedCompleted.forEach(game => {
-        game._isUnviewedResult = true;
-        game._isLoss = game.winner_id !== userId;
-      });
+      // Check if database query worked (columns exist)
+      if (completedResponse.ok) {
+        const dbUnviewed = await completedResponse.json();
+        // Mark unviewed completed games with flags
+        dbUnviewed.forEach(game => {
+          game._isUnviewedResult = true;
+          game._isLoss = game.winner_id !== userId;
+        });
+        unviewedCompleted = dbUnviewed;
+      } else {
+        // Fallback to localStorage if columns don't exist yet
+        console.log('[GameSync] Using localStorage fallback for viewed tracking');
+        const viewedGames = this.getViewedGames();
+        
+        const fallbackResponse = await fetch(
+          `${SUPABASE_URL}/rest/v1/games?or=(player1_id.eq.${userId},player2_id.eq.${userId})&status=eq.completed&order=updated_at.desc&limit=50&select=*`,
+          { headers }
+        );
+        
+        if (fallbackResponse.ok) {
+          const completedGames = await fallbackResponse.json();
+          unviewedCompleted = completedGames.filter(game => !viewedGames.includes(game.id));
+          unviewedCompleted.forEach(game => {
+            game._isUnviewedResult = true;
+            game._isLoss = game.winner_id !== userId;
+          });
+        }
+      }
 
       // Combine active + unviewed completed
       const allGames = [...unviewedCompleted, ...activeGames];
@@ -569,10 +586,38 @@ class GameSyncService {
     }
   }
 
-  // v7.15.2: Mark a completed game as viewed (stores in localStorage)
-  markGameAsViewed(gameId) {
+  // v7.16: Mark a completed game as viewed (stores in database)
+  // Falls back to localStorage if database update fails
+  async markGameAsViewed(gameId, userId) {
     if (!gameId) return;
     
+    const headers = getAuthHeaders();
+    
+    // Try database first
+    if (headers && userId) {
+      try {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/rpc/mark_game_viewed`,
+          {
+            method: 'POST',
+            headers: {
+              ...headers,
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({ p_game_id: gameId, p_user_id: userId })
+          }
+        );
+        
+        if (response.ok) {
+          console.log('[GameSync] Game marked as viewed in database:', gameId);
+          return;
+        }
+      } catch (e) {
+        console.log('[GameSync] Database mark_game_viewed failed, using localStorage fallback');
+      }
+    }
+    
+    // Fallback to localStorage
     try {
       const viewedGames = this.getViewedGames();
       if (!viewedGames.includes(gameId)) {
@@ -839,11 +884,8 @@ class GameSyncService {
       // Players are "active" if they joined recently (within last 2 minutes) and haven't been matched
       const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       
-      // URL encode the date to handle special characters (colons, periods)
-      const encodedDate = encodeURIComponent(twoMinutesAgo);
-      
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/matchmaking_queue?status=eq.waiting&queued_at=gte.${encodedDate}&select=id`,
+        `${SUPABASE_URL}/rest/v1/matchmaking_queue?status=eq.waiting&created_at=gte.${twoMinutesAgo}&select=id`,
         { 
           headers: {
             ...headers,
@@ -853,7 +895,6 @@ class GameSyncService {
       );
 
       if (!response.ok) {
-        // Silently return 0 - table may not exist or other expected errors
         return { data: { count: 0 }, error: null };
       }
 

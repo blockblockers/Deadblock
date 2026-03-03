@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.30: Fixed crash - removed undefined setShowAIDetails/setShowPuzzleDetails calls
 // v7.29: Stats layout aligned with PlayerStatsModal - collapsible sections for all categories
 // v7.28: Performance - Single RPC call (get_player_profile) with fallback to original loading
 // v7.26: Fixed stats - ALWAYS fetch full profile from DB, use service calls for streak/weekly
@@ -238,8 +239,7 @@ const ViewPlayerProfile = ({
       setRecentGames([]);
       setHeadToHead(null);
       setPlayerStats(null);
-      setShowAIDetails(false);
-      setShowPuzzleDetails(false);
+      setExpandedSection('overview'); // v7.30: Reset to overview (replaced removed showAIDetails/showPuzzleDetails)
       setPlayStreak({ current: 0, longest: 0 });
       setWeeklyStats({ first: 0, second: 0, third: 0, total: 0 });
       setCreatorStats({ totalCompleted: 0, totalPuzzles: 100 });
