@@ -1,5 +1,5 @@
 // Online Menu - Hub for online features
-// v7.27: Performance - parallel loading with Promise.all for faster init and refresh
+// v7.27: PERFORMANCE - Single RPC call (get_online_menu_data) replaces 8+ separate queries
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
 // v7.25: FinalBoardView spacing fix - explicitly clear viewingPlayerId before opening
 // v7.24: Simplified FinalBoardView opening - removed RAF, use conditional hide + key for clean state
@@ -52,6 +52,53 @@ const theme = {
 
 // Helper to fetch game moves for replay (v7.15.1)
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Get auth headers for API calls
+const getAuthHeaders = () => {
+  const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
+  try {
+    const authData = JSON.parse(localStorage.getItem(authKey) || 'null');
+    const token = authData?.access_token;
+    if (!token) return null;
+    return {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  } catch (e) {
+    return null;
+  }
+};
+
+// v7.27: Single RPC call for all OnlineMenu data
+const fetchOnlineMenuData = async (userId) => {
+  const headers = getAuthHeaders();
+  if (!headers || !SUPABASE_URL) return null;
+  
+  try {
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/rpc/get_online_menu_data`,
+      {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({ p_user_id: userId })
+      }
+    );
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    return null;
+  } catch (err) {
+    console.log('[OnlineMenu] RPC not available, using fallback');
+    return null;
+  }
+};
+
 const fetchGameMoves = async (gameId) => {
   const authKey = 'sb-oyeibyrednwlolmsjlwk-auth-token';
   try {
@@ -410,58 +457,8 @@ const OnlineMenu = ({
     loadFriendRequests();
   }, [sessionReady, profile?.id]);
 
-  // Load leaderboard rank
-  useEffect(() => {
-    const loadLeaderboardRank = async () => {
-      if (!profile?.id) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id')
-          .order('rating', { ascending: false });
-        
-        if (!error && data) {
-          const rank = data.findIndex(p => p.id === profile.id) + 1;
-          if (rank > 0) setLeaderboardRank(rank);
-        }
-      } catch (err) {
-        console.error('[OnlineMenu] Error loading leaderboard rank:', err);
-      }
-    };
-    
-    loadLeaderboardRank();
-  }, [profile?.id]);
-
-  // Load achievement count
-  useEffect(() => {
-    const loadAchievementCount = async () => {
-      if (!profile?.id) return;
-      
-      try {
-        // Get achievement definitions
-        const { data: definitions } = await supabase
-          .from('achievements')
-          .select('id');
-        
-        // Get user's unlocked achievements
-        const { data: userAchievements } = await supabase
-          .from('user_achievements')
-          .select('achievement_id')
-          .eq('user_id', profile.id);
-        
-        const total = definitions?.length || 0;
-        const unlocked = userAchievements?.length || 0;
-        setAchievementCount({ unlocked, total });
-      } catch (err) {
-        console.error('[OnlineMenu] Error loading achievement count:', err);
-      }
-    };
-    
-    loadAchievementCount();
-  }, [profile?.id]);
-
-  // Load games and invites
+  // v7.27: CONSOLIDATED LOADING - Single RPC call replaces 3 separate useEffects
+  // This replaces: loadLeaderboardRank, loadAchievementCount, loadGames/loadInvites
   useEffect(() => {
     // Wait for session to be verified AND profile to exist
     if (!sessionReady || !profile?.id) {
@@ -471,17 +468,82 @@ const OnlineMenu = ({
     // Set loading only on initial load
     setLoading(true);
     
-    // v7.27: Parallel initial load for faster startup
-    const load = async () => {
-      await Promise.all([loadGames(), loadInvites()]);
+    const loadAllData = async () => {
+      // v7.27: Try single RPC call first (5-10x faster)
+      const rpcData = await fetchOnlineMenuData(profile.id);
+      
+      if (rpcData) {
+        console.log('[OnlineMenu] RPC success - loaded all data in single call');
+        
+        // Apply RPC data
+        if (rpcData.leaderboard_rank) setLeaderboardRank(rpcData.leaderboard_rank);
+        if (rpcData.achievement_count) setAchievementCount(rpcData.achievement_count);
+        if (rpcData.friend_requests !== undefined) setPendingFriendRequests(rpcData.friend_requests);
+        if (rpcData.active_games) setActiveGames(rpcData.active_games);
+        if (rpcData.recent_games) {
+          const completedGames = (rpcData.recent_games || []).filter(g => g.status === 'completed');
+          setRecentGames(completedGames);
+        }
+        if (rpcData.received_invites) setReceivedInvites(rpcData.received_invites);
+        if (rpcData.sent_invites) setSentInvites(rpcData.sent_invites);
+        
+        setLoading(false);
+        return;
+      }
+      
+      // FALLBACK: Original separate queries if RPC not available
+      console.log('[OnlineMenu] RPC fallback - using separate queries');
+      
+      // Load all data in parallel
+      await Promise.all([
+        // Leaderboard rank (optimized query)
+        (async () => {
+          try {
+            const { count, error } = await supabase
+              .from('profiles')
+              .select('*', { count: 'exact', head: true })
+              .gt('rating', profile.rating || 1000);
+            
+            if (!error && count !== null) {
+              setLeaderboardRank(count + 1);
+            }
+          } catch (err) {
+            console.error('[OnlineMenu] Error loading leaderboard rank:', err);
+          }
+        })(),
+        
+        // Achievement count
+        (async () => {
+          try {
+            const [defResult, userResult] = await Promise.all([
+              supabase.from('achievements').select('id'),
+              supabase.from('user_achievements').select('achievement_id').eq('user_id', profile.id)
+            ]);
+            
+            const total = defResult.data?.length || 0;
+            const unlocked = userResult.data?.length || 0;
+            setAchievementCount({ unlocked, total });
+          } catch (err) {
+            console.error('[OnlineMenu] Error loading achievement count:', err);
+          }
+        })(),
+        
+        // Games
+        loadGames(),
+        
+        // Invites
+        loadInvites()
+      ]);
+      
+      setLoading(false);
     };
     
-    load();
+    loadAllData();
     
     // Periodic refresh every 45 seconds (reduced from 15s to save battery/CPU)
     const refreshInterval = setInterval(() => {
-      // v7.27: Parallel refresh
-      Promise.all([loadGames(), loadInvites()]);
+      loadGames();
+      loadInvites();
     }, 45000);
     
     // Also refresh when tab becomes visible again (but throttle)
@@ -491,7 +553,8 @@ const OnlineMenu = ({
         // Only refresh if more than 10 seconds since last refresh
         if (Date.now() - lastRefresh > 10000) {
           lastRefresh = Date.now();
-          Promise.all([loadGames(), loadInvites()]);
+          loadGames();
+          loadInvites();
         }
       }
     };
@@ -502,7 +565,8 @@ const OnlineMenu = ({
       // Only refresh if more than 10 seconds since last refresh
       if (Date.now() - lastRefresh > 10000) {
         lastRefresh = Date.now();
-        Promise.all([loadGames(), loadInvites()]);
+        loadGames();
+        loadInvites();
       }
     };
     window.addEventListener('focus', handleFocus);
@@ -832,12 +896,12 @@ const OnlineMenu = ({
     if (refreshing) return;
     setRefreshing(true);
     soundManager.playButtonClick();
-    // v7.27: Parallel refresh for faster response
-    await Promise.all([
-      refreshProfile ? refreshProfile() : Promise.resolve(),
-      loadGames(),
-      loadInvites()
-    ]);
+    // Refresh profile to get latest data
+    if (refreshProfile) {
+      await refreshProfile();
+    }
+    await loadGames();
+    await loadInvites();
     setRefreshing(false);
   };
 

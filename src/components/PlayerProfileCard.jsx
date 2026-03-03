@@ -1,4 +1,5 @@
 // PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, and achievements
+// v7.18: PERFORMANCE - Optimized leaderboard rank query (COUNT instead of fetching all profiles)
 // v7.17: Match OnlineMenu profile display style - inline stats with leaderboard rank and achievement count
 // Place in src/components/PlayerProfileCard.jsx
 
@@ -231,13 +232,13 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
   
-  // Fetch leaderboard rank
+  // Fetch leaderboard rank - v7.18: Optimized with COUNT instead of fetching all profiles
   useEffect(() => {
     const fetchLeaderboardRank = async () => {
       if (!effectiveProfile?.id) return;
       
       try {
-        // Count players with higher rating
+        // v7.18: Use COUNT query instead of fetching all profiles (much faster)
         const { count, error } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true })

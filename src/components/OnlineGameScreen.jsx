@@ -1,4 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.22: Added orange color to GlowOrbButton for Home button
 // v7.21: Removed top-left menu button, updated bottom menu to orange Home icon
 // v7.18: Fixed 5-second game over modal - removed stale closure check, use ref only
 // v7.17: Fixed gold confetti highlighting all cells of winning piece using getPieceCoords
@@ -54,6 +55,7 @@ const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className 
   const colorClasses = {
     cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
     amber: 'from-amber-500 to-orange-600 shadow-[0_0_15px_rgba(251,191,36,0.4)] hover:shadow-[0_0_25px_rgba(251,191,36,0.6)]',
+    orange: 'from-orange-500 to-amber-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]',
     green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
     red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
     purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
