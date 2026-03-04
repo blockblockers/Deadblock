@@ -1,8 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v2.0: Smaller puzzle info bar (text-base number, text-xs name, reduced padding)
-// v1.9: Cyberpunk neon styled puzzle info bar with glowing text
-// v1.8: Fixed difficulty colors - Easy=green, Medium=amber, Hard=red, Expert=purple
-// v1.7: Neon glow square badge, theme-colored puzzle info, fixed AI piece removal from tray
+// v2.1: Fixed freeze on "Next Puzzle" - reset mountedRef and clear timeouts for new puzzles
 // v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
 // v1.5: Attempt persistence - loads/saves attempts to database across sessions
 // v1.4: Removed duplicate "New" button (creator puzzles don't generate new puzzles)
@@ -51,25 +48,25 @@ const difficultyThemes = {
     panelShadow: 'shadow-[0_0_40px_rgba(34,197,94,0.3)]',
   },
   medium: {
-    gridColor: 'rgba(251, 191, 36, 0.3)',
-    glow1: 'bg-amber-500/30',
-    glow2: 'bg-orange-500/25',
-    panelBorder: 'border-amber-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.3)]',
+    gridColor: 'rgba(34, 211, 238, 0.3)',
+    glow1: 'bg-cyan-500/30',
+    glow2: 'bg-sky-500/25',
+    panelBorder: 'border-cyan-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
   },
   hard: {
-    gridColor: 'rgba(239, 68, 68, 0.3)',
-    glow1: 'bg-red-500/30',
-    glow2: 'bg-rose-500/25',
-    panelBorder: 'border-red-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
-  },
-  expert: {
     gridColor: 'rgba(168, 85, 247, 0.3)',
     glow1: 'bg-purple-500/30',
     glow2: 'bg-pink-500/25',
     panelBorder: 'border-purple-500/40',
     panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
+  },
+  expert: {
+    gridColor: 'rgba(239, 68, 68, 0.3)',
+    glow1: 'bg-red-500/30',
+    glow2: 'bg-rose-500/25',
+    panelBorder: 'border-red-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
   },
 };
 
@@ -321,25 +318,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }, [pendingMove]);
   
   // Compute effective used pieces for PieceTray
-  // This includes all pieces NOT in availablePieces + actually placed pieces + pieces currently on board
+  // This includes all pieces NOT in availablePieces + actually placed pieces
   const effectiveUsedPieces = useMemo(() => {
     const allPieceNames = Object.keys(pieces);
     const notAvailable = allPieceNames.filter(p => !availablePieces.includes(p));
-    
-    // Also include any pieces currently on the board (handles AI pieces)
-    const piecesOnBoard = new Set();
-    if (boardPieces) {
-      for (let r = 0; r < BOARD_SIZE; r++) {
-        for (let c = 0; c < BOARD_SIZE; c++) {
-          if (boardPieces[r]?.[c]) {
-            piecesOnBoard.add(boardPieces[r][c]);
-          }
-        }
-      }
-    }
-    
-    return [...new Set([...notAvailable, ...usedPieces, ...piecesOnBoard])];
-  }, [availablePieces, usedPieces, boardPieces]);
+    return [...new Set([...notAvailable, ...usedPieces])];
+  }, [availablePieces, usedPieces]);
   
   // Show error when placement is invalid (matching GameScreen behavior)
   useEffect(() => {
@@ -608,6 +592,13 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   useEffect(() => {
     if (!puzzle) return;
     
+    // v2.1: Reset mountedRef for new puzzle (was causing freeze after completing puzzles)
+    mountedRef.current = true;
+    
+    // v2.1: Clear any pending timeouts from previous puzzle
+    pendingTimeoutsRef.current.forEach(clearTimeout);
+    pendingTimeoutsRef.current.clear();
+    
     console.log('[CreatorPuzzleGame] Loading puzzle:', puzzle.puzzle_number);
     
     const { board: parsedBoard, boardPieces: parsedBoardPieces } = parsePuzzleBoard(
@@ -626,20 +617,34 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setUsedPieces([]);
     setMoveIndex(0);
     
+    // v2.1: Reset all interaction state for clean start
+    setSelectedPiece(null);
+    setRotation(0);
+    setFlipped(false);
+    setPendingMove(null);
+    setPlayerAnimatingMove(null);
+    setAiAnimatingMove(null);
+    setShowWrongMove(false);
+    setErrorMessage(null);
+    
     // Load previous attempts from database (if user is logged in)
     if (profile?.id && puzzle?.id) {
       creatorPuzzleService.getProgress(profile.id, puzzle.id)
         .then(progress => {
-          if (progress?.attempts) {
-            console.log('[CreatorPuzzleGame] Loaded previous attempts:', progress.attempts);
-            setAttempts(progress.attempts);
-          } else {
-            setAttempts(1);
+          if (mountedRef.current) {
+            if (progress?.attempts) {
+              console.log('[CreatorPuzzleGame] Loaded previous attempts:', progress.attempts);
+              setAttempts(progress.attempts);
+            } else {
+              setAttempts(1);
+            }
           }
         })
         .catch(err => {
           console.warn('[CreatorPuzzleGame] Failed to load progress:', err);
-          setAttempts(1);
+          if (mountedRef.current) {
+            setAttempts(1);
+          }
         });
     } else {
       setAttempts(1);
@@ -1353,98 +1358,20 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Game Area */}
           <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
             
-            {/* Puzzle Info Bar - Cyberpunk Neon Style (Compact) */}
+            {/* Puzzle Info Bar - Centered */}
             <div className="flex items-center justify-center mb-2 px-1">
-              <div 
-                className="relative flex items-center gap-2 px-4 py-1.5 rounded-lg bg-slate-900/80 border overflow-hidden"
-                style={{
-                  borderColor: puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.5)' :
-                               puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.5)' :
-                               puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.5)' :
-                               'rgba(251,191,36,0.5)',
-                  boxShadow: `0 0 20px ${
-                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.35)' :
-                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.35)' :
-                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.35)' :
-                    'rgba(251,191,36,0.35)'
-                  }, inset 0 0 15px ${
-                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.1)' :
-                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.1)' :
-                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.1)' :
-                    'rgba(251,191,36,0.1)'
-                  }`
-                }}
-              >
-                {/* Animated scan line */}
-                <div 
-                  className="absolute inset-0 bg-gradient-to-b from-transparent via-white/5 to-transparent animate-pulse"
-                  style={{ animationDuration: '3s' }}
-                />
-                
-                {/* Puzzle Number - Glowing (smaller) */}
-                <span 
-                  className="relative font-black text-base tracking-wider"
-                  style={{
-                    color: puzzle.difficulty === 'easy' ? '#4ade80' :
-                           puzzle.difficulty === 'hard' ? '#f87171' :
-                           puzzle.difficulty === 'expert' ? '#c084fc' :
-                           '#fbbf24',
-                    textShadow: `0 0 8px ${
-                      puzzle.difficulty === 'easy' ? 'rgba(74,222,128,0.8)' :
-                      puzzle.difficulty === 'hard' ? 'rgba(248,113,113,0.8)' :
-                      puzzle.difficulty === 'expert' ? 'rgba(192,132,252,0.8)' :
-                      'rgba(251,191,36,0.8)'
-                    }, 0 0 15px ${
-                      puzzle.difficulty === 'easy' ? 'rgba(74,222,128,0.5)' :
-                      puzzle.difficulty === 'hard' ? 'rgba(248,113,113,0.5)' :
-                      puzzle.difficulty === 'expert' ? 'rgba(192,132,252,0.5)' :
-                      'rgba(251,191,36,0.5)'
-                    }`
-                  }}
-                >
-                  #{puzzle.puzzle_number}
-                </span>
-                
+              <div className="flex items-center gap-2 text-center">
+                <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
                 {puzzle.name && (
                   <>
-                    {/* Separator - Neon line */}
-                    <div 
-                      className="w-px h-3"
-                      style={{
-                        background: `linear-gradient(to bottom, transparent, ${
-                          puzzle.difficulty === 'easy' ? 'rgba(74,222,128,0.6)' :
-                          puzzle.difficulty === 'hard' ? 'rgba(248,113,113,0.6)' :
-                          puzzle.difficulty === 'expert' ? 'rgba(192,132,252,0.6)' :
-                          'rgba(251,191,36,0.6)'
-                        }, transparent)`
-                      }}
-                    />
-                    
-                    {/* Puzzle Name - Cyberpunk style (smaller) */}
-                    <span 
-                      className="relative text-xs font-bold tracking-wide uppercase"
-                      style={{
-                        color: puzzle.difficulty === 'easy' ? '#86efac' :
-                               puzzle.difficulty === 'hard' ? '#fca5a5' :
-                               puzzle.difficulty === 'expert' ? '#d8b4fe' :
-                               '#fcd34d',
-                        textShadow: `0 0 6px ${
-                          puzzle.difficulty === 'easy' ? 'rgba(134,239,172,0.6)' :
-                          puzzle.difficulty === 'hard' ? 'rgba(252,165,165,0.6)' :
-                          puzzle.difficulty === 'expert' ? 'rgba(216,180,254,0.6)' :
-                          'rgba(252,211,77,0.6)'
-                        }`
-                      }}
-                    >
-                      {puzzle.name}
-                    </span>
+                    <span className="text-slate-500">•</span>
+                    <span className="text-slate-400 text-sm">{puzzle.name}</span>
                   </>
                 )}
-                
                 {attempts > 1 && (
                   <>
-                    <div className="w-px h-2.5 bg-slate-600/50" />
-                    <span className="text-slate-400 text-[10px] font-mono">ATT:{attempts}</span>
+                    <span className="text-slate-500">•</span>
+                    <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
                   </>
                 )}
               </div>
@@ -1466,33 +1393,25 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 </span>
               </div>
               
-              {/* Difficulty Badge - Neon Glow Square */}
+              {/* Difficulty Badge */}
               <div 
-                className={`px-4 py-1.5 rounded-lg bg-gradient-to-r ${
+                className={`px-3 py-1 rounded-full bg-gradient-to-r ${
                   puzzle.difficulty === 'easy' ? 'from-green-600 to-emerald-600' :
-                  puzzle.difficulty === 'hard' ? 'from-red-500 to-rose-600' :
-                  puzzle.difficulty === 'expert' ? 'from-purple-500 to-pink-600' :
-                  'from-amber-500 to-orange-600'
-                } border ${
-                  puzzle.difficulty === 'easy' ? 'border-green-400/60' :
-                  puzzle.difficulty === 'hard' ? 'border-red-400/60' :
-                  puzzle.difficulty === 'expert' ? 'border-purple-400/60' :
-                  'border-amber-400/60'
-                }`}
+                  puzzle.difficulty === 'hard' ? 'from-purple-500 to-pink-600' :
+                  puzzle.difficulty === 'expert' ? 'from-red-500 to-rose-600' :
+                  'from-cyan-500 to-sky-600'
+                } border border-white/20`}
                 style={{ 
-                  boxShadow: `0 0 20px ${
-                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.7)' :
-                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.7)' :
-                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.7)' :
-                    'rgba(251,191,36,0.7)'
-                  }, inset 0 1px 0 rgba(255,255,255,0.2)` 
+                  boxShadow: `0 0 15px ${
+                    puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.6)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(168,85,247,0.6)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(239,68,68,0.6)' :
+                    'rgba(34,211,238,0.6)'
+                  }` 
                 }}
               >
-                <span className="text-white text-xs font-black tracking-wider uppercase drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
-                  {puzzle.difficulty === 'easy' ? 'BEGINNER' : 
-                   puzzle.difficulty === 'medium' ? 'INTERMEDIATE' : 
-                   puzzle.difficulty === 'hard' ? 'HARD' : 
-                   puzzle.difficulty === 'expert' ? 'EXPERT' : 'INTERMEDIATE'}
+                <span className="text-white text-[10px] font-black tracking-wider uppercase">
+                  {puzzle.difficulty || 'MEDIUM'}
                 </span>
               </div>
               

@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.31: Fixed modal appearing at bottom - added scrollRef to reset scroll position on open
 // v7.30: Fixed crash - removed undefined setShowAIDetails/setShowPuzzleDetails calls
 // v7.29: Stats layout aligned with PlayerStatsModal - collapsible sections for all categories
 // v7.28: Performance - Single RPC call (get_player_profile) with fallback to original loading
@@ -10,7 +11,7 @@
 // v7.12: Added full stats display (AI wins, puzzle stats) for all players
 // v7.12: Added player_stats loading from profiles table
 // v7.12: Final Board View now fetches moves for full replay functionality
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Trophy, Target, Swords, Clock, UserPlus, UserCheck, UserX, Loader, ChevronRight, ChevronDown, ChevronUp, Award, Gamepad2, Zap, LayoutGrid, Bot, Flame, Medal, TrendingUp, Sparkles } from 'lucide-react';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
@@ -212,6 +213,9 @@ const ViewPlayerProfile = ({
   const [headToHead, setHeadToHead] = useState(null);
   const [playerStats, setPlayerStats] = useState(null); // v7.12: Full stats from profiles table
   
+  // v7.31: Ref for scrollable content to reset scroll position on open
+  const scrollRef = useRef(null);
+  
   // v7.29: Collapsible sections matching PlayerStatsModal
   const [expandedSection, setExpandedSection] = useState('overview');
   const [playStreak, setPlayStreak] = useState({ current: 0, longest: 0 });
@@ -234,6 +238,11 @@ const ViewPlayerProfile = ({
 
   useEffect(() => {
     if (playerId) {
+      // v7.31: Reset scroll position to top when viewing a new profile
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = 0;
+      }
+      
       // Reset stats when viewing a different player
       setCalculatedStats({ wins: 0, totalGames: 0 });
       setRecentGames([]);
@@ -626,6 +635,7 @@ const ViewPlayerProfile = ({
             
             {/* Scrollable Content Area */}
             <div 
+              ref={scrollRef}
               className="p-4"
               style={{ 
                 overflowY: 'scroll',
