@@ -1,4 +1,5 @@
 // App.jsx - Main application component
+// v7.21: Added global GameInviteNotification for push notifications on all screens
 // v7.20: Added Creator Puzzles (PuzzleTypeSelect, CreatorPuzzleSelect, CreatorPuzzleGame)
 // v7.19.1: Fixed TDZ error - moved useAuth() before wasAuthenticatedRef
 // v7.19: Sign out now redirects to entry auth screen (reset hasPassedEntryAuth on sign out)
@@ -26,6 +27,7 @@ import EntryAuthScreen from './components/EntryAuthScreen';
 import PlayerProfileCard from './components/PlayerProfileCard';
 import WelcomeModal from './components/WelcomeModal';
 import HowToPlayModal from './components/HowToPlayModal';
+import GameInviteNotification from './components/GameInviteNotification';
 
 // =============================================================================
 // LAZY LOADED COMPONENTS
@@ -1425,6 +1427,42 @@ function AppContent({ onBgThemeChange }) {
   );
 }
 
+// v7.21: Global notifications wrapper - renders GameInviteNotification for all screens
+// This ensures push notifications work even when not on the OnlineMenu
+function GlobalNotifications() {
+  const { profile, isAuthenticated, sessionReady } = useAuth();
+  
+  // Only render when user is authenticated and session is ready
+  if (!sessionReady || !isAuthenticated || !profile?.id) {
+    return null;
+  }
+  
+  // Handler for accepting invites from toast notification
+  const handleAcceptInvite = async (notification) => {
+    if (notification.type === 'invite') {
+      // Navigate to online menu to handle the invite
+      // The invite will be visible in the pending invites list
+      window.location.href = '/?navigateTo=online';
+    }
+  };
+  
+  // Handler for declining invites from toast notification
+  const handleDeclineInvite = async (notification) => {
+    if (notification.type === 'invite') {
+      const { inviteService } = await import('./services/inviteService');
+      await inviteService.declineInvite(notification.id, profile.id);
+    }
+  };
+  
+  return (
+    <GameInviteNotification
+      userId={profile.id}
+      onAccept={handleAcceptInvite}
+      onDecline={handleDeclineInvite}
+    />
+  );
+}
+
 // Main App with Auth Provider wrapper
 function App() {
   // Background theme state - persists across screen changes
@@ -1435,6 +1473,8 @@ function App() {
       {/* Global background - rendered once, never remounts */}
       <GlobalBackground theme={bgTheme} />
       <AppContent onBgThemeChange={setBgTheme} />
+      {/* v7.21: Global notifications - works on all screens */}
+      <GlobalNotifications />
       <IOSInstallPrompt />
     </AuthProvider>
   );

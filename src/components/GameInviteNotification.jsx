@@ -1,4 +1,5 @@
 // GameInviteNotification.jsx - Toast notifications for game invites and friend requests
+// v7.30: Always send push notifications (removed document.hidden check - notificationService handles visibility)
 // FIXED: Uses centralized RealtimeManager instead of separate channels
 // FIX: Changed table subscription from 'friendships' (wrong) to 'friends' (correct)
 // FIX: Added proper error handling for friend request accept in parent handler
@@ -56,9 +57,8 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
 
         soundManager.playSound('notification');
 
-        if (document.hidden) {
-          notificationService.notifyGameInvite(senderName, fullInvite.id);
-        }
+        // v7.30: Always send push notification - notificationService handles visibility logic internally
+        notificationService.notifyGameInvite(senderName, fullInvite.id);
       }
     });
 
@@ -101,9 +101,8 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
 
           soundManager.playSound('notification');
           
-          if (document.hidden) {
-            notificationService.notifyFriendRequest(senderName);
-          }
+          // v7.30: Always send push notification - notificationService handles visibility logic internally
+          notificationService.notifyFriendRequest(senderName);
         }
       }
     });
