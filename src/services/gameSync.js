@@ -1,4 +1,5 @@
 // Game Sync Service - Real-time game state management
+// v7.17: Fixed checkAndForfeitStaleGames - now uses RPC function with SECURITY DEFINER to bypass RLS
 // FIXED: 
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
@@ -796,7 +797,8 @@ class GameSyncService {
   }
 
   // Check for and auto-forfeit games with no activity for 2+ weeks
-  // Only reduces rating for inactive player, doesn't increase opponent's rating
+  // v7.17: Now uses RPC function with SECURITY DEFINER to bypass RLS
+  // The player whose turn it is loses 15 ELO, winner gets no ELO change
   async checkAndForfeitStaleGames(userId) {
     if (!isSupabaseConfigured() || !userId) return { forfeited: [] };
 
@@ -804,66 +806,34 @@ class GameSyncService {
       const headers = getAuthHeaders();
       if (!headers) return { forfeited: [] };
 
-      // Get active games for this user
-      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-      
-      // Find games where it's been this user's turn for 2+ weeks
-      const url = `${SUPABASE_URL}/rest/v1/games?select=*,player1:profiles!games_player1_id_fkey(id,username,display_name,rating),player2:profiles!games_player2_id_fkey(id,username,display_name,rating)&status=eq.active&or=(player1_id.eq.${userId},player2_id.eq.${userId})&updated_at=lt.${twoWeeksAgo}`;
-      
-      const response = await fetch(url, { headers });
-      if (!response.ok) return { forfeited: [] };
-      
-      const staleGames = await response.json();
-      const forfeitedGames = [];
-      
-      for (const game of staleGames) {
-        // Determine whose turn it is
-        const currentPlayerId = game.current_player === 1 ? game.player1_id : game.player2_id;
-        
-        // Auto-forfeit: the player whose turn it is loses
-        const winnerId = game.current_player === 1 ? game.player2_id : game.player1_id;
-        const loserId = currentPlayerId;
-        
-        // Update game status
-        const updateUrl = `${SUPABASE_URL}/rest/v1/games?id=eq.${game.id}`;
-        const updateResponse = await fetch(updateUrl, {
-          method: 'PATCH',
-          headers: { ...headers, 'Prefer': 'return=minimal' },
-          body: JSON.stringify({
-            status: 'completed',
-            winner_id: winnerId,
-            forfeit_reason: 'inactivity',
-            updated_at: new Date().toISOString()
-          })
-        });
-        
-        if (updateResponse.ok) {
-          // Only reduce rating for the inactive player (loser)
-          // Don't increase rating for winner - it's not a real win
-          const loserRating = loserId === game.player1_id 
-            ? (game.player1?.rating || 1000) 
-            : (game.player2?.rating || 1000);
-          
-          // Reduce by 15 points (half of normal loss)
-          const newLoserRating = Math.max(100, loserRating - 15);
-          
-          const ratingUrl = `${SUPABASE_URL}/rest/v1/profiles?id=eq.${loserId}`;
-          await fetch(ratingUrl, {
-            method: 'PATCH',
-            headers: { ...headers, 'Prefer': 'return=minimal' },
-            body: JSON.stringify({ rating: newLoserRating })
-          });
-          
-          forfeitedGames.push({
-            gameId: game.id,
-            loserId,
-            winnerId,
-            reason: 'inactivity'
-          });
-        }
+      // Call the RPC function which runs with elevated privileges
+      const url = `${SUPABASE_URL}/rest/v1/rpc/forfeit_stale_games`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requesting_user_id: userId })
+      });
+
+      if (!response.ok) {
+        console.error('[GameSync] forfeit_stale_games RPC failed:', response.status);
+        return { forfeited: [] };
       }
+
+      const result = await response.json();
       
-      return { forfeited: forfeitedGames };
+      if (result?.forfeited_count > 0) {
+        console.log(`[GameSync] Auto-forfeited ${result.forfeited_count} stale game(s)`);
+      }
+
+      // Transform to expected format
+      const forfeited = (result?.forfeited_games || []).map(g => ({
+        gameId: g.game_id,
+        loserId: g.loser_id,
+        winnerId: g.winner_id,
+        reason: 'inactivity'
+      }));
+
+      return { forfeited };
     } catch (e) {
       console.error('[GameSync] checkAndForfeitStaleGames error:', e);
       return { forfeited: [] };

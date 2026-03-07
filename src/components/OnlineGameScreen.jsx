@@ -1,4 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.23: CRITICAL FIX - Game over modal now appears for winning player (fixed useEffect reset cascade)
 // v7.22: Added orange color to GlowOrbButton for Home button
 // v7.21: Removed top-left menu button, updated bottom menu to orange Home icon
 // v7.18: Fixed 5-second game over modal - removed stale closure check, use ref only
@@ -201,6 +202,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const mountedRef = useRef(true);
   const dismissedGameOverRef = useRef(false);
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
+  const prevGameIdRef = useRef(null);  // v7.23: Track previous game ID to prevent spurious resets
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
@@ -838,12 +840,17 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     mountedRef.current = true;
     
-    // v7.18: Reset game over state when loading a new game
-    // This fixes the issue where dismissedGameOverRef stays true between games
-    dismissedGameOverRef.current = false;
-    setShowGameOver(false);
-    setGameResult(null);
-    setWinningMoveCells(null);
+    // v7.23: CRITICAL FIX - Only reset game over state when GAME ID actually changes
+    // Previously, updateGameState in deps caused this effect to re-run when showGameOver changed,
+    // which reset the modal state immediately after it was set (modal never appeared)
+    const isNewGame = prevGameIdRef.current !== currentGameId;
+    if (isNewGame) {
+      prevGameIdRef.current = currentGameId;
+      dismissedGameOverRef.current = false;
+      setShowGameOver(false);
+      setGameResult(null);
+      setWinningMoveCells(null);
+    }
     
     // console.log('OnlineGameScreen: Starting game load', { gameId: currentGameId, userId });
 

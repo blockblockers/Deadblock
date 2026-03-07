@@ -1,4 +1,6 @@
 // Online Menu - Hub for online features
+// v7.29: Fixed Recent Games challenge button - now shows error feedback to user (was silent)
+// v7.28: Fixed Active/Recent Games modal scroll - added min-h-0 for bidirectional scrolling
 // v7.27: PERFORMANCE - Single RPC call (get_online_menu_data) replaces 8+ separate queries
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
 // v7.25: FinalBoardView spacing fix - explicitly clear viewingPlayerId before opening
@@ -2480,9 +2482,9 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.17: Simplified scroll handling for better mobile support */}
+            {/* Games List - v7.28: Fixed scroll - added min-h-0 for proper flex shrinking */}
             <div 
-              className="flex-1 overflow-y-auto overscroll-contain"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
               style={{ 
                 WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
@@ -2673,9 +2675,9 @@ const OnlineMenu = ({
               </button>
             </div>
             
-            {/* Games List - v7.17: Simplified scroll handling */}
+            {/* Games List - v7.28: Fixed scroll - added min-h-0 for proper flex shrinking */}
             <div 
-              className="flex-1 overflow-y-auto overscroll-contain"
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
               style={{ 
                 WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
@@ -2743,7 +2745,11 @@ const OnlineMenu = ({
               setSendingInvite(null);
               
               if (error) {
+                // v7.29: Show error to user instead of just logging
                 console.error('Error sending invite from recent games:', error);
+                soundManager.playSound('invalid');
+                setShowRecentGames(false);
+                setInviteError(error.message || 'Failed to send challenge');
               } else if (data?.game) {
                 // v7.26: If the other user had already invited us, a game was created
                 soundManager.playSound('win');
@@ -2751,7 +2757,7 @@ const OnlineMenu = ({
                 onResumeGame(data.game);
               } else {
                 // v7.26: Invite sent successfully - refresh pending invites and play sound
-                soundManager.playClickSound('confirm');
+                soundManager.playSound('success');
                 await loadInvites();
                 setShowRecentGames(false);
               }
