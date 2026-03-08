@@ -1,4 +1,5 @@
 // App.jsx - Main application component
+// v7.22: Fixed push notification click - force refresh when already on online-menu
 // v7.21: Added global GameInviteNotification for push notifications on all screens
 // v7.20: Added Creator Puzzles (PuzzleTypeSelect, CreatorPuzzleSelect, CreatorPuzzleGame)
 // v7.19.1: Fixed TDZ error - moved useAuth() before wasAuthenticatedRef
@@ -723,7 +724,7 @@ function AppContent({ onBgThemeChange }) {
         }
         
         // Navigate immediately if authenticated
-        // v7.11: Always navigate to specific game when gameId is provided
+        // v7.22: Force refresh even if already on target screen
         if (gameId) {
           console.log('[App] Navigating to game:', gameId);
           if (openChat) {
@@ -735,6 +736,12 @@ function AppContent({ onBgThemeChange }) {
           // Weekly challenge notification - go to weekly menu
           console.log('[App] Navigating to weekly challenge menu');
           setGameMode('weekly-menu');
+        } else if (notificationType === 'game_invite' || notificationType === 'friend_request' || notificationType === 'rematch_request') {
+          // v7.22: For invite/friend/rematch notifications, force refresh online-menu
+          // even if already there by briefly setting to null first
+          console.log('[App] Force navigating to online menu for:', notificationType);
+          setGameMode(null);
+          setTimeout(() => setGameMode('online-menu'), 50);
         } else {
           console.log('[App] Navigating to online menu');
           setGameMode('online-menu');
@@ -1427,7 +1434,7 @@ function AppContent({ onBgThemeChange }) {
   );
 }
 
-// v7.21: Global notifications wrapper - renders GameInviteNotification for all screens
+// v7.22: Global notifications wrapper - renders GameInviteNotification for all screens
 // This ensures push notifications work even when not on the OnlineMenu
 function GlobalNotifications() {
   const { profile, isAuthenticated, sessionReady } = useAuth();
@@ -1440,17 +1447,57 @@ function GlobalNotifications() {
   // Handler for accepting invites from toast notification
   const handleAcceptInvite = async (notification) => {
     if (notification.type === 'invite') {
-      // Navigate to online menu to handle the invite
-      // The invite will be visible in the pending invites list
-      window.location.href = '/?navigateTo=online';
+      // v7.22: Actually accept the invite and navigate to the game
+      try {
+        const { inviteService } = await import('./services/inviteService');
+        const { soundManager } = await import('./utils/soundManager');
+        
+        const { data, error } = await inviteService.acceptInvite(notification.id, profile.id, 'invitee');
+        if (!error && data?.game) {
+          soundManager.playSound('success');
+          // Navigate to the game
+          window.location.href = `/?navigateTo=online&gameId=${data.game.id}`;
+        } else {
+          console.error('[GlobalNotifications] Accept invite error:', error);
+          // Fallback: just navigate to online menu
+          window.location.href = '/?navigateTo=online';
+        }
+      } catch (err) {
+        console.error('[GlobalNotifications] Accept invite exception:', err);
+        window.location.href = '/?navigateTo=online';
+      }
+    } else if (notification.type === 'friend_request') {
+      // Accept friend request
+      try {
+        const { friendsService } = await import('./services/friendsService');
+        const { soundManager } = await import('./utils/soundManager');
+        
+        const { error } = await friendsService.acceptFriendRequest(notification.id, profile.id);
+        if (!error) {
+          soundManager.playSound('success');
+        }
+      } catch (err) {
+        console.error('[GlobalNotifications] Accept friend request error:', err);
+      }
     }
   };
   
   // Handler for declining invites from toast notification
   const handleDeclineInvite = async (notification) => {
     if (notification.type === 'invite') {
-      const { inviteService } = await import('./services/inviteService');
-      await inviteService.declineInvite(notification.id, profile.id);
+      try {
+        const { inviteService } = await import('./services/inviteService');
+        await inviteService.declineInvite(notification.id, profile.id);
+      } catch (err) {
+        console.error('[GlobalNotifications] Decline invite error:', err);
+      }
+    } else if (notification.type === 'friend_request') {
+      try {
+        const { friendsService } = await import('./services/friendsService');
+        await friendsService.declineFriendRequest(notification.id, profile.id);
+      } catch (err) {
+        console.error('[GlobalNotifications] Decline friend request error:', err);
+      }
     }
   };
   
