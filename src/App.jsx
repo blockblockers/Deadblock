@@ -1,4 +1,5 @@
 // App.jsx - Main application component
+// v7.23: Added debug logging to GlobalNotifications for toast debugging
 // v7.22: Fixed push notification click - force refresh when already on online-menu
 // v7.21: Added global GameInviteNotification for push notifications on all screens
 // v7.20: Added Creator Puzzles (PuzzleTypeSelect, CreatorPuzzleSelect, CreatorPuzzleGame)
@@ -1434,15 +1435,25 @@ function AppContent({ onBgThemeChange }) {
   );
 }
 
-// v7.22: Global notifications wrapper - renders GameInviteNotification for all screens
+// v7.23: Global notifications wrapper - renders GameInviteNotification for all screens
 // This ensures push notifications work even when not on the OnlineMenu
 function GlobalNotifications() {
   const { profile, isAuthenticated, sessionReady } = useAuth();
   
+  // Debug: Log render state
+  console.log('[GlobalNotifications] Render check:', { 
+    sessionReady, 
+    isAuthenticated, 
+    profileId: profile?.id 
+  });
+  
   // Only render when user is authenticated and session is ready
   if (!sessionReady || !isAuthenticated || !profile?.id) {
+    console.log('[GlobalNotifications] Not rendering - auth not ready');
     return null;
   }
+  
+  console.log('[GlobalNotifications] Rendering GameInviteNotification for user:', profile.id);
   
   // Handler for accepting invites from toast notification
   const handleAcceptInvite = async (notification) => {
