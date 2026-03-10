@@ -1,4 +1,5 @@
 // service-worker.js - UNIFIED Service Worker for Deadblock PWA
+// v7.16 - Decline button now sends message to app to actually decline invites/rematches
 // v7.15.3 - Fixed notification badges: now using monochrome PNG files for Android
 // v7.15.2 - Added streak_reminder notification type (N pentomino)
 // FIXES:
@@ -6,9 +7,10 @@
 // - Chat notifications open game WITH chat panel
 // - Victory/defeat navigate to game to see final board
 // - Handles both camelCase and snake_case data keys from database
+// - Decline action sends DECLINE_INVITE/DECLINE_REMATCH message to app
 // Place in: public/service-worker.js
 
-const CACHE_NAME = 'deadblock-v7.15.3';
+const CACHE_NAME = 'deadblock-v7.16';
 const APP_URL = self.location.origin;
 
 // =============================================================================
@@ -16,21 +18,22 @@ const APP_URL = self.location.origin;
 // =============================================================================
 
 // Pentomino badge paths - PNG files for Android notification badges (must be monochrome)
+// v7.16: Use absolute URLs for Android compatibility
 const BADGES = {
-  'your_turn': '/badges/badge-turn.png',           // T pentomino
-  'game_start': '/badges/badge-turn.png',          // T pentomino
-  'game_invite': '/badges/badge-invite.png',       // I pentomino
-  'invite_accepted': '/badges/badge-invite.png',   // I pentomino
-  'friend_request': '/badges/badge-friend.png',    // F pentomino
-  'rematch_request': '/badges/badge-rematch.png',  // X pentomino
-  'rematch_accepted': '/badges/badge-rematch.png', // X pentomino
-  'chat_message': '/badges/badge-chat.png',        // U pentomino
-  'chat': '/badges/badge-chat.png',                // U pentomino
-  'victory': '/badges/badge-victory.png',          // W pentomino
-  'defeat': '/badges/badge-defeat.png',            // L pentomino
-  'weekly_challenge': '/badges/badge-weekly.png',  // Z pentomino
-  'streak_reminder': '/badges/badge-streak.png',   // N pentomino
-  'default': '/badges/badge-default.png'           // I pentomino
+  'your_turn': `${APP_URL}/badges/badge-turn.png`,           // T pentomino
+  'game_start': `${APP_URL}/badges/badge-turn.png`,          // T pentomino
+  'game_invite': `${APP_URL}/badges/badge-invite.png`,       // I pentomino
+  'invite_accepted': `${APP_URL}/badges/badge-invite.png`,   // I pentomino
+  'friend_request': `${APP_URL}/badges/badge-friend.png`,    // F pentomino
+  'rematch_request': `${APP_URL}/badges/badge-rematch.png`,  // X pentomino
+  'rematch_accepted': `${APP_URL}/badges/badge-rematch.png`, // X pentomino
+  'chat_message': `${APP_URL}/badges/badge-chat.png`,        // U pentomino
+  'chat': `${APP_URL}/badges/badge-chat.png`,                // U pentomino
+  'victory': `${APP_URL}/badges/badge-victory.png`,          // W pentomino
+  'defeat': `${APP_URL}/badges/badge-defeat.png`,            // L pentomino
+  'weekly_challenge': `${APP_URL}/badges/badge-weekly.png`,  // Z pentomino
+  'streak_reminder': `${APP_URL}/badges/badge-streak.png`,   // N pentomino
+  'default': `${APP_URL}/badges/badge-default.png`           // I pentomino
 };
 
 // Vibration patterns per notification type
@@ -74,7 +77,7 @@ const CORE_ASSETS = [
 // INSTALL EVENT
 // =============================================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v7.15.3...');
+  console.log('[SW] Installing v7.16...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -95,7 +98,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE EVENT
 // =============================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v7.15.3...');
+  console.log('[SW] Activating v7.16...');
   event.waitUntil(
     caches.keys()
       .then((cacheNames) => {
@@ -199,7 +202,7 @@ self.addEventListener('push', (event) => {
   
   const options = {
     body: data.body,
-    icon: '/pwa-192x192.png',
+    icon: `${APP_URL}/pwa-192x192.png`,
     badge: BADGES[type] || BADGES['default'],
     tag: `deadblock-${type}-${Date.now()}`,
     renotify: true,
@@ -246,11 +249,30 @@ self.addEventListener('notificationclick', (event) => {
   const data = event.notification.data || {};
   const { type, gameId, inviteId, rematchId } = data;
   
-  console.log('[SW] Click - action:', action, 'type:', type, 'gameId:', gameId);
+  console.log('[SW] Click - action:', action, 'type:', type, 'gameId:', gameId, 'inviteId:', inviteId);
   event.notification.close();
   
-  // Handle decline action - just close, don't navigate
+  // v7.16: Handle decline action - send message to app to actually decline
   if (action === 'decline') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+        for (const client of clients) {
+          if (type === 'game_invite' && inviteId) {
+            console.log('[SW] Sending DECLINE_INVITE message for:', inviteId);
+            client.postMessage({
+              type: 'DECLINE_INVITE',
+              inviteId: inviteId
+            });
+          } else if (type === 'rematch_request' && rematchId) {
+            console.log('[SW] Sending DECLINE_REMATCH message for:', rematchId);
+            client.postMessage({
+              type: 'DECLINE_REMATCH',
+              rematchId: rematchId
+            });
+          }
+        }
+      })
+    );
     return;
   }
   
@@ -384,4 +406,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] v7.15.3 unified service worker loaded');
+console.log('[SW] v7.16 unified service worker loaded');

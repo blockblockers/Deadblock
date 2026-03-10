@@ -1,4 +1,5 @@
 // App.jsx - Main application component
+// v7.24: Added service worker message listener for DECLINE_INVITE/DECLINE_REMATCH from push notifications
 // v7.23: Added debug logging to GlobalNotifications for toast debugging
 // v7.22: Fixed push notification click - force refresh when already on online-menu
 // v7.21: Added global GameInviteNotification for push notifications on all screens
@@ -1454,6 +1455,47 @@ function GlobalNotifications() {
   }
   
   console.log('[GlobalNotifications] Rendering GameInviteNotification for user:', profile.id);
+  
+  // v7.24: Listen for service worker messages (DECLINE_INVITE, DECLINE_REMATCH)
+  useEffect(() => {
+    const handleServiceWorkerMessage = async (event) => {
+      const { type, inviteId, rematchId } = event.data || {};
+      
+      if (type === 'DECLINE_INVITE' && inviteId) {
+        console.log('[GlobalNotifications] Received DECLINE_INVITE from SW:', inviteId);
+        try {
+          const { inviteService } = await import('./services/inviteService');
+          await inviteService.declineInvite(inviteId, profile.id);
+          console.log('[GlobalNotifications] Invite declined successfully');
+        } catch (err) {
+          console.error('[GlobalNotifications] Failed to decline invite:', err);
+        }
+      } else if (type === 'DECLINE_REMATCH' && rematchId) {
+        console.log('[GlobalNotifications] Received DECLINE_REMATCH from SW:', rematchId);
+        try {
+          const { supabase } = await import('./utils/supabase');
+          await supabase
+            .from('rematch_requests')
+            .update({ status: 'declined' })
+            .eq('id', rematchId);
+          console.log('[GlobalNotifications] Rematch declined successfully');
+        } catch (err) {
+          console.error('[GlobalNotifications] Failed to decline rematch:', err);
+        }
+      }
+    };
+    
+    // Listen for messages from service worker
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+    
+    return () => {
+      if (navigator.serviceWorker) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    };
+  }, [profile.id]);
   
   // Handler for accepting invites from toast notification
   const handleAcceptInvite = async (notification) => {

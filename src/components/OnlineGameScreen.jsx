@@ -1,4 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.24: Added sound feedback to GameOverModal X button dismiss for consistency
 // v7.23: CRITICAL FIX - Game over modal now appears for winning player (fixed useEffect reset cascade)
 // v7.22: Added orange color to GlowOrbButton for Home button
 // v7.21: Removed top-left menu button, updated bottom menu to orange Home icon
@@ -1858,6 +1859,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           gameMode="online"
           opponentName={opponent?.display_name || opponent?.username || 'Opponent'}
           onClose={() => {
+            // v7.24: Play click sound for user feedback
+            soundManager.playButtonClick();
             // Permanently dismiss - won't reappear from real-time updates
             dismissedGameOverRef.current = true;
             setShowGameOver(false);
