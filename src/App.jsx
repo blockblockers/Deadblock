@@ -1,4 +1,5 @@
 // App.jsx - Main application component
+// v7.25: CRITICAL FIX - Moved useEffect before conditional return (Rules of Hooks violation)
 // v7.24: Added service worker message listener for DECLINE_INVITE/DECLINE_REMATCH from push notifications
 // v7.23: Added debug logging to GlobalNotifications for toast debugging
 // v7.22: Fixed push notification click - force refresh when already on online-menu
@@ -1436,8 +1437,9 @@ function AppContent({ onBgThemeChange }) {
   );
 }
 
-// v7.23: Global notifications wrapper - renders GameInviteNotification for all screens
+// v7.25: Global notifications wrapper - renders GameInviteNotification for all screens
 // This ensures push notifications work even when not on the OnlineMenu
+// FIXED: Hooks must be called before conditional returns (Rules of Hooks)
 function GlobalNotifications() {
   const { profile, isAuthenticated, sessionReady } = useAuth();
   
@@ -1448,16 +1450,12 @@ function GlobalNotifications() {
     profileId: profile?.id 
   });
   
-  // Only render when user is authenticated and session is ready
-  if (!sessionReady || !isAuthenticated || !profile?.id) {
-    console.log('[GlobalNotifications] Not rendering - auth not ready');
-    return null;
-  }
-  
-  console.log('[GlobalNotifications] Rendering GameInviteNotification for user:', profile.id);
-  
-  // v7.24: Listen for service worker messages (DECLINE_INVITE, DECLINE_REMATCH)
+  // v7.25: Listen for service worker messages (DECLINE_INVITE, DECLINE_REMATCH)
+  // MUST be called before any conditional returns (Rules of Hooks)
   useEffect(() => {
+    // Skip if not authenticated
+    if (!profile?.id) return;
+    
     const handleServiceWorkerMessage = async (event) => {
       const { type, inviteId, rematchId } = event.data || {};
       
@@ -1495,7 +1493,15 @@ function GlobalNotifications() {
         navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
       }
     };
-  }, [profile.id]);
+  }, [profile?.id]);
+  
+  // Only render when user is authenticated and session is ready
+  if (!sessionReady || !isAuthenticated || !profile?.id) {
+    console.log('[GlobalNotifications] Not rendering - auth not ready');
+    return null;
+  }
+  
+  console.log('[GlobalNotifications] Rendering GameInviteNotification for user:', profile.id);
   
   // Handler for accepting invites from toast notification
   const handleAcceptInvite = async (notification) => {
