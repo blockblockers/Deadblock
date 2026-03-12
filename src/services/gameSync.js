@@ -852,10 +852,11 @@ class GameSyncService {
     try {
       // Query the matchmaking_queue table for active entries
       // Players are "active" if they joined recently (within last 2 minutes) and haven't been matched
+      // NOTE: Column is `queued_at`, not `created_at` - matches matchmaking.js which orders by queued_at
       const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
       
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/matchmaking_queue?status=eq.waiting&created_at=gte.${twoMinutesAgo}&select=id`,
+       `${SUPABASE_URL}/rest/v1/matchmaking_queue?status=eq.waiting&queued_at=gte.${twoMinutesAgo}&select=id`,
         { 
           headers: {
             ...headers,

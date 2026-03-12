@@ -1,4 +1,8 @@
 // App.jsx - Main application component
+// v7.26: FIX - Push notification Accept button now actually accepts invite and navigates to game
+//   - NOTIFICATION_CLICK handler accepts invite via inviteService when inviteId present
+//   - URL param handler captures acceptInvite param for new-window opens
+//   - Pending nav handler processes stored acceptInvite after auth ready
 // v7.25: CRITICAL FIX - Moved useEffect before conditional return (Rules of Hooks violation)
 // v7.24: Added service worker message listener for DECLINE_INVITE/DECLINE_REMATCH from push notifications
 // v7.23: Added debug logging to GlobalNotifications for toast debugging
@@ -714,6 +718,9 @@ function AppContent({ onBgThemeChange }) {
           if (gameId) {
             sessionStorage.setItem('deadblock_pending_game_id', gameId);
           }
+          if (inviteId) {
+            sessionStorage.setItem('deadblock_pending_accept_invite', inviteId);
+          }
           if (openChat) {
             sessionStorage.setItem('deadblock_open_chat', 'true');
           }
@@ -739,6 +746,29 @@ function AppContent({ onBgThemeChange }) {
           // Weekly challenge notification - go to weekly menu
           console.log('[App] Navigating to weekly challenge menu');
           setGameMode('weekly-menu');
+        } else if (notificationType === 'game_invite' && inviteId) {
+          // v7.26: Accept invite from push notification and navigate to game
+          console.log('[App] Accepting invite from push notification:', inviteId);
+          (async () => {
+            try {
+              const { inviteService } = await import('./services/inviteService');
+              const { soundManager } = await import('./utils/soundManager');
+              const { data, error } = await inviteService.acceptInvite(inviteId, profile?.id, 'invitee');
+              if (!error && data?.game) {
+                soundManager.playSound('success');
+                setOnlineGameId(data.game.id);
+                setGameMode('online-game');
+              } else {
+                console.error('[App] Accept invite from push error:', error);
+                setGameMode(null);
+                setTimeout(() => setGameMode('online-menu'), 50);
+              }
+            } catch (err) {
+              console.error('[App] Accept invite from push exception:', err);
+              setGameMode(null);
+              setTimeout(() => setGameMode('online-menu'), 50);
+            }
+          })();
         } else if (notificationType === 'game_invite' || notificationType === 'friend_request' || notificationType === 'rematch_request') {
           // v7.22: For invite/friend/rematch notifications, force refresh online-menu
           // even if already there by briefly setting to null first
@@ -763,12 +793,16 @@ function AppContent({ onBgThemeChange }) {
     const urlGameId = params.get('gameId');
     const rematchGameId = params.get('rematchGameId');
     const openChat = params.get('openChat');
+    const acceptInviteParam = params.get('acceptInvite');
     
     // Store navigation params in sessionStorage so they survive auth loading
     if (navigateTo === 'online') {
-      console.log('[App] URL params detected - gameId:', urlGameId);
+      console.log('[App] URL params detected - gameId:', urlGameId, 'acceptInvite:', acceptInviteParam);
       if (urlGameId) {
         sessionStorage.setItem('deadblock_pending_game_id', urlGameId);
+      }
+      if (acceptInviteParam) {
+        sessionStorage.setItem('deadblock_pending_accept_invite', acceptInviteParam);
       }
       if (openChat === 'true') {
         sessionStorage.setItem('deadblock_open_chat', 'true');
@@ -799,11 +833,32 @@ function AppContent({ onBgThemeChange }) {
       console.log('[App] Processing pending online navigation, gameId:', pendingGameId);
       sessionStorage.removeItem('deadblock_pending_nav');
       sessionStorage.removeItem('deadblock_pending_game_id');
+      const pendingAcceptInvite = sessionStorage.getItem('deadblock_pending_accept_invite');
+      sessionStorage.removeItem('deadblock_pending_accept_invite');
       // Keep deadblock_open_chat for OnlineGameScreen to read
       
       // Small delay to ensure state is ready
-      setTimeout(() => {
-        if (pendingGameId) {
+      setTimeout(async () => {
+        // v7.26: Handle pending invite acceptance from push notification
+        if (pendingAcceptInvite && profile?.id) {
+          console.log('[App] Processing pending invite acceptance:', pendingAcceptInvite);
+          try {
+            const { inviteService } = await import('./services/inviteService');
+            const { soundManager } = await import('./utils/soundManager');
+            const { data, error } = await inviteService.acceptInvite(pendingAcceptInvite, profile.id, 'invitee');
+            if (!error && data?.game) {
+              soundManager.playSound('success');
+              setOnlineGameId(data.game.id);
+              setGameMode('online-game');
+            } else {
+              console.error('[App] Pending accept invite error:', error);
+              setGameMode('online-menu');
+            }
+          } catch (err) {
+            console.error('[App] Pending accept invite exception:', err);
+            setGameMode('online-menu');
+          }
+        } else if (pendingGameId) {
           console.log('[App] Setting online game:', pendingGameId);
           setOnlineGameId(pendingGameId);
           setGameMode('online-game');
@@ -818,7 +873,7 @@ function AppContent({ onBgThemeChange }) {
         setGameMode('weekly-menu');
       }, 100);
     }
-  }, [hasPassedEntryAuth, setGameMode, setOnlineGameId]);
+  }, [hasPassedEntryAuth, setGameMode, setOnlineGameId, profile]);
 
   // Fallback timeout for stuck loading state
   const [loadingStuck, setLoadingStuck] = useState(false);
