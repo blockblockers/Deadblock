@@ -1,4 +1,8 @@
 // service-worker.js - UNIFIED Service Worker for Deadblock PWA
+// v7.17 - Accept button now works on Android (handles accept action explicitly)
+//   - Accept action sends ACCEPT_INVITE message to app or opens with full absolute URL
+//   - Badge URLs use full absolute paths for Android compatibility
+//   - Added debug logging for badge URLs
 // v7.16 - Decline button now sends message to app to actually decline invites/rematches
 // v7.15.3 - Fixed notification badges: now using monochrome PNG files for Android
 // v7.15.2 - Added streak_reminder notification type (N pentomino)
@@ -8,9 +12,10 @@
 // - Victory/defeat navigate to game to see final board
 // - Handles both camelCase and snake_case data keys from database
 // - Decline action sends DECLINE_INVITE/DECLINE_REMATCH message to app
+// - Accept action sends ACCEPT_INVITE message to app or navigates via URL
 // Place in: public/service-worker.js
 
-const CACHE_NAME = 'deadblock-v7.16';
+const CACHE_NAME = 'deadblock-v7.17';
 const APP_URL = self.location.origin;
 
 // =============================================================================
@@ -33,7 +38,7 @@ const BADGES = {
   'defeat': `${APP_URL}/badges/badge-defeat.png`,            // L pentomino
   'weekly_challenge': `${APP_URL}/badges/badge-weekly.png`,  // Z pentomino
   'streak_reminder': `${APP_URL}/badges/badge-streak.png`,   // N pentomino
-  'default': `${APP_URL}/badges/badge-default.png`           // I pentomino
+  'default': `${APP_URL}/badges/badge-default.png`           // P pentomino
 };
 
 // Vibration patterns per notification type
@@ -49,7 +54,7 @@ const VIBRATIONS = {
   'victory': [100, 50, 100, 50, 300],
   'defeat': [200, 200, 200],
   'weekly_challenge': [100, 50, 100, 50, 100, 50, 200],
-  'streak_reminder': [100, 100, 100, 100, 200],  // Urgent pulsing
+  'streak_reminder': [100, 100, 100, 100, 200],
   'default': [100, 50, 100]
 };
 
@@ -77,7 +82,7 @@ const CORE_ASSETS = [
 // INSTALL EVENT
 // =============================================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v7.16...');
+  console.log('[SW] Installing v7.17...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -98,7 +103,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE EVENT
 // =============================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v7.16...');
+  console.log('[SW] Activating v7.17...');
   event.waitUntil(
     caches.keys()
       .then((cacheNames) => {
@@ -198,12 +203,17 @@ self.addEventListener('push', (event) => {
   const inviteId = data.inviteId || data.invite_id || data.data?.inviteId || data.data?.invite_id;
   const rematchId = data.rematchId || data.rematch_id || data.data?.rematchId || data.data?.rematch_id;
   
-  console.log('[SW] Notification type:', type, 'gameId:', gameId);
+  // v7.17: Resolve badge URL
+  const badgeUrl = BADGES[type] || BADGES['default'];
+  
+  console.log('[SW] Notification type:', type, 'gameId:', gameId, 'inviteId:', inviteId);
+  console.log('[SW] Badge URL:', badgeUrl);
+  console.log('[SW] APP_URL:', APP_URL);
   
   const options = {
     body: data.body,
     icon: `${APP_URL}/pwa-192x192.png`,
-    badge: BADGES[type] || BADGES['default'],
+    badge: badgeUrl,
     tag: `deadblock-${type}-${Date.now()}`,
     renotify: true,
     requireInteraction: REQUIRE_INTERACTION.includes(type),
@@ -251,6 +261,52 @@ self.addEventListener('notificationclick', (event) => {
   
   console.log('[SW] Click - action:', action, 'type:', type, 'gameId:', gameId, 'inviteId:', inviteId);
   event.notification.close();
+  
+  // v7.17: Handle accept action explicitly
+  // On Android, action button taps may not grant sufficient user activation for openWindow.
+  // We handle accept by sending a message to existing client OR navigating via full URL.
+  if (action === 'accept') {
+    const acceptUrl = (type === 'game_invite' && inviteId) 
+      ? `${APP_URL}/?navigateTo=online&acceptInvite=${inviteId}`
+      : (type === 'rematch_request' && rematchId)
+        ? `${APP_URL}/?navigateTo=online&acceptRematch=${rematchId}`
+        : `${APP_URL}/?navigateTo=online`;
+    
+    console.log('[SW] Accept action - URL:', acceptUrl);
+    
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+        // Try to find an existing app window
+        for (const client of clients) {
+          if (client.url.includes(APP_URL) && 'focus' in client) {
+            console.log('[SW] Accept - sending to existing client');
+            // Send accept message to existing window
+            if (type === 'game_invite' && inviteId) {
+              client.postMessage({
+                type: 'NOTIFICATION_CLICK',
+                url: acceptUrl,
+                data: { type, gameId, inviteId, rematchId }
+              });
+            } else if (type === 'rematch_request' && rematchId) {
+              client.postMessage({
+                type: 'NOTIFICATION_CLICK',
+                url: acceptUrl,
+                data: { type, gameId, inviteId, rematchId }
+              });
+            }
+            return client.focus();
+          }
+        }
+        
+        // No existing window - open new one with full absolute URL
+        console.log('[SW] Accept - no existing client, opening:', acceptUrl);
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(acceptUrl);
+        }
+      })
+    );
+    return;
+  }
   
   // v7.16: Handle decline action - send message to app to actually decline
   if (action === 'decline') {
@@ -311,11 +367,8 @@ self.addEventListener('notificationclick', (event) => {
       break;
       
     case 'game_invite':
-      if (inviteId && action === 'accept') {
-        url = `/?navigateTo=online&acceptInvite=${inviteId}`;
-      } else {
-        url = '/?navigateTo=online';
-      }
+      // Body tap (not action button) - just go to online menu to see invite
+      url = '/?navigateTo=online';
       break;
       
     case 'invite_accepted':
@@ -327,9 +380,6 @@ self.addEventListener('notificationclick', (event) => {
     case 'rematch_request':
       if (gameId) {
         url = `/?navigateTo=online&gameId=${gameId}`;
-      }
-      if (rematchId && action === 'accept') {
-        url = `/?navigateTo=online&acceptRematch=${rematchId}`;
       }
       break;
       
@@ -382,9 +432,10 @@ self.addEventListener('notificationclick', (event) => {
           return client.focus();
         }
       }
-      // Open new window
+      // Open new window - v7.17: use full absolute URL for Android reliability
       if (self.clients.openWindow) {
-        return self.clients.openWindow(url);
+        const fullUrl = url.startsWith('http') ? url : `${APP_URL}${url}`;
+        return self.clients.openWindow(fullUrl);
       }
     })
   );
@@ -406,4 +457,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] v7.16 unified service worker loaded');
+console.log('[SW] v7.17 unified service worker loaded');
