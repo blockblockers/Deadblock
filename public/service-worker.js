@@ -1,36 +1,36 @@
 // service-worker.js - UNIFIED Service Worker for Deadblock PWA
-// v7.17 - Body tap on game_invite now accepts the invite (Android action buttons unreliable)
-//   - Pre-caches badge PNGs during install for instant availability
-//   - Full absolute URLs for openWindow on Android
-//   - Tapping notification body on game_invite = accept + open game
-//   - Action buttons remain as bonus (work when app is already open)
-// v7.16 - Decline button sends message to app to actually decline invites/rematches
-// v7.15.3 - Fixed notification badges: now using monochrome PNG files for Android
-// v7.15.2 - Added streak_reminder notification type (N pentomino)
+// v7.17 - Inline base64 badges (no network fetch), single Accept Game button
+//   - Badge PNGs embedded as data URIs to eliminate Android fetch issues
+//   - game_invite has single "⚔ Accept Game" button (like "Play Now" on your_turn)
+//   - Body tap on game_invite also accepts (most reliable on Android)
+//   - Pre-caches badge PNG files as backup
+// v7.16 - Decline button sends message to app to decline invites/rematches
 // Place in: public/service-worker.js
 
 const CACHE_NAME = 'deadblock-v7.17';
 const APP_URL = self.location.origin;
 
 // =============================================================================
-// PENTOMINO BADGES & VIBRATION PATTERNS
+// PENTOMINO BADGES - INLINE BASE64 DATA URIS
+// v7.17: Embedded directly to eliminate Android fetch/timing issues
+// Each is a 72x72 white-on-transparent PNG pentomino shape
 // =============================================================================
 
 const BADGES = {
-  'your_turn': `${APP_URL}/badges/badge-turn.png`,
-  'game_start': `${APP_URL}/badges/badge-turn.png`,
-  'game_invite': `${APP_URL}/badges/badge-invite.png`,
-  'invite_accepted': `${APP_URL}/badges/badge-invite.png`,
-  'friend_request': `${APP_URL}/badges/badge-friend.png`,
-  'rematch_request': `${APP_URL}/badges/badge-rematch.png`,
-  'rematch_accepted': `${APP_URL}/badges/badge-rematch.png`,
-  'chat_message': `${APP_URL}/badges/badge-chat.png`,
-  'chat': `${APP_URL}/badges/badge-chat.png`,
-  'victory': `${APP_URL}/badges/badge-victory.png`,
-  'defeat': `${APP_URL}/badges/badge-defeat.png`,
-  'weekly_challenge': `${APP_URL}/badges/badge-weekly.png`,
-  'streak_reminder': `${APP_URL}/badges/badge-streak.png`,
-  'default': `${APP_URL}/badges/badge-default.png`
+  'your_turn': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAbElEQVR42u3QQQ0AMAgEsPNvmhnYYx+WEFoJTR7UR5lIkCBBggQJEiRIkCBBggQJEiRIkCBBDYnZTJAgQYIECRIkSJAgQYIECRIkSJAgQYIECRIkSJAgQYIECRIkSJAgQYIECRIEAAAAAHB3AJ40nA0VMjaPAAAAAElFTkSuQmCC',
+  'game_start': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAbElEQVR42u3QQQ0AMAgEsPNvmhnYYx+WEFoJTR7UR5lIkCBBggQJEiRIkCBBggQJEiRIkCBBDYnZTJAgQYIECRIkSJAgQYIECRIkSJAgQYIECRIkSJAgQYIECRIkSJAgQYIECRIEAAAAAHB3AJ40nA0VMjaPAAAAAElFTkSuQmCC',
+  'game_invite': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAXUlEQVR42u3QQQ0AAAgEoOtfWiu46U+IQHKkBvKZIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIAAAAAAAAADYastMTgcgzKA+AAAAAElFTkSuQmCC',
+  'invite_accepted': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAXUlEQVR42u3QQQ0AAAgEoOtfWiu46U+IQHKkBvKZIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIEGCBAkSJEiQIAAAAAAAAADYastMTgcgzKA+AAAAAElFTkSuQmCC',
+  'friend_request': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAVElEQVR42u3SwQ0AMAjEsNt/aboCQvSD7BGiJA21JFcJJJBAAgkkkEACXQzkDoEEEkgggQQSSCCBvkYUSCCBBBJIIIEEEggAAAAAAAAAAAAAAAAYeXaCTgcB8ixzAAAAAElFTkSuQmCC',
+  'rematch_request': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAU0lEQVR42u3XMQEAMAjEwPg33VpgYOPOAZmeWvIGukwggQQSSCCBBBLo6vFbBBJIIIEEEkgggQSypL0aAgkkkEACCSSQQAAAAAAAAAAAAAAAAEB9tLlOBxAmpBcAAAAASUVORK5CYII=',
+  'rematch_accepted': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAU0lEQVR42u3XMQEAMAjEwPg33VpgYOPOAZmeWvIGukwggQQSSCCBBBLo6vFbBBJIIIEEEkgggQSypL0aAgkkkEACCSSQQAAAAAAAAAAAAAAAAEB9tLlOBxAmpBcAAAAASUVORK5CYII=',
+  'chat_message': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAASUlEQVR42u3QMQ0AAAgEMfybBgs/QMLQCrjhqgMV2Oq8Y5BBBhlkkEEGGWTQPYMMMsgggwwyyCCDAAAAAAAAAAAAAAAAAAAAyAw+zk4HUirdiAAAAABJRU5ErkJggg==',
+  'chat': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAASUlEQVR42u3QMQ0AAAgEMfybBgs/QMLQCrjhqgMV2Oq8Y5BBBhlkkEEGGWTQPYMMMsgggwwyyCCDAAAAAAAAAAAAAAAAAAAAyAw+zk4HUirdiAAAAABJRU5ErkJggg==',
+  'victory': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAUUlEQVR42u3WMQ0AAAgEsfdvGiyQwEYr4aZLDeQzgQQSSCCBBBJIIIF2BBJIIIEEEkgggQQykyIKJJBAAgkkkEACCQQAAAAAAAAAAAAAAAB3GksMTgc4IxlQAAAAAElFTkSuQmCC',
+  'defeat': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAXElEQVR42u3WMQEAAAjDsPk3DRY49pFI6NXMQT4TSCCBBBJIIIEEEkgggQQSSCCBBBJIIIEEEkgggQQSSCCBBBKoEeh1RIEEEkgggQQSSCAzCQAAAAAAAAAAAFCzIX9OB83QQW0AAAAASUVORK5CYII=',
+  'weekly_challenge': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAUklEQVR42u3WMQEAAAjDsPk3DSZ2QSKhVzMluUoggQQSSCCBBBLoa6BWRIEEEkgggQQSSCCBBHLbAgkkkEACCSSQQAIBAAAAAAAAAAAAAABAzwKuNk4HkvyAVwAAAABJRU5ErkJggg==',
+  'streak_reminder': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAAXElEQVR42u3XMQEAAAgCQfqX1gpMLt414DeSwhTymUACCSSQQAIJJNDX8QIJJJBAAgkkkEACCeRGCCSQQAIJJJBAAgkkkEACCSSQQAIJJJBAAAAAAAAAAAAAALcWTPVOB2SmVjwAAAAASUVORK5CYII=',
+  'default': 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABICAYAAABV7bNHAAAATUlEQVR42u3QQQ0AMAgEsPNvmmkggc9oJTQ1JL8SJEiQIEGCBAkSJEiQIEGCBAkSJEhQMyiXCRIkSJAgQYIEAQAAAAAAAAAAAAAAALsepcpOB6ROb4YAAAAASUVORK5CYII='
 };
 
 const VIBRATIONS = {
@@ -60,24 +60,13 @@ const REQUIRE_INTERACTION = [
 
 // =============================================================================
 // CORE ASSETS TO CACHE
-// v7.17: Pre-cache badge PNGs so they're instantly available for notifications
 // =============================================================================
 
 const CORE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/pwa-192x192.png',
-  '/badges/badge-turn.png',
-  '/badges/badge-invite.png',
-  '/badges/badge-friend.png',
-  '/badges/badge-rematch.png',
-  '/badges/badge-chat.png',
-  '/badges/badge-victory.png',
-  '/badges/badge-defeat.png',
-  '/badges/badge-weekly.png',
-  '/badges/badge-streak.png',
-  '/badges/badge-default.png'
+  '/pwa-192x192.png'
 ];
 
 // =============================================================================
@@ -88,14 +77,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[SW] Caching core assets + badge PNGs');
-        // Use addAll but don't fail install if a badge file is missing
-        return cache.addAll(CORE_ASSETS).catch((err) => {
-          console.warn('[SW] Some assets failed to cache, trying individually:', err.message);
-          return Promise.allSettled(
-            CORE_ASSETS.map(url => cache.add(url).catch(e => console.warn('[SW] Failed to cache:', url, e.message)))
-          );
-        });
+        console.log('[SW] Caching core assets');
+        return cache.addAll(CORE_ASSETS);
       })
       .then(() => {
         console.log('[SW] Install complete');
@@ -137,7 +120,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (!event.request.url.startsWith('http')) return;
-  
   if (event.request.url.includes('supabase.co')) return;
   if (event.request.url.includes('/api/') || 
       event.request.url.includes('/auth/') ||
@@ -186,8 +168,7 @@ self.addEventListener('push', (event) => {
   const inviteId = data.inviteId || data.invite_id || data.data?.inviteId || data.data?.invite_id;
   const rematchId = data.rematchId || data.rematch_id || data.data?.rematchId || data.data?.rematch_id;
   
-  const badgeUrl = BADGES[type] || BADGES['default'];
-  console.log('[SW] Type:', type, 'gameId:', gameId, 'inviteId:', inviteId, 'badge:', badgeUrl);
+  console.log('[SW] Type:', type, 'gameId:', gameId, 'inviteId:', inviteId);
   
   // v7.17: For game_invite, hint that tapping accepts
   let body = data.body;
@@ -198,7 +179,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: body,
     icon: `${APP_URL}/pwa-192x192.png`,
-    badge: badgeUrl,
+    badge: BADGES[type] || BADGES['default'],
     tag: `deadblock-${type}-${Date.now()}`,
     renotify: true,
     requireInteraction: REQUIRE_INTERACTION.includes(type),
@@ -210,15 +191,16 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(data.title, options));
 });
 
+// v7.17: Single action button for game_invite (like "Play Now" on your_turn)
 function getActions(type) {
   switch (type) {
     case 'your_turn':
     case 'game_start':
       return [{ action: 'play', title: '🎮 Play Now' }];
     case 'game_invite':
-      return [{ action: 'accept', title: '✓ Accept' }, { action: 'decline', title: '✗ Decline' }];
+      return [{ action: 'accept', title: '⚔️ Accept Game' }];
     case 'rematch_request':
-      return [{ action: 'accept', title: '⚔️ Accept' }, { action: 'decline', title: '✗ Decline' }];
+      return [{ action: 'accept', title: '⚔️ Accept Rematch' }];
     case 'chat_message':
     case 'chat':
       return [{ action: 'reply', title: '💬 Reply' }];
@@ -238,6 +220,7 @@ function getActions(type) {
 // =============================================================================
 // NOTIFICATION CLICK
 // v7.17: Body tap on game_invite = accept (most reliable on Android)
+//        Single "Accept Game" button also accepts
 // =============================================================================
 self.addEventListener('notificationclick', (event) => {
   const { action } = event;
@@ -248,7 +231,7 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
   // -------------------------------------------------------------------------
-  // ACCEPT: action button tap OR body tap on game_invite/rematch_request
+  // ACCEPT: button tap OR body tap on game_invite/rematch_request
   // -------------------------------------------------------------------------
   const isAcceptAction = (action === 'accept');
   const isInviteBodyTap = (!action && type === 'game_invite' && inviteId);
@@ -289,24 +272,9 @@ self.addEventListener('notificationclick', (event) => {
   }
   
   // -------------------------------------------------------------------------
-  // DECLINE: action button only
+  // DECLINE: swipe away or close handles this naturally
+  // (No dedicated decline button - user just ignores/dismisses notification)
   // -------------------------------------------------------------------------
-  if (action === 'decline') {
-    event.waitUntil(
-      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-        for (const client of clients) {
-          if (type === 'game_invite' && inviteId) {
-            console.log('[SW] Sending DECLINE_INVITE for:', inviteId);
-            client.postMessage({ type: 'DECLINE_INVITE', inviteId });
-          } else if (type === 'rematch_request' && rematchId) {
-            console.log('[SW] Sending DECLINE_REMATCH for:', rematchId);
-            client.postMessage({ type: 'DECLINE_REMATCH', rematchId });
-          }
-        }
-      })
-    );
-    return;
-  }
   
   // -------------------------------------------------------------------------
   // ALL OTHER: navigate based on type

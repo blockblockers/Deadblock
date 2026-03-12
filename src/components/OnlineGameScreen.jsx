@@ -1,4 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.25: FIX - Game over modal X button dismiss is now permanent (cleanup no longer resets ref)
+//   - FIX - Play Again auto-accept now navigates to new game instead of menu
 // v7.24: Added sound feedback to GameOverModal X button dismiss for consistency
 // v7.23: CRITICAL FIX - Game over modal now appears for winning player (fixed useEffect reset cascade)
 // v7.22: Added orange color to GlowOrbButton for Home button
@@ -1052,8 +1054,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     return () => {
       mountedRef.current = false;
-      // v7.18: Reset dismissedGameOverRef on cleanup so it's fresh for next game
-      dismissedGameOverRef.current = false;
+      // v7.25: Removed dismissedGameOverRef reset from cleanup
+      // It was causing the game over modal to re-appear after X button dismiss
+      // because showGameOver changing → updateGameState recreated → this effect re-runs →
+      // cleanup resets the ref → loadGame timeout re-shows the modal.
+      // The ref is correctly reset when game ID changes (in the isNewGame check above).
       clearTimeout(loadingTimeout);
       if (subscription) {
         subscription.unsubscribe();
@@ -1897,15 +1902,32 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 soundManager.playSound('notification');
                 setRematchMessage(`Rematch starting! ${firstPlayerName} first.`);
                 
-                // Navigate to new game after delay
+                // v7.25: Navigate to new game instead of going back to menu
                 setTimeout(() => {
                   setShowGameOver(false);
                   setShowRematchModal(false);
-                  if (typeof onLeave === 'function') {
-                    onLeave();
-                  } else {
-                    window.location.href = window.location.origin;
-                  }
+                  setRematchWaiting(false);
+                  setRematchRequest(null);
+                  setIsRematchRequester(false);
+                  setRematchDeclined(false);
+                  setRematchAccepted(false);
+                  setRematchMessage(null);
+                  
+                  // Reset board state for new game
+                  setBoard(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
+                  setBoardPieces({});
+                  setUsedPieces([]);
+                  setSelectedPiece(null);
+                  setPendingMove(null);
+                  setRotation(0);
+                  setFlipped(false);
+                  setWinningMoveCells(null);
+                  setGameResult(null);
+                  setGame(null);
+                  setLoading(true);
+                  
+                  // Set the new game ID - triggers the load effect
+                  setCurrentGameId(data.game.id);
                 }, 2000);
                 return;
               }
