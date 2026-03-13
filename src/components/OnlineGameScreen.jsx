@@ -1,7 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.25: FIX - Game over modal X button dismiss is now permanent (cleanup no longer resets ref)
-//   - FIX - Play Again auto-accept now navigates to new game instead of menu
-//   - FIX - Play Again without instant response: toast + redirect to online menu after 2s
+// v7.26: FIX - Rematch sender: setShowGameOver(false) immediately on Play Again to kill polling
+//   - FIX - Viewing completed game: isReviewModeRef blocks RematchModal from auto-showing
 // v7.24: Added sound feedback to GameOverModal X button dismiss for consistency
 // v7.23: CRITICAL FIX - Game over modal now appears for winning player (fixed useEffect reset cascade)
 // v7.22: Added orange color to GlowOrbButton for Home button
@@ -205,6 +204,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const expectedPieceCountRef = useRef(null);
   const mountedRef = useRef(true);
   const dismissedGameOverRef = useRef(false);
+  const isReviewModeRef = useRef(false);  // v7.26: True when viewing an already-completed game
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
   const prevGameIdRef = useRef(null);  // v7.23: Track previous game ID to prevent spurious resets
   // Refs for synchronous access in touch handlers
@@ -649,13 +649,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           // Handle pending request
           if (request.status === 'pending') {
             // If we're the receiver and haven't seen this request yet, show modal
-            if (!isSender && !showRematchModal && !rematchDeclined) {
+            // v7.26: Skip in review mode - don't interrupt viewing a completed game
+            if (!isSender && !showRematchModal && !rematchDeclined && !isReviewModeRef.current) {
               setShowRematchModal(true);
               soundManager.playSound('notification');
             }
             
             // If we're the requester, show waiting state
-            if (isSender && !rematchAccepted) {
+            // v7.26: Skip in review mode - sender was already navigated away
+            if (isSender && !rematchAccepted && !isReviewModeRef.current) {
               setRematchWaiting(true);
               if (!showRematchModal) {
                 setShowRematchModal(true);
@@ -851,6 +853,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (isNewGame) {
       prevGameIdRef.current = currentGameId;
       dismissedGameOverRef.current = false;
+      isReviewModeRef.current = false;
       setShowGameOver(false);
       setGameResult(null);
       setWinningMoveCells(null);
@@ -946,6 +949,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           // v7.18: Show game over modal after 5 second delay for completed games
           // This gives user time to see the board and the winning move
           // NOTE: Only check dismissedGameOverRef (not showGameOver) to avoid stale closure
+          // v7.26: Mark as review mode so rematch polling won't auto-show RematchModal
+          isReviewModeRef.current = true;
           setTimeout(() => {
             if (mountedRef.current && !dismissedGameOverRef.current) {
               setShowGameOver(true);
@@ -1934,19 +1939,20 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               }
               
               // No auto-accept - opponent hasn't requested yet
-              // v7.25: Show toast and redirect to online menu after 2 seconds
-              // The pending rematch will be visible in the online menu
+              // v7.26: Kill polling immediately by clearing showGameOver before the delay
+              // Previously, showGameOver stayed true during the 2s wait, letting the polling
+              // detect isSender=true and re-open the RematchModal before onLeave() fired
               soundManager.playSound('notification');
               setRematchMessage('Rematch request sent!');
+              setShowGameOver(false);
               
-              // Navigate to online menu after brief delay
+              // Navigate to online menu after 5 second delay
               setTimeout(() => {
                 setRematchMessage(null);
-                setShowGameOver(false);
                 if (typeof onLeave === 'function') {
                   onLeave();
                 }
-              }, 2000);
+              }, 5000);
               
             } catch (err) {
               console.error('[OnlineGameScreen] Rematch error:', err);
