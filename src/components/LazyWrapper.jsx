@@ -1,15 +1,35 @@
 /**
  * Lazy Loading Helpers
  * Utilities for code-splitting and lazy loading components
+ * v7.x: Added screenFadeIn animation to LazyWrapper — single implementation covers all lazy screens
  */
 
 import React, { Suspense, lazy, ComponentType } from 'react';
 import LoadingScreen, { LoadingSpinner } from './LoadingScreen';
 
+// Inject screen-fade keyframes once at module level (same pattern as PlacementAnimation)
+let fadeStyleInjected = false;
+const injectFadeStyle = () => {
+  if (fadeStyleInjected || typeof document === 'undefined') return;
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes screenFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
+    .screen-fade-in {
+      animation: screenFadeIn 0.15s ease-out;
+    }
+  `;
+  document.head.appendChild(style);
+  fadeStyleInjected = true;
+};
+
 /**
  * Wrapper component for lazy-loaded components with Suspense
  * Provides consistent loading UI across the app
- * 
+ * v7.x: Wraps output in .screen-fade-in div — covers all lazy screen transitions at once
+ *
  * @example
  * <LazyWrapper>
  *   <SomeLazyComponent {...props} />
@@ -21,12 +41,15 @@ export const LazyWrapper = ({
   variant = 'fullscreen',
   message = 'Loading...',
 }) => {
+  injectFadeStyle();
   const defaultFallback = <LoadingScreen variant={variant} message={message} />;
   
   return (
-    <Suspense fallback={fallback || defaultFallback}>
-      {children}
-    </Suspense>
+    <div className="screen-fade-in">
+      <Suspense fallback={fallback || defaultFallback}>
+        {children}
+      </Suspense>
+    </div>
   );
 };
 
@@ -49,12 +72,6 @@ export const LazyInline = ({ children, fallback = null }) => {
 
 /**
  * Create a lazy-loadable component with preload capability
- * 
- * @example
- * const MyComponent = lazyWithPreload(() => import('./MyComponent'));
- * 
- * // Preload on hover
- * onMouseEnter={() => MyComponent.preload()}
  */
 export function lazyWithPreload(factory) {
   const Component = lazy(factory);
@@ -64,10 +81,6 @@ export function lazyWithPreload(factory) {
 
 /**
  * Retry lazy load with exponential backoff
- * Useful for components that might fail to load due to network issues
- * 
- * @example
- * const MyComponent = lazyWithRetry(() => import('./MyComponent'));
  */
 export function lazyWithRetry(factory, retriesLeft = 3, delay = 1000) {
   return lazy(() => 
@@ -83,11 +96,6 @@ export function lazyWithRetry(factory, retriesLeft = 3, delay = 1000) {
     })
   );
 }
-
-/**
- * Named exports for the components with preload support
- * These are the actual lazy-loaded components with preload capability
- */
 
 // Puzzle components
 export const LazyPuzzleSelect = lazyWithPreload(() => import('./PuzzleSelect'));
@@ -112,14 +120,6 @@ export const LazyLeaderboard = lazyWithPreload(() => import('./Leaderboard'));
 export const LazySpectatorView = lazyWithPreload(() => import('./SpectatorView'));
 export const LazyGameReplay = lazyWithPreload(() => import('./GameReplay'));
 
-/**
- * Preload a group of related components
- * Call this when user shows intent to navigate to a section
- * 
- * @example
- * // When user hovers over "Online" button
- * onMouseEnter={() => preloadOnlineComponents()}
- */
 export const preloadOnlineComponents = () => {
   LazyAuthScreen.preload();
   LazyOnlineMenu.preload();

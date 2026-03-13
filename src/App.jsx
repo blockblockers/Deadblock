@@ -1091,7 +1091,7 @@ function AppContent({ onBgThemeChange }) {
       setTimeout(() => setHasPassedEntryAuth(true), 0);
     }
     return (
-      <>
+      <div className="screen-fade-in">
         <MenuScreen
           onStartGame={handleStartGame}
           onPuzzleSelect={() => setGameMode('puzzle-type-select')}
@@ -1148,7 +1148,7 @@ function AppContent({ onBgThemeChange }) {
             onClose={() => setShowNewUserTutorial(false)} 
           />
         )}
-      </>
+      </div>
     );
   }
 
@@ -1160,43 +1160,45 @@ function AppContent({ onBgThemeChange }) {
   if (gameMode === 'auth') {
     // console.log('Rendering: EntryAuthScreen for auth mode with inviteInfo:', !!inviteInfo);
     return (
-      <EntryAuthScreen
-        onComplete={() => {
-          // After auth, check if we need to accept an invite
-          const inviteCode = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
-          if (inviteCode && profile?.id) {
-            // Invite will be processed by the invite acceptance effect
-            setGameMode(null); // Go to menu, invite effect will handle the rest
-          } else {
-            setGameMode('online-menu');
-          }
-        }}
-        onOfflineMode={() => {
-          setPendingInviteCode(null);
-          setInviteInfo(null);
-          setInviteError(null);
-          localStorage.removeItem('deadblock_pending_invite_code');
-          setGameMode(null);
-        }}
-        inviteInfo={inviteInfo}
-        inviteLoading={inviteLoading}
-        inviteError={inviteError}
-        onCancelInvite={() => {
-          setPendingInviteCode(null);
-          setInviteInfo(null);
-          localStorage.removeItem('deadblock_pending_invite_code');
-          setInviteError(null);
-          setGameMode(null);
-        }}
-        forceOnlineOnly={!!inviteInfo}
-      />
+      <div className="screen-fade-in">
+        <EntryAuthScreen
+          onComplete={() => {
+            // After auth, check if we need to accept an invite
+            const inviteCode = pendingInviteCode || localStorage.getItem('deadblock_pending_invite_code');
+            if (inviteCode && profile?.id) {
+              // Invite will be processed by the invite acceptance effect
+              setGameMode(null); // Go to menu, invite effect will handle the rest
+            } else {
+              setGameMode('online-menu');
+            }
+          }}
+          onOfflineMode={() => {
+            setPendingInviteCode(null);
+            setInviteInfo(null);
+            setInviteError(null);
+            localStorage.removeItem('deadblock_pending_invite_code');
+            setGameMode(null);
+          }}
+          inviteInfo={inviteInfo}
+          inviteLoading={inviteLoading}
+          inviteError={inviteError}
+          onCancelInvite={() => {
+            setPendingInviteCode(null);
+            setInviteInfo(null);
+            localStorage.removeItem('deadblock_pending_invite_code');
+            setInviteError(null);
+            setGameMode(null);
+          }}
+          forceOnlineOnly={!!inviteInfo}
+        />
+      </div>
     );
   }
 
   // Online Menu/Lobby
   if (gameMode === 'online-menu') {
     return (
-      <LazyWrapper message="Loading online lobby...">
+      <LazyWrapper message="Entering the lobby…">
         <OnlineMenu
           onFindMatch={() => setGameMode('matchmaking')}
           onViewProfile={() => setGameMode('profile')}
@@ -1213,7 +1215,7 @@ function AppContent({ onBgThemeChange }) {
   // Matchmaking Screen
   if (gameMode === 'matchmaking') {
     return (
-      <LazyWrapper message="Finding opponents...">
+      <LazyWrapper message="Scanning for opponents…">
         <MatchmakingScreen
           onMatchFound={handleMatchFound}
           onCancel={() => setGameMode('online-menu')}
@@ -1228,7 +1230,7 @@ function AppContent({ onBgThemeChange }) {
       console.error('online-game mode but no gameId, redirecting to menu');
       // Reset to online menu if we somehow got here without a game ID
       return (
-        <LazyWrapper message="Loading online lobby...">
+        <LazyWrapper message="Entering the lobby…">
           <OnlineMenu
             onFindMatch={() => setGameMode('matchmaking')}
             onViewProfile={() => setGameMode('profile')}
@@ -1242,7 +1244,7 @@ function AppContent({ onBgThemeChange }) {
       );
     }
     return (
-      <LazyWrapper message="Loading game...">
+      <LazyWrapper message="Entering the arena…">
         <OnlineGameScreen
           gameId={onlineGameId}
           onGameEnd={handleOnlineGameEnd}
@@ -1260,7 +1262,7 @@ function AppContent({ onBgThemeChange }) {
   // User Profile
   if (gameMode === 'profile') {
     return (
-      <LazyWrapper message="Loading profile...">
+      <LazyWrapper message="Accessing profile data…">
         <UserProfile
           onBack={() => setGameMode('online-menu')}
         />
@@ -1271,7 +1273,7 @@ function AppContent({ onBgThemeChange }) {
   // Leaderboard
   if (gameMode === 'leaderboard') {
     return (
-      <LazyWrapper message="Loading leaderboard...">
+      <LazyWrapper message="Loading the rankings…">
         <Leaderboard
           onBack={() => setGameMode('online-menu')}
         />
@@ -1282,7 +1284,7 @@ function AppContent({ onBgThemeChange }) {
   // Spectate Game
   if (gameMode === 'spectate') {
     return (
-      <LazyWrapper message="Loading spectator view...">
+      <LazyWrapper message="Entering spectator mode…">
         <SpectatorView
           gameId={spectatingGameId}
           userId={profile?.id}
@@ -1298,7 +1300,7 @@ function AppContent({ onBgThemeChange }) {
   // Game Replay
   if (gameMode === 'replay') {
     return (
-      <LazyWrapper message="Loading replay...">
+      <LazyWrapper message="Reviewing the battlefield…">
         <GameReplay
           gameId={replayGameId}
           onClose={() => {
@@ -1317,7 +1319,7 @@ function AppContent({ onBgThemeChange }) {
   // Render Difficulty Selector for AI
   if (gameMode === 'difficulty-select') {
     return (
-      <LazyWrapper message="Loading difficulty selector...">
+      <LazyWrapper message="Choosing your challenge…">
         <DifficultySelector
           selectedDifficulty={aiDifficulty}
           onSelectDifficulty={setAiDifficulty}
@@ -1335,7 +1337,7 @@ function AppContent({ onBgThemeChange }) {
   // Render Puzzle Type Selection Screen (Creator vs Generated)
   if (gameMode === 'puzzle-type-select') {
     return (
-      <LazyWrapper message="Loading puzzles...">
+      <LazyWrapper message="Loading puzzle archive…">
         <PuzzleTypeSelect
           onSelectCreator={() => setGameMode('creator-puzzle-select')}
           onSelectGenerated={() => setGameMode('puzzle-select')}
@@ -1348,7 +1350,7 @@ function AppContent({ onBgThemeChange }) {
   // Render Creator Puzzle Selection Screen
   if (gameMode === 'creator-puzzle-select') {
     return (
-      <LazyWrapper message="Loading creator puzzles...">
+      <LazyWrapper message="Loading creator challenges…">
         <CreatorPuzzleSelect
           onSelectPuzzle={handleCreatorPuzzleSelect}
           onBack={() => setGameMode('puzzle-type-select')}
@@ -1364,7 +1366,7 @@ function AppContent({ onBgThemeChange }) {
       return null;
     }
     return (
-      <LazyWrapper message="Loading puzzle...">
+      <LazyWrapper message="Entering the puzzle…">
         <CreatorPuzzleGame
           puzzle={currentCreatorPuzzle}
           onBack={() => {
@@ -1380,7 +1382,7 @@ function AppContent({ onBgThemeChange }) {
   // Render Generated Puzzle Difficulty Select Screen
   if (gameMode === 'puzzle-select') {
     return (
-      <LazyWrapper message="Loading puzzle mode...">
+      <LazyWrapper message="Loading puzzle mode…">
         <PuzzleSelect
           onSelectPuzzle={handlePuzzleSelect}
           onSpeedMode={() => setGameMode('speed-puzzle')}
@@ -1393,7 +1395,7 @@ function AppContent({ onBgThemeChange }) {
   // Render Speed Puzzle Screen
   if (gameMode === 'speed-puzzle') {
     return (
-      <LazyWrapper message="Loading speed puzzle...">
+      <LazyWrapper message="Initializing speed mode…">
         <SpeedPuzzleScreen
           onMenu={() => setGameMode('puzzle-select')}
           isOfflineMode={isOfflineMode}
@@ -1410,7 +1412,7 @@ function AppContent({ onBgThemeChange }) {
   if (gameMode === 'weekly-menu') {
     // console.log('Rendering: WeeklyChallengeMenu');
     return (
-      <LazyWrapper message="Loading weekly challenge...">
+      <LazyWrapper message="Accessing weekly challenge…">
         <WeeklyChallengeMenu
           onPlay={handlePlayWeeklyChallenge}
           onLeaderboard={handleWeeklyLeaderboard}
@@ -1423,7 +1425,7 @@ function AppContent({ onBgThemeChange }) {
   // Weekly Challenge Game
   if (gameMode === 'weekly-game') {
     return (
-      <LazyWrapper message="Starting challenge...">
+      <LazyWrapper message="Entering the arena…">
         <WeeklyChallengeScreen
           challenge={currentWeeklyChallenge}
           onMenu={() => setGameMode('weekly-menu')}
@@ -1436,7 +1438,7 @@ function AppContent({ onBgThemeChange }) {
   // Weekly Leaderboard
   if (gameMode === 'weekly-leaderboard') {
     return (
-      <LazyWrapper message="Loading leaderboard...">
+      <LazyWrapper message="Loading the rankings…">
         <WeeklyLeaderboard
           challenge={currentWeeklyChallenge}
           onBack={() => setGameMode('weekly-menu')}
@@ -1448,7 +1450,8 @@ function AppContent({ onBgThemeChange }) {
   // Render Game Screen (for ai, 2player, and puzzle modes)
   // console.log('Rendering: GameScreen (fallback) - gameMode:', gameMode);
   return (
-    <GameScreen
+    <div className="screen-fade-in">
+      <GameScreen
       board={board}
       boardPieces={boardPieces}
       currentPlayer={currentPlayer}
@@ -1489,6 +1492,7 @@ function AppContent({ onBgThemeChange }) {
       }}
       onDifficultySelect={() => setGameMode(gameMode === 'puzzle' ? 'puzzle-select' : 'difficulty-select')}
     />
+    </div>
   );
 }
 

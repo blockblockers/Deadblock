@@ -185,6 +185,7 @@ const QuickChat = ({
     }
 
     soundManager.playClickSound?.('soft');
+    soundManager.vibrate(30); // v7.x: haptic feedback on phrase send
     
     // Show "sent" feedback
     setSentMessage(display);

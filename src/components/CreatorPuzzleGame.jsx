@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.2: Added confirmFlashCells for immediate cell-flash feedback on confirm tap
 // v2.1: Fixed freeze on "Next Puzzle" - reset mountedRef and clear timeouts for new puzzles
 // v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
 // v1.5: Attempt persistence - loads/saves attempts to database across sessions
@@ -273,6 +274,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
+  const [confirmFlashCells, setConfirmFlashCells] = useState(null); // v2.2: Immediate flash on confirm tap
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -741,6 +743,16 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords)) {
       soundManager.playInvalid();
       return;
+    }
+    
+    // v2.2: Immediate cell-flash feedback before any async work
+    if (pendingMove.coords) {
+      const flashCells = pendingMove.coords.map(([dx, dy]) => ({
+        row: pendingMove.row + dy,
+        col: pendingMove.col + dx,
+      })).filter(c => c.row >= 0 && c.row < 8 && c.col >= 0 && c.col < 8);
+      setConfirmFlashCells(flashCells);
+      setTimeout(() => setConfirmFlashCells(null), 400);
     }
     
     // Place the user's piece
@@ -1453,6 +1465,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 draggedPiece={draggedPiece}
                 dragRotation={rotation}
                 dragFlipped={flipped}
+                confirmFlashCells={confirmFlashCells}
               />
             </div>
 

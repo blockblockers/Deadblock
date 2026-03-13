@@ -1,4 +1,5 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
+// v7.x: Added confirmFlashCells for immediate cell-flash feedback on confirm tap
 // 
 // SENIOR ENGINEER CODE REVIEW - IMPROVEMENTS APPLIED:
 // 1. Extracted magic numbers to named constants
@@ -649,6 +650,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
+  const [confirmFlashCells, setConfirmFlashCells] = useState(null); // v7.x: Immediate flash on confirm tap
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -1519,6 +1521,16 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       return;
     }
     
+    // v7.x: Immediate cell-flash feedback before any async work
+    if (pendingMove.coords) {
+      const flashCells = pendingMove.coords.map(([dx, dy]) => ({
+        row: pendingMove.row + dy,
+        col: pendingMove.col + dx,
+      })).filter(c => c.row >= 0 && c.row < 8 && c.col >= 0 && c.col < 8);
+      setConfirmFlashCells(flashCells);
+      setTimeout(() => setConfirmFlashCells(null), 400);
+    }
+    
     // Stop timer and prevent game over during processing
     clearTimer();
     gameOverHandledRef.current = true;
@@ -1771,6 +1783,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                   draggedPiece={draggedPiece}
                   dragRotation={rotation}
                   dragFlipped={flipped}
+                  confirmFlashCells={confirmFlashCells}
                 />
                 
                 {/* Wrong move feedback overlay */}

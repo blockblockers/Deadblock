@@ -1,4 +1,5 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.18: Added confirmFlashCells for immediate cell-flash feedback on confirm tap
 // v7.17: Persistent timer - saves elapsed time on reset/close, restores when returning
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
@@ -285,6 +286,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
+  const [confirmFlashCells, setConfirmFlashCells] = useState(null); // v7.18: Immediate flash on confirm tap
   const [draggedPiece, setDraggedPiece] = useState(null);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -823,6 +825,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
   }, [gameOver, gameStarted, currentPlayer, pendingMove, selectPiece, attachGlobalTouchHandlers]);
+
+  // v7.18: Wrapper around hook's confirmMove to fire immediate cell-flash feedback
+  const handleConfirmMove = useCallback(() => {
+    if (pendingMove) {
+      const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+      const flashCells = coords.map(([dx, dy]) => ({
+        row: pendingMove.row + dy,
+        col: pendingMove.col + dx,
+      })).filter(c => c.row >= 0 && c.row < 8 && c.col >= 0 && c.col < 8);
+      setConfirmFlashCells(flashCells);
+      setTimeout(() => setConfirmFlashCells(null), 400);
+    }
+    confirmMove();
+  }, [pendingMove, rotation, flipped, confirmMove]);
 
   // Global mouse handlers for desktop drag
   useEffect(() => {
@@ -1386,6 +1402,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                   1: 'bg-gradient-to-br from-red-400 to-rose-500',
                   2: 'bg-gradient-to-br from-rose-400 to-pink-500',
                 }}
+                confirmFlashCells={confirmFlashCells}
               />
             </div>
             
@@ -1453,7 +1470,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                   <X size={14} />CANCEL
                 </button>
                 <button
-                  onClick={confirmMove}
+                  onClick={handleConfirmMove}
                   disabled={!pendingMove || !(() => {
                     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
                     return canPlacePiece(board, pendingMove.row, pendingMove.col, coords);

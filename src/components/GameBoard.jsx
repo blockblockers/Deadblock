@@ -1,6 +1,8 @@
 // GameBoard.jsx - Main game board component
-// v7.8: Breathing glow animation - pieces glow up/down at random intervals
+// v7.10: Added turnPulse prop (cyan edge ripple when it becomes your turn)
+//        Added confirmFlashCells prop (bright cell flash on confirm button tap)
 // v7.9: Added lastMoveCells for highlighting opponent's previous move
+// v7.8: Breathing glow animation - pieces glow up/down at random intervals
 // CHANGED: Allow dropping pieces even with conflicts (for rotation adjustment)
 // This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
 
@@ -39,6 +41,10 @@ const GameBoard = forwardRef(({
   dragFlipped = false,
   // v7.9: Last move highlighting for online play
   lastMoveCells = null, // Array of { row, col } for opponent's last placed piece
+  // v7.10: Turn transition pulse — set true briefly when it becomes player's turn
+  turnPulse = false,
+  // v7.10: Confirm flash cells — array of { row, col } for immediate tap feedback
+  confirmFlashCells = null,
 }, ref) => {
   // Ensure board is properly formatted
   const safeBoard = Array.isArray(board) 
@@ -221,6 +227,9 @@ const GameBoard = forwardRef(({
             // v7.9: Check if this cell is part of opponent's last move
             const isLastMove = lastMoveCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
             
+            // v7.10: Check if this cell is part of confirm flash
+            const isConfirmFlash = confirmFlashCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
+            
             // v7.7: Check if this cell is part of drag preview
             const dragPreviewInfo = dragPreviewCells.find(p => p.row === rowIdx && p.col === colIdx);
             const isDragPreview = !!dragPreviewInfo;
@@ -286,6 +295,7 @@ const GameBoard = forwardRef(({
                   ${isPlayerAnimating ? (isPlayerWinningMove ? 'player-winning-cell' : 'player-placing-cell') : ''}
                   ${isPending ? 'pending cursor-grab active:cursor-grabbing' : ''}
                   ${isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating ? 'last-move-cell' : ''}
+                  ${isConfirmFlash ? 'confirm-flash-cell' : ''}
                 `}
                 style={isPending ? {
                   animationDelay: `${pendingIndex * 0.15}s`,
@@ -412,6 +422,11 @@ const GameBoard = forwardRef(({
                     }}
                   />
                 )}
+                
+                {/* v7.10: Confirm flash - bright burst on the placed cells immediately on confirm tap */}
+                {isConfirmFlash && (
+                  <div className="absolute inset-0 rounded-md pointer-events-none confirm-flash-overlay" />
+                )}
               </div>
             );
           })
@@ -442,6 +457,18 @@ const GameBoard = forwardRef(({
               />
             );
           })}
+        </div>
+      )}
+
+      {/* v7.10: Turn transition pulse — cyan ripple rings around board edge */}
+      {turnPulse && (
+        <div className="absolute inset-0 pointer-events-none rounded-lg overflow-visible" style={{ zIndex: 60 }}>
+          {/* Expanding ring 1 */}
+          <div className="absolute inset-0 rounded-lg turn-pulse-ring" style={{ animationDelay: '0ms' }} />
+          {/* Expanding ring 2 */}
+          <div className="absolute inset-0 rounded-lg turn-pulse-ring" style={{ animationDelay: '150ms' }} />
+          {/* Solid glow base (stays for full duration) */}
+          <div className="absolute inset-0 rounded-lg turn-pulse-glow" />
         </div>
       )}
 
@@ -760,6 +787,89 @@ const GameBoard = forwardRef(({
               0 0 8px rgba(236, 72, 153, 0.5),
               0 0 16px rgba(236, 72, 153, 0.3),
               0 0 24px rgba(236, 72, 153, 0.15);
+          }
+        }
+        
+        /* ============================================
+           v7.10: TURN TRANSITION PULSE
+           Cyan glow ripple around board edge when it becomes your turn
+           ============================================ */
+        .turn-pulse-ring {
+          border: 2px solid rgba(34, 211, 238, 0.9);
+          box-shadow: 
+            0 0 20px rgba(34, 211, 238, 0.6),
+            inset 0 0 20px rgba(34, 211, 238, 0.1);
+          animation: turn-pulse-expand 0.6s ease-out forwards;
+        }
+        
+        @keyframes turn-pulse-expand {
+          0% {
+            opacity: 0.9;
+            transform: scale(1);
+            border-color: rgba(34, 211, 238, 0.9);
+            box-shadow: 
+              0 0 25px rgba(34, 211, 238, 0.8),
+              inset 0 0 15px rgba(34, 211, 238, 0.2);
+          }
+          60% {
+            opacity: 0.4;
+            transform: scale(1.04);
+            border-color: rgba(34, 211, 238, 0.5);
+          }
+          100% {
+            opacity: 0;
+            transform: scale(1.08);
+            border-color: rgba(34, 211, 238, 0);
+            box-shadow: 0 0 0 rgba(34, 211, 238, 0);
+          }
+        }
+        
+        .turn-pulse-glow {
+          border: 2px solid rgba(34, 211, 238, 0.6);
+          box-shadow: 
+            0 0 30px rgba(34, 211, 238, 0.5),
+            0 0 60px rgba(34, 211, 238, 0.2),
+            inset 0 0 25px rgba(34, 211, 238, 0.1);
+          animation: turn-pulse-fade 0.7s ease-out forwards;
+        }
+        
+        @keyframes turn-pulse-fade {
+          0%   { opacity: 1; }
+          70%  { opacity: 0.7; }
+          100% { opacity: 0; }
+        }
+        
+        /* ============================================
+           v7.10: CONFIRM FLASH
+           Bright burst on cells immediately when confirm tapped
+           ============================================ */
+        .confirm-flash-cell {
+          z-index: 10;
+          position: relative;
+        }
+        
+        .confirm-flash-overlay {
+          background: rgba(34, 211, 238, 0.6);
+          animation: confirm-flash-burst 0.4s ease-out forwards;
+        }
+        
+        @keyframes confirm-flash-burst {
+          0% {
+            opacity: 0;
+            background: rgba(34, 211, 238, 0.0);
+            box-shadow: none;
+          }
+          15% {
+            opacity: 1;
+            background: rgba(34, 211, 238, 0.75);
+            box-shadow: 
+              0 0 16px rgba(34, 211, 238, 0.9),
+              inset 0 0 12px rgba(255, 255, 255, 0.4);
+          }
+          100% {
+            opacity: 0;
+            background: rgba(34, 211, 238, 0.0);
+            box-shadow: 0 0 0 rgba(34, 211, 238, 0);
           }
         }
         

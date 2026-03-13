@@ -37,6 +37,7 @@ import { SpectatableGamesList } from './SpectatorView';
 // v7.30: GameInviteNotification removed - now handled globally by App.jsx GlobalNotifications
 import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
+import { CardSkeleton, ListSkeleton } from './LoadingScreen'; // v7.26: skeleton loading
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Online theme - amber/orange to match the menu button
@@ -1437,7 +1438,15 @@ const OnlineMenu = ({
           {/* Main Card - Only show when profile is loaded */}
           {profile && (
             <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}>
-            
+
+            {/* v7.26: Skeleton placeholders while active games / invites are fetching */}
+            {loading && (
+              <div className="space-y-3 mb-4 animate-pulse-once">
+                <CardSkeleton />
+                <ListSkeleton count={3} />
+              </div>
+            )}
+
             {/* User Stats Card - Compact Style matching main menu */}
             {(() => {
               const tier = ratingService.getRatingTier(profile?.rating || 1000);
@@ -1566,6 +1575,39 @@ const OnlineMenu = ({
                 )}
               </button>
             </div>
+
+{/* v7.26: Empty state CTA — shown when new user has no activity yet */}
+{!loading && activeGames.length === 0 && recentGames.length === 0 && 
+ receivedInvites.length === 0 && sentInvites.length === 0 && 
+ pendingRematches.length === 0 && (
+  <div className="mb-4 rounded-xl overflow-hidden border border-cyan-500/20 bg-gradient-to-br from-cyan-950/60 to-slate-900/80 relative">
+    {/* Subtle animated background glow */}
+    <div className="absolute inset-0 pointer-events-none">
+      <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 via-transparent to-transparent animate-pulse" 
+           style={{ animationDuration: '3s' }} />
+    </div>
+    <div className="relative p-4 flex flex-col items-center text-center gap-2">
+      {/* Icon cluster */}
+      <div className="flex items-center gap-1 mb-0.5">
+        <span className="text-2xl">⚔️</span>
+      </div>
+      <h3 className="text-cyan-300 font-black tracking-wide text-sm uppercase">
+        Find Your First Opponent
+      </h3>
+      <p className="text-slate-400 text-xs leading-relaxed max-w-[240px]">
+        Jump into matchmaking and get paired with a random player. 
+        Or challenge a friend directly below.
+      </p>
+      {/* CTA arrow pointing down toward Find Match button */}
+      <div className="flex flex-col items-center gap-0.5 mt-1 text-cyan-500/70">
+        <span className="text-[10px] uppercase tracking-widest font-bold">Start here</span>
+        <svg width="16" height="10" viewBox="0 0 16 10" fill="none">
+          <path d="M8 10L0 0h16L8 10z" fill="currentColor" opacity="0.7"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+)}
 
 {/* Find Match - Expanded with Queue Count */}
 <button

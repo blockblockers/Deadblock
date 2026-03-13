@@ -15,6 +15,7 @@
 // FIXED: Real-time updates, drag from board, UI consistency, game over detection
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
+// v7.28: Added turnPulse (board edge ripple on turn change) and confirmFlashCells (cell flash on confirm tap)
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Flag, MessageCircle, Home } from 'lucide-react';
@@ -157,6 +158,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [usedPieces, setUsedPieces] = useState([]);
   const [myPlayerNumber, setMyPlayerNumber] = useState(null);
   const [isMyTurn, setIsMyTurn] = useState(false);
+  // v7.28: Turn transition pulse & confirm flash feedback
+  const [turnPulse, setTurnPulse] = useState(false);
+  const [confirmFlashCells, setConfirmFlashCells] = useState(null);
   const [opponent, setOpponent] = useState(null);
   
   // UI state
@@ -799,6 +803,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         // Play notification sound when it becomes our turn
         soundManager.playSound('notification');
         
+        // v7.28: Board edge pulse for ~650ms to catch attention
+        setTurnPulse(true);
+        setTimeout(() => setTurnPulse(false), 650);
+        
         // v7.12 FIX: Send push notification if page is hidden (user not actively viewing)
         if (document.visibilityState === 'hidden' || document.hidden) {
           const opponentName = gameData.player1_id === currentUserId 
@@ -1240,6 +1248,15 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
     
+    // v7.28: Immediate cell flash feedback on confirm tap (clears after 400ms)
+    const flashCells = coords.map(([dx, dy]) => ({
+      row: pendingMove.row + dy,
+      col: pendingMove.col + dx,
+    })).filter(c => c.row >= 0 && c.row < BOARD_SIZE && c.col >= 0 && c.col < BOARD_SIZE);
+    setConfirmFlashCells(flashCells);
+    setTimeout(() => setConfirmFlashCells(null), 400);
+    soundManager.vibrate(50); // v7.28: haptic on confirm
+    
     // Calculate new board state
     const newBoard = board.map(row => [...row]);
     const newBoardPieces = { ...boardPieces };
@@ -1624,6 +1641,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   draggedPiece={draggedPiece}
                   dragRotation={rotation}
                   dragFlipped={flipped}
+                  // v7.28: Turn pulse & confirm flash
+                  turnPulse={turnPulse}
+                  confirmFlashCells={confirmFlashCells}
                 />
                 {/* Placement Animation Overlay */}
                 {placementAnimation && (
