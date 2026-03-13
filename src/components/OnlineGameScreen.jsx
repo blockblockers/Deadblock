@@ -1,6 +1,7 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
 // v7.25: FIX - Game over modal X button dismiss is now permanent (cleanup no longer resets ref)
 //   - FIX - Play Again auto-accept now navigates to new game instead of menu
+//   - FIX - Play Again without instant response: toast + redirect to online menu after 2s
 // v7.24: Added sound feedback to GameOverModal X button dismiss for consistency
 // v7.23: CRITICAL FIX - Game over modal now appears for winning player (fixed useEffect reset cascade)
 // v7.22: Added orange color to GlowOrbButton for Home button
@@ -1932,18 +1933,20 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                 return;
               }
               
-              // Show rematch modal in waiting state
-              // console.log('[OnlineGameScreen] Rematch request sent:', data.id);
-              setRematchRequest(data);
-              setIsRematchRequester(true);
-              setRematchWaiting(true);
-              setShowRematchModal(true);
-              
-              // v7.13: Show info toast that request will stay active
-              setRematchMessage('Rematch request sent! Opponent can accept even if you leave this screen.');
-              setTimeout(() => setRematchMessage(null), 4000);
-              
+              // No auto-accept - opponent hasn't requested yet
+              // v7.25: Show toast and redirect to online menu after 2 seconds
+              // The pending rematch will be visible in the online menu
               soundManager.playSound('notification');
+              setRematchMessage('Rematch request sent!');
+              
+              // Navigate to online menu after brief delay
+              setTimeout(() => {
+                setRematchMessage(null);
+                setShowGameOver(false);
+                if (typeof onLeave === 'function') {
+                  onLeave();
+                }
+              }, 2000);
               
             } catch (err) {
               console.error('[OnlineGameScreen] Rematch error:', err);

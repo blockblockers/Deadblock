@@ -13,11 +13,12 @@
 // ============================================
 
 import { useState, useEffect } from 'react';
-import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star, ChevronRight, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, UserPlus2, LogIn, KeyRound, Wand2, Key, ArrowRight, CheckCircle, ArrowLeft, Wifi, WifiOff, RefreshCw, Swords, Users, Loader, XCircle, Trophy, Zap, Globe, Shield, Star, ChevronRight, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import AccountDeletionModal from './AccountDeletionModal';
 
 const EntryAuthScreen = ({ 
   onComplete, 
@@ -30,7 +31,7 @@ const EntryAuthScreen = ({
   inviteError = null,
   onCancelInvite = null
 }) => {
-  const { signIn, signUp, signInWithGoogle, signInWithMagicLink, resetPassword, resendConfirmationEmail, deleteAccount } = useAuth();
+  const { signIn, signUp, signInWithGoogle, signInWithMagicLink, resetPassword, resendConfirmationEmail } = useAuth();
   const { needsScroll } = useResponsiveLayout(700);
   
   // Check if this is an invite flow
@@ -50,11 +51,8 @@ const EntryAuthScreen = ({
   const [showResendOption, setShowResendOption] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   
-  // Delete account states
+  // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const [deletingAccount, setDeletingAccount] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
 
   const clearMessages = () => {
     setError('');
@@ -238,33 +236,6 @@ const EntryAuthScreen = ({
     }
     
     setResendingEmail(false);
-  };
-
-  // Handle account deletion
-  const handleDeleteAccount = async () => {
-    if (deleteConfirmText !== 'DELETE') return;
-    
-    setDeletingAccount(true);
-    setDeleteError('');
-    soundManager.playButtonClick?.();
-    
-    try {
-      const { error } = await deleteAccount();
-      
-      if (error) {
-        setDeleteError(error.message || 'Failed to delete account');
-        setDeletingAccount(false);
-        return;
-      }
-      
-      // Success - close modal and go to offline mode
-      setShowDeleteModal(false);
-      setDeleteConfirmText('');
-      onOfflineMode?.();
-    } catch (err) {
-      setDeleteError('An unexpected error occurred');
-      setDeletingAccount(false);
-    }
   };
 
   const handleOfflineMode = () => {
@@ -1169,91 +1140,9 @@ const EntryAuthScreen = ({
         </button>
       </div>
       
-      {/* Delete Account Modal */}
+      {/* Delete Account Modal - requires email/password verification first */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-red-500/50 shadow-[0_0_60px_rgba(239,68,68,0.3)] overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-red-600 to-rose-600 p-4 relative">
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeleteConfirmText('');
-                  setDeleteError('');
-                }}
-                className="absolute top-3 right-3 p-1 text-white/70 hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
-              <div className="flex items-center justify-center gap-3">
-                <AlertTriangle size={28} className="text-white" />
-                <h2 className="text-xl font-black text-white">Delete Account</h2>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-5 space-y-4">
-              <div className="p-3 bg-red-900/30 border border-red-500/30 rounded-xl">
-                <p className="text-red-300 text-sm">
-                  <strong>Warning:</strong> This action is permanent and cannot be undone. All your data will be deleted including:
-                </p>
-                <ul className="mt-2 text-red-300/80 text-xs space-y-1 ml-4 list-disc">
-                  <li>Your profile and username</li>
-                  <li>Game history and statistics</li>
-                  <li>Friends and pending invites</li>
-                  <li>Achievements and ratings</li>
-                </ul>
-              </div>
-              
-              {deleteError && (
-                <div className="p-3 bg-red-900/50 border border-red-500/50 rounded-xl text-red-300 text-sm">
-                  {deleteError}
-                </div>
-              )}
-              
-              <div>
-                <label className="block text-slate-400 text-sm mb-2">
-                  Type <span className="text-red-400 font-bold">DELETE</span> to confirm:
-                </label>
-                <input
-                  type="text"
-                  value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value.toUpperCase())}
-                  className="w-full px-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-red-500 focus:ring-1 focus:ring-red-500/50 focus:outline-none transition-all"
-                  placeholder="Type DELETE"
-                  autoComplete="off"
-                />
-              </div>
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setDeleteConfirmText('');
-                    setDeleteError('');
-                  }}
-                  className="flex-1 py-3 bg-slate-700 text-slate-300 font-bold rounded-xl hover:bg-slate-600 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={deleteConfirmText !== 'DELETE' || deletingAccount}
-                  className="flex-1 py-3 bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold rounded-xl hover:from-red-500 hover:to-rose-500 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {deletingAccount ? (
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Trash2 size={18} />
-                      Delete
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AccountDeletionModal onClose={() => setShowDeleteModal(false)} />
       )}
       
       {/* Shine animation for glowing orb buttons */}

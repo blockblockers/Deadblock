@@ -1,12 +1,12 @@
-// QuickChat - In-game emotes, quick messages, and custom text
-// UPDATED: Added custom text message input tab
+// QuickChat - In-game emotes and quick messages
+// v7.18: Removed custom text input - only canned phrases and emotes
 // UPDATED: Added onNewMessage callback for notification support
 // UPDATED: Enhanced received message notification with screen flash
 // v7.10: Added iOS scroll fixes for content and recent messages
 // Place in src/components/QuickChat.jsx
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, Send } from 'lucide-react';
+import { MessageCircle, X } from 'lucide-react';
 import { chatService, QUICK_CHAT_MESSAGES, EMOTES } from '../services/chatService';
 import { soundManager } from '../utils/soundManager';
 
@@ -30,23 +30,14 @@ const QuickChat = ({
   const isOpen = isControlled ? externalIsOpen : internalIsOpen;
   const setIsOpen = isControlled ? externalOnToggle : setInternalIsOpen;
   
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat', 'emote', or 'type'
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' or 'emote'
   const [recentMessages, setRecentMessages] = useState([]);
   const [showBubble, setShowBubble] = useState(null);
   const [showFlash, setShowFlash] = useState(false); // Screen flash effect
   const [cooldown, setCooldown] = useState(false);
-  const [customText, setCustomText] = useState('');
   const subscriptionRef = useRef(null);
   const bubbleTimeoutRef = useRef(null);
   const flashTimeoutRef = useRef(null);
-  const inputRef = useRef(null);
-
-  // Focus input when switching to type tab
-  useEffect(() => {
-    if (activeTab === 'type' && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [activeTab]);
 
   // Subscribe to chat messages
   useEffect(() => {
@@ -204,49 +195,6 @@ const QuickChat = ({
     }, 1500);
   };
 
-  const sendCustomMessage = async () => {
-    if (cooldown || disabled || !customText.trim()) return;
-
-    const messageText = customText.trim();
-    
-    // Start cooldown (2 seconds between messages)
-    setCooldown(true);
-    setTimeout(() => setCooldown(false), 2000);
-
-    // Clear input immediately for better UX
-    setCustomText('');
-
-    // Send the message
-    const { error } = await chatService.sendCustomMessage(gameId, userId, messageText);
-    
-    if (error) {
-      console.error('[QuickChat] Failed to send custom message:', error);
-      // Show error feedback
-      setSentMessage({ icon: '❌', text: 'Failed to send' });
-      if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
-      sentTimeoutRef.current = setTimeout(() => {
-        setSentMessage(null);
-      }, 2000);
-      return;
-    }
-
-    soundManager.playClickSound?.('soft');
-    
-    // Show "sent" feedback
-    setSentMessage({ icon: '💬', text: messageText.slice(0, 30) + (messageText.length > 30 ? '...' : '') });
-    if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
-    sentTimeoutRef.current = setTimeout(() => {
-      setSentMessage(null);
-    }, 1500);
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendCustomMessage();
-    }
-  };
-
   return (
     <>
       {/* SCREEN FLASH - Full screen amber flash when message received */}
@@ -350,7 +298,7 @@ const QuickChat = ({
             </div>
           )}
           
-          {/* Tabs - Now with 3 options */}
+          {/* Tabs - Quick phrases and Emotes */}
           <div className="flex border-b border-amber-500/20">
             <button
               onClick={() => setActiveTab('chat')}
@@ -371,16 +319,6 @@ const QuickChat = ({
               }`}
             >
               Emotes
-            </button>
-            <button
-              onClick={() => setActiveTab('type')}
-              className={`flex-1 py-2 text-xs font-medium transition-colors ${
-                activeTab === 'type' 
-                  ? 'bg-amber-500/20 text-amber-300' 
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Type ✏️
             </button>
           </div>
 
@@ -407,7 +345,7 @@ const QuickChat = ({
                   </button>
                 ))}
               </div>
-            ) : activeTab === 'emote' ? (
+            ) : (
               <div className="grid grid-cols-5 gap-2">
                 {Object.entries(EMOTES).map(([key, emoji]) => (
                   <button
@@ -423,64 +361,6 @@ const QuickChat = ({
                     {emoji}
                   </button>
                 ))}
-              </div>
-            ) : (
-              /* Custom Message Input Tab */
-              <div className="space-y-3">
-                <p className="text-xs text-slate-400 text-center">
-                  Type a short message (max 200 chars)
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={customText}
-                    onChange={(e) => setCustomText(e.target.value.slice(0, 200))}
-                    onKeyDown={handleKeyDown}
-                    placeholder={cooldown ? 'Wait...' : 'Type message...'}
-                    disabled={cooldown || disabled}
-                    className={`
-                      flex-1 px-3 py-2 bg-slate-800 border rounded-lg 
-                      text-sm text-white placeholder-slate-500
-                      focus:outline-none focus:ring-1 transition-all
-                      ${cooldown || disabled
-                        ? 'border-slate-700 cursor-not-allowed opacity-50'
-                        : 'border-slate-600 focus:border-amber-500/50 focus:ring-amber-500/30'
-                      }
-                    `}
-                    maxLength={200}
-                  />
-                  <button
-                    onClick={sendCustomMessage}
-                    disabled={cooldown || disabled || !customText.trim()}
-                    className={`
-                      p-2 rounded-lg transition-all
-                      ${cooldown || disabled || !customText.trim()
-                        ? 'bg-slate-800 text-slate-600 cursor-not-allowed'
-                        : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-400'
-                      }
-                    `}
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
-                {customText.length > 0 && (
-                  <div className="text-right">
-                    <span className={`text-xs ${customText.length >= 200 ? 'text-red-400' : 'text-slate-500'}`}>
-                      {customText.length}/200
-                    </span>
-                  </div>
-                )}
-                
-                {/* Cooldown indicator */}
-                {cooldown && (
-                  <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-amber-500/50 animate-pulse"
-                      style={{ width: '100%', animation: 'shrink 2s linear forwards' }}
-                    />
-                  </div>
-                )}
               </div>
             )}
           </div>
