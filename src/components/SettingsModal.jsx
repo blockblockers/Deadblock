@@ -10,6 +10,7 @@ import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music, 
 import { soundManager } from '../utils/soundManager';
 import { useAuth } from '../contexts/AuthContext';
 import { pushNotificationService } from '../services/pushNotificationService';
+import { supabase } from '../utils/supabase';
 
 const SettingsModal = ({ isOpen, onClose }) => {
   const { 
@@ -62,6 +63,13 @@ const SettingsModal = ({ isOpen, onClose }) => {
   const [showSendResetEmail, setShowSendResetEmail] = useState(false);
   const [sendingResetEmail, setSendingResetEmail] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  
+  // Delete account states
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
   const [resetEmailError, setResetEmailError] = useState('');
 
   // v7.11: Granular notification preferences
@@ -347,6 +355,83 @@ const SettingsModal = ({ isOpen, onClose }) => {
     } finally {
       setSigningOut(false);
       setShowSignOutConfirm(false);
+    }
+  };
+  
+  // Handle account deletion (user is already logged in)
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
+    
+    setDeletingAccount(true);
+    setDeleteError('');
+    
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        setDeleteError('No user session found.');
+        setDeletingAccount(false);
+        return;
+      }
+      
+      let deleted = false;
+      
+      // Try Edge Function first
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const session = await supabase.auth.getSession();
+        const accessToken = session.data?.session?.access_token;
+        
+        if (accessToken && supabaseUrl) {
+          const response = await fetch(
+            `${supabaseUrl}/functions/v1/delete-user-account`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          if (response.ok) {
+            const result = await response.json();
+            if (result.success) deleted = true;
+          }
+        }
+      } catch (e) {
+        console.warn('[Settings] Edge function delete failed:', e);
+      }
+      
+      // Fallback to RPC
+      if (!deleted) {
+        const { error: rpcError } = await supabase.rpc('delete_user_account', {
+          p_user_id: currentUser.id
+        });
+        if (rpcError) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .delete()
+            .eq('id', currentUser.id);
+          if (profileError) {
+            setDeleteError('Failed to delete. Contact deadblock.game@gmail.com');
+            setDeletingAccount(false);
+            return;
+          }
+        }
+      }
+      
+      await supabase.auth.signOut();
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('deadblock_') || key.startsWith('sb-')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      setDeleteSuccess(true);
+      setTimeout(() => { window.location.href = '/'; }, 2000);
+    } catch (err) {
+      console.error('[Settings] Delete error:', err);
+      setDeleteError('Failed to delete. Contact deadblock.game@gmail.com');
+      setDeletingAccount(false);
     }
   };
   
@@ -928,6 +1013,69 @@ const SettingsModal = ({ isOpen, onClose }) => {
                       </button>
                     </div>
                   )}
+                </div>
+              )}
+              
+              {/* Delete Account */}
+              {deleteSuccess ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-900/30 border border-green-500/30 text-green-400 text-sm">
+                  <Check size={16} />
+                  Account deleted. Redirecting...
+                </div>
+              ) : !showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-red-900/20 hover:border-red-500/30 transition-colors text-left group"
+                >
+                  <Trash2 size={20} className="text-slate-500 group-hover:text-red-400" />
+                  <span className="text-slate-400 group-hover:text-red-300 text-sm">Delete Account</span>
+                </button>
+              ) : (
+                <div className="space-y-3 p-3 rounded-lg bg-red-900/20 border border-red-500/30">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-red-400" />
+                    <span className="text-red-300 text-sm font-bold">This cannot be undone</span>
+                  </div>
+                  <p className="text-red-300/70 text-xs">
+                    All data will be permanently deleted: profile, games, stats, friends, achievements.
+                  </p>
+                  {deleteError && (
+                    <p className="text-red-400 text-xs">{deleteError}</p>
+                  )}
+                  <div>
+                    <label className="block text-slate-400 text-xs mb-1">
+                      Type <span className="text-red-400 font-bold font-mono">DELETE</span> to confirm:
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value.toUpperCase())}
+                      className="w-full px-3 py-2 bg-slate-800/80 rounded-lg text-white text-center font-mono text-sm border border-red-500/30 focus:border-red-500 focus:outline-none"
+                      placeholder="Type DELETE"
+                      autoComplete="off"
+                      disabled={deletingAccount}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); setDeleteError(''); }}
+                      disabled={deletingAccount}
+                      className="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-sm hover:bg-slate-600 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteConfirmText !== 'DELETE' || deletingAccount}
+                      className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                    >
+                      {deletingAccount ? (
+                        <><Loader size={14} className="animate-spin" /> Deleting...</>
+                      ) : (
+                        <><Trash2 size={14} /> Delete</>
+                      )}
+                    </button>
+                  </div>
                 </div>
               )}
               
