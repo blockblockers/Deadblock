@@ -1,4 +1,5 @@
 // RematchModal.jsx - Themed modal for rematch requests
+// v7.8: Added scale-in entry animation matching GameOverModal
 // v7.7: Added "Back to Menu" button for requester waiting state
 import React, { useState, useEffect } from 'react';
 import { X, Swords, Check, Loader2, Home } from 'lucide-react';
@@ -63,7 +64,7 @@ const RematchModal = ({
       <div className="absolute inset-0 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-amber-500/30 shadow-2xl shadow-amber-500/20 max-w-sm w-full overflow-hidden">
+      <div className="relative bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl border border-amber-500/30 shadow-2xl shadow-amber-500/20 max-w-sm w-full overflow-hidden animate-rematch-modal-pop">
         
         {/* Close button */}
         <button
@@ -208,6 +209,17 @@ const RematchModal = ({
           </div>
         </div>
       </div>
+
+      <style>{`
+        @keyframes rematch-modal-pop {
+          0%   { opacity: 0; transform: scale(0.9) translateY(16px); }
+          70%  { transform: scale(1.02) translateY(0); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .animate-rematch-modal-pop {
+          animation: rematch-modal-pop 0.4s ease-out both;
+        }
+      `}</style>
     </div>
   );
 };

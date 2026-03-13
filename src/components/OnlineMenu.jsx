@@ -274,6 +274,13 @@ const OnlineMenu = ({
   const [pendingRematches, setPendingRematches] = useState([]);
   const [processingRematch, setProcessingRematch] = useState(null);
   
+  // v7.26: Rematch-sent banner — persisted from OnlineGameScreen via sessionStorage
+  const [showRematchSentBanner, setShowRematchSentBanner] = useState(() => {
+    const flag = sessionStorage.getItem('deadblock_rematch_pending');
+    if (flag) { sessionStorage.removeItem('deadblock_rematch_pending'); return true; }
+    return false;
+  });
+  
   // Error message state (for in-GUI display instead of alert)
   const [inviteError, setInviteError] = useState(null);
   
@@ -594,6 +601,7 @@ const OnlineMenu = ({
       if (rematchData?.status === 'accepted' && rematchData?.new_game_id) {
         await loadGames();
         soundManager.playSound('notification');
+        setShowRematchSentBanner(false); // v7.26: Banner no longer needed once accepted
         
         // Send notification to the requester that rematch was accepted
         if (notificationService.isEnabled() && rematchData?.from_user_id === profile.id) {
@@ -1318,6 +1326,38 @@ const OnlineMenu = ({
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
+
+      {/* v7.26: Rematch-sent banner */}
+      {showRematchSentBanner && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
+          <div
+            className="mt-3 mx-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/50 bg-slate-900/95 backdrop-blur-sm shadow-[0_0_20px_rgba(251,191,36,0.25)] pointer-events-auto"
+            style={{ animation: 'rematch-banner-in 0.35s ease-out both' }}
+          >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="text-lg leading-none">⚔️</span>
+              <span className="text-amber-300 text-sm font-medium truncate">
+                Waiting for opponent to accept your rematch…
+              </span>
+            </div>
+            <button
+              onClick={() => setShowRematchSentBanner(false)}
+              className="flex-shrink-0 text-slate-500 hover:text-white transition-colors p-0.5"
+              aria-label="Dismiss"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <style>{`
+            @keyframes rematch-banner-in {
+              0%   { opacity: 0; transform: translateY(-12px); }
+              100% { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
+        </div>
+      )}
 
       {/* Active Game Prompt Modal */}
       {showActivePrompt && hasMyTurnGames && !loading && (

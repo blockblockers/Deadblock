@@ -1,4 +1,5 @@
 // service-worker.js - UNIFIED Service Worker for Deadblock PWA
+// v7.18 - Use monochrome-192x192.png as notification icon (fixes gray D on Android expanded)
 // v7.17 - Inline base64 badges (no network fetch), single Accept Game button
 //   - Badge PNGs embedded as data URIs to eliminate Android fetch issues
 //   - game_invite has single "⚔ Accept Game" button (like "Play Now" on your_turn)
@@ -7,7 +8,7 @@
 // v7.16 - Decline button sends message to app to decline invites/rematches
 // Place in: public/service-worker.js
 
-const CACHE_NAME = 'deadblock-v7.17';
+const CACHE_NAME = 'deadblock-v7.18';
 const APP_URL = self.location.origin;
 
 // =============================================================================
@@ -73,7 +74,7 @@ const CORE_ASSETS = [
 // INSTALL EVENT
 // =============================================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing v7.17...');
+  console.log('[SW] Installing v7.18...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
@@ -94,7 +95,7 @@ self.addEventListener('install', (event) => {
 // ACTIVATE EVENT
 // =============================================================================
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating v7.17...');
+  console.log('[SW] Activating v7.18...');
   event.waitUntil(
     caches.keys()
       .then((cacheNames) => {
@@ -178,7 +179,7 @@ self.addEventListener('push', (event) => {
   
   const options = {
     body: body,
-    icon: `${APP_URL}/pwa-192x192.png`,
+    icon: `${APP_URL}/icons/monochrome-192x192.png`,
     badge: BADGES[type] || BADGES['default'],
     tag: `deadblock-${type}-${Date.now()}`,
     renotify: true,
@@ -336,4 +337,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] v7.17 unified service worker loaded');
+console.log('[SW] v7.18 unified service worker loaded');

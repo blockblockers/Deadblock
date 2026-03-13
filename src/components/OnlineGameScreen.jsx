@@ -1,4 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.27: FIX - Board-clearing glitch: isReviewModeRef guard on accepted rematch polling path
+//   - FIX - Sender countdown banner replaces static toast (live 5s countdown)
 // v7.26: FIX - Rematch sender: setShowGameOver(false) immediately on Play Again to kill polling
 //   - FIX - Viewing completed game: isReviewModeRef blocks RematchModal from auto-showing
 // v7.24: Added sound feedback to GameOverModal X button dismiss for consistency
@@ -168,6 +170,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [showGameOver, setShowGameOver] = useState(false);
   const [rematchMessage, setRematchMessage] = useState(null);
   const [rematchError, setRematchError] = useState(null);
+  const [rematchCountdown, setRematchCountdown] = useState(null); // v7.27: live countdown for sender
   const [gameResult, setGameResult] = useState(null);
   
   // Rematch request system state
@@ -612,7 +615,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           setIsRematchRequester(isSender);
           
           // Handle accepted rematch - navigate to new game
-          if (request.status === 'accepted' && request.new_game_id) {
+          // v7.27: Skip in review mode - stale accepted rematch for old game was wiping the board
+          if (request.status === 'accepted' && request.new_game_id && !isReviewModeRef.current) {
             // console.log('[OnlineGameScreen] Rematch accepted! New game:', request.new_game_id);
             setRematchAccepted(true);
             setShowRematchModal(false);
@@ -1657,9 +1661,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                             width: `${cellSize}px`,
                             height: `${cellSize}px`,
                             background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
-                            boxShadow: '0 0 20px rgba(251,191,36,0.7), 0 0 40px rgba(251,191,36,0.3)',
-                            animation: 'winning-move-pop 0.5s ease-out both',
-                            animationDelay: `${idx * 0.06}s`,
+                            '--pop-delay': `${idx * 0.06}s`,
                           }}
                         >
                           {/* Gold shimmer */}
@@ -1939,20 +1941,24 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               }
               
               // No auto-accept - opponent hasn't requested yet
-              // v7.26: Kill polling immediately by clearing showGameOver before the delay
-              // Previously, showGameOver stayed true during the 2s wait, letting the polling
-              // detect isSender=true and re-open the RematchModal before onLeave() fired
+              // v7.27: Kill polling immediately + show live countdown banner
               soundManager.playSound('notification');
-              setRematchMessage('Rematch request sent!');
               setShowGameOver(false);
-              
-              // Navigate to online menu after 5 second delay
-              setTimeout(() => {
-                setRematchMessage(null);
-                if (typeof onLeave === 'function') {
-                  onLeave();
+              sessionStorage.setItem('deadblock_rematch_pending', '1');
+
+              // Start 5-second countdown
+              const COUNTDOWN = 5;
+              setRematchCountdown(COUNTDOWN);
+              let remaining = COUNTDOWN;
+              const countInterval = setInterval(() => {
+                remaining -= 1;
+                setRematchCountdown(remaining);
+                if (remaining <= 0) {
+                  clearInterval(countInterval);
+                  setRematchCountdown(null);
+                  if (typeof onLeave === 'function') onLeave();
                 }
-              }, 5000);
+              }, 1000);
               
             } catch (err) {
               console.error('[OnlineGameScreen] Rematch error:', err);
@@ -1972,31 +1978,31 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         />
       )}
 
-      {/* Rematch Notification Toast */}
-      {(rematchMessage || rematchError) && (
+      {/* v7.27: Countdown banner for rematch sender */}
+      {rematchCountdown !== null && (
         <div className="fixed inset-x-0 top-20 z-[60] flex justify-center pointer-events-none">
-          <div 
-            className={`
-              px-6 py-4 rounded-xl shadow-2xl max-w-sm mx-4 text-center
-              ${rematchError 
-                ? 'bg-red-900/90 border border-red-500/50 text-red-100' 
-                : 'bg-gradient-to-r from-amber-500/90 to-orange-500/90 border border-amber-400/50 text-white'
-              }
-              backdrop-blur-sm animate-pulse
-            `}
+          <div className="px-5 py-4 rounded-xl shadow-2xl max-w-sm mx-4 bg-slate-900/95 border border-amber-500/50 backdrop-blur-sm text-center"
+            style={{ animation: 'rematch-sender-in 0.3s ease-out both' }}
           >
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <span className="text-xl">⚔️</span>
+              <span className="text-amber-300 font-bold text-sm">Rematch request sent!</span>
+            </div>
+            <p className="text-slate-400 text-xs">
+              Waiting for {opponent?.display_name || opponent?.username || 'opponent'}…
+              redirecting in <span className="text-amber-400 font-bold tabular-nums">{rematchCountdown}s</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Error toast */}
+      {rematchError && (
+        <div className="fixed inset-x-0 top-20 z-[60] flex justify-center pointer-events-none">
+          <div className="px-6 py-4 rounded-xl shadow-2xl max-w-sm mx-4 bg-red-900/90 border border-red-500/50 text-red-100 backdrop-blur-sm text-center">
             <div className="flex items-center justify-center gap-2">
-              {rematchError ? (
-                <>
-                  <span className="text-2xl">❌</span>
-                  <span className="font-medium">{rematchError}</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-2xl">⚔️</span>
-                  <span className="font-bold">{rematchMessage}</span>
-                </>
-              )}
+              <span className="text-2xl">❌</span>
+              <span className="font-medium">{rematchError}</span>
             </div>
           </div>
         </div>
@@ -2113,6 +2119,20 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             0% { transform: scale(0); opacity: 0; }
             60% { transform: scale(1.1); opacity: 1; }
             100% { transform: scale(1); opacity: 1; }
+          }
+          @keyframes rematch-sender-in {
+            0%   { opacity: 0; transform: translateY(-10px); }
+            100% { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes winning-move-breathe {
+            0%   { box-shadow: 0 0 12px rgba(251,191,36,0.5), 0 0 24px rgba(251,191,36,0.2); }
+            100% { box-shadow: 0 0 28px rgba(251,191,36,0.9), 0 0 55px rgba(251,191,36,0.5); }
+          }
+          .winning-move-gold {
+            animation:
+              winning-move-pop 0.5s ease-out both,
+              winning-move-breathe 2s ease-in-out infinite alternate;
+            animation-delay: var(--pop-delay, 0s), calc(var(--pop-delay, 0s) + 0.5s);
           }
           @keyframes gold-shimmer-online {
             0% { background-position: 0% 0%; }

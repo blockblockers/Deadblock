@@ -1025,10 +1025,16 @@ const SettingsModal = ({ isOpen, onClose }) => {
               ) : !showDeleteConfirm ? (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-red-900/20 hover:border-red-500/30 transition-colors text-left group"
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 hover:border-red-500/60 hover:shadow-[0_0_18px_rgba(239,68,68,0.3)] transition-all group text-left"
                 >
-                  <Trash2 size={20} className="text-slate-500 group-hover:text-red-400" />
-                  <span className="text-slate-400 group-hover:text-red-300 text-sm">Delete Account</span>
+                  <div className="relative flex-shrink-0">
+                    <div className="absolute inset-0 bg-red-500/50 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Trash2 size={20} className="relative text-red-400" />
+                  </div>
+                  <div>
+                    <span className="text-red-300 text-sm font-medium">Delete Account</span>
+                    <p className="text-xs text-red-400/50">Permanently remove your account</p>
+                  </div>
                 </button>
               ) : (
                 <div className="space-y-3 p-3 rounded-lg bg-red-900/20 border border-red-500/30">

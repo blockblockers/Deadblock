@@ -559,7 +559,7 @@ const GameBoard = forwardRef(({
         
         /* v7.8: AI WINNING MOVE ANIMATION - Golden pulsing glow */
         .ai-winning-cell {
-          animation: winning-pulse 0.5s ease-in-out infinite alternate;
+          animation: winning-pulse 2s ease-in-out infinite alternate;
           border: 3px solid rgba(251, 191, 36, 1) !important;
         }
         
@@ -603,7 +603,7 @@ const GameBoard = forwardRef(({
         
         /* v7.8: PLAYER WINNING MOVE ANIMATION - Golden pulsing glow */
         .player-winning-cell {
-          animation: winning-pulse 0.5s ease-in-out infinite alternate;
+          animation: winning-pulse 2s ease-in-out infinite alternate;
           border: 3px solid rgba(251, 191, 36, 1) !important;
         }
         
