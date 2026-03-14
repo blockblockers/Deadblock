@@ -24,7 +24,7 @@ const getCachedProfileSync = () => {
       }
     }
   } catch (e) {
-    console.warn('[PlayerProfileCard] Failed to read cached profile:', e);
+    // console.warn('[PlayerProfileCard] Failed to read cached profile:', e);
   }
   return null;
 };
@@ -248,7 +248,7 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
           setLeaderboardRank(count + 1);
         }
       } catch (err) {
-        console.warn('[PlayerProfileCard] Failed to fetch leaderboard rank:', err);
+        // console.warn('[PlayerProfileCard] Failed to fetch leaderboard rank:', err);
       }
     };
     
@@ -259,24 +259,24 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   useEffect(() => {
     const loadAchievements = async () => {
       if (!effectiveProfile?.id) {
-        console.log('[PlayerProfileCard] No profile ID for achievements');
+        // console.log('[PlayerProfileCard] No profile ID for achievements');
         return;
       }
       
       try {
-        console.log('[PlayerProfileCard] Loading achievements for:', effectiveProfile.id);
+        // console.log('[PlayerProfileCard] Loading achievements for:', effectiveProfile.id);
         
         // Get all achievements with status
         const result = await achievementService.getAchievementsWithStatus(effectiveProfile.id);
-        console.log('[PlayerProfileCard] Achievement result:', { 
-          dataLength: result.data?.length, 
-          error: result.error 
-        });
+        // console.log('[PlayerProfileCard] Achievement result:', { 
+          // dataLength: result.data?.length, 
+          // error: result.error 
+        // });
         
         if (result.data && result.data.length > 0) {
           const unlocked = result.data.filter(a => a.unlocked);
           const total = result.data.length;
-          console.log('[PlayerProfileCard] Achievements loaded:', { unlocked: unlocked.length, total });
+          // console.log('[PlayerProfileCard] Achievements loaded:', { unlocked: unlocked.length, total });
           setAchievementCount({ unlocked: unlocked.length, total });
           
           // Check for new (unviewed) achievements
@@ -301,7 +301,7 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
             setNewAchievementsCount(0);
           }
         } else {
-          console.log('[PlayerProfileCard] No achievements found or error:', result.error);
+          // console.log('[PlayerProfileCard] No achievements found or error:', result.error);
         }
       } catch (err) {
         console.error('[PlayerProfileCard] Error loading achievements:', err);

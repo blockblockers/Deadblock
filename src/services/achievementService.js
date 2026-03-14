@@ -235,7 +235,7 @@ class AchievementService {
       }
       
       // Fallback: Calculate manually
-      console.log('[achievementService] getAchievementStats: RPC not available, calculating manually');
+      // console.log('[achievementService] getAchievementStats: RPC not available, calculating manually');
       
       // v7.12: Query 'achievements' table
       const { data: allAchievements } = await dbSelect('achievements', {

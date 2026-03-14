@@ -30,7 +30,7 @@ class StatsService {
       if (error) {
         console.error('[Stats] Error updating stat:', statType, error);
       } else {
-        console.log('[Stats] Updated:', statType, value);
+        // console.log('[Stats] Updated:', statType, value);
       }
     } catch (err) {
       console.error('[Stats] Failed to update stat:', err);

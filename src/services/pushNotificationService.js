@@ -58,22 +58,22 @@ class PushNotificationService {
   }
 
   async _doInit() {
-    console.log('[PushService] Initializing...');
+    // console.log('[PushService] Initializing...');
     
     this.supported = this.isSupported();
     if (!this.supported) {
-      console.log('[PushService] Push not supported');
+      // console.log('[PushService] Push not supported');
       this.initialized = true;
       return false;
     }
 
     try {
       // Step 1: Clean up conflicting service workers
-      console.log('[PushService] Checking for conflicting service workers...');
+      // console.log('[PushService] Checking for conflicting service workers...');
       await this._cleanupConflictingWorkers();
       
       // Step 2: Get or register the correct service worker
-      console.log('[PushService] Getting service worker registration...');
+      // console.log('[PushService] Getting service worker registration...');
       this.swRegistration = await withTimeout(
         this._getOrRegisterServiceWorker(),
         15000,
@@ -84,7 +84,7 @@ class PushNotificationService {
         throw new Error('Failed to get service worker registration');
       }
       
-      console.log('[PushService] Service worker ready:', this.swRegistration.scope);
+      // console.log('[PushService] Service worker ready:', this.swRegistration.scope);
       
       // Step 3: Check for existing subscription
       if (this.swRegistration.pushManager) {
@@ -95,7 +95,7 @@ class PushNotificationService {
             'Get subscription timed out'
           );
           if (this.subscription) {
-            console.log('[PushService] Existing subscription found');
+            // console.log('[PushService] Existing subscription found');
           }
         } catch (e) {
           console.warn('[PushService] Could not check subscription:', e.message);
@@ -103,7 +103,7 @@ class PushNotificationService {
       }
       
       this.initialized = true;
-      console.log('[PushService] Initialization complete');
+      // console.log('[PushService] Initialization complete');
       return true;
       
     } catch (error) {
@@ -118,7 +118,7 @@ class PushNotificationService {
   async _cleanupConflictingWorkers() {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
-      console.log('[PushService] Found', registrations.length, 'service worker registrations');
+      // console.log('[PushService] Found', registrations.length, 'service worker registrations');
       
       for (const reg of registrations) {
         // Check if this is the old sw.js (not our service-worker.js)
@@ -126,10 +126,10 @@ class PushNotificationService {
         
         // Remove any sw.js registrations (we use service-worker.js now)
         if (swUrl.includes('/sw.js') && !swUrl.includes('service-worker.js')) {
-          console.log('[PushService] Unregistering old sw.js');
+          // console.log('[PushService] Unregistering old sw.js');
           try {
             await reg.unregister();
-            console.log('[PushService] Old sw.js unregistered');
+            // console.log('[PushService] Old sw.js unregistered');
           } catch (e) {
             console.warn('[PushService] Failed to unregister old worker:', e.message);
           }
@@ -146,7 +146,7 @@ class PushNotificationService {
     if (navigator.serviceWorker.controller) {
       const reg = await navigator.serviceWorker.getRegistration('/');
       if (reg && reg.active) {
-        console.log('[PushService] Using existing controller');
+        // console.log('[PushService] Using existing controller');
         return reg;
       }
     }
@@ -156,18 +156,18 @@ class PushNotificationService {
     for (const reg of registrations) {
       const swUrl = reg.active?.scriptURL || '';
       if (swUrl.includes('service-worker.js') && reg.active) {
-        console.log('[PushService] Using existing service-worker.js registration');
+        // console.log('[PushService] Using existing service-worker.js registration');
         return reg;
       }
     }
     
     // Need to register a new service worker
-    console.log('[PushService] Registering new service worker...');
+    // console.log('[PushService] Registering new service worker...');
     const registration = await navigator.serviceWorker.register(SW_FILE, { scope: '/' });
     
     // Wait for it to activate
     if (!registration.active) {
-      console.log('[PushService] Waiting for activation...');
+      // console.log('[PushService] Waiting for activation...');
       await this._waitForActivation(registration);
     }
     
@@ -225,7 +225,7 @@ class PushNotificationService {
   // v7.15: Async check that queries the browser directly
   // Use this when opening settings modal to get accurate state
   async checkSubscription() {
-    console.log('[PushService] checkSubscription called');
+    // console.log('[PushService] checkSubscription called');
     
     // Make sure we're initialized
     if (!this.initialized) {
@@ -233,7 +233,7 @@ class PushNotificationService {
     }
     
     if (!this.swRegistration?.pushManager) {
-      console.log('[PushService] No pushManager available, returning false');
+      // console.log('[PushService] No pushManager available, returning false');
       return false;
     }
     
@@ -241,7 +241,7 @@ class PushNotificationService {
       // Query the browser directly for current subscription state
       this.subscription = await this.swRegistration.pushManager.getSubscription();
       const isSubbed = !!this.subscription;
-      console.log('[PushService] checkSubscription result:', isSubbed);
+      // console.log('[PushService] checkSubscription result:', isSubbed);
       return isSubbed;
     } catch (e) {
       console.warn('[PushService] checkSubscription error:', e.message);
@@ -250,7 +250,7 @@ class PushNotificationService {
   }
 
   async subscribe(userId) {
-    console.log('[PushService] Subscribe called for user:', userId);
+    // console.log('[PushService] Subscribe called for user:', userId);
     
     if (!userId) {
       throw new Error('User ID required');
@@ -270,21 +270,21 @@ class PushNotificationService {
 
     try {
       // Request permission
-      console.log('[PushService] Requesting permission...');
+      // console.log('[PushService] Requesting permission...');
       const permission = await withTimeout(
         Notification.requestPermission(),
         30000,
         'Permission request timed out'
       );
       
-      console.log('[PushService] Permission:', permission);
+      // console.log('[PushService] Permission:', permission);
       
       if (permission !== 'granted') {
         return { success: false, reason: 'permission_denied' };
       }
 
       // Subscribe
-      console.log('[PushService] Creating subscription...');
+      // console.log('[PushService] Creating subscription...');
       const applicationServerKey = this.urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
       
       this.subscription = await withTimeout(
@@ -296,7 +296,7 @@ class PushNotificationService {
         'Subscription timed out'
       );
 
-      console.log('[PushService] Subscription created');
+      // console.log('[PushService] Subscription created');
 
       // Save to database
       try {
@@ -314,12 +314,12 @@ class PushNotificationService {
   }
 
   async unsubscribe(userId) {
-    console.log('[PushService] Unsubscribe called');
+    // console.log('[PushService] Unsubscribe called');
     
     try {
       if (this.subscription) {
         await this.subscription.unsubscribe();
-        console.log('[PushService] Browser subscription removed');
+        // console.log('[PushService] Browser subscription removed');
       }
       
       // Remove from database
@@ -344,7 +344,7 @@ class PushNotificationService {
   async saveSubscription(userId, subscription) {
     const subscriptionJson = subscription.toJSON();
     
-    console.log('[PushService] Saving subscription to database...');
+    // console.log('[PushService] Saving subscription to database...');
     
     const { error } = await supabase
       .from('push_subscriptions')
@@ -363,11 +363,11 @@ class PushNotificationService {
       throw error;
     }
     
-    console.log('[PushService] Subscription saved');
+    // console.log('[PushService] Subscription saved');
   }
 
   async removeSubscription(userId) {
-    console.log('[PushService] Removing subscription from database...');
+    // console.log('[PushService] Removing subscription from database...');
     
     const { error } = await supabase
       .from('push_subscriptions')
@@ -379,7 +379,7 @@ class PushNotificationService {
       throw error;
     }
     
-    console.log('[PushService] Subscription removed from database');
+    // console.log('[PushService] Subscription removed from database');
   }
 
   urlBase64ToUint8Array(base64String) {
@@ -399,7 +399,7 @@ class PushNotificationService {
 
   // Send a test notification via the service worker
   async sendTestNotification() {
-    console.log('[PushService] Sending test notification...');
+    // console.log('[PushService] Sending test notification...');
     
     if (!this.swRegistration) {
       console.warn('[PushService] No service worker for test notification');
@@ -415,7 +415,7 @@ class PushNotificationService {
         tag: 'test-notification',
         requireInteraction: false
       });
-      console.log('[PushService] Test notification sent');
+      // console.log('[PushService] Test notification sent');
     } catch (e) {
       console.error('[PushService] Test notification failed:', e.message);
     }

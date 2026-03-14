@@ -33,9 +33,9 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
         
         // Load top 3 for preview
         const leaderboardResult = await weeklyChallengeService.getLeaderboard(data.id, 3);
-        console.log('[WeeklyChallengeMenu] Leaderboard result:', leaderboardResult);
+        // console.log('[WeeklyChallengeMenu] Leaderboard result:', leaderboardResult);
         if (leaderboardResult.data) {
-          console.log('[WeeklyChallengeMenu] Top players data:', leaderboardResult.data);
+          // console.log('[WeeklyChallengeMenu] Top players data:', leaderboardResult.data);
           setTopPlayers(leaderboardResult.data);
         }
       }

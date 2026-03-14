@@ -405,11 +405,11 @@ function AppContent({ onBgThemeChange }) {
   useEffect(() => {
     const storedInviteCode = localStorage.getItem('deadblock_pending_invite_code');
     /* OAuth redirect debug - disabled for production
-    console.log('OAuth redirect check:', { 
-      isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, 
-      hasPassedEntryAuth, hasProfile: !!profile, pendingOnlineIntent,
-      pendingInviteCode, storedInviteCode
-    });
+    // console.log('OAuth redirect check:', { 
+      // isOAuthCallback, isAuthenticated, authLoading, hasRedirectedAfterOAuth, 
+      // hasPassedEntryAuth, hasProfile: !!profile, pendingOnlineIntent,
+      // pendingInviteCode, storedInviteCode
+    // });
     */
     
     if (isOAuthCallback && isAuthenticated && !authLoading && !hasRedirectedAfterOAuth) {
@@ -636,7 +636,7 @@ function AppContent({ onBgThemeChange }) {
   const handleCreatorPuzzleSelect = (puzzle) => {
     setCurrentCreatorPuzzle(puzzle);
     setGameMode('creator-puzzle');
-    console.log('[App] Starting creator puzzle:', puzzle.puzzle_number);
+    // console.log('[App] Starting creator puzzle:', puzzle.puzzle_number);
   };
 
   // Handle next creator puzzle (after completing one)
@@ -703,18 +703,18 @@ function AppContent({ onBgThemeChange }) {
   // v7.11: Improved to ensure gameId navigation works properly
   useEffect(() => {
     const handleServiceWorkerMessage = (event) => {
-      console.log('[App] Received service worker message:', event.data);
+      // console.log('[App] Received service worker message:', event.data);
       
       if (event.data?.type === 'NOTIFICATION_CLICK') {
         const { data } = event.data;
         // Service worker sends 'type', not 'notificationType'
         const { gameId, type: notificationType, inviteId, rematchId, openChat } = data || {};
         
-        console.log('[App] Processing notification click:', { gameId, notificationType, openChat });
+        // console.log('[App] Processing notification click:', { gameId, notificationType, openChat });
         
         // If not authenticated yet, store for later navigation
         if (!hasPassedEntryAuth) {
-          console.log('[App] Not past entry auth, storing for later navigation');
+          // console.log('[App] Not past entry auth, storing for later navigation');
           if (gameId) {
             sessionStorage.setItem('deadblock_pending_game_id', gameId);
           }
@@ -736,7 +736,7 @@ function AppContent({ onBgThemeChange }) {
         // Navigate immediately if authenticated
         // v7.22: Force refresh even if already on target screen
         if (gameId) {
-          console.log('[App] Navigating to game:', gameId);
+          // console.log('[App] Navigating to game:', gameId);
           if (openChat) {
             sessionStorage.setItem('deadblock_open_chat', 'true');
           }
@@ -744,11 +744,11 @@ function AppContent({ onBgThemeChange }) {
           setGameMode('online-game');
         } else if (notificationType === 'weekly_challenge') {
           // Weekly challenge notification - go to weekly menu
-          console.log('[App] Navigating to weekly challenge menu');
+          // console.log('[App] Navigating to weekly challenge menu');
           setGameMode('weekly-menu');
         } else if (notificationType === 'game_invite' && inviteId) {
           // v7.26: Accept invite from push notification and navigate to game
-          console.log('[App] Accepting invite from push notification:', inviteId);
+          // console.log('[App] Accepting invite from push notification:', inviteId);
           (async () => {
             try {
               const { inviteService } = await import('./services/inviteService');
@@ -772,11 +772,11 @@ function AppContent({ onBgThemeChange }) {
         } else if (notificationType === 'game_invite' || notificationType === 'friend_request' || notificationType === 'rematch_request') {
           // v7.22: For invite/friend/rematch notifications, force refresh online-menu
           // even if already there by briefly setting to null first
-          console.log('[App] Force navigating to online menu for:', notificationType);
+          // console.log('[App] Force navigating to online menu for:', notificationType);
           setGameMode(null);
           setTimeout(() => setGameMode('online-menu'), 50);
         } else {
-          console.log('[App] Navigating to online menu');
+          // console.log('[App] Navigating to online menu');
           setGameMode('online-menu');
         }
       }
@@ -797,7 +797,7 @@ function AppContent({ onBgThemeChange }) {
     
     // Store navigation params in sessionStorage so they survive auth loading
     if (navigateTo === 'online') {
-      console.log('[App] URL params detected - gameId:', urlGameId, 'acceptInvite:', acceptInviteParam);
+      // console.log('[App] URL params detected - gameId:', urlGameId, 'acceptInvite:', acceptInviteParam);
       if (urlGameId) {
         sessionStorage.setItem('deadblock_pending_game_id', urlGameId);
       }
@@ -830,7 +830,7 @@ function AppContent({ onBgThemeChange }) {
     const pendingGameId = sessionStorage.getItem('deadblock_pending_game_id');
     
     if (pendingNav === 'online') {
-      console.log('[App] Processing pending online navigation, gameId:', pendingGameId);
+      // console.log('[App] Processing pending online navigation, gameId:', pendingGameId);
       sessionStorage.removeItem('deadblock_pending_nav');
       sessionStorage.removeItem('deadblock_pending_game_id');
       const pendingAcceptInvite = sessionStorage.getItem('deadblock_pending_accept_invite');
@@ -841,7 +841,7 @@ function AppContent({ onBgThemeChange }) {
       setTimeout(async () => {
         // v7.26: Handle pending invite acceptance from push notification
         if (pendingAcceptInvite && profile?.id) {
-          console.log('[App] Processing pending invite acceptance:', pendingAcceptInvite);
+          // console.log('[App] Processing pending invite acceptance:', pendingAcceptInvite);
           try {
             const { inviteService } = await import('./services/inviteService');
             const { soundManager } = await import('./utils/soundManager');
@@ -859,7 +859,7 @@ function AppContent({ onBgThemeChange }) {
             setGameMode('online-menu');
           }
         } else if (pendingGameId) {
-          console.log('[App] Setting online game:', pendingGameId);
+          // console.log('[App] Setting online game:', pendingGameId);
           setOnlineGameId(pendingGameId);
           setGameMode('online-game');
         } else {
@@ -867,7 +867,7 @@ function AppContent({ onBgThemeChange }) {
         }
       }, 100);
     } else if (pendingNav === 'weekly') {
-      console.log('[App] Processing pending weekly navigation');
+      // console.log('[App] Processing pending weekly navigation');
       sessionStorage.removeItem('deadblock_pending_nav');
       setTimeout(() => {
         setGameMode('weekly-menu');
@@ -924,17 +924,17 @@ function AppContent({ onBgThemeChange }) {
   const showAuthLoading = isOnlineEnabled && (authLoading || (isOAuthCallback && !hasRedirectedAfterOAuth));
   
   /* DEBUG: Always log current state (even before loading check) - disabled for production
-  console.log('=== App Render Debug ===', {
-    showAuthLoading,
-    authLoading,
-    isOAuthCallback,
-    hasRedirectedAfterOAuth,
-    isAuthenticated,
-    hasPassedEntryAuth,
-    isOnlineEnabled,
-    gameMode,
-    hasProfile: !!profile,
-  });
+  // console.log('=== App Render Debug ===', {
+    // showAuthLoading,
+    // authLoading,
+    // isOAuthCallback,
+    // hasRedirectedAfterOAuth,
+    // isAuthenticated,
+    // hasPassedEntryAuth,
+    // isOnlineEnabled,
+    // gameMode,
+    // hasProfile: !!profile,
+  // });
   */
   
   // INLINE OAuth completion handling - if we're in OAuth callback but user is authenticated,
@@ -1025,18 +1025,18 @@ function AppContent({ onBgThemeChange }) {
   }
 
   /* Debug logging - comprehensive state dump - disabled for production
-  console.log('App render state:', { 
-    gameMode, 
-    onlineGameId, 
-    isAuthenticated, 
-    authLoading, 
-    isOAuthCallback, 
-    hasPassedEntryAuth, 
-    isOfflineMode,
-    showOnlineAuthPrompt,
-    isOnlineEnabled,
-    hasProfile: !!profile
-  });
+  // console.log('App render state:', { 
+    // gameMode, 
+    // onlineGameId, 
+    // isAuthenticated, 
+    // authLoading, 
+    // isOAuthCallback, 
+    // hasPassedEntryAuth, 
+    // isOfflineMode,
+    // showOnlineAuthPrompt,
+    // isOnlineEnabled,
+    // hasProfile: !!profile
+  // });
   */
 
   // Show Entry Auth Screen first (before anything else)
@@ -1502,13 +1502,6 @@ function AppContent({ onBgThemeChange }) {
 function GlobalNotifications() {
   const { profile, isAuthenticated, sessionReady } = useAuth();
   
-  // Debug: Log render state
-  console.log('[GlobalNotifications] Render check:', { 
-    sessionReady, 
-    isAuthenticated, 
-    profileId: profile?.id 
-  });
-  
   // v7.25: Listen for service worker messages (DECLINE_INVITE, DECLINE_REMATCH)
   // MUST be called before any conditional returns (Rules of Hooks)
   useEffect(() => {
@@ -1519,23 +1512,23 @@ function GlobalNotifications() {
       const { type, inviteId, rematchId } = event.data || {};
       
       if (type === 'DECLINE_INVITE' && inviteId) {
-        console.log('[GlobalNotifications] Received DECLINE_INVITE from SW:', inviteId);
+        // console.log('[GlobalNotifications] Received DECLINE_INVITE from SW:', inviteId);
         try {
           const { inviteService } = await import('./services/inviteService');
           await inviteService.declineInvite(inviteId, profile.id);
-          console.log('[GlobalNotifications] Invite declined successfully');
+          // console.log('[GlobalNotifications] Invite declined successfully');
         } catch (err) {
           console.error('[GlobalNotifications] Failed to decline invite:', err);
         }
       } else if (type === 'DECLINE_REMATCH' && rematchId) {
-        console.log('[GlobalNotifications] Received DECLINE_REMATCH from SW:', rematchId);
+        // console.log('[GlobalNotifications] Received DECLINE_REMATCH from SW:', rematchId);
         try {
           const { supabase } = await import('./utils/supabase');
           await supabase
             .from('rematch_requests')
             .update({ status: 'declined' })
             .eq('id', rematchId);
-          console.log('[GlobalNotifications] Rematch declined successfully');
+          // console.log('[GlobalNotifications] Rematch declined successfully');
         } catch (err) {
           console.error('[GlobalNotifications] Failed to decline rematch:', err);
         }
@@ -1556,11 +1549,8 @@ function GlobalNotifications() {
   
   // Only render when user is authenticated and session is ready
   if (!sessionReady || !isAuthenticated || !profile?.id) {
-    console.log('[GlobalNotifications] Not rendering - auth not ready');
     return null;
   }
-  
-  console.log('[GlobalNotifications] Rendering GameInviteNotification for user:', profile.id);
   
   // Handler for accepting invites from toast notification
   const handleAcceptInvite = async (notification) => {

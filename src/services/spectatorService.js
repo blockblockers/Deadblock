@@ -187,7 +187,7 @@ export const spectatorService = {
   subscribeToSpectators(gameId, callback) {
     if (!isSupabaseConfigured()) return { unsubscribe: () => {} };
 
-    console.log('[SpectatorService] Starting spectator count polling (10s interval)');
+    // console.log('[SpectatorService] Starting spectator count polling (10s interval)');
 
     this.getSpectators(gameId).then(({ data }) => {
       callback(data || []);
@@ -211,11 +211,11 @@ export const spectatorService = {
   subscribeToGame(gameId, onUpdate, onError) {
     if (!isSupabaseConfigured()) return { unsubscribe: () => {} };
 
-    console.log('[SpectatorService] Subscribing to game via RealtimeManager');
+    // console.log('[SpectatorService] Subscribing to game via RealtimeManager');
     realtimeManager.connectGame(gameId);
 
     const unsubscribe = realtimeManager.on('gameUpdate', (gameData) => {
-      console.log('[SpectatorService] Game update received:', gameData?.id);
+      // console.log('[SpectatorService] Game update received:', gameData?.id);
       onUpdate(gameData);
     });
 
@@ -293,7 +293,7 @@ export const spectatorService = {
       
       const url = `${SUPABASE_URL}/rest/v1/games?select=id,status,current_player,allow_spectators,created_at,player1_id,player2_id&or=(${encodeURIComponent(orFilter)})&status=eq.active&allow_spectators=eq.true&order=created_at.desc`;
       
-      console.log('[SpectatorService] Fetching friend games with OR filter for', friendIds.length, 'friends');
+      // console.log('[SpectatorService] Fetching friend games with OR filter for', friendIds.length, 'friends');
       
       const response = await fetch(url, { headers });
       if (!response.ok) {
@@ -302,7 +302,7 @@ export const spectatorService = {
       }
       
       const data = await response.json();
-      console.log('[SpectatorService] Found', data?.length || 0, 'active games');
+      // console.log('[SpectatorService] Found', data?.length || 0, 'active games');
       
       if (!data?.length) return { data: [], error: null };
 

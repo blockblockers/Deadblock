@@ -14,12 +14,12 @@ const DPad = ({ onMove }) => {
     // Debounce - ignore if less than 80ms since last move
     const now = Date.now();
     if (now - lastMoveTime.current < 80) {
-      console.log('[DPad] Debounced:', direction);
+      // console.log('[DPad] Debounced:', direction);
       return false;
     }
     lastMoveTime.current = now;
     
-    console.log('[DPad] Executing move:', direction);
+    // console.log('[DPad] Executing move:', direction);
     onMove(direction);
     return true;
   }, [onMove]);
@@ -42,7 +42,7 @@ const DPad = ({ onMove }) => {
     
     // If touch was used recently, skip click to prevent double-fire
     if (touchUsedRef.current) {
-      console.log('[DPad] Click ignored (touch was used)');
+      // console.log('[DPad] Click ignored (touch was used)');
       return;
     }
     

@@ -250,7 +250,7 @@ export const friendsService = {
   subscribToFriendStatus(userId, friendIds, callback) {
     if (!isSupabaseConfigured() || !friendIds.length) return null;
 
-    console.log('[FriendsService] Starting friend status polling (30s interval)');
+    // console.log('[FriendsService] Starting friend status polling (30s interval)');
 
     this.fetchFriendStatuses(friendIds).then(statuses => {
       statuses.forEach(status => callback(status));
@@ -289,10 +289,10 @@ export const friendsService = {
   subscribeToFriendRequests(userId, callback) {
     if (!isSupabaseConfigured()) return { unsubscribe: () => {} };
 
-    console.log('[FriendsService] Subscribing to friend requests via RealtimeManager');
+    // console.log('[FriendsService] Subscribing to friend requests via RealtimeManager');
 
     const unsubscribe = realtimeManager.on('friendRequest', (request) => {
-      console.log('[FriendsService] Friend request received:', request?.id);
+      // console.log('[FriendsService] Friend request received:', request?.id);
       callback(request);
     });
 

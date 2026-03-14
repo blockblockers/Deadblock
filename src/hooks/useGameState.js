@@ -126,28 +126,28 @@ export const useGameState = () => {
 
   // Confirm the pending move
   const confirmMove = useCallback(() => {
-    console.log('[useGameState] confirmMove called:', { 
-      hasPendingMove: !!pendingMove, 
-      pendingMove,
-      rotation, 
-      flipped 
-    });
+    // console.log('[useGameState] confirmMove called:', { 
+      // hasPendingMove: !!pendingMove, 
+      // pendingMove,
+      // rotation, 
+      // flipped 
+    // });
     
     if (!pendingMove) {
-      console.log('[useGameState] No pending move - returning early');
+      // console.log('[useGameState] No pending move - returning early');
       return;
     }
     
     const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    console.log('[useGameState] Piece coords:', coords);
+    // console.log('[useGameState] Piece coords:', coords);
     
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, coords)) {
-      console.log('[useGameState] Invalid placement - playing invalid sound');
+      // console.log('[useGameState] Invalid placement - playing invalid sound');
       soundManager.playInvalid();
       return;
     }
     
-    console.log('[useGameState] Valid placement - animating...');
+    // console.log('[useGameState] Valid placement - animating...');
     
     // Animate player piece placement
     setPlayerAnimatingMove({
@@ -325,15 +325,15 @@ export const useGameState = () => {
             if (cachedProfile) {
               const { profile } = JSON.parse(cachedProfile);
               if (profile?.id) {
-                console.log('[useGameState] Updating play streak for AI game');
+                // console.log('[useGameState] Updating play streak for AI game');
                 const { data } = await streakService.updateStreak(profile.id);
                 if (data?.new_achievements?.length > 0) {
-                  console.log('[useGameState] New streak achievements:', data.new_achievements);
+                  // console.log('[useGameState] New streak achievements:', data.new_achievements);
                 }
               }
             }
           } catch (err) {
-            console.warn('[useGameState] Failed to update streak:', err);
+            // console.warn('[useGameState] Failed to update streak:', err);
           }
         };
         updateStreak();
@@ -358,15 +358,15 @@ export const useGameState = () => {
             if (cachedProfile) {
               const { profile } = JSON.parse(cachedProfile);
               if (profile?.id) {
-                console.log('[useGameState] Updating play streak for puzzle game');
+                // console.log('[useGameState] Updating play streak for puzzle game');
                 const { data } = await streakService.updateStreak(profile.id);
                 if (data?.new_achievements?.length > 0) {
-                  console.log('[useGameState] New streak achievements:', data.new_achievements);
+                  // console.log('[useGameState] New streak achievements:', data.new_achievements);
                 }
               }
             }
           } catch (err) {
-            console.warn('[useGameState] Failed to update streak:', err);
+            // console.warn('[useGameState] Failed to update streak:', err);
           }
         };
         updateStreak();
@@ -381,7 +381,7 @@ export const useGameState = () => {
       return;
     }
     
-    console.log('Loading puzzle:', puzzle.name, 'difficulty:', puzzle.difficulty);
+    // console.log('Loading puzzle:', puzzle.name, 'difficulty:', puzzle.difficulty);
     
     // Parse the board state
     const newBoard = createEmptyBoard();
@@ -459,11 +459,11 @@ export const useGameState = () => {
   // Reset current puzzle to original state (retry)
   const resetCurrentPuzzle = useCallback(() => {
     if (!originalPuzzleState) {
-      console.log('No original puzzle state to reset to');
+      // console.log('No original puzzle state to reset to');
       return;
     }
     
-    console.log('Resetting puzzle to original state');
+    // console.log('Resetting puzzle to original state');
     
     setBoard(originalPuzzleState.board.map(r => [...r]));
     setBoardPieces(originalPuzzleState.boardPieces.map(r => [...r]));
@@ -484,10 +484,10 @@ export const useGameState = () => {
   // Reset game - preserves AI goes first preference for VS AI mode
   const resetGame = useCallback(() => {
     if (gameMode === 'puzzle') {
-      console.log('Reset: generating new puzzle with difficulty:', puzzleDifficultyRef.current);
+      // console.log('Reset: generating new puzzle with difficulty:', puzzleDifficultyRef.current);
       generateAndLoadPuzzle(puzzleDifficultyRef.current);
     } else if (gameMode === 'ai') {
-      console.log('Reset: starting new AI game, aiGoesFirst:', aiGoesFirstRef.current);
+      // console.log('Reset: starting new AI game, aiGoesFirst:', aiGoesFirstRef.current);
       setBoard(createEmptyBoard());
       setBoardPieces(createEmptyBoard());
       setCurrentPlayer(aiGoesFirstRef.current ? 2 : 1);
@@ -517,7 +517,7 @@ export const useGameState = () => {
 
   // Start new game - CRITICAL: This is called by App.jsx handleStartGame for '2player' mode
   const startNewGame = useCallback((mode, aiGoesFirst = false) => {
-    console.log('startNewGame called:', mode, 'aiGoesFirst:', aiGoesFirst);
+    // console.log('startNewGame called:', mode, 'aiGoesFirst:', aiGoesFirst);
     
     // Store AI goes first preference
     if (mode === 'ai') {

@@ -345,7 +345,7 @@ const ViewPlayerProfile = ({
             }
           }
         } catch (rpcError) {
-          console.log('RPC not available, using fallback:', rpcError.message);
+          // console.log('RPC not available, using fallback:', rpcError.message);
         }
       }
       
@@ -446,7 +446,7 @@ const ViewPlayerProfile = ({
         
         setRecentGames(gamesWithOpponents);
       } catch (e) {
-        console.log('Recent games not available:', e);
+        // console.log('Recent games not available:', e);
       }
 
       // Load achievement stats
@@ -462,7 +462,7 @@ const ViewPlayerProfile = ({
           }
         }
       } catch (e) {
-        console.log('Achievement stats not available');
+        // console.log('Achievement stats not available');
       }
 
       // Check friend status
@@ -477,7 +477,7 @@ const ViewPlayerProfile = ({
             setFriendshipId(null);
           }
         } catch (e) {
-          console.log('Friend status not available');
+          // console.log('Friend status not available');
         }
       }
       
@@ -492,7 +492,7 @@ const ViewPlayerProfile = ({
           });
         }
       } catch (e) {
-        console.log('Play streak not available:', e);
+        // console.log('Play streak not available:', e);
       }
       
       // Weekly challenge stats - use weeklyChallengeService
@@ -507,7 +507,7 @@ const ViewPlayerProfile = ({
           });
         }
       } catch (e) {
-        console.log('Weekly stats not available:', e);
+        // console.log('Weekly stats not available:', e);
       }
       
       // Creator puzzle completions
@@ -526,7 +526,7 @@ const ViewPlayerProfile = ({
             });
           }
         } catch (e) {
-          console.log('Creator puzzle stats not available');
+          // console.log('Creator puzzle stats not available');
         }
       }
     } catch (err) {

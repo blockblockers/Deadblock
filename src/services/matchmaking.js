@@ -97,7 +97,7 @@ class MatchmakingService {
       }
 
       if (games && games.length > 0) {
-        console.log('[Matchmaking] Found recent game via fallback:', games[0].id);
+        // console.log('[Matchmaking] Found recent game via fallback:', games[0].id);
         return games[0];
       }
       return null;
@@ -117,7 +117,7 @@ class MatchmakingService {
     // Randomly decide who goes first
     const firstPlayer = Math.random() < 0.5 ? 1 : 2;
     
-    console.log('[Matchmaking] Creating game between', player1Id, 'and', player2Id);
+    // console.log('[Matchmaking] Creating game between', player1Id, 'and', player2Id);
     
     try {
       // First, create the game without the profile joins
@@ -140,7 +140,7 @@ class MatchmakingService {
         return { game: null, error: createError };
       }
 
-      console.log('[Matchmaking] Game created:', game.id);
+      // console.log('[Matchmaking] Game created:', game.id);
 
       // Now fetch the game with player profiles
       const { data: fullGame, error: fetchError } = await supabase
@@ -165,7 +165,7 @@ class MatchmakingService {
         .delete()
         .in('user_id', [player1Id, player2Id]);
 
-      console.log('[Matchmaking] Game ready with profiles:', fullGame.id);
+      // console.log('[Matchmaking] Game ready with profiles:', fullGame.id);
       return { game: fullGame, error: null };
     } catch (err) {
       console.error('[Matchmaking] Exception creating game:', err);
@@ -186,7 +186,7 @@ class MatchmakingService {
     // Safe wrapper to prevent double-firing onMatch
     const safeOnMatch = (game) => {
       if (this.matchHandled) {
-        console.log('[Matchmaking] Match already handled, ignoring duplicate');
+        // console.log('[Matchmaking] Match already handled, ignoring duplicate');
         return;
       }
       this.matchHandled = true;
@@ -211,16 +211,16 @@ class MatchmakingService {
           // FIX #1: Queue entry gone - the OTHER player likely created a game for us.
           // Instead of just stopping (which kills the realtime sub before the event
           // arrives), actively check for a recently created game.
-          console.log('[Matchmaking] No queue entry found - checking for recent game...');
+          // console.log('[Matchmaking] No queue entry found - checking for recent game...');
           
           const recentGame = await this.checkForRecentGame(userId);
           if (recentGame) {
-            console.log('[Matchmaking] Found game via polling fallback:', recentGame.id);
+            // console.log('[Matchmaking] Found game via polling fallback:', recentGame.id);
             safeOnMatch(recentGame);
           } else {
             // No game found either - may have been removed from queue for other reasons
             // Keep polling a couple more times in case game creation is in progress
-            console.log('[Matchmaking] No game found yet, will retry...');
+            // console.log('[Matchmaking] No game found yet, will retry...');
             // Don't stop - give it a few more cycles. The realtime sub or next
             // poll iteration will catch it. After 10 seconds of no queue + no game,
             // we'll stop naturally.
@@ -238,11 +238,11 @@ class MatchmakingService {
           if (queueEntry.queued_at > match.queued_at) {
             // The other player queued first - they should create the game.
             // We wait for notification (realtime or polling fallback).
-            console.log('[Matchmaking] Match found but other player queued first - waiting for them to create game');
+            // console.log('[Matchmaking] Match found but other player queued first - waiting for them to create game');
             return;
           }
           
-          console.log('[Matchmaking] Match found - we are the creator');
+          // console.log('[Matchmaking] Match found - we are the creator');
           
           // Found a match! Create the game
           const { game, error } = await this.createGame(userId, match.user_id);
@@ -268,16 +268,16 @@ class MatchmakingService {
   subscribeToMatches(userId, onMatch) {
     if (!supabase) return { unsubscribe: () => {} };
 
-    console.log('[Matchmaking] Subscribing to matches via RealtimeManager');
+    // console.log('[Matchmaking] Subscribing to matches via RealtimeManager');
 
     // Register handler with RealtimeManager (no new channel created!)
     this.unsubscribeHandler = realtimeManager.on('matchFound', async (gameData) => {
       if (this.matchHandled) {
-        console.log('[Matchmaking] Match already handled, ignoring realtime event');
+        // console.log('[Matchmaking] Match already handled, ignoring realtime event');
         return;
       }
       
-      console.log('[Matchmaking] Match found via RealtimeManager:', gameData?.id);
+      // console.log('[Matchmaking] Match found via RealtimeManager:', gameData?.id);
       
       // Fetch full game with profiles
       const { data: game } = await supabase

@@ -26,15 +26,15 @@ export function useRealtimeConnection() {
         if (connectionAttempted.current) return;
         connectionAttempted.current = true;
         
-        console.log('[useRealtimeConnection] Connecting realtime for user:', user.id);
+        // console.log('[useRealtimeConnection] Connecting realtime for user:', user.id);
         const success = await realtimeManager.connectUser(user.id);
-        console.log('[useRealtimeConnection] Connection result:', success ? 'connected' : 'polling fallback');
+        // console.log('[useRealtimeConnection] Connection result:', success ? 'connected' : 'polling fallback');
       }
     };
     
     const disconnectUser = async () => {
       if (!isAuthenticated && connectionAttempted.current) {
-        console.log('[useRealtimeConnection] Disconnecting realtime (user logged out)');
+        // console.log('[useRealtimeConnection] Disconnecting realtime (user logged out)');
         await realtimeManager.disconnectUser();
         connectionAttempted.current = false;
       }
@@ -61,7 +61,7 @@ export function useRealtimeConnection() {
         // Check if we need to reconnect
         const status = realtimeManager.getStatus();
         if (!status.isConnected && !status.usePollingFallback) {
-          console.log('[useRealtimeConnection] Tab visible, reconnecting...');
+          // console.log('[useRealtimeConnection] Tab visible, reconnecting...');
           realtimeManager.connectUser(user.id);
         }
       }

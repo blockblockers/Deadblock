@@ -42,28 +42,28 @@ const QuickChat = ({
   // Subscribe to chat messages
   useEffect(() => {
     if (!gameId) {
-      console.log('[QuickChat] No gameId, skipping subscription');
+      // console.log('[QuickChat] No gameId, skipping subscription');
       return;
     }
 
-    console.log('[QuickChat] Setting up subscription for game:', gameId, 'userId:', userId);
+    // console.log('[QuickChat] Setting up subscription for game:', gameId, 'userId:', userId);
 
     // Load existing messages
     chatService.getChatHistory(gameId).then(({ data }) => {
       if (data) {
-        console.log('[QuickChat] Loaded', data.length, 'existing messages');
+        // console.log('[QuickChat] Loaded', data.length, 'existing messages');
         setRecentMessages(data.slice(-10));
       }
     });
 
     // Subscribe to new messages
     subscriptionRef.current = chatService.subscribeToChat(gameId, (newMessage) => {
-      console.log('[QuickChat] 📨 New message received:', newMessage);
+      // console.log('[QuickChat] 📨 New message received:', newMessage);
       setRecentMessages(prev => [...prev.slice(-9), newMessage]);
       
       // Show bubble for opponent's messages
       if (newMessage.user_id !== userId) {
-        console.log('[QuickChat] 🔔 OPPONENT MESSAGE - Showing notification!');
+        // console.log('[QuickChat] 🔔 OPPONENT MESSAGE - Showing notification!');
         const display = chatService.getMessageDisplay(
           newMessage.message_type, 
           newMessage.message_key,
@@ -124,7 +124,7 @@ const QuickChat = ({
         if (lastMessageIdRef.current && latestMessage.id !== lastMessageIdRef.current) {
           // Check if it's from opponent
           if (latestMessage.user_id !== userId) {
-            console.log('[QuickChat] 🔄 POLL: Found new opponent message!', latestMessage.id);
+            // console.log('[QuickChat] 🔄 POLL: Found new opponent message!', latestMessage.id);
             
             const display = chatService.getMessageDisplay(
               latestMessage.message_type, 

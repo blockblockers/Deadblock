@@ -18,7 +18,7 @@ const safeGetStorage = (key) => {
   try {
     return localStorage.getItem(key);
   } catch (e) {
-    console.warn('[AuthContext] localStorage read error:', e);
+    // console.warn('[AuthContext] localStorage read error:', e);
     return null;
   }
 };
@@ -28,7 +28,7 @@ const safeSetStorage = (key, value) => {
   try {
     localStorage.setItem(key, value);
   } catch (e) {
-    console.warn('[AuthContext] localStorage write error:', e);
+    // console.warn('[AuthContext] localStorage write error:', e);
   }
 };
 
@@ -37,7 +37,7 @@ const safeRemoveStorage = (key) => {
   try {
     localStorage.removeItem(key);
   } catch (e) {
-    console.warn('[AuthContext] localStorage remove error:', e);
+    // console.warn('[AuthContext] localStorage remove error:', e);
   }
 };
 
@@ -56,15 +56,15 @@ const loadCachedProfile = () => {
     const timestamp = parseInt(cachedTimestamp, 10) || 0;
     const age = Date.now() - timestamp;
     
-    console.log('[AuthContext] Loaded cached profile:', { 
-      username: profile?.username, 
-      userId: cachedUserId,
-      ageMinutes: Math.round(age / 60000)
-    });
+    // console.log('[AuthContext] Loaded cached profile:', { 
+      // username: profile?.username, 
+      // userId: cachedUserId,
+      // ageMinutes: Math.round(age / 60000)
+    // });
     
     return { userId: cachedUserId, profile, isExpired: age > CACHE_EXPIRY_MS };
   } catch (e) {
-    console.warn('[AuthContext] Error loading cached profile:', e);
+    // console.warn('[AuthContext] Error loading cached profile:', e);
     return null;
   }
 };
@@ -78,9 +78,9 @@ const saveCachedProfile = (userId, profile) => {
     safeSetStorage(STORAGE_KEYS.CACHED_PROFILE, JSON.stringify(profile));
     safeSetStorage(STORAGE_KEYS.CACHED_TIMESTAMP, Date.now().toString());
     
-    console.log('[AuthContext] Saved profile to cache:', { username: profile.username });
+    // console.log('[AuthContext] Saved profile to cache:', { username: profile.username });
   } catch (e) {
-    console.warn('[AuthContext] Error saving profile to cache:', e);
+    // console.warn('[AuthContext] Error saving profile to cache:', e);
   }
 };
 
@@ -89,7 +89,7 @@ const clearCachedProfile = () => {
   safeRemoveStorage(STORAGE_KEYS.CACHED_USER_ID);
   safeRemoveStorage(STORAGE_KEYS.CACHED_PROFILE);
   safeRemoveStorage(STORAGE_KEYS.CACHED_TIMESTAMP);
-  console.log('[AuthContext] Cleared cached profile');
+  // console.log('[AuthContext] Cleared cached profile');
 };
 
 const AuthContext = createContext({
@@ -143,7 +143,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const authData = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
       if (!authData?.access_token || !ANON_KEY) {
-        console.log('[AuthContext] fetchProfileDirect: No auth token available');
+        // console.log('[AuthContext] fetchProfileDirect: No auth token available');
         return null;
       }
       
@@ -156,7 +156,7 @@ export const AuthProvider = ({ children }) => {
         'Accept': 'application/json'
       };
       
-      console.log('[AuthContext] fetchProfileDirect: Fetching via direct API...');
+      // console.log('[AuthContext] fetchProfileDirect: Fetching via direct API...');
       const startTime = Date.now();
       
       const response = await fetch(
@@ -165,7 +165,7 @@ export const AuthProvider = ({ children }) => {
       );
       
       const elapsed = Date.now() - startTime;
-      console.log(`[AuthContext] fetchProfileDirect: Response in ${elapsed}ms, status: ${response.status}`);
+      // console.log(`[AuthContext] fetchProfileDirect: Response in ${elapsed}ms, status: ${response.status}`);
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -178,11 +178,11 @@ export const AuthProvider = ({ children }) => {
       const data = Array.isArray(dataArray) ? dataArray[0] : dataArray;
       
       if (!data) {
-        console.log('[AuthContext] fetchProfileDirect: No profile found (empty result)');
+        // console.log('[AuthContext] fetchProfileDirect: No profile found (empty result)');
         return null;
       }
       
-      console.log('[AuthContext] fetchProfileDirect: Success:', { username: data?.username, id: data?.id });
+      // console.log('[AuthContext] fetchProfileDirect: Success:', { username: data?.username, id: data?.id });
       return data;
     } catch (err) {
       console.error('[AuthContext] fetchProfileDirect: Exception:', err.message);
@@ -192,34 +192,34 @@ export const AuthProvider = ({ children }) => {
 
   const fetchProfile = useCallback(async (userId, retryCount = 0) => {
     if (!supabase) {
-      console.log('[AuthContext] fetchProfile: supabase not configured');
+      // console.log('[AuthContext] fetchProfile: supabase not configured');
       return null;
     }
     
     if (!userId) {
-      console.log('[AuthContext] fetchProfile: no userId provided');
+      // console.log('[AuthContext] fetchProfile: no userId provided');
       return null;
     }
     
     const maxRetries = 3;
-    console.log(`[AuthContext] fetchProfile: fetching for ${userId}, attempt ${retryCount + 1}`);
+    // console.log(`[AuthContext] fetchProfile: fetching for ${userId}, attempt ${retryCount + 1}`);
     
     try {
       // Use direct fetch to bypass Supabase client timeout issues
       const data = await fetchProfileDirect(userId);
       
       if (!data || !data.id) {
-        console.log('[AuthContext] fetchProfile: No profile data returned');
+        // console.log('[AuthContext] fetchProfile: No profile data returned');
         // Profile not found, retry in case of race condition (new user)
         if (retryCount < maxRetries) {
-          console.log(`[AuthContext] fetchProfile: Retry ${retryCount + 1}/${maxRetries}...`);
+          // console.log(`[AuthContext] fetchProfile: Retry ${retryCount + 1}/${maxRetries}...`);
           await new Promise(r => setTimeout(r, 500 * (retryCount + 1)));
           return fetchProfile(userId, retryCount + 1);
         }
         return null;
       }
       
-      console.log('[AuthContext] fetchProfile success:', { username: data?.username, id: data?.id });
+      // console.log('[AuthContext] fetchProfile success:', { username: data?.username, id: data?.id });
       setProfile(data);
       
       // Cache the profile for instant loading next time
@@ -254,19 +254,19 @@ export const AuthProvider = ({ children }) => {
     
     // Clean up empty callback URLs (leftover from previous OAuth)
     if (url.includes('/auth/callback') && !hasAuthData) {
-      console.log('Cleaning up empty OAuth callback URL');
+      // console.log('Cleaning up empty OAuth callback URL');
       window.history.replaceState({}, document.title, '/');
     }
     
     if (hasAuthData) {
-      console.log('OAuth callback detected with auth data, processing...');
+      // console.log('OAuth callback detected with auth data, processing...');
       setIsOAuthCallback(true);
     }
 
     // Handle OAuth callback - extract session from URL
     const handleOAuthCallback = async () => {
       if (hasAuthData) {
-        console.log('=== OAuth Callback Processing Started ===');
+        // console.log('=== OAuth Callback Processing Started ===');
         try {
           // Set a longer timeout for OAuth processing (network can be slow)
           const timeoutPromise = new Promise((_, reject) => 
@@ -274,33 +274,33 @@ export const AuthProvider = ({ children }) => {
           );
           
           // This extracts the session from the URL hash/params
-          console.log('OAuth: Getting session from Supabase...');
+          // console.log('OAuth: Getting session from Supabase...');
           const sessionPromise = supabase.auth.getSession();
           
           const { data, error } = await Promise.race([sessionPromise, timeoutPromise.then(() => ({ data: null, error: { message: 'Timeout' } }))]);
           
-          console.log('OAuth: Session response:', { 
-            hasData: !!data, 
-            hasSession: !!data?.session,
-            hasUser: !!data?.session?.user,
-            error: error?.message 
-          });
+          // console.log('OAuth: Session response:', { 
+            // hasData: !!data, 
+            // hasSession: !!data?.session,
+            // hasUser: !!data?.session?.user,
+            // error: error?.message 
+          // });
           
           if (error) {
             console.error('OAuth: Error getting session:', error);
             setIsOAuthCallback(false); // Clear flag on error only
           } else if (data?.session) {
-            console.log('OAuth: Session established successfully', {
-              userId: data.session.user?.id,
-              email: data.session.user?.email
-            });
+            // console.log('OAuth: Session established successfully', {
+              // userId: data.session.user?.id,
+              // email: data.session.user?.email
+            // });
             setUser(data.session.user);
             
             // Try to fetch profile, but don't block on it
             try {
-              console.log('OAuth: Fetching profile...');
+              // console.log('OAuth: Fetching profile...');
               const profileResult = await fetchProfile(data.session.user.id);
-              console.log('OAuth: Profile result:', { hasProfile: !!profileResult });
+              // console.log('OAuth: Profile result:', { hasProfile: !!profileResult });
               
               // Check if this is a new user (profile created within last 60 seconds)
               if (profileResult?.created_at) {
@@ -308,7 +308,7 @@ export const AuthProvider = ({ children }) => {
                 const now = new Date();
                 const diffSeconds = (now - createdAt) / 1000;
                 if (diffSeconds < 60) {
-                  console.log('OAuth: New user detected (profile created', diffSeconds, 'seconds ago)');
+                  // console.log('OAuth: New user detected (profile created', diffSeconds, 'seconds ago)');
                   setIsNewUser(true);
                 }
               }
@@ -318,25 +318,25 @@ export const AuthProvider = ({ children }) => {
             }
             
             // DON'T clear isOAuthCallback here - let App.jsx handle it after redirect
-            console.log('OAuth: Callback processed successfully, waiting for App.jsx to handle redirect');
+            // console.log('OAuth: Callback processed successfully, waiting for App.jsx to handle redirect');
           } else {
-            console.log('OAuth: No session in response');
+            // console.log('OAuth: No session in response');
             setIsOAuthCallback(false); // Clear flag when no session
           }
           
           // Clean up URL after processing
-          console.log('OAuth: Cleaning up URL');
+          // console.log('OAuth: Cleaning up URL');
           window.history.replaceState({}, document.title, '/');
         } catch (err) {
           console.error('OAuth: Callback error:', err);
           
           // On timeout, try one more time to get the session (it might have succeeded)
           if (err.message === 'OAuth timeout') {
-            console.log('OAuth: Timeout occurred, attempting session recovery...');
+            // console.log('OAuth: Timeout occurred, attempting session recovery...');
             try {
               const { data: recoveryData } = await supabase.auth.getSession();
               if (recoveryData?.session?.user) {
-                console.log('OAuth: Session recovery successful!', recoveryData.session.user.id);
+                // console.log('OAuth: Session recovery successful!', recoveryData.session.user.id);
                 setUser(recoveryData.session.user);
                 // Fetch profile
                 fetchProfile(recoveryData.session.user.id).catch(e => {
@@ -344,7 +344,7 @@ export const AuthProvider = ({ children }) => {
                 });
                 // Don't clear isOAuthCallback - let App.jsx handle redirect
                 window.history.replaceState({}, document.title, '/');
-                console.log('=== OAuth Callback Processing Finished (recovered) ===');
+                // console.log('=== OAuth Callback Processing Finished (recovered) ===');
                 return;
               }
             } catch (recoveryErr) {
@@ -355,18 +355,18 @@ export const AuthProvider = ({ children }) => {
           setIsOAuthCallback(false); // Clear flag on error
           window.history.replaceState({}, document.title, '/');
         }
-        console.log('=== OAuth Callback Processing Finished ===');
+        // console.log('=== OAuth Callback Processing Finished ===');
       }
     };
 
     // Get initial session
     const initAuth = async () => {
-      console.log('=== Auth Init Started ===');
+      // console.log('=== Auth Init Started ===');
       
       // Check if we have cached profile data for instant loading
       const cached = loadCachedProfile();
       if (cached?.profile && !initialFetchDone.current) {
-        console.log('Auth init: Using cached profile for instant display:', cached.profile.username);
+        // console.log('Auth init: Using cached profile for instant display:', cached.profile.username);
         setProfile(cached.profile);
         // Don't show loading if we have cached data
         setLoading(false);
@@ -377,11 +377,11 @@ export const AuthProvider = ({ children }) => {
       // Longer timeout for OAuth callbacks (network can be slow)
       // Shorter timeout if we have cached data and it's NOT an OAuth flow
       const timeoutMs = hasAuthData ? 20000 : (cached?.profile ? 4000 : 10000);
-      console.log('Auth init: Setting timeout for', timeoutMs, 'ms (OAuth:', hasAuthData, ', hasCached:', !!cached?.profile, ')');
+      // console.log('Auth init: Setting timeout for', timeoutMs, 'ms (OAuth:', hasAuthData, ', hasCached:', !!cached?.profile, ')');
       
       const timeout = setTimeout(async () => {
         if (!timeoutCleared) {
-          console.log('Auth init: TIMEOUT - completing with current state');
+          // console.log('Auth init: TIMEOUT - completing with current state');
           
           // Check if there's a real session we should use
           // The SIGNED_IN event might not have fired yet, so check directly
@@ -390,7 +390,7 @@ export const AuthProvider = ({ children }) => {
             const sessionUser = currentSession?.data?.session?.user;
             
             if (sessionUser) {
-              console.log('Auth init: Timeout but found real session - setting user:', sessionUser.id);
+              // console.log('Auth init: Timeout but found real session - setting user:', sessionUser.id);
               setUser(sessionUser);
               // Fetch profile if we don't have it yet
               if (!profile) {
@@ -399,7 +399,7 @@ export const AuthProvider = ({ children }) => {
                 });
               }
             } else if (cached?.profile && cached?.userId) {
-              console.log('Auth init: Timeout with valid cache and NO real session - trusting cached auth state');
+              // console.log('Auth init: Timeout with valid cache and NO real session - trusting cached auth state');
               // Create a minimal user object from cached data to maintain isAuthenticated
               setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
               
@@ -409,30 +409,30 @@ export const AuthProvider = ({ children }) => {
                 // Check if user is still supposed to be logged in before refreshing
                 const currentCache = loadCachedProfile();
                 if (!currentCache?.userId || currentCache.userId !== userIdToRefresh) {
-                  console.log('Auth init: Background refresh skipped - user state changed');
+                  // console.log('Auth init: Background refresh skipped - user state changed');
                   return;
                 }
                 
-                console.log('Auth init: Background refresh triggered after timeout');
+                // console.log('Auth init: Background refresh triggered after timeout');
                 try {
                   const freshProfile = await fetchProfile(userIdToRefresh);
                   if (freshProfile) {
-                    console.log('Auth init: Background refresh successful:', freshProfile.username);
+                    // console.log('Auth init: Background refresh successful:', freshProfile.username);
                   } else {
-                    console.log('Auth init: Background refresh returned no data');
+                    // console.log('Auth init: Background refresh returned no data');
                   }
                 } catch (err) {
                   console.error('Auth init: Background refresh error:', err);
                 }
               }, 500);
             } else {
-              console.log('Auth init: Timeout with no session and no cache');
+              // console.log('Auth init: Timeout with no session and no cache');
             }
           } catch (err) {
             console.error('Auth init: Timeout session check failed:', err);
             // Fall back to cache if available
             if (cached?.profile && cached?.userId) {
-              console.log('Auth init: Using cache after session check failure');
+              // console.log('Auth init: Using cache after session check failure');
               setUser({ id: cached.userId, email: cached.profile.email || 'cached@user' });
             }
           }
@@ -449,12 +449,12 @@ export const AuthProvider = ({ children }) => {
       
       try {
         // First handle any OAuth callback
-        console.log('Auth init: Handling OAuth callback (if any)...');
+        // console.log('Auth init: Handling OAuth callback (if any)...');
         await handleOAuthCallback();
-        console.log('Auth init: OAuth callback handling complete');
+        // console.log('Auth init: OAuth callback handling complete');
         
         // Then get the current session
-        console.log('Auth init: Getting current session...');
+        // console.log('Auth init: Getting current session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -465,20 +465,20 @@ export const AuthProvider = ({ children }) => {
           return;
         }
         
-        console.log('Auth init: Session result', { 
-          hasSession: !!session, 
-          userId: session?.user?.id,
-          email: session?.user?.email 
-        });
+        // console.log('Auth init: Session result', { 
+          // hasSession: !!session, 
+          // userId: session?.user?.id,
+          // email: session?.user?.email 
+        // });
         
         setUser(session?.user ?? null);
         setSessionReady(true); // Session has been verified with Supabase
-        console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user, ', sessionReady: true');
+        // console.log('Auth init: User state set, isAuthenticated will be:', !!session?.user, ', sessionReady: true');
         
         // Validate cached data matches current session
         if (cached?.profile && session?.user) {
           if (cached.userId !== session.user.id) {
-            console.log('Auth init: Cached profile is for different user, clearing');
+            // console.log('Auth init: Cached profile is for different user, clearing');
             clearCachedProfile();
             setProfile(null);
           }
@@ -487,7 +487,7 @@ export const AuthProvider = ({ children }) => {
         // If no session, clear any cached data
         if (!session?.user) {
           if (cached?.profile) {
-            console.log('Auth init: No session but have cached profile, clearing');
+            // console.log('Auth init: No session but have cached profile, clearing');
             clearCachedProfile();
             setProfile(null);
           }
@@ -498,30 +498,30 @@ export const AuthProvider = ({ children }) => {
         }
         
         // Fetch fresh profile from server (in background if we have cache)
-        console.log('Auth init: Fetching fresh profile for', session.user.id);
+        // console.log('Auth init: Fetching fresh profile for', session.user.id);
         initialFetchDone.current = true;
         
         const profileResult = await fetchProfile(session.user.id);
-        console.log('Auth init: Profile fetch result', { 
-          hasProfile: !!profileResult,
-          username: profileResult?.username 
-        });
+        // console.log('Auth init: Profile fetch result', { 
+          // hasProfile: !!profileResult,
+          // username: profileResult?.username 
+        // });
         
         // Only retry if we don't have cached data and server fetch failed
         if (!profileResult && !cached?.profile) {
-          console.log('Auth init: Profile not found and no cache, starting retry...');
+          // console.log('Auth init: Profile not found and no cache, starting retry...');
           for (let i = 0; i < 3; i++) {
             await new Promise(r => setTimeout(r, 500 * (i + 1)));
             const retryResult = await fetchProfile(session.user.id);
-            console.log(`Auth init: Retry ${i + 1} result:`, { hasProfile: !!retryResult });
+            // console.log(`Auth init: Retry ${i + 1} result:`, { hasProfile: !!retryResult });
             if (retryResult) break;
           }
         }
         
         clearTimeoutSafe();
-        console.log('Auth init: Setting loading to false');
+        // console.log('Auth init: Setting loading to false');
         setLoading(false);
-        console.log('=== Auth Init Complete ===');
+        // console.log('=== Auth Init Complete ===');
       } catch (err) {
         console.error('Auth init: Error:', err);
         clearTimeoutSafe();
@@ -534,17 +534,17 @@ export const AuthProvider = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[AuthContext] Auth event:', event, session?.user?.email);
+        // console.log('[AuthContext] Auth event:', event, session?.user?.email);
         setUser(session?.user ?? null);
         
         // Set sessionReady when we have a valid session from any auth event
         if (session?.user) {
-          console.log('[AuthContext] Setting sessionReady=true from', event);
+          // console.log('[AuthContext] Setting sessionReady=true from', event);
           setSessionReady(true);
         }
         
         if (event === 'SIGNED_IN' && session?.user) {
-          console.log('[AuthContext] SIGNED_IN - fetching profile');
+          // console.log('[AuthContext] SIGNED_IN - fetching profile');
           await fetchProfile(session.user.id);
           // Don't set isOAuthCallback to false here - let App.jsx handle it after redirect
           
@@ -555,49 +555,49 @@ export const AuthProvider = ({ children }) => {
           }
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
           // Token was refreshed (e.g., on app reopen) - always fetch profile to ensure it's loaded
-          console.log('[AuthContext] TOKEN_REFRESHED - fetching profile for', session.user.id);
+          // console.log('[AuthContext] TOKEN_REFRESHED - fetching profile for', session.user.id);
           const result = await fetchProfile(session.user.id);
-          console.log('[AuthContext] TOKEN_REFRESHED - profile fetch result:', { 
-            hasProfile: !!result, 
-            username: result?.username 
-          });
+          // console.log('[AuthContext] TOKEN_REFRESHED - profile fetch result:', { 
+            // hasProfile: !!result, 
+            // username: result?.username 
+          // });
           
           // If profile fetch failed, retry a few times
           if (!result) {
-            console.log('[AuthContext] TOKEN_REFRESHED - profile not found, retrying...');
+            // console.log('[AuthContext] TOKEN_REFRESHED - profile not found, retrying...');
             for (let i = 0; i < 3; i++) {
               await new Promise(r => setTimeout(r, 1000 * (i + 1)));
               const retryResult = await fetchProfile(session.user.id);
-              console.log(`[AuthContext] TOKEN_REFRESHED - retry ${i + 1}:`, { hasProfile: !!retryResult });
+              // console.log(`[AuthContext] TOKEN_REFRESHED - retry ${i + 1}:`, { hasProfile: !!retryResult });
               if (retryResult) break;
             }
           }
         } else if (event === 'INITIAL_SESSION' && session?.user) {
           // Initial session restored from storage - always fetch profile
-          console.log('[AuthContext] INITIAL_SESSION - fetching profile for', session.user.id);
+          // console.log('[AuthContext] INITIAL_SESSION - fetching profile for', session.user.id);
           const result = await fetchProfile(session.user.id);
-          console.log('[AuthContext] INITIAL_SESSION - profile fetch result:', { 
-            hasProfile: !!result, 
-            username: result?.username 
-          });
+          // console.log('[AuthContext] INITIAL_SESSION - profile fetch result:', { 
+            // hasProfile: !!result, 
+            // username: result?.username 
+          // });
           
           // If profile fetch failed, retry
           if (!result) {
-            console.log('[AuthContext] INITIAL_SESSION - profile not found, retrying...');
+            // console.log('[AuthContext] INITIAL_SESSION - profile not found, retrying...');
             for (let i = 0; i < 3; i++) {
               await new Promise(r => setTimeout(r, 1000 * (i + 1)));
               const retryResult = await fetchProfile(session.user.id);
-              console.log(`[AuthContext] INITIAL_SESSION - retry ${i + 1}:`, { hasProfile: !!retryResult });
+              // console.log(`[AuthContext] INITIAL_SESSION - retry ${i + 1}:`, { hasProfile: !!retryResult });
               if (retryResult) break;
             }
           }
         } else if (event === 'INITIAL_SESSION' && !session) {
           // No session - user is not logged in
-          console.log('[AuthContext] INITIAL_SESSION - no session, user not logged in');
+          // console.log('[AuthContext] INITIAL_SESSION - no session, user not logged in');
           setSessionReady(true);
           // Clear any stale cached profile
           if (loadCachedProfile()?.profile) {
-            console.log('[AuthContext] Clearing stale cached profile');
+            // console.log('[AuthContext] Clearing stale cached profile');
             clearCachedProfile();
             setProfile(null);
           }
@@ -610,7 +610,7 @@ export const AuthProvider = ({ children }) => {
           // Clear cached profile on sign out
           clearCachedProfile();
           localStorage.removeItem('deadblock_entry_auth_passed');
-          console.log('[AuthContext] SIGNED_OUT - cleared user, profile, and cache');
+          // console.log('[AuthContext] SIGNED_OUT - cleared user, profile, and cache');
         }
       }
     );
@@ -648,7 +648,7 @@ export const AuthProvider = ({ children }) => {
         }
       }
     } catch (emailCheckErr) {
-      console.log('Email check failed, proceeding:', emailCheckErr);
+      // console.log('Email check failed, proceeding:', emailCheckErr);
       // Continue anyway - Supabase auth will catch the duplicate
     }
 
@@ -675,12 +675,12 @@ export const AuthProvider = ({ children }) => {
         }
       }
     } catch (checkErr) {
-      console.log('Username check failed, proceeding with signup:', checkErr);
+      // console.log('Username check failed, proceeding with signup:', checkErr);
       // Continue anyway - the database constraint will catch duplicates
     }
 
     // Sign up the user
-    console.log('[AuthContext] Attempting signup for:', email, username);
+    // console.log('[AuthContext] Attempting signup for:', email, username);
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -716,14 +716,14 @@ export const AuthProvider = ({ children }) => {
         .maybeSingle();
       
       if (checkError) {
-        console.log('[AuthContext] Profile check error (expected if new):', checkError.message);
+        // console.log('[AuthContext] Profile check error (expected if new):', checkError.message);
       }
       
       let createdProfile = profileCheck;
       
       // If no profile exists, create it manually
       if (!profileCheck) {
-        console.log('[AuthContext] Profile not created by trigger, creating manually for:', data.user.id);
+        // console.log('[AuthContext] Profile not created by trigger, creating manually for:', data.user.id);
         const { data: newProfile, error: profileError } = await supabase
           .from('profiles')
           .insert({
@@ -767,11 +767,11 @@ export const AuthProvider = ({ children }) => {
       
       // CRITICAL: Set the profile in state so the app can proceed
       if (createdProfile) {
-        console.log('[AuthContext] Setting profile after signup:', createdProfile.username);
+        // console.log('[AuthContext] Setting profile after signup:', createdProfile.username);
         setProfile(createdProfile);
       } else {
         // Last resort: fetch the profile again
-        console.log('[AuthContext] Fetching profile after creation...');
+        // console.log('[AuthContext] Fetching profile after creation...');
         await new Promise(resolve => setTimeout(resolve, 300));
         const { data: finalProfile } = await supabase
           .from('profiles')
@@ -780,7 +780,7 @@ export const AuthProvider = ({ children }) => {
           .single();
         
         if (finalProfile) {
-          console.log('[AuthContext] Got profile on retry:', finalProfile.username);
+          // console.log('[AuthContext] Got profile on retry:', finalProfile.username);
           setProfile(finalProfile);
         } else {
           console.error('[AuthContext] Could not get profile after signup!');
@@ -836,7 +836,7 @@ export const AuthProvider = ({ children }) => {
   const signInWithGoogle = async () => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
-    console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
+    // console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
     
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -847,7 +847,7 @@ export const AuthProvider = ({ children }) => {
         }
       });
       
-      console.log('[AuthContext] Google OAuth result:', { data, error });
+      // console.log('[AuthContext] Google OAuth result:', { data, error });
       
       if (error) {
         console.error('[AuthContext] Google OAuth error:', error);
@@ -857,7 +857,7 @@ export const AuthProvider = ({ children }) => {
       // If we get here without redirect, there might be an issue
       // The browser should be redirecting, so wait a moment
       if (data?.url) {
-        console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
+        // console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
         // Manually redirect if the auto-redirect didn't work
         window.location.href = data.url;
       }
@@ -872,7 +872,7 @@ export const AuthProvider = ({ children }) => {
   const signOut = async () => {
     if (!supabase) return;
     
-    console.log('[AuthContext] signOut: Starting sign out process');
+    // console.log('[AuthContext] signOut: Starting sign out process');
     
     // Clear state FIRST before calling Supabase (in case it times out)
     setUser(null);
@@ -890,13 +890,13 @@ export const AuthProvider = ({ children }) => {
       if (error) {
         console.error('[AuthContext] signOut: Supabase error:', error);
       } else {
-        console.log('[AuthContext] signOut: Supabase sign out successful');
+        // console.log('[AuthContext] signOut: Supabase sign out successful');
       }
     } catch (err) {
       console.error('[AuthContext] signOut: Exception:', err);
     }
     
-    console.log('[AuthContext] signOut: Complete - cleared user, profile, and cache');
+    // console.log('[AuthContext] signOut: Complete - cleared user, profile, and cache');
     return { error: null };
   };
 
@@ -966,7 +966,7 @@ export const AuthProvider = ({ children }) => {
           // Admin will need to manually delete the account
         }
       } catch (rpcErr) {
-        console.warn('[AuthContext] deleteAccount RPC not available:', rpcErr.message);
+        // console.warn('[AuthContext] deleteAccount RPC not available:', rpcErr.message);
       }
 
       // Clear local cache

@@ -148,7 +148,7 @@ const AchievementsDisplay = ({ compact = false }) => {
       // Use getAchievementsWithStatus for consistency with other screens
       if (typeof achievementService?.getAchievementsWithStatus === 'function') {
         const result = await achievementService.getAchievementsWithStatus(profile.id);
-        console.log('[AchievementsDisplay] Loaded achievements:', result.data?.length || 0);
+        // console.log('[AchievementsDisplay] Loaded achievements:', result.data?.length || 0);
         setAchievements(result.data || []);
       } else {
         console.warn('[AchievementsDisplay] Achievement service not available');

@@ -293,7 +293,7 @@ class GameSyncService {
           // console.log('gameSync.makeMove: Move recorded successfully');
         }
       } catch (moveErr) {
-        console.warn('gameSync.makeMove: Could not record move history:', moveErr.message);
+        // console.warn('gameSync.makeMove: Could not record move history:', moveErr.message);
         // Continue with game update even if move history fails
       }
 
@@ -313,11 +313,11 @@ class GameSyncService {
       }
 
       /* makeMove updating game state debug - disabled for production
-      console.log('gameSync.makeMove: Updating game state...', { 
-        nextPlayer, 
-        gameOver, 
-        usedPiecesCount: newUsedPieces.length 
-      });
+      // console.log('gameSync.makeMove: Updating game state...', { 
+        // nextPlayer, 
+        // gameOver, 
+        // usedPiecesCount: newUsedPieces.length 
+      // });
       */
 
       const updateHeaders = { ...headers };
@@ -340,10 +340,10 @@ class GameSyncService {
 
       const updatedGame = await gameUpdateResponse.json();
       /* makeMove success debug - disabled for production
-      console.log('gameSync.makeMove: Game updated successfully', { 
-        newCurrentPlayer: updatedGame.current_player,
-        status: updatedGame.status 
-      });
+      // console.log('gameSync.makeMove: Game updated successfully', { 
+        // newCurrentPlayer: updatedGame.current_player,
+        // status: updatedGame.status 
+      // });
       */
 
       // Step 4: Update player stats if game is over
@@ -530,7 +530,7 @@ class GameSyncService {
         unviewedCompleted = dbUnviewed;
       } else {
         // Fallback to localStorage if columns don't exist yet
-        console.log('[GameSync] Using localStorage fallback for viewed tracking');
+        // console.log('[GameSync] Using localStorage fallback for viewed tracking');
         const viewedGames = this.getViewedGames();
         
         const fallbackResponse = await fetch(
@@ -610,11 +610,11 @@ class GameSyncService {
         );
         
         if (response.ok) {
-          console.log('[GameSync] Game marked as viewed in database:', gameId);
+          // console.log('[GameSync] Game marked as viewed in database:', gameId);
           return;
         }
       } catch (e) {
-        console.log('[GameSync] Database mark_game_viewed failed, using localStorage fallback');
+        // console.log('[GameSync] Database mark_game_viewed failed, using localStorage fallback');
       }
     }
     
@@ -628,7 +628,7 @@ class GameSyncService {
         localStorage.setItem('deadblock_viewed_games', JSON.stringify(trimmed));
       }
     } catch (e) {
-      console.warn('[GameSync] Failed to mark game as viewed:', e);
+      // console.warn('[GameSync] Failed to mark game as viewed:', e);
     }
   }
 
@@ -822,7 +822,7 @@ class GameSyncService {
       const result = await response.json();
       
       if (result?.forfeited_count > 0) {
-        console.log(`[GameSync] Auto-forfeited ${result.forfeited_count} stale game(s)`);
+        // console.log(`[GameSync] Auto-forfeited ${result.forfeited_count} stale game(s)`);
       }
 
       // Transform to expected format

@@ -642,7 +642,7 @@ const OnlineMenu = ({
   useEffect(() => {
     if (!sessionReady || !profile?.id || !supabase) return;
     
-    console.log('[OnlineMenu] Setting up real-time game updates subscription');
+    // console.log('[OnlineMenu] Setting up real-time game updates subscription');
     
     // Subscribe to games where user is player1
     const player1Channel = supabase
@@ -662,7 +662,7 @@ const OnlineMenu = ({
           // Refresh on turn change or status change
           if (game?.current_player !== oldGame?.current_player || 
               game?.status !== oldGame?.status) {
-            console.log('[OnlineMenu] Game update (p1): turn/status changed, refreshing');
+            // console.log('[OnlineMenu] Game update (p1): turn/status changed, refreshing');
             loadGames();
           }
         }
@@ -687,7 +687,7 @@ const OnlineMenu = ({
           // Refresh on turn change or status change
           if (game?.current_player !== oldGame?.current_player || 
               game?.status !== oldGame?.status) {
-            console.log('[OnlineMenu] Game update (p2): turn/status changed, refreshing');
+            // console.log('[OnlineMenu] Game update (p2): turn/status changed, refreshing');
             loadGames();
           }
         }
@@ -706,7 +706,7 @@ const OnlineMenu = ({
           filter: `player1_id=eq.${profile.id}`
         },
         () => {
-          console.log('[OnlineMenu] New game created (p1), refreshing');
+          // console.log('[OnlineMenu] New game created (p1), refreshing');
           loadGames();
         }
       )
@@ -719,7 +719,7 @@ const OnlineMenu = ({
           filter: `player2_id=eq.${profile.id}`
         },
         () => {
-          console.log('[OnlineMenu] New game created (p2), refreshing');
+          // console.log('[OnlineMenu] New game created (p2), refreshing');
           loadGames();
         }
       )
@@ -744,14 +744,14 @@ const OnlineMenu = ({
           
           // Only act on status changes
           if (invite?.status !== oldInvite?.status) {
-            console.log('[OnlineMenu] Sent invite status changed:', oldInvite?.status, '->', invite?.status);
+            // console.log('[OnlineMenu] Sent invite status changed:', oldInvite?.status, '->', invite?.status);
             
             // Refresh invites to remove from pending list
             loadInvites();
             
             // If accepted, also refresh games to show the new active game
             if (invite?.status === 'accepted') {
-              console.log('[OnlineMenu] Sent invite accepted, refreshing games');
+              // console.log('[OnlineMenu] Sent invite accepted, refreshing games');
               loadGames();
               soundManager.playSound('notification');
             }
@@ -817,7 +817,7 @@ const OnlineMenu = ({
       if (!lastStaleCheck || parseInt(lastStaleCheck) < sixHoursAgo) {
         const { forfeited } = await gameSyncService.checkAndForfeitStaleGames(profile.id);
         if (forfeited?.length > 0) {
-          console.log(`[OnlineMenu] Auto-forfeited ${forfeited.length} stale game(s)`);
+          // console.log(`[OnlineMenu] Auto-forfeited ${forfeited.length} stale game(s)`);
         }
         localStorage.setItem(staleCheckKey, Date.now().toString());
       }

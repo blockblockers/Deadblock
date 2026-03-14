@@ -233,7 +233,7 @@ class RealtimeManager {
       });
       
       if (status !== 'connected') {
-        console.warn('[RealtimeManager] Failed to connect, using polling fallback');
+        // console.warn('[RealtimeManager] Failed to connect, using polling fallback');
         this.enablePollingFallback();
         return false;
       }
@@ -306,12 +306,12 @@ class RealtimeManager {
           },
           (payload) => {
             /* Chat message debug - disabled for production
-            console.log('[RealtimeManager] 📨 Chat message received:', {
-              id: payload.new?.id,
-              user_id: payload.new?.user_id,
-              message_type: payload.new?.message_type,
-              message_key: payload.new?.message_key
-            });
+            // console.log('[RealtimeManager] 📨 Chat message received:', {
+              // id: payload.new?.id,
+              // user_id: payload.new?.user_id,
+              // message_type: payload.new?.message_type,
+              // message_key: payload.new?.message_key
+            // });
             */
             this.notifyHandlers('chatMessage', payload.new);
           }
@@ -330,7 +330,7 @@ class RealtimeManager {
       });
       
       if (status !== 'connected') {
-        console.warn('[RealtimeManager] Game channel failed, using polling');
+        // console.warn('[RealtimeManager] Game channel failed, using polling');
         this.startGamePolling(gameId);
         return false;
       }

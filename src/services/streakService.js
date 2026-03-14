@@ -60,7 +60,7 @@ export const streakService = {
       }
 
       const data = await response.json();
-      console.log('[StreakService] Streak updated:', data);
+      // console.log('[StreakService] Streak updated:', data);
       
       return { data, error: null };
     } catch (err) {

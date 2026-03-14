@@ -733,12 +733,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     if (!gameData || !mountedRef.current) return;
 
     /* updateGameState debug - disabled for production
-    console.log('updateGameState: Received', { 
-      id: gameData.id, 
-      status: gameData.status,
-      current_player: gameData.current_player,
-      pieces: gameData.used_pieces?.length 
-    });
+    // console.log('updateGameState: Received', { 
+      // id: gameData.id, 
+      // status: gameData.status,
+      // current_player: gameData.current_player,
+      // pieces: gameData.used_pieces?.length 
+    // });
     */
 
     let validBoard = gameData.board;
@@ -836,7 +836,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         if (currentUserId) {
           streakService.updateStreak(currentUserId).then(({ data }) => {
             if (data?.new_achievements?.length > 0) {
-              console.log('[OnlineGame] New streak achievements:', data.new_achievements);
+              // console.log('[OnlineGame] New streak achievements:', data.new_achievements);
             }
           }).catch(err => console.warn('[OnlineGame] Failed to update streak:', err));
         }
@@ -1044,11 +1044,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         if (!updatedGame || updatedGame.id !== currentGameId) return;
         
         /* Real-time update debug - disabled for production
-        console.log('Real-time update received', {
-          pieces: updatedGame?.used_pieces?.length,
-          expected: expectedPieceCountRef.current,
-          moveInProgress: moveInProgressRef.current
-        });
+        // console.log('Real-time update received', {
+          // pieces: updatedGame?.used_pieces?.length,
+          // expected: expectedPieceCountRef.current,
+          // moveInProgress: moveInProgressRef.current
+        // });
         */
         
         // Skip stale updates
@@ -1286,12 +1286,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     let gameOverReason = null;
     
     /* handleConfirm game over check debug - disabled for production
-    console.log('handleConfirm: Checking game over...', { 
-      usedPiecesCount: newUsedPieces.length, 
-      totalPieces,
-      myPlayerNumber,
-      nextPlayer
-    });
+    // console.log('handleConfirm: Checking game over...', { 
+      // usedPiecesCount: newUsedPieces.length, 
+      // totalPieces,
+      // myPlayerNumber,
+      // nextPlayer
+    // });
     */
     
     // Case 1: All pieces have been placed - game ends, count cells to determine winner
@@ -1467,7 +1467,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       if (user?.id) {
         streakService.updateStreak(user.id).then(({ data }) => {
           if (data?.new_achievements?.length > 0) {
-            console.log('[OnlineGame] New streak achievements:', data.new_achievements);
+            // console.log('[OnlineGame] New streak achievements:', data.new_achievements);
           }
         }).catch(err => console.warn('[OnlineGame] Failed to update streak:', err));
       }

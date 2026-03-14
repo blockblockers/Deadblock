@@ -164,7 +164,7 @@ const UserProfile = ({ onBack }) => {
     try {
       const { data } = await ratingService.getRatingHistory(profile.id, 50);
       if (data) {
-        console.log('[UserProfile] Loaded rating history:', data.length, 'entries');
+        // console.log('[UserProfile] Loaded rating history:', data.length, 'entries');
         setRatingHistory(data);
       }
     } catch (err) {

@@ -229,7 +229,7 @@ export const creatorPuzzleService = {
       }
       
       const result = await response.json();
-      console.log('[CreatorPuzzleService] Progress saved:', puzzleNumber, 'attempts:', attempts);
+      // console.log('[CreatorPuzzleService] Progress saved:', puzzleNumber, 'attempts:', attempts);
       return result[0] || null;
     } catch (error) {
       console.error('[CreatorPuzzleService] Error saving progress:', error);
@@ -320,7 +320,7 @@ export const creatorPuzzleService = {
       }
       
       const result = await response.json();
-      console.log('[CreatorPuzzleService] Marked puzzle completed:', puzzleNumber, 'attempts:', attempts);
+      // console.log('[CreatorPuzzleService] Marked puzzle completed:', puzzleNumber, 'attempts:', attempts);
       
       // Note: Progress is automatically cleared by database trigger
       return result[0];

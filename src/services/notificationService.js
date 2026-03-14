@@ -26,7 +26,7 @@ class NotificationService {
     }
     
     this.initialized = true;
-    console.log('[NotificationService] Initialized, permission:', this.permission);
+    // console.log('[NotificationService] Initialized, permission:', this.permission);
   }
 
   isEnabled() {
@@ -73,7 +73,7 @@ class NotificationService {
     try {
       const result = await Notification.requestPermission();
       this.permission = result;
-      console.log('[NotificationService] Permission result:', result);
+      // console.log('[NotificationService] Permission result:', result);
       
       // Send test notification if granted
       if (result === 'granted') {
@@ -125,10 +125,10 @@ class NotificationService {
   }
 
   sendNotification(title, options = {}) {
-    console.log('[NotificationService] sendNotification called:', title, options);
+    // console.log('[NotificationService] sendNotification called:', title, options);
     
     if (!this.isEnabled()) {
-      console.log('[NotificationService] Notifications not enabled, permission:', this.permission);
+      // console.log('[NotificationService] Notifications not enabled, permission:', this.permission);
       return null;
     }
 
@@ -150,7 +150,7 @@ class NotificationService {
     
     const prefKey = prefKeyMap[notificationType];
     if (prefKey && prefs[prefKey] === false) {
-      console.log('[NotificationService] Notification type disabled by user preference:', notificationType);
+      // console.log('[NotificationService] Notification type disabled by user preference:', notificationType);
       return null;
     }
 
@@ -160,7 +160,7 @@ class NotificationService {
     const alwaysNotify = ['chat_message', 'your_turn', 'game_invite', 'rematch_request'].includes(notificationType);
     
     if (!isPageHidden && !alwaysNotify) {
-      console.log('[NotificationService] Page is visible and notification type not priority, skipping');
+      // console.log('[NotificationService] Page is visible and notification type not priority, skipping');
       return null;
     }
 
@@ -190,7 +190,7 @@ class NotificationService {
         enhancedOptions.requireInteraction = true;
       }
 
-      console.log('[NotificationService] Creating notification with options:', enhancedOptions);
+      // console.log('[NotificationService] Creating notification with options:', enhancedOptions);
       const notification = new Notification(title, enhancedOptions);
 
       // Auto-close after 10 seconds (unless requireInteraction is true)
@@ -221,11 +221,11 @@ class NotificationService {
           navigateUrl = `/?navigateTo=online&gameId=${data.gameId}`;
         }
         
-        console.log('[NotificationService] Click navigating to:', navigateUrl, 'type:', data.type);
+        // console.log('[NotificationService] Click navigating to:', navigateUrl, 'type:', data.type);
         window.location.href = navigateUrl;
       };
 
-      console.log('[NotificationService] Notification created successfully');
+      // console.log('[NotificationService] Notification created successfully');
       return notification;
     } catch (err) {
       console.error('[NotificationService] Failed to send notification:', err);
@@ -263,7 +263,7 @@ class NotificationService {
 
   // v7.12 FIX: Now accepts gameId parameter and uses game-specific tag
   notifyYourTurn(opponentName, gameId) {
-    console.log('[NotificationService] notifyYourTurn called:', { opponentName, gameId });
+    // console.log('[NotificationService] notifyYourTurn called:', { opponentName, gameId });
     
     const messages = [
       `${opponentName} made a move. It's your turn.`,
@@ -485,7 +485,7 @@ class NotificationService {
     try {
       const prefs = JSON.parse(localStorage.getItem('deadblock_notification_prefs') || '{}');
       if (prefs.streakReminder === false) {
-        console.log('[NotificationService] Streak reminders disabled');
+        // console.log('[NotificationService] Streak reminders disabled');
         return null;
       }
     } catch (e) {

@@ -29,7 +29,7 @@ export function useAchievements() {
     if (!userId || checking) return;
     
     setChecking(true);
-    console.log('[useAchievements] Checking achievements after game:', { userId, gameId, isWin });
+    // console.log('[useAchievements] Checking achievements after game:', { userId, gameId, isWin });
     
     try {
       const { data, error } = await achievementService.checkAchievements(userId, gameId);
@@ -37,7 +37,7 @@ export function useAchievements() {
       if (error) {
         console.error('[useAchievements] Error checking achievements:', error);
       } else if (data && data.length > 0) {
-        console.log('[useAchievements] New achievements unlocked:', data);
+        // console.log('[useAchievements] New achievements unlocked:', data);
         setNewAchievements(prev => [...prev, ...data]);
         
         // Play achievement sound
@@ -57,7 +57,7 @@ export function useAchievements() {
     if (!userId || !solved || checking) return;
     
     setChecking(true);
-    console.log('[useAchievements] Checking achievements after puzzle:', { userId, difficulty });
+    // console.log('[useAchievements] Checking achievements after puzzle:', { userId, difficulty });
     
     try {
       // Use the general check which looks at player_stats
@@ -66,7 +66,7 @@ export function useAchievements() {
       if (error) {
         console.error('[useAchievements] Error checking puzzle achievements:', error);
       } else if (data && data.length > 0) {
-        console.log('[useAchievements] New achievements unlocked:', data);
+        // console.log('[useAchievements] New achievements unlocked:', data);
         setNewAchievements(prev => [...prev, ...data]);
         soundManager.playButtonClick?.();
       }
@@ -87,13 +87,13 @@ export function useAchievements() {
     if (![5, 10, 25, 50].includes(currentStreak)) return;
     
     setChecking(true);
-    console.log('[useAchievements] Checking speed puzzle achievements:', { userId, currentStreak });
+    // console.log('[useAchievements] Checking speed puzzle achievements:', { userId, currentStreak });
     
     try {
       const { data, error } = await achievementService.checkAchievements(userId);
       
       if (!error && data && data.length > 0) {
-        console.log('[useAchievements] Speed puzzle achievements unlocked:', data);
+        // console.log('[useAchievements] Speed puzzle achievements unlocked:', data);
         setNewAchievements(prev => [...prev, ...data]);
         soundManager.playButtonClick?.();
       }
@@ -111,14 +111,14 @@ export function useAchievements() {
     if (!userId || checking) return;
     
     setChecking(true);
-    console.log('[useAchievements] Checking weekly challenge achievements:', { userId, rank, challengeId });
+    // console.log('[useAchievements] Checking weekly challenge achievements:', { userId, rank, challengeId });
     
     try {
       // Check weekly-specific achievements
       const awarded = await achievementService.checkWeeklyAchievements(rank, challengeId);
       
       if (awarded && awarded.length > 0) {
-        console.log('[useAchievements] Weekly achievements unlocked:', awarded);
+        // console.log('[useAchievements] Weekly achievements unlocked:', awarded);
         // Convert to display format
         const newOnes = awarded.map(id => ({ achievement_id: id, success: true }));
         setNewAchievements(prev => [...prev, ...newOnes]);
@@ -144,13 +144,13 @@ export function useAchievements() {
     if (!userId || checking) return;
     
     setChecking(true);
-    console.log('[useAchievements] Checking AI game achievements:', { userId, difficulty, isWin });
+    // console.log('[useAchievements] Checking AI game achievements:', { userId, difficulty, isWin });
     
     try {
       const { data, error } = await achievementService.checkAchievements(userId);
       
       if (!error && data && data.length > 0) {
-        console.log('[useAchievements] AI achievements unlocked:', data);
+        // console.log('[useAchievements] AI achievements unlocked:', data);
         setNewAchievements(prev => [...prev, ...data]);
         soundManager.playButtonClick?.();
       }

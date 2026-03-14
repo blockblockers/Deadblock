@@ -220,7 +220,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
               return; // Success - skip fallback
             }
           } catch (rpcError) {
-            console.log('[PlayerStatsModal] RPC not available, using fallback:', rpcError.message);
+            // console.log('[PlayerStatsModal] RPC not available, using fallback:', rpcError.message);
           }
         }
         
@@ -278,11 +278,11 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
     if (!profile?.id) return;
     
     try {
-      console.log('[PlayerStatsModal] Loading play streak for:', profile.id);
+      // console.log('[PlayerStatsModal] Loading play streak for:', profile.id);
       const result = await streakService.getStreak(profile.id);
       
       if (result.data && !result.error) {
-        console.log('[PlayerStatsModal] Play streak loaded:', result.data);
+        // console.log('[PlayerStatsModal] Play streak loaded:', result.data);
         setPlayStreak({
           current: result.data.current_streak || 0,
           longest: result.data.longest_streak || 0,

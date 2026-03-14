@@ -20,7 +20,7 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
   useEffect(() => {
     if (!userId) return;
 
-    console.log('[GameInviteNotification] Setting up subscriptions for:', userId);
+    // console.log('[GameInviteNotification] Setting up subscriptions for:', userId);
 
     // Listen for game invites via RealtimeManager
     const unsubInvite = realtimeManager.on('gameInvite', async (invite) => {
@@ -29,7 +29,7 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
       // Only show notifications for invites directed at this user
       if (invite.to_user_id !== userId) return;
       
-      console.log('[GameInviteNotification] New invite received:', invite.id);
+      // console.log('[GameInviteNotification] New invite received:', invite.id);
       
       // Fetch full invite with sender info
       const { data: fullInvite } = await supabase
@@ -70,7 +70,7 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
       // Only show notifications for requests directed at this user
       if (request.friend_id !== userId) return;
       
-      console.log('[GameInviteNotification] New friend request:', request.id);
+      // console.log('[GameInviteNotification] New friend request:', request.id);
       
       if (request.status === 'pending') {
         // Fetch sender info - request.user_id is the person who sent the request
@@ -110,7 +110,7 @@ const GameInviteNotification = ({ userId, onAccept, onDecline }) => {
     unsubscribeRef.current = [unsubInvite, unsubFriend];
 
     return () => {
-      console.log('[GameInviteNotification] Cleaning up subscriptions');
+      // console.log('[GameInviteNotification] Cleaning up subscriptions');
       unsubscribeRef.current.forEach(unsub => unsub?.());
       unsubscribeRef.current = [];
     };

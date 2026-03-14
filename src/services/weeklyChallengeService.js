@@ -25,21 +25,21 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://oyeibyrednwlo
 class WeeklyChallengeService {
   // Get or create the current week's challenge
   async getCurrentChallenge() {
-    console.log('[WeeklyChallengeService] getCurrentChallenge called');
+    // console.log('[WeeklyChallengeService] getCurrentChallenge called');
     
     if (!isSupabaseConfigured()) {
-      console.log('[WeeklyChallengeService] Supabase not configured');
+      // console.log('[WeeklyChallengeService] Supabase not configured');
       return { data: null, error: 'Supabase not configured' };
     }
     
     const headers = getAuthHeaders();
     if (!headers) {
-      console.log('[WeeklyChallengeService] No auth headers available');
+      // console.log('[WeeklyChallengeService] No auth headers available');
       return { data: null, error: 'Not authenticated' };
     }
     
     try {
-      console.log('[WeeklyChallengeService] Calling RPC via direct fetch...');
+      // console.log('[WeeklyChallengeService] Calling RPC via direct fetch...');
       const startTime = Date.now();
       
       // Call RPC via direct fetch
@@ -50,11 +50,11 @@ class WeeklyChallengeService {
       });
       
       const elapsed = Date.now() - startTime;
-      console.log('[WeeklyChallengeService] RPC completed in', elapsed, 'ms, status:', rpcResponse.status);
+      // console.log('[WeeklyChallengeService] RPC completed in', elapsed, 'ms, status:', rpcResponse.status);
       
       if (rpcResponse.ok) {
         const data = await rpcResponse.json();
-        console.log('[WeeklyChallengeService] Success! Challenge data:', data);
+        // console.log('[WeeklyChallengeService] Success! Challenge data:', data);
         
         // VALIDATION: Check if challenge dates are current
         if (data) {
@@ -62,21 +62,21 @@ class WeeklyChallengeService {
           const startsAt = data.starts_at ? new Date(data.starts_at) : null;
           const endsAt = data.ends_at ? new Date(data.ends_at) : null;
           
-          console.log('[WeeklyChallengeService] Challenge dates validation:', {
-            now: now.toISOString(),
-            starts_at: startsAt?.toISOString(),
-            ends_at: endsAt?.toISOString(),
-            week_number: data.week_number,
-            challenge_id: data.id,
-            puzzle_seed: data.puzzle_seed
-          });
+          // console.log('[WeeklyChallengeService] Challenge dates validation:', {
+            // now: now.toISOString(),
+            // starts_at: startsAt?.toISOString(),
+            // ends_at: endsAt?.toISOString(),
+            // week_number: data.week_number,
+            // challenge_id: data.id,
+            // puzzle_seed: data.puzzle_seed
+          // });
         }
         
         return { data, error: null };
       }
       
       // RPC failed, try fallback query
-      console.log('[WeeklyChallengeService] RPC failed, trying fallback query...');
+      // console.log('[WeeklyChallengeService] RPC failed, trying fallback query...');
       const now = new Date().toISOString();
       
       const fallbackResponse = await fetch(
@@ -87,7 +87,7 @@ class WeeklyChallengeService {
       if (fallbackResponse.ok) {
         const fallbackData = await fallbackResponse.json();
         if (fallbackData && fallbackData.length > 0) {
-          console.log('[WeeklyChallengeService] Fallback succeeded:', fallbackData[0].id);
+          // console.log('[WeeklyChallengeService] Fallback succeeded:', fallbackData[0].id);
           return { data: fallbackData[0], error: null };
         }
       }
@@ -190,7 +190,7 @@ class WeeklyChallengeService {
   
   // Get the leaderboard for a challenge (ranked by first_attempt_time_ms)
   async getLeaderboard(challengeId, limit = 50) {
-    console.log('[WeeklyChallengeService] getLeaderboard called:', { challengeId, limit });
+    // console.log('[WeeklyChallengeService] getLeaderboard called:', { challengeId, limit });
     
     if (!isSupabaseConfigured()) return { data: [], error: 'Supabase not configured' };
     
@@ -245,7 +245,7 @@ class WeeklyChallengeService {
   
   // Get the user's result for a specific challenge
   async getUserResult(challengeId) {
-    console.log('[WeeklyChallengeService] getUserResult called:', challengeId);
+    // console.log('[WeeklyChallengeService] getUserResult called:', challengeId);
     
     if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
     
@@ -269,7 +269,7 @@ class WeeklyChallengeService {
       }
       
       const results = await response.json();
-      console.log('[WeeklyChallengeService] getUserResult result:', results[0] || null);
+      // console.log('[WeeklyChallengeService] getUserResult result:', results[0] || null);
       return { data: results[0] || null, error: null };
     } catch (err) {
       console.error('Error getting user result:', err);
@@ -326,7 +326,7 @@ class WeeklyChallengeService {
   
   // Get user's total podium finishes across all challenges
   async getUserPodiumBreakdown(userId) {
-    console.log('[WeeklyChallengeService] getUserPodiumBreakdown called:', userId);
+    // console.log('[WeeklyChallengeService] getUserPodiumBreakdown called:', userId);
     
     if (!isSupabaseConfigured()) return { data: null, error: 'Supabase not configured' };
     
@@ -356,19 +356,19 @@ class WeeklyChallengeService {
           
           if (userIndex === 0) {
             first++;
-            console.log('[WeeklyChallengeService] Found 1st place in challenge', challenge.id);
+            // console.log('[WeeklyChallengeService] Found 1st place in challenge', challenge.id);
           } else if (userIndex === 1) {
             second++;
-            console.log('[WeeklyChallengeService] Found 2nd place in challenge', challenge.id);
+            // console.log('[WeeklyChallengeService] Found 2nd place in challenge', challenge.id);
           } else if (userIndex === 2) {
             third++;
-            console.log('[WeeklyChallengeService] Found 3rd place in challenge', challenge.id);
+            // console.log('[WeeklyChallengeService] Found 3rd place in challenge', challenge.id);
           }
         }
       }
       
       const total = first + second + third;
-      console.log('[WeeklyChallengeService] Podium breakdown:', { first, second, third, total });
+      // console.log('[WeeklyChallengeService] Podium breakdown:', { first, second, third, total });
       
       return { data: { first, second, third, total }, error: null };
     } catch (err) {

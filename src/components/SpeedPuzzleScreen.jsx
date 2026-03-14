@@ -294,7 +294,7 @@ StreakDisplay.propTypes = {
  * Success overlay - shown after correct puzzle solution
  */
 const SuccessOverlay = memo(({ streak, onContinue }) => {
-  console.log('[SuccessOverlay] Rendering with streak:', streak);
+  // console.log('[SuccessOverlay] Rendering with streak:', streak);
   
   return (
     <div 
@@ -362,7 +362,7 @@ const SuccessOverlay = memo(({ streak, onContinue }) => {
           {/* Continue Button */}
           <button
             onClick={() => {
-              console.log('[SuccessOverlay] Continue clicked');
+              // console.log('[SuccessOverlay] Continue clicked');
               onContinue();
             }}
             style={{
@@ -408,7 +408,7 @@ SuccessOverlay.propTypes = {
  */
 const GameOverOverlay = memo(({ streak, bestStreak, onPlayAgain, onMenu }) => {
   // Log when this component renders for debugging
-  console.log('[GameOverOverlay] Rendering with:', { streak, bestStreak });
+  // console.log('[GameOverOverlay] Rendering with:', { streak, bestStreak });
   
   return (
     <div 
@@ -502,7 +502,7 @@ const GameOverOverlay = memo(({ streak, bestStreak, onPlayAgain, onMenu }) => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button
               onClick={() => {
-                console.log('[GameOverOverlay] Play Again clicked');
+                // console.log('[GameOverOverlay] Play Again clicked');
                 onPlayAgain();
               }}
               style={{
@@ -529,7 +529,7 @@ const GameOverOverlay = memo(({ streak, bestStreak, onPlayAgain, onMenu }) => {
             
             <button
               onClick={() => {
-                console.log('[GameOverOverlay] Menu clicked');
+                // console.log('[GameOverOverlay] Menu clicked');
                 onMenu();
               }}
               style={{
@@ -1282,21 +1282,21 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // EFFECT: Log gameState changes (debug)
   // -------------------------------------------------------------------------
   useEffect(() => {
-    console.log('[SpeedPuzzle] gameState changed to:', gameState);
+    // console.log('[SpeedPuzzle] gameState changed to:', gameState);
   }, [gameState]);
 
   // -------------------------------------------------------------------------
   // GAME OVER HANDLER
   // -------------------------------------------------------------------------
   const triggerGameOver = useCallback(() => {
-    console.log('[SpeedPuzzle] triggerGameOver called, current handled status:', gameOverHandledRef.current);
+    // console.log('[SpeedPuzzle] triggerGameOver called, current handled status:', gameOverHandledRef.current);
     
     if (gameOverHandledRef.current) {
-      console.log('[SpeedPuzzle] Game over already handled, skipping');
+      // console.log('[SpeedPuzzle] Game over already handled, skipping');
       return;
     }
     
-    console.log('[SpeedPuzzle] Setting game over state');
+    // console.log('[SpeedPuzzle] Setting game over state');
     gameOverHandledRef.current = true;
     clearTimer();
     
@@ -1309,7 +1309,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     // Set state - use functional update to ensure we get latest state
     setGameState((prevState) => {
-      console.log('[SpeedPuzzle] Changing state from', prevState, 'to', GAME_STATES.GAMEOVER);
+      // console.log('[SpeedPuzzle] Changing state from', prevState, 'to', GAME_STATES.GAMEOVER);
       return GAME_STATES.GAMEOVER;
     });
   }, [clearTimer]);
@@ -1394,16 +1394,16 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   useEffect(() => {
     // Log every time timeLeft changes near zero for debugging
     if (timeLeft <= 1) {
-      console.log('[SpeedPuzzle] Timer low:', { 
-        timeLeft, 
-        gameState, 
-        gameOverHandled: gameOverHandledRef.current,
-        shouldTrigger: gameState === GAME_STATES.PLAYING && timeLeft <= 0 && !gameOverHandledRef.current
-      });
+      // console.log('[SpeedPuzzle] Timer low:', { 
+        // timeLeft, 
+        // gameState, 
+        // gameOverHandled: gameOverHandledRef.current,
+        // shouldTrigger: gameState === GAME_STATES.PLAYING && timeLeft <= 0 && !gameOverHandledRef.current
+      // });
     }
     
     if (gameState === GAME_STATES.PLAYING && timeLeft <= 0 && !gameOverHandledRef.current) {
-      console.log('[SpeedPuzzle] *** TIMER EXPIRED - TRIGGERING GAME OVER ***');
+      // console.log('[SpeedPuzzle] *** TIMER EXPIRED - TRIGGERING GAME OVER ***');
       triggerGameOver();
     }
   }, [timeLeft, gameState, triggerGameOver]);
@@ -1412,9 +1412,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // EFFECT: Debug - Log gameState changes
   // -------------------------------------------------------------------------
   useEffect(() => {
-    console.log('[SpeedPuzzle] >>> gameState is now:', gameState);
+    // console.log('[SpeedPuzzle] >>> gameState is now:', gameState);
     if (gameState === GAME_STATES.GAMEOVER) {
-      console.log('[SpeedPuzzle] >>> GAMEOVER STATE ACTIVE - overlay should be visible');
+      // console.log('[SpeedPuzzle] >>> GAMEOVER STATE ACTIVE - overlay should be visible');
     }
   }, [gameState]);
 
@@ -1480,9 +1480,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   }, [selectedPiece, gameState, rotation, flipped, board]);
 
   const movePendingPiece = useCallback((direction) => {
-    console.log('[SpeedPuzzle] movePendingPiece called:', direction, { pendingMove, gameState });
+    // console.log('[SpeedPuzzle] movePendingPiece called:', direction, { pendingMove, gameState });
     if (!pendingMove || gameState !== GAME_STATES.PLAYING) {
-      console.log('[SpeedPuzzle] movePendingPiece blocked:', { hasPending: !!pendingMove, gameState });
+      // console.log('[SpeedPuzzle] movePendingPiece blocked:', { hasPending: !!pendingMove, gameState });
       return;
     }
     
@@ -1490,7 +1490,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     const newRow = pendingMove.row + dr;
     const newCol = pendingMove.col + dc;
     
-    console.log('[SpeedPuzzle] Moving piece:', { from: { row: pendingMove.row, col: pendingMove.col }, to: { row: newRow, col: newCol } });
+    // console.log('[SpeedPuzzle] Moving piece:', { from: { row: pendingMove.row, col: pendingMove.col }, to: { row: newRow, col: newCol } });
     
     // Always allow movement to show ghost outlines (even for invalid positions)
     // The GameBoard will show red ghost cells for out-of-bounds positions
@@ -1592,13 +1592,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               if (profile?.id) {
                 streakService.updateStreak(profile.id).then(({ data }) => {
                   if (data?.new_achievements?.length > 0) {
-                    console.log('[SpeedPuzzle] New streak achievements:', data.new_achievements);
+                    // console.log('[SpeedPuzzle] New streak achievements:', data.new_achievements);
                   }
                 });
               }
             }
           } catch (err) {
-            console.warn('[SpeedPuzzle] Failed to update streak:', err);
+            // console.warn('[SpeedPuzzle] Failed to update streak:', err);
           }
         }
         
@@ -1616,7 +1616,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         setGameState(GAME_STATES.SUCCESS);
       } else {
         // Wrong move - AI can still play!
-        console.log('[SpeedPuzzle] Wrong move - AI can still play, showing feedback');
+        // console.log('[SpeedPuzzle] Wrong move - AI can still play, showing feedback');
         soundManager.playInvalid();
         
         // Show wrong move feedback briefly

@@ -426,14 +426,14 @@ const generateEasyPuzzleWithTraps = (onProgress = null) => {
       
       // If we found a great puzzle, use it
       if (puzzleScore >= 80) {
-        console.log(`EASY puzzle generated (score ${puzzleScore}): ${winningPieces.length} winning pieces, ${trapPieces.length} trap pieces`);
+        // console.log(`EASY puzzle generated (score ${puzzleScore}): ${winningPieces.length} winning pieces, ${trapPieces.length} trap pieces`);
         return bestPuzzle;
       }
     }
   }
   
   if (bestPuzzle) {
-    console.log(`EASY puzzle generated (score ${bestScore}): best found after 50 attempts`);
+    // console.log(`EASY puzzle generated (score ${bestScore}): best found after 50 attempts`);
     return bestPuzzle;
   }
   
@@ -495,7 +495,7 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
     
     // Need at least N moves to back out
     if (game.totalMoves < movesToBackOut) {
-      console.log(`Game ${attempt + 1}: Only ${game.totalMoves} moves, need ${movesToBackOut}`);
+      // console.log(`Game ${attempt + 1}: Only ${game.totalMoves} moves, need ${movesToBackOut}`);
       continue;
     }
     
@@ -504,7 +504,7 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
     const puzzleState = game.history[puzzleStateIndex];
     
     if (!puzzleState) {
-      console.log(`Game ${attempt + 1}: No state at index ${puzzleStateIndex}`);
+      // console.log(`Game ${attempt + 1}: No state at index ${puzzleStateIndex}`);
       continue;
     }
     
@@ -557,14 +557,14 @@ export const generatePuzzle = (difficulty = PUZZLE_DIFFICULTY.EASY, onProgress =
       
       // If we found a great puzzle (unique solution + good spread), use it
       if (uniquenessScore >= 80 && spreadScore >= 15) {
-        console.log(`Puzzle generated (${difficulty}): ${winningPaths} winning paths, spread ${spreadScore}`);
+        // console.log(`Puzzle generated (${difficulty}): ${winningPaths} winning paths, spread ${spreadScore}`);
         return bestPuzzle;
       }
     }
   }
   
   if (bestPuzzle) {
-    console.log(`Puzzle generated (${difficulty}): best found with score ${bestUniquenessScore}`);
+    // console.log(`Puzzle generated (${difficulty}): best found with score ${bestUniquenessScore}`);
     return bestPuzzle;
   }
   
@@ -631,7 +631,7 @@ export const generateSpeedPuzzle = () => {
       
       // Ideal puzzle: ALL moves are winning (100% win ratio)
       if (winRatio >= 1.0) {
-        console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves (PERFECT - 100%)`);
+        // console.log(`Speed puzzle generated: ${winningMoves.length} winning moves out of ${allMoves.length} total moves (PERFECT - 100%)`);
         return {
           id: `speed-puzzle-${Date.now()}`,
           name: 'Speed Puzzle',
@@ -665,13 +665,13 @@ export const generateSpeedPuzzle = () => {
   
   // Return the best puzzle found (prefer 50%+ win ratio)
   if (bestPuzzle && bestWinRatio >= 0.5) {
-    console.log(`Speed puzzle generated: ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
+    // console.log(`Speed puzzle generated: ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
     return bestPuzzle;
   }
   
   // If no good puzzle found, return the best we have (even if low win ratio)
   if (bestPuzzle) {
-    console.log(`Speed puzzle generated (low quality): ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
+    // console.log(`Speed puzzle generated (low quality): ${bestPuzzle._winningMoveCount} winning moves out of ${bestPuzzle._totalMoves} total moves (${Math.round(bestWinRatio * 100)}%)`);
     return bestPuzzle;
   }
   
@@ -855,7 +855,7 @@ const generateSeededPuzzle = (seed, difficulty = PUZZLE_DIFFICULTY.HARD) => {
     
     // Just need at least 1 valid move
     if (allMoves.length > 0) {
-      console.log(`Seeded puzzle generated from seed "${seed}": ${allMoves.length} possible moves`);
+      // console.log(`Seeded puzzle generated from seed "${seed}": ${allMoves.length} possible moves`);
       
       return {
         id: `seeded-puzzle-${seed}`,

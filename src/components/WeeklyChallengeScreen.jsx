@@ -40,7 +40,7 @@ const saveTimerState = (challengeId, elapsedMs, attemptCount) => {
     };
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
-    console.warn('[WeeklyChallenge] Failed to save timer state:', e);
+    // console.warn('[WeeklyChallenge] Failed to save timer state:', e);
   }
 };
 
@@ -65,7 +65,7 @@ const loadTimerState = (challengeId) => {
     
     return data;
   } catch (e) {
-    console.warn('[WeeklyChallenge] Failed to load timer state:', e);
+    // console.warn('[WeeklyChallenge] Failed to load timer state:', e);
     return null;
   }
 };
@@ -76,7 +76,7 @@ const clearTimerState = (challengeId) => {
     const key = getTimerStorageKey(challengeId);
     localStorage.removeItem(key);
   } catch (e) {
-    console.warn('[WeeklyChallenge] Failed to clear timer state:', e);
+    // console.warn('[WeeklyChallenge] Failed to clear timer state:', e);
   }
 };
 
@@ -936,7 +936,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           setAccumulatedMs(savedTimer.elapsedMs);
           setElapsedMs(savedTimer.elapsedMs);
           setAttemptCount(savedTimer.attemptCount || 0);
-          console.log('[WeeklyChallenge] Restored timer:', savedTimer.elapsedMs, 'ms');
+          // console.log('[WeeklyChallenge] Restored timer:', savedTimer.elapsedMs, 'ms');
         }
       } catch (err) {
         console.error('Error loading weekly puzzle:', err);
@@ -1015,13 +1015,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             if (profile?.id) {
               streakService.updateStreak(profile.id).then(({ data }) => {
                 if (data?.new_achievements?.length > 0) {
-                  console.log('[WeeklyChallenge] New streak achievements:', data.new_achievements);
+                  // console.log('[WeeklyChallenge] New streak achievements:', data.new_achievements);
                 }
               });
             }
           }
         } catch (err) {
-          console.warn('[WeeklyChallenge] Failed to update streak:', err);
+          // console.warn('[WeeklyChallenge] Failed to update streak:', err);
         }
       } else if (winner === 2) {
         const pausedTime = pauseTimer();
