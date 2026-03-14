@@ -16,12 +16,16 @@
 // ADDED: Rematch request system with opponent notification
 // UPDATED: Chat notifications, rematch navigation, placement animations
 // v7.28: Added turnPulse (board edge ripple on turn change) and confirmFlashCells (cell flash on confirm tap)
+// v7.29: Replaced window.confirm forfeit/quit dialogs with in-app cyberpunk toast confirmation
+// v7.30: Fix modal reappear after Play Again (set dismissedGameOverRef before hiding modal)
+//        Fix review mode Play Again: use sendInvite + immediate leave instead of rematch flow
 // v7.12 FIX: Now sends push notification when it becomes your turn
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Flag, MessageCircle, Home } from 'lucide-react';
+import { Flag, MessageCircle, Home, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { rematchService } from '../services/rematchService';
+import { inviteService } from '../services/inviteService';
 import { notificationService } from '../services/notificationService';
 import { supabase } from '../utils/supabase';
 import NeonTitle from './NeonTitle';
@@ -186,6 +190,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const [rematchDeclined, setRematchDeclined] = useState(false);
   const [newGameFromRematch, setNewGameFromRematch] = useState(null);
   
+  // Quit/forfeit confirmation toast
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [quitIsForfeit, setQuitIsForfeit] = useState(false);
+
   const [chatOpen, setChatOpen] = useState(false);
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [chatToast, setChatToast] = useState(null); // { senderName, message, timestamp }
@@ -1497,28 +1505,26 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }, [pendingMove, canConfirm, rotation, flipped, board, boardPieces, usedPieces, 
       myPlayerNumber, gameId, user, updateGameState, triggerAnimation, currentGameId]);
 
-  const handleQuitOrForfeit = useCallback(async () => {
+  const handleQuitOrForfeit = useCallback(() => {
     if (game?.status !== 'active') return;
-    
-    if (hasMovesPlayed) {
-      const confirmed = window.confirm('Forfeit this game? This will count as a loss.');
-      if (!confirmed) return;
-      
-      soundManager.playButtonClick();
+    setQuitIsForfeit(hasMovesPlayed);
+    setShowQuitConfirm(true);
+    soundManager.playClickSound();
+  }, [game?.status, hasMovesPlayed]);
+
+  const confirmQuitOrForfeit = useCallback(async () => {
+    setShowQuitConfirm(false);
+    soundManager.playButtonClick();
+    if (quitIsForfeit) {
       await gameSyncService.forfeitGame(currentGameId, user.id);
-      
       setGameResult({ isWin: false, winnerId: opponent?.id, reason: 'forfeit' });
       setShowGameOver(true);
       soundManager.playSound('lose');
     } else {
-      const confirmed = window.confirm('Quit this game? No penalty since no moves have been made.');
-      if (!confirmed) return;
-      
-      soundManager.playButtonClick();
       await gameSyncService.abandonGame(currentGameId);
       onLeave();
     }
-  }, [game?.status, hasMovesPlayed, gameId, user?.id, opponent?.id, onLeave]);
+  }, [quitIsForfeit, currentGameId, user?.id, opponent?.id, onLeave]);
 
   const handleLeave = () => {
     soundManager.playButtonClick();
@@ -1906,9 +1912,31 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           }}
           onRematch={async () => {
             try {
-              // console.log('[OnlineGameScreen] Initiating rematch request...');
-              
-              // Create rematch request (this will check if opponent already requested)
+              // v7.30 FIX: Review mode (viewing a lost game from active games menu)
+              // Opponent isn't watching — just send a standard invite and go back to online menu.
+              if (isReviewModeRef.current) {
+                if (!opponent?.id) {
+                  if (typeof onLeave === 'function') onLeave();
+                  return;
+                }
+                soundManager.playButtonClick();
+                // Seal the modal before hiding so updateGameState can't re-open it
+                dismissedGameOverRef.current = true;
+                setShowGameOver(false);
+                const { error: inviteError } = await inviteService.sendInvite(user.id, opponent.id);
+                if (inviteError && inviteError.message !== 'Invite already sent') {
+                  console.error('[OnlineGameScreen] sendInvite error:', inviteError);
+                }
+                soundManager.playClickSound('confirm');
+                if (typeof onLeave === 'function') onLeave();
+                return;
+              }
+
+              // Normal post-game flow: use rematch request system
+              // v7.30 FIX: Seal the modal before proceeding so updateGameState can't
+              // re-show it when it sees game=completed + showGameOver=false.
+              dismissedGameOverRef.current = true;
+
               const { data, error } = await rematchService.createRematchRequest(
                 gameId,
                 user.id,
@@ -1923,20 +1951,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               
               // Check if rematch was auto-accepted (opponent already requested)
               if (data?.game) {
-                // console.log('[OnlineGameScreen] Rematch auto-accepted, new game:', data.game.id);
                 setRematchAccepted(true);
                 setNewGameFromRematch(data.game);
-                
-                // Determine who goes first
                 const firstPlayerId = data.firstPlayerId;
                 const firstPlayerName = firstPlayerId === user.id
                   ? 'You go'
                   : `${opponent?.display_name || opponent?.username || 'Opponent'} goes`;
-                
                 soundManager.playSound('notification');
                 setRematchMessage(`Rematch starting! ${firstPlayerName} first.`);
-                
-                // v7.25: Navigate to new game instead of going back to menu
                 setTimeout(() => {
                   setShowGameOver(false);
                   setShowRematchModal(false);
@@ -1946,8 +1968,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   setRematchDeclined(false);
                   setRematchAccepted(false);
                   setRematchMessage(null);
-                  
-                  // Reset board state for new game
                   setBoard(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
                   setBoardPieces({});
                   setUsedPieces([]);
@@ -1959,47 +1979,31 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   setGameResult(null);
                   setGame(null);
                   setLoading(true);
-                  
-                  // Set the new game ID - triggers the load effect
                   setCurrentGameId(data.game.id);
                 }, 2000);
                 return;
               }
               
               // No auto-accept - opponent hasn't requested yet
-              // v7.27: Kill polling immediately + show live countdown banner
-              // v7.28: Poll for acceptance on every tick so we catch it within the window
               soundManager.playSound('notification');
               setShowGameOver(false);
               sessionStorage.setItem('deadblock_rematch_pending', '1');
-
-              // Capture for closure — state vars aren't reliable inside setInterval
               const pendingGameId = gameId;
               const pendingUserId = user.id;
-
-              // Start 5-second countdown
               const COUNTDOWN = 5;
               setRematchCountdown(COUNTDOWN);
               let remaining = COUNTDOWN;
-
-              // Clear any prior interval (shouldn't exist, but be safe)
               if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
-
               countdownIntervalRef.current = setInterval(async () => {
                 remaining -= 1;
                 setRematchCountdown(remaining > 0 ? remaining : null);
-
-                // v7.28: Check every tick whether opponent accepted during the window
                 try {
                   const { data: req } = await rematchService.getRematchRequestByGame(pendingGameId, pendingUserId);
                   if (req?.status === 'accepted' && req?.new_game_id) {
-                    // Opponent accepted — abort countdown, navigate to new game
                     clearInterval(countdownIntervalRef.current);
                     countdownIntervalRef.current = null;
                     setRematchCountdown(null);
                     soundManager.playSound('notification');
-
-                    // Full reset identical to the auto-accept path above
                     setShowGameOver(false);
                     setShowRematchModal(false);
                     setRematchWaiting(false);
@@ -2023,9 +2027,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                     return;
                   }
                 } catch (e) {
-                  // Ignore poll errors during countdown — non-critical
+                  // Ignore poll errors during countdown
                 }
-
                 if (remaining <= 0) {
                   clearInterval(countdownIntervalRef.current);
                   countdownIntervalRef.current = null;
@@ -2254,6 +2257,104 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           .animate-confetti-online-5 { animation: confetti-online-5 2.0s ease-out infinite; animation-delay: 0.2s; }
         `}</style>
       )}
+
+      {/* Forfeit / Quit confirmation toast */}
+      {showQuitConfirm && (
+        <div className="fixed inset-0 z-[9998]" onClick={() => setShowQuitConfirm(false)}>
+          <div
+            className={`
+              fixed bottom-5 left-4 right-4 max-w-sm mx-auto z-[9999]
+              transition-all duration-300 opacity-100 translate-y-0
+            `}
+            onClick={e => e.stopPropagation()}
+            style={{ animation: 'quitToastSlideUp 0.25s ease-out' }}
+          >
+            <div
+              className="relative rounded-xl border-2 overflow-hidden p-4"
+              style={{
+                background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
+                borderColor: quitIsForfeit ? 'rgba(239,68,68,0.6)' : 'rgba(251,191,36,0.6)',
+                boxShadow: quitIsForfeit
+                  ? '0 0 30px rgba(239,68,68,0.35), 0 0 60px rgba(239,68,68,0.15), inset 0 1px 0 rgba(255,255,255,0.08)'
+                  : '0 0 30px rgba(251,191,36,0.35), 0 0 60px rgba(251,191,36,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+              }}
+            >
+              {/* Animated top border glow */}
+              <div
+                className="absolute top-0 left-0 right-0 h-[2px]"
+                style={{
+                  background: quitIsForfeit
+                    ? 'linear-gradient(90deg, transparent, rgba(239,68,68,0.9), rgba(244,63,94,0.7), transparent)'
+                    : 'linear-gradient(90deg, transparent, rgba(251,191,36,0.9), rgba(249,115,22,0.7), transparent)',
+                }}
+              />
+
+              {/* Corner accents */}
+              <div className={`absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 ${quitIsForfeit ? 'border-red-400/80' : 'border-amber-400/80'}`} />
+              <div className={`absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 ${quitIsForfeit ? 'border-red-400/80' : 'border-amber-400/80'}`} />
+              <div className={`absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 ${quitIsForfeit ? 'border-red-400/80' : 'border-amber-400/80'}`} />
+              <div className={`absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 ${quitIsForfeit ? 'border-red-400/80' : 'border-amber-400/80'}`} />
+
+              {/* Icon + title */}
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: quitIsForfeit ? 'rgba(239,68,68,0.15)' : 'rgba(251,191,36,0.15)',
+                    boxShadow: quitIsForfeit ? '0 0 15px rgba(239,68,68,0.3)' : '0 0 15px rgba(251,191,36,0.3)',
+                  }}
+                >
+                  {quitIsForfeit
+                    ? <Flag size={20} className="text-red-400" />
+                    : <XCircle size={20} className="text-amber-400" />
+                  }
+                </div>
+                <div>
+                  <h3
+                    className={`font-black text-sm uppercase tracking-wider ${quitIsForfeit ? 'text-red-300' : 'text-amber-300'}`}
+                    style={{ fontFamily: "'Orbitron', sans-serif" }}
+                  >
+                    {quitIsForfeit ? 'Forfeit Game?' : 'Quit Game?'}
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-0.5">
+                    {quitIsForfeit
+                      ? 'This will count as a loss on your record.'
+                      : 'No moves made — no penalty to your stats.'
+                    }
+                  </p>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowQuitConfirm(false)}
+                  className="flex-1 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-sm font-bold transition-all border border-slate-600/50"
+                >
+                  Keep Playing
+                </button>
+                <button
+                  onClick={confirmQuitOrForfeit}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition-all border ${
+                    quitIsForfeit
+                      ? 'bg-red-600/80 hover:bg-red-500/80 text-white border-red-400/50'
+                      : 'bg-amber-600/80 hover:bg-amber-500/80 text-white border-amber-400/50'
+                  }`}
+                >
+                  {quitIsForfeit ? 'Forfeit' : 'Quit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes quitToastSlideUp {
+          from { opacity: 0; transform: translateY(16px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 };

@@ -175,26 +175,38 @@ class NotificationService {
         ...options
       };
 
-      // Add action buttons for certain notification types
+      // Single action button only — v7.17 decision: decline = user dismisses notification
       if (notificationType === 'game_invite' && options.data?.inviteId) {
         enhancedOptions.actions = [
-          { action: 'accept', title: '✓ Accept', icon: '/pwa-192x192.png' },
-          { action: 'decline', title: '✗ Decline', icon: '/pwa-192x192.png' }
+          { action: 'accept', title: '⚔️ Accept Game' }
         ];
         enhancedOptions.requireInteraction = true;
       } else if (notificationType === 'rematch_request' && options.data?.rematchId) {
         enhancedOptions.actions = [
-          { action: 'accept', title: '⚔️ Rematch!', icon: '/pwa-192x192.png' },
-          { action: 'decline', title: 'Not now', icon: '/pwa-192x192.png' }
+          { action: 'accept', title: '⚔️ Accept Rematch' }
         ];
         enhancedOptions.requireInteraction = true;
       }
 
-      // console.log('[NotificationService] Creating notification with options:', enhancedOptions);
-      const notification = new Notification(title, enhancedOptions);
+      // Use ServiceWorkerRegistration.showNotification() when a SW is active —
+      // it's the only path that supports action buttons.
+      // Fall back to new Notification() for desktop/non-SW environments,
+      // but strip 'actions' since the basic constructor doesn't support them.
+      const swReg = navigator.serviceWorker?.controller
+        ? await navigator.serviceWorker.getRegistration('/')
+        : null;
+
+      if (swReg) {
+        await swReg.showNotification(title, enhancedOptions);
+        return null; // SW notifications handle their own click events
+      }
+
+      // Fallback: new Notification() — strip unsupported fields
+      const { actions: _actions, vibrate: _vibrate, badge: _badge, ...safeOptions } = enhancedOptions;
+      const notification = new Notification(title, safeOptions);
 
       // Auto-close after 10 seconds (unless requireInteraction is true)
-      if (!enhancedOptions.requireInteraction) {
+      if (!safeOptions.requireInteraction) {
         setTimeout(() => notification.close(), 10000);
       }
 
