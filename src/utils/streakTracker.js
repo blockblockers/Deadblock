@@ -54,18 +54,18 @@ export const streakTracker = {
     
     if (data.lastPlayedDate === today) {
       // Already played today, no change needed
-      console.log('[StreakTracker] Already played today, streak:', data.streak);
+      // console.log('[StreakTracker] Already played today, streak:', data.streak);
       return data.streak;
     }
     
     if (data.lastPlayedDate === this.getYesterdayString()) {
       // Played yesterday, increment streak
       data.streak += 1;
-      console.log('[StreakTracker] Streak continued! Now at:', data.streak);
+      // console.log('[StreakTracker] Streak continued! Now at:', data.streak);
     } else {
       // Streak broken or new streak starting
       data.streak = 1;
-      console.log('[StreakTracker] New streak started');
+      // console.log('[StreakTracker] New streak started');
     }
     
     data.lastPlayedDate = today;
@@ -84,23 +84,23 @@ export const streakTracker = {
     const today = this.getTodayString();
     const yesterday = this.getYesterdayString();
     
-    console.log('[StreakTracker] Checking streak:', data);
+    // console.log('[StreakTracker] Checking streak:', data);
     
     // Only remind if streak is 5+ days
     if (data.streak < 5) {
-      console.log('[StreakTracker] Streak < 5, no reminder needed');
+      // console.log('[StreakTracker] Streak < 5, no reminder needed');
       return false;
     }
     
     // Don't remind if already played today
     if (data.lastPlayedDate === today) {
-      console.log('[StreakTracker] Already played today, no reminder needed');
+      // console.log('[StreakTracker] Already played today, no reminder needed');
       return false;
     }
     
     // If last played wasn't yesterday, streak is already broken
     if (data.lastPlayedDate !== yesterday) {
-      console.log('[StreakTracker] Streak already broken (missed yesterday)');
+      // console.log('[StreakTracker] Streak already broken (missed yesterday)');
       // Reset streak since they missed yesterday
       this.saveStreakData({ streak: 0, lastPlayedDate: null });
       return false;
@@ -109,7 +109,7 @@ export const streakTracker = {
     // Check if we already sent reminder today
     const reminderSentDate = localStorage.getItem(REMINDER_SENT_KEY);
     if (reminderSentDate === today) {
-      console.log('[StreakTracker] Reminder already sent today');
+      // console.log('[StreakTracker] Reminder already sent today');
       return false;
     }
     
@@ -117,7 +117,7 @@ export const streakTracker = {
     try {
       const prefs = JSON.parse(localStorage.getItem('deadblock_notification_prefs') || '{}');
       if (prefs.streakReminder === false) {
-        console.log('[StreakTracker] Streak reminders disabled in preferences');
+        // console.log('[StreakTracker] Streak reminders disabled in preferences');
         return false;
       }
     } catch (e) {
@@ -125,7 +125,7 @@ export const streakTracker = {
     }
     
     // Send the reminder!
-    console.log('[StreakTracker] Sending streak reminder for', data.streak, 'day streak');
+    // console.log('[StreakTracker] Sending streak reminder for', data.streak, 'day streak');
     
     if (notificationService.isEnabled()) {
       notificationService.notifyStreakReminder(data.streak);

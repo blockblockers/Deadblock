@@ -64,7 +64,7 @@ class SoundManager {
       this.musicGainNode.connect(this.audioContext.destination);
       
       this.initialized = true;
-      console.log('[SoundManager] Audio context created');
+      // console.log('[SoundManager] Audio context created');
       
       // Load music buffer
       this.loadMusicBuffer();
@@ -86,7 +86,7 @@ class SoundManager {
     
     for (const path of musicPaths) {
       try {
-        console.log(`[SoundManager] Trying to load music from: ${path}`);
+        // console.log(`[SoundManager] Trying to load music from: ${path}`);
         const response = await fetch(path);
         
         if (!response.ok) continue;
@@ -95,7 +95,7 @@ class SoundManager {
         this.musicBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
         this.musicLoaded = true;
         
-        console.log(`[SoundManager] Music loaded from: ${path} (duration: ${this.musicBuffer.duration}s)`);
+        // console.log(`[SoundManager] Music loaded from: ${path} (duration: ${this.musicBuffer.duration}s)`);
         
         if (this.musicEnabled && !this.isMusicPlaying) {
           this.startMusic();
@@ -103,11 +103,11 @@ class SoundManager {
         
         return;
       } catch (e) {
-        console.log(`[SoundManager] Failed to load from ${path}`);
+        // console.log(`[SoundManager] Failed to load from ${path}`);
       }
     }
     
-    console.log('[SoundManager] No background music file found');
+    // console.log('[SoundManager] No background music file found');
   }
 
   toggleSound() {
@@ -161,7 +161,7 @@ class SoundManager {
       this.musicSource.start(0);
       
       this.isMusicPlaying = true;
-      console.log('[SoundManager] Music started (seamless Web Audio loop)');
+      // console.log('[SoundManager] Music started (seamless Web Audio loop)');
     } catch (e) {
       console.warn('[SoundManager] Failed to start music:', e);
       

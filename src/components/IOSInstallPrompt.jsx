@@ -68,7 +68,7 @@ const IOSInstallPrompt = () => {
         wasDismissed = daysSince < 7; // Only block for 7 days
       }
     } catch (e) {
-      console.log('[IOSInstallPrompt] localStorage error:', e);
+      // console.log('[IOSInstallPrompt] localStorage error:', e);
     }
     
     // Mark as launched if in standalone mode
@@ -99,7 +99,7 @@ const IOSInstallPrompt = () => {
     };
     
     setDebugInfo(debug);
-    console.log('[IOSInstallPrompt] Detection:', debug);
+    // console.log('[IOSInstallPrompt] Detection:', debug);
     
     // =========================================================================
     // DECIDE WHETHER TO SHOW
@@ -112,17 +112,17 @@ const IOSInstallPrompt = () => {
     // 3. Mac Safari users who haven't installed
     const shouldShow = (isIOS || isMacSafari) && !isAlreadyInstalled && !wasDismissed;
     
-    console.log('[IOSInstallPrompt] shouldShow:', shouldShow, {
-      isIOS,
-      isMacSafari,
-      isAlreadyInstalled,
-      wasDismissed
-    });
+    // console.log('[IOSInstallPrompt] shouldShow:', shouldShow, {
+      // isIOS,
+      // isMacSafari,
+      // isAlreadyInstalled,
+      // wasDismissed
+    // });
 
     if (shouldShow) {
       // Delay showing for better UX
       const timer = setTimeout(() => {
-        console.log('[IOSInstallPrompt] Showing prompt now');
+        // console.log('[IOSInstallPrompt] Showing prompt now');
         setShow(true);
       }, 3000);
       return () => clearTimeout(timer);
