@@ -124,7 +124,7 @@ class NotificationService {
     return badgeMap[type] || '/badges/badge-default.png';
   }
 
-  sendNotification(title, options = {}) {
+  async sendNotification(title, options = {}) {
     // console.log('[NotificationService] sendNotification called:', title, options);
     
     if (!this.isEnabled()) {
