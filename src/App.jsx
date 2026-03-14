@@ -1606,6 +1606,8 @@ function GlobalNotifications() {
       try {
         const { inviteService } = await import('./services/inviteService');
         await inviteService.declineInvite(notification.id, profile.id);
+        // Notify any mounted OnlineMenu instance to remove this invite immediately
+        window.dispatchEvent(new CustomEvent('deadblock:invite-declined', { detail: { inviteId: notification.id } }));
       } catch (err) {
         console.error('[GlobalNotifications] Decline invite error:', err);
       }

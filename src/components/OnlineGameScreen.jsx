@@ -214,6 +214,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const isReviewModeRef = useRef(false);  // v7.26: True when viewing an already-completed game
   const prevBoardPiecesRef = useRef({});  // Track previous board pieces for opponent animation
   const prevGameIdRef = useRef(null);  // v7.23: Track previous game ID to prevent spurious resets
+  const countdownIntervalRef = useRef(null);  // v7.28: Ref so acceptance poll can clear it
   // Refs for synchronous access in touch handlers
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
@@ -702,6 +703,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     return () => {
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
+      // v7.28: Clear countdown interval if component unmounts mid-countdown
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
     };
   }, []);
 
@@ -1962,20 +1968,67 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               
               // No auto-accept - opponent hasn't requested yet
               // v7.27: Kill polling immediately + show live countdown banner
+              // v7.28: Poll for acceptance on every tick so we catch it within the window
               soundManager.playSound('notification');
               setShowGameOver(false);
               sessionStorage.setItem('deadblock_rematch_pending', '1');
+
+              // Capture for closure — state vars aren't reliable inside setInterval
+              const pendingGameId = gameId;
+              const pendingUserId = user.id;
 
               // Start 5-second countdown
               const COUNTDOWN = 5;
               setRematchCountdown(COUNTDOWN);
               let remaining = COUNTDOWN;
-              const countInterval = setInterval(() => {
+
+              // Clear any prior interval (shouldn't exist, but be safe)
+              if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+
+              countdownIntervalRef.current = setInterval(async () => {
                 remaining -= 1;
-                setRematchCountdown(remaining);
+                setRematchCountdown(remaining > 0 ? remaining : null);
+
+                // v7.28: Check every tick whether opponent accepted during the window
+                try {
+                  const { data: req } = await rematchService.getRematchRequestByGame(pendingGameId, pendingUserId);
+                  if (req?.status === 'accepted' && req?.new_game_id) {
+                    // Opponent accepted — abort countdown, navigate to new game
+                    clearInterval(countdownIntervalRef.current);
+                    countdownIntervalRef.current = null;
+                    setRematchCountdown(null);
+                    soundManager.playSound('notification');
+
+                    // Full reset identical to the auto-accept path above
+                    setShowGameOver(false);
+                    setShowRematchModal(false);
+                    setRematchWaiting(false);
+                    setRematchRequest(null);
+                    setIsRematchRequester(false);
+                    setRematchDeclined(false);
+                    setRematchAccepted(false);
+                    setRematchMessage(null);
+                    setBoard(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
+                    setBoardPieces({});
+                    setUsedPieces([]);
+                    setSelectedPiece(null);
+                    setPendingMove(null);
+                    setRotation(0);
+                    setFlipped(false);
+                    setWinningMoveCells(null);
+                    setGameResult(null);
+                    setGame(null);
+                    setLoading(true);
+                    setCurrentGameId(req.new_game_id);
+                    return;
+                  }
+                } catch (e) {
+                  // Ignore poll errors during countdown — non-critical
+                }
+
                 if (remaining <= 0) {
-                  clearInterval(countInterval);
-                  setRematchCountdown(null);
+                  clearInterval(countdownIntervalRef.current);
+                  countdownIntervalRef.current = null;
                   if (typeof onLeave === 'function') onLeave();
                 }
               }, 1000);

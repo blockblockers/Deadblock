@@ -37,7 +37,6 @@ import { SpectatableGamesList } from './SpectatorView';
 // v7.30: GameInviteNotification removed - now handled globally by App.jsx GlobalNotifications
 import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
-import { CardSkeleton, ListSkeleton } from './LoadingScreen'; // v7.26: skeleton loading
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Online theme - amber/orange to match the menu button
@@ -523,6 +522,20 @@ const OnlineMenu = ({
       window.removeEventListener('focus', handleFocus);
     };
   }, [sessionReady, profile?.id]);
+
+  // Listen for toast-decline events dispatched by GlobalNotifications in App.jsx
+  // Immediately removes the invite from local state so the list updates without
+  // waiting for a realtime subscription round-trip
+  useEffect(() => {
+    const handleInviteDeclined = (e) => {
+      const { inviteId } = e.detail || {};
+      if (inviteId) {
+        setReceivedInvites(prev => prev.filter(i => i.id !== inviteId));
+      }
+    };
+    window.addEventListener('deadblock:invite-declined', handleInviteDeclined);
+    return () => window.removeEventListener('deadblock:invite-declined', handleInviteDeclined);
+  }, []);
   
   // Subscribe to invite updates
   useEffect(() => {
@@ -1437,15 +1450,10 @@ const OnlineMenu = ({
 
           {/* Main Card - Only show when profile is loaded */}
           {profile && (
-            <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}>
-
-            {/* v7.26: Skeleton placeholders while active games / invites are fetching */}
-            {loading && (
-              <div className="space-y-3 mb-4 animate-pulse-once">
-                <CardSkeleton />
-                <ListSkeleton count={3} />
-              </div>
-            )}
+            <div
+              className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}
+              style={{ opacity: loading ? 0 : 1, transition: 'opacity 0.15s ease-out' }}
+            >
 
             {/* User Stats Card - Compact Style matching main menu */}
             {(() => {

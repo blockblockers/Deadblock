@@ -1,4 +1,5 @@
 // pushNotificationService.js - Client-side push notification management
+// v7.16: Fixed test notification icon/badge to use monochrome-192x192.png (matches all other notifications)
 // v7.15: FIXED - Handles service worker conflicts, proper timeouts, state persistence
 // Place in src/services/pushNotificationService.js
 //
@@ -408,8 +409,8 @@ class PushNotificationService {
     try {
       await this.swRegistration.showNotification('Notifications Enabled!', {
         body: 'If you received this test, then notifications are configured!',
-        icon: '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
+        icon: '/icons/monochrome-192x192.png',
+        badge: '/icons/monochrome-192x192.png',
         vibrate: [200, 100, 200],
         tag: 'test-notification',
         requireInteraction: false
