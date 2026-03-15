@@ -262,72 +262,119 @@ const EntryAuthScreen = ({
   // ============================================
   // INVITE BANNER COMPONENT
   // ============================================
-  const InviteBanner = () => {
+  // v7.31: InviteBanner replaced with InviteModal — a prominent full-overlay so it's unmissable
+  const InviteBanner = () => null; // kept for any stray callers; modal below handles display
+
+  const InviteModal = () => {
     if (inviteLoading) {
       return (
-        <div className="mb-4 p-4 bg-gradient-to-r from-amber-900/40 to-orange-900/40 border border-amber-500/50 rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.2)]">
-          <div className="flex items-center gap-3">
-            <Loader size={20} className="text-amber-400 animate-spin" />
-            <span className="text-amber-300 text-sm font-medium">Loading game invite...</span>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="flex flex-col items-center gap-4">
+            <Loader size={32} className="text-amber-400 animate-spin" />
+            <span className="text-amber-300 font-medium">Loading game invite...</span>
           </div>
         </div>
       );
     }
-    
+
     if (inviteError) {
       return (
-        <div className="mb-4 p-4 bg-red-900/30 border border-red-500/50 rounded-xl">
-          <div className="flex items-center gap-3">
-            <XCircle size={20} className="text-red-400" />
-            <div className="flex-1">
-              <span className="text-red-300 text-sm">{inviteError}</span>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-sm rounded-2xl border-2 border-red-500/60 overflow-hidden p-6"
+            style={{ background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)', boxShadow: '0 0 40px rgba(239,68,68,0.3)' }}>
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-red-400 to-transparent" />
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="w-14 h-14 rounded-full bg-red-500/20 border-2 border-red-500/50 flex items-center justify-center">
+                <XCircle size={28} className="text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-red-300 font-bold text-lg mb-1">Invite Error</h3>
+                <p className="text-slate-400 text-sm">{inviteError}</p>
+              </div>
+              {onCancelInvite && (
+                <button onClick={handleCancelInvite}
+                  className="w-full py-3 rounded-xl font-bold text-white bg-slate-700 hover:bg-slate-600 transition-all border border-slate-600/50">
+                  Back to Menu
+                </button>
+              )}
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!inviteInfo) return null;
+
+    const challengerName = inviteInfo.from_username || inviteInfo.from_display_name || 'A player';
+
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+        <div className="relative w-full max-w-sm rounded-2xl border-2 overflow-hidden"
+          style={{
+            borderColor: 'rgba(251,191,36,0.7)',
+            background: 'linear-gradient(135deg, rgba(15,23,42,0.99) 0%, rgba(30,41,59,0.99) 100%)',
+            boxShadow: '0 0 50px rgba(251,191,36,0.35), 0 0 100px rgba(249,115,22,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+            animation: 'inviteModalIn 0.3s ease-out',
+            marginBottom: 'env(safe-area-inset-bottom, 0px)',
+          }}>
+          {/* Animated top border */}
+          <div className="absolute top-0 left-0 right-0 h-[2px]"
+            style={{ background: 'linear-gradient(90deg, transparent, rgba(251,191,36,0.9), rgba(249,115,22,0.8), transparent)' }} />
+          {/* Corner accents */}
+          <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-amber-400/80" />
+          <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-amber-400/80" />
+          <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-orange-400/80" />
+          <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-orange-400/80" />
+
+          <div className="p-6">
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <div className="relative">
+                <div className="absolute inset-0 bg-amber-500/30 blur-xl rounded-full" />
+                <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-[0_0_25px_rgba(251,191,36,0.5)]">
+                  <Swords size={28} className="text-white" />
+                </div>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className="text-center font-black text-xl text-white mb-1"
+              style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              GAME CHALLENGE
+            </h2>
+            <p className="text-center text-amber-200/70 text-xs mb-5 tracking-widest uppercase">
+              You've been invited to battle
+            </p>
+
+            {/* Challenger info */}
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-5 text-center">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-bold text-lg mx-auto mb-2">
+                {challengerName[0]?.toUpperCase() || '?'}
+              </div>
+              <p className="text-amber-200 font-bold text-base">{challengerName}</p>
+              <p className="text-slate-400 text-xs mt-1">challenges you to a game of Deadblock</p>
+            </div>
+
+            {/* CTA */}
+            <p className="text-center text-slate-300 text-sm mb-5">
+              Sign in or create a free account to accept the challenge and start playing immediately.
+            </p>
+
+            {/* Cancel option */}
             {onCancelInvite && (
-              <button
-                onClick={handleCancelInvite}
-                className="text-red-400 hover:text-red-300 text-xs underline"
-              >
-                Dismiss
+              <button onClick={handleCancelInvite}
+                className="w-full py-2 text-slate-500 hover:text-slate-300 text-xs transition-colors text-center">
+                Decline — go to main menu instead
               </button>
             )}
           </div>
         </div>
-      );
-    }
-    
-    if (!inviteInfo) return null;
-    
-    return (
-      <div className="mb-4 p-4 bg-gradient-to-r from-amber-900/40 to-orange-900/40 border border-amber-500/50 rounded-xl shadow-[0_0_25px_rgba(251,191,36,0.25)]">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 bg-amber-500/20 rounded-lg border border-amber-400/30">
-            <Swords size={24} className="text-amber-400" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-amber-300 font-bold text-sm mb-1 flex items-center gap-2">
-              🎮 Game Invitation
-            </h3>
-            <p className="text-slate-200 text-sm">
-              <span className="text-amber-200 font-bold">
-                {inviteInfo.from_username || inviteInfo.from_display_name || 'A player'}
-              </span>
-              {' '}has challenged you to a game!
-            </p>
-          </div>
-        </div>
-        <div className="mt-3 pt-3 border-t border-amber-500/20">
-          <p className="text-amber-200/80 text-xs">
-            ✨ Sign in or create an account to accept the challenge
-          </p>
-        </div>
-        {onCancelInvite && (
-          <button
-            onClick={handleCancelInvite}
-            className="mt-2 text-slate-400 hover:text-slate-300 text-xs underline"
-          >
-            Cancel and go to main menu
-          </button>
-        )}
+        <style>{`
+          @keyframes inviteModalIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+          }
+        `}</style>
       </div>
     );
   };
@@ -1155,6 +1202,9 @@ const EntryAuthScreen = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
+
+      {/* v7.31: Invite modal — full-screen overlay, renders on top of everything */}
+      <InviteModal />
     </div>
   );
 };

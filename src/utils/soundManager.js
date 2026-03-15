@@ -52,10 +52,16 @@ class SoundManager {
   
   async _doInit() {
     try {
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Create AudioContext only if not already created by the synchronous gesture handler
+      if (!this.audioContext) {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
       
+      // Resume if suspended — don't await; the synchronous call in initOnInteraction
+      // already triggered resume within the gesture context on Android Chrome browser.
+      // Awaiting here would break the synchronous chain needed for Android browser audio.
       if (this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
+        this.audioContext.resume();
       }
       
       // Create music gain node
@@ -64,7 +70,6 @@ class SoundManager {
       this.musicGainNode.connect(this.audioContext.destination);
       
       this.initialized = true;
-      // console.log('[SoundManager] Audio context created');
       
       // Load music buffer
       this.loadMusicBuffer();
@@ -308,8 +313,26 @@ class SoundManager {
 export const soundManager = new SoundManager();
 
 // Auto-initialize on first user interaction
+// v7.31: Android Chrome browser requires AudioContext creation AND resume() to happen
+// synchronously within the user gesture event handler. Any await before resume() breaks
+// the gesture context and leaves the AudioContext suspended indefinitely (no sound).
+// Fix: create the context and call resume() synchronously here, then let init() handle
+// the rest (gain node, music buffer) asynchronously. _doInit() skips creation/resume
+// if the context already exists.
 if (typeof document !== 'undefined') {
   const initOnInteraction = () => {
+    // Synchronous AudioContext bootstrap within gesture context
+    try {
+      if (!soundManager.audioContext) {
+        soundManager.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (soundManager.audioContext.state === 'suspended') {
+        soundManager.audioContext.resume(); // synchronous call — stays within gesture
+      }
+    } catch (e) {
+      // Ignore — _doInit will try again
+    }
+    // Complete async setup (gain node, music buffer, etc.)
     soundManager.init();
     document.removeEventListener('click', initOnInteraction);
     document.removeEventListener('touchstart', initOnInteraction);

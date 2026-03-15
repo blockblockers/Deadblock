@@ -708,6 +708,9 @@ const OnlineMenu = ({
         () => {
           // console.log('[OnlineMenu] New game created (p1), refreshing');
           loadGames();
+          // v7.31: Also refresh invites — new game means an invite link was accepted,
+          // so the sender's link card should disappear immediately
+          loadInvites();
         }
       )
       .on(
@@ -721,6 +724,7 @@ const OnlineMenu = ({
         () => {
           // console.log('[OnlineMenu] New game created (p2), refreshing');
           loadGames();
+          loadInvites();
         }
       )
       .subscribe();

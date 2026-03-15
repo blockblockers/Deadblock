@@ -139,6 +139,8 @@ function AppContent({ onBgThemeChange }) {
   
   // v7.8: Track if new user joined via invite link (to show tutorial)
   const [showTutorialOnJoin, setShowTutorialOnJoin] = useState(false);
+  // v7.31: For new users joining via invite — hold the game ID until they finish onboarding
+  const [pendingInviteGameId, setPendingInviteGameId] = useState(null);
   
   // Show welcome modal when new user is detected
   useEffect(() => {
@@ -221,18 +223,19 @@ function AppContent({ onBgThemeChange }) {
           setInviteError(null);
           localStorage.removeItem('deadblock_pending_invite_code');
           
-          // v7.8: Check if this is a new user - show tutorial
-          // A user is considered "new" if they just created their account
+          // v7.31: New users get WelcomeModal + HowToPlay before the game board
           const isFirstGame = !localStorage.getItem('deadblock_has_played_online');
           if (isFirstGame || isNewUser) {
-            // console.log('[App] New user joining via invite - will show tutorial');
-            setShowTutorialOnJoin(true);
             localStorage.setItem('deadblock_has_played_online', 'true');
+            // Store the game ID and show onboarding first; navigation happens on modal close
+            setPendingInviteGameId(data.game_id);
+            setShowWelcomeModal(true);
+            // Don't navigate yet — WelcomeModal/HowToPlay onClose handlers below will do it
+          } else {
+            // Returning user: go straight to the game
+            setOnlineGameId(data.game_id);
+            if (setGameModeFn) setGameModeFn('online-game');
           }
-          
-          // Go directly to the game
-          setOnlineGameId(data.game_id);
-          if (setGameModeFn) setGameModeFn('online-game');
         } else if (error) {
           // console.log('App: Could not accept invite:', error.message);
           if (error.message !== 'Cannot accept your own invite') {
@@ -1123,17 +1126,28 @@ function AppContent({ onBgThemeChange }) {
           <WelcomeModal
             username={profile.username || profile.display_name || 'Player'}
             onClose={() => {
-              // User skipped - just close without tutorial
+              // User skipped welcome — if they came via invite link, go to game now
               setShowWelcomeModal(false);
               clearNewUser();
+              if (pendingInviteGameId) {
+                setOnlineGameId(pendingInviteGameId);
+                setPendingInviteGameId(null);
+                setGameMode('online-game');
+              }
             }}
             onEditUsername={() => {
               setShowWelcomeModal(false);
               clearNewUser();
               setShowProfileModal(true);
+              // Profile edit skips the tutorial; navigate to game after closing
+              if (pendingInviteGameId) {
+                setOnlineGameId(pendingInviteGameId);
+                setPendingInviteGameId(null);
+                setGameMode('online-game');
+              }
             }}
             onComplete={() => {
-              // v7.12: User completed welcome - show tutorial next
+              // User completed welcome — show HowToPlay next, then navigate
               setShowWelcomeModal(false);
               clearNewUser();
               setShowNewUserTutorial(true);
@@ -1145,7 +1159,15 @@ function AppContent({ onBgThemeChange }) {
         {showNewUserTutorial && (
           <HowToPlayModal 
             isOpen={true} 
-            onClose={() => setShowNewUserTutorial(false)} 
+            onClose={() => {
+              setShowNewUserTutorial(false);
+              // v7.31: After tutorial, navigate to pending invite game if one is waiting
+              if (pendingInviteGameId) {
+                setOnlineGameId(pendingInviteGameId);
+                setPendingInviteGameId(null);
+                setGameMode('online-game');
+              }
+            }} 
           />
         )}
       </div>
