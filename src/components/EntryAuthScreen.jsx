@@ -308,14 +308,13 @@ const EntryAuthScreen = ({
     const challengerName = inviteInfo.from_username || inviteInfo.from_display_name || 'A player';
 
     return (
-      <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-4">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
         <div className="relative w-full max-w-sm rounded-2xl border-2 overflow-hidden"
           style={{
             borderColor: 'rgba(251,191,36,0.7)',
             background: 'linear-gradient(135deg, rgba(15,23,42,0.99) 0%, rgba(30,41,59,0.99) 100%)',
             boxShadow: '0 0 50px rgba(251,191,36,0.35), 0 0 100px rgba(249,115,22,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
             animation: 'inviteModalIn 0.3s ease-out',
-            marginBottom: 'env(safe-area-inset-bottom, 0px)',
           }}>
           {/* Animated top border */}
           <div className="absolute top-0 left-0 right-0 h-[2px]"

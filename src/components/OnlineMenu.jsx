@@ -705,11 +705,27 @@ const OnlineMenu = ({
           table: 'games',
           filter: `player1_id=eq.${profile.id}`
         },
-        () => {
+        async (payload) => {
           // console.log('[OnlineMenu] New game created (p1), refreshing');
+          const newGameId = payload?.new?.id;
+          // v7.32: Mark any pending invite links as accepted using the SENDER's auth.
+          // acceptInviteByCode runs with the receiver's token, which RLS may block from
+          // updating email_invites (only from_user_id can UPDATE their own rows).
+          // PostgREST returns HTTP 200 with empty body in that case — silent failure.
+          // The sender has from_user_id permission, so we do it here instead.
+          if (newGameId && supabase) {
+            try {
+              await supabase
+                .from('email_invites')
+                .update({ status: 'accepted', game_id: newGameId })
+                .eq('from_user_id', profile.id)
+                .in('status', ['pending', 'sent'])
+                .is('game_id', null);
+            } catch (e) {
+              // Non-critical — loadInvites below will still refresh the list
+            }
+          }
           loadGames();
-          // v7.31: Also refresh invites — new game means an invite link was accepted,
-          // so the sender's link card should disappear immediately
           loadInvites();
         }
       )

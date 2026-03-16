@@ -227,10 +227,12 @@ function AppContent({ onBgThemeChange }) {
           const isFirstGame = !localStorage.getItem('deadblock_has_played_online');
           if (isFirstGame || isNewUser) {
             localStorage.setItem('deadblock_has_played_online', 'true');
-            // Store the game ID and show onboarding first; navigation happens on modal close
+            // Store the game ID and navigate to menu screen (where WelcomeModal renders).
+            // Without this setGameModeFn call, gameMode stays 'auth' and EntryAuthScreen
+            // keeps rendering, forcing the user to log in again.
             setPendingInviteGameId(data.game_id);
             setShowWelcomeModal(true);
-            // Don't navigate yet — WelcomeModal/HowToPlay onClose handlers below will do it
+            if (setGameModeFn) setGameModeFn(null); // Go to menu so WelcomeModal is visible
           } else {
             // Returning user: go straight to the game
             setOnlineGameId(data.game_id);
