@@ -1,4 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.32: Fetch challenger profile from DB if inviteInfo lacks from_username/from_display_name (fixes "A Player" bug)
 // v7.19: Delete Account underlined, footer padding increased to show static Privacy/Terms footer from index.html
 // v7.18: Fixed footer positioning - sits at bottom of screen with proper safe area
 // v7.15: Added account deletion modal for App Store/Play Store compliance
@@ -19,6 +20,7 @@ import NeonTitle from './NeonTitle';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import AccountDeletionModal from './AccountDeletionModal';
+import { supabase } from '../utils/supabase';
 
 const EntryAuthScreen = ({ 
   onComplete, 
@@ -53,6 +55,26 @@ const EntryAuthScreen = ({
   
   // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  // Resolved challenger name — fetches from profiles if inviteInfo lacks username fields
+  const [resolvedChallengerName, setResolvedChallengerName] = useState(null);
+  useEffect(() => {
+    if (!inviteInfo) { setResolvedChallengerName(null); return; }
+    const name = inviteInfo.from_username || inviteInfo.from_display_name;
+    if (name) { setResolvedChallengerName(name); return; }
+    if (inviteInfo.from_user_id) {
+      supabase
+        .from('profiles')
+        .select('username, display_name')
+        .eq('id', inviteInfo.from_user_id)
+        .single()
+        .then(({ data }) => {
+          setResolvedChallengerName(data?.username || data?.display_name || 'A player');
+        });
+    } else {
+      setResolvedChallengerName('A player');
+    }
+  }, [inviteInfo]);
 
   const clearMessages = () => {
     setError('');
@@ -305,7 +327,7 @@ const EntryAuthScreen = ({
 
     if (!inviteInfo) return null;
 
-    const challengerName = inviteInfo.from_username || inviteInfo.from_display_name || 'A player';
+    const challengerName = resolvedChallengerName || inviteInfo.from_username || inviteInfo.from_display_name || 'A player';
 
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">

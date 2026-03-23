@@ -48,6 +48,7 @@ class RealtimeManager {
   constructor() {
     // Single consolidated channel per user for all personal notifications
     this.userChannel = null;
+    this.emailInvitesChannel = null;  // Isolated to prevent poisoning main channel
     this.userId = null;
     
     // Game-specific channel (only one at a time)
@@ -155,23 +156,6 @@ class RealtimeManager {
             }
           }
         )
-        // Email invite links (when someone accepts your invite link)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'email_invites',
-            filter: `from_user_id=eq.${userId}`
-          },
-          (payload) => {
-            // console.log('[RealtimeManager] Email invite updated:', payload.new?.id, payload.new?.status);
-            // When status changes from pending/sent to accepted/declined, notify
-            if (payload.new?.status === 'accepted' || payload.new?.status === 'declined') {
-              this.notifyHandlers('emailInviteUpdated', payload.new);
-            }
-          }
-        )
         // Rematch requests received (new requests where user is recipient)
         .on(
           'postgres_changes',
@@ -239,6 +223,28 @@ class RealtimeManager {
       }
       
       this.resetIdleTimeout();
+      
+      // Separate channel for email_invites to prevent it poisoning the main channel
+      // (email_invites may lack REPLICA IDENTITY FULL or realtime publication membership)
+      this.emailInvitesChannel = supabase
+        .channel(`email-invites:${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'email_invites',
+            filter: `from_user_id=eq.${userId}`
+          },
+          (payload) => {
+            // console.log('[RealtimeManager] Email invite updated:', payload.new?.id, payload.new?.status);
+            if (payload.new?.status === 'accepted' || payload.new?.status === 'declined') {
+              this.notifyHandlers('emailInviteUpdated', payload.new);
+            }
+          }
+        )
+        .subscribe();
+      
       return true;
       
     } catch (error) {
@@ -254,6 +260,11 @@ class RealtimeManager {
       // console.log('[RealtimeManager] Disconnecting user channel');
       await this.userChannel.unsubscribe();
       this.userChannel = null;
+    }
+    
+    if (this.emailInvitesChannel) {
+      await this.emailInvitesChannel.unsubscribe();
+      this.emailInvitesChannel = null;
     }
     
     this.userId = null;

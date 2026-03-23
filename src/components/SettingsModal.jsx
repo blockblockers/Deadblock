@@ -1,4 +1,5 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.15: Purple glow orb Change Password, orange glow orb Sign Out (matched Delete Account pattern)
 // v7.14: Fixed push notification toggle - properly checks subscription state after init
 // UPDATED: Added push notification subscription management
 // v7.10: Added iOS scroll fixes for modal content
@@ -888,12 +889,15 @@ const SettingsModal = ({ isOpen, onClose }) => {
               {(!isGoogleUser || isPasswordRecovery) && !showPasswordReset && !showSendResetEmail && (
                 <button
                   onClick={() => setShowSendResetEmail(true)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-slate-700 transition-colors text-left"
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/30 hover:bg-purple-500/20 hover:border-purple-500/60 hover:shadow-[0_0_18px_rgba(168,85,247,0.3)] transition-all group text-left"
                 >
-                  <Key size={20} className="text-slate-400" />
+                  <div className="relative flex-shrink-0">
+                    <div className="absolute inset-0 bg-purple-500/50 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Key size={20} className="relative text-purple-400" />
+                  </div>
                   <div>
-                    <span className="text-slate-300">Change Password</span>
-                    <p className="text-xs text-slate-500">Send password reset email</p>
+                    <span className="text-purple-300 text-sm font-medium">Change Password</span>
+                    <p className="text-xs text-purple-400/50">Send password reset email</p>
                   </div>
                 </button>
               )}
@@ -1089,10 +1093,13 @@ const SettingsModal = ({ isOpen, onClose }) => {
               {!showSignOutConfirm ? (
                 <button
                   onClick={() => setShowSignOutConfirm(true)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-slate-700/50 border border-slate-600/30 hover:bg-red-900/30 hover:border-red-500/30 transition-colors text-left group"
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/20 hover:border-orange-500/60 hover:shadow-[0_0_18px_rgba(249,115,22,0.3)] transition-all group text-left"
                 >
-                  <LogOut size={20} className="text-slate-400 group-hover:text-red-400" />
-                  <span className="text-slate-300 group-hover:text-red-300">Sign Out</span>
+                  <div className="relative flex-shrink-0">
+                    <div className="absolute inset-0 bg-orange-500/50 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <LogOut size={20} className="relative text-orange-400" />
+                  </div>
+                  <span className="text-orange-300 text-sm font-medium">Sign Out</span>
                 </button>
               ) : (
                 <div className="space-y-2 p-3 rounded-lg bg-red-900/20 border border-red-500/30">
