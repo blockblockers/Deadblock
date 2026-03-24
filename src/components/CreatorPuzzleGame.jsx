@@ -1,5 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v2.2: Added confirmFlashCells for immediate cell-flash feedback on confirm tap
+// v2.3: Scroll fixes - h-dvh (iOS Safari fix), overscrollBehavior:'contain' on scroll mode
 // v2.1: Fixed freeze on "Next Puzzle" - reset mountedRef and clear timeouts for new puzzles
 // v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
 // v1.5: Attempt persistence - loads/saves attempts to database across sessions
@@ -1345,11 +1345,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-transparent' : 'h-screen bg-transparent overflow-hidden'}
+      className={needsScroll ? 'min-h-screen bg-transparent' : 'h-dvh bg-transparent overflow-hidden'}
       style={needsScroll ? { 
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain',
         touchAction: isDragging ? 'none' : 'pan-y',
       } : {}}
     >

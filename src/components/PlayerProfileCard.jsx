@@ -48,8 +48,8 @@ const RatingInfoModal = ({ onClose }) => {
         </div>
         
         <div 
-          className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"
-          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+          className="p-4 space-y-4 overflow-y-auto"
+          style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
         >
           <p className="text-sm text-slate-400">
             Your ELO rating changes based on match results. Beat higher-rated players to gain more points!

@@ -1694,7 +1694,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
 
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-dvh bg-slate-950 overflow-hidden'}
       style={scrollStyles}
     >
       {/* Grid background */}

@@ -280,6 +280,12 @@ const UserProfile = ({ onBack }) => {
     <div 
       className="scroll-page bg-slate-950"
       style={{
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain',
+        touchAction: 'pan-y',
+        minHeight: '100dvh',
         paddingTop: 'max(16px, env(safe-area-inset-top))',
         paddingBottom: 'env(safe-area-inset-bottom)'
       }}
@@ -290,7 +296,7 @@ const UserProfile = ({ onBack }) => {
           overflow-y: auto;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
-          overscroll-behavior-y: contain;
+          overscroll-behavior: contain;
           scrollbar-width: thin;
           scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
         }

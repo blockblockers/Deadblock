@@ -1,7 +1,9 @@
 // Authentication Context with Local Profile Caching
-// v7.20: Added resendConfirmationEmail and deleteAccount functions
+// v7.21: Fix Google OAuth on Android — Capacitor WebView reports origin as https://localhost,
+//        so detect native platform and hardcode production URL for OAuth redirectTo
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
+import { Capacitor } from '@capacitor/core';
 
 // Local storage keys for persistent auth
 const STORAGE_KEYS = {
@@ -842,7 +844,7 @@ export const AuthProvider = ({ children }) => {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${Capacitor.isNativePlatform() ? 'https://deadblock.app' : window.location.origin}/auth/callback`,
           skipBrowserRedirect: false, // Ensure redirect happens
         }
       });

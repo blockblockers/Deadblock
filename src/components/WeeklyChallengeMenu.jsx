@@ -101,9 +101,10 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
     overflowY: 'auto',
     overflowX: 'hidden',
     WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y pinch-zoom',
+    touchAction: 'pan-y',
     overscrollBehavior: 'contain',
     scrollBehavior: 'smooth',
+    minHeight: '100dvh',
   };
   
   return (

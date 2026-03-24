@@ -1,5 +1,7 @@
 // Online Menu - Hub for online features
-// v7.30: Removed duplicate GameInviteNotification (now handled globally by App.jsx)
+// v7.31: Fix page scroll blocked when Challenge panel is open — removed WebkitOverflowScrolling
+//        and touchAction from the non-scroll expanded panel wrapper (was creating a WebKit scroll
+//        layer that absorbed touches without scrolling, preventing the parent from receiving them)
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
 // v7.25: FinalBoardView spacing fix - explicitly clear viewingPlayerId before opening
 // v7.24: Simplified FinalBoardView opening - removed RAF, use conditional hide + key for clean state
@@ -1353,7 +1355,7 @@ const OnlineMenu = ({
       style={{ 
         WebkitOverflowScrolling: 'touch', 
         overscrollBehavior: 'contain',
-        // Remove touchAction from outer - let iOS handle naturally
+        touchAction: 'pan-y',
       }}
     >
       {/* Themed glow orbs */}
@@ -1758,8 +1760,9 @@ const OnlineMenu = ({
                 className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30 space-y-3" 
                 style={{ 
                   boxShadow: '0 0 15px rgba(168,85,247,0.15)',
-                  touchAction: 'pan-y',
-                  WebkitOverflowScrolling: 'touch',
+                  // NOTE: no touchAction or WebkitOverflowScrolling here — this is not a scroll
+                  // container. Those properties on a non-scroll element create a WebKit scroll
+                  // layer that absorbs touches and breaks the parent page scroll.
                 }}>
                 {/* Option 1: Search by Username/Email */}
                 <div className="bg-slate-900/50 rounded-lg p-3 border border-purple-500/20">

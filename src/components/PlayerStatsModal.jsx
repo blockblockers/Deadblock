@@ -427,8 +427,9 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
       >
         {/* Modal - pointer-events-auto captures events */}
         <div 
-          className="w-full max-w-md max-h-[85vh] rounded-2xl overflow-hidden flex flex-col pointer-events-auto"
+          className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col pointer-events-auto"
           style={{ 
+            maxHeight: 'calc(100dvh - 32px)',
             backgroundColor: tierBg,
             border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
             boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}`
@@ -548,6 +549,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
             minHeight: 0,
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',
+            touchAction: 'pan-y',
           }}
         >
           {isOffline ? (

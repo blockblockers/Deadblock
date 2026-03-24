@@ -1538,7 +1538,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   if (loading) {
     return (
       // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      <div className="min-h-screen bg-transparent flex items-center justify-center">
+      <div className="min-h-dvh bg-transparent flex items-center justify-center">
         <div className="relative text-center">
           <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-amber-300 mb-6">Loading game...</p>
@@ -1553,7 +1553,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   if (error) {
     return (
       // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      <div className="min-h-screen bg-transparent flex items-center justify-center">
+      <div className="min-h-dvh bg-transparent flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
           <button onClick={handleLeave} className="px-6 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700">
@@ -1567,11 +1567,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   return (
     <div 
       // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      className="min-h-screen bg-transparent overflow-x-hidden"
+      className="min-h-dvh bg-transparent overflow-x-hidden"
       style={{ 
         overflowY: needsScroll ? 'auto' : 'hidden',
         WebkitOverflowScrolling: 'touch',
-        overscrollBehaviorY: 'contain',
+        overscrollBehavior: 'contain',
         touchAction: isDragging ? 'none' : 'pan-y'
       }}
     >
@@ -1593,7 +1593,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       )}
 
       {/* Main content */}
-      <div className={`relative z-10 ${needsScroll ? 'min-h-screen' : 'h-screen flex flex-col'}`}>
+      <div className={`relative z-10 ${needsScroll ? 'min-h-dvh' : 'h-dvh flex flex-col'}`}>
         <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
           
           {/* UPDATED v7.21: Header - removed top menu button, centered title */}

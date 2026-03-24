@@ -1,5 +1,5 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
-// UPDATED: Added drag-and-drop for pieces from tray to board
+// Scroll fix: h-dvh (iOS Safari fix), overscrollBehavior:'contain' on scroll mode
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Flag, XCircle, Move } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -725,11 +725,12 @@ const GameScreen = ({
   return (
     <div 
       // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      className={needsScroll ? 'min-h-screen bg-transparent' : 'h-screen bg-transparent overflow-hidden'}
+      className={needsScroll ? 'min-h-screen bg-transparent' : 'h-dvh bg-transparent overflow-hidden'}
       style={needsScroll ? { 
         overflowY: 'auto', 
         overflowX: 'hidden', 
         WebkitOverflowScrolling: 'touch',
+        overscrollBehavior: 'contain',
         touchAction: isDragging ? 'none' : 'pan-y',
       } : {}}
     >

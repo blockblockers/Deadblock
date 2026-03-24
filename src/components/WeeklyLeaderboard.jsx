@@ -94,7 +94,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
   return (
     <div 
       className="min-h-screen bg-slate-950"
-      style={{ overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+      style={{ overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
     >
       {/* Background - RED THEME */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
@@ -182,7 +182,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
                 <p className="text-slate-500 text-sm">Be the first to complete this week's challenge!</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-800/50 max-h-[60vh] overflow-y-auto">
+              <div className="divide-y divide-slate-800/50 overflow-y-auto" style={{ maxHeight: 'calc(60dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
                 {leaderboard.map((entry, index) => {
                   const rank = index + 1;
                   const isCurrentUser = entry.user_id === profile?.id;

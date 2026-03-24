@@ -1,4 +1,5 @@
-// CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
+// CreatorPuzzleSelect.jsx
+// Scroll fixes: h-dvh (iOS Safari fix), min-h-0 + overscrollBehavior + touchAction on scroll container - Selection grid for hand-crafted creator puzzles
 // v1.5: Enhanced layout - larger title, subtitle, pagination, themed puzzle info
 import { useState, useEffect } from 'react';
 import { Check, Lock, Loader, Trophy, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
@@ -256,7 +257,7 @@ const CreatorPuzzleSelect = ({
   const selectedColors = selectedPuzzle ? getPuzzleColors(selectedPuzzle) : selectedTier.color;
 
   return (
-    <div className="h-screen bg-slate-950 flex flex-col overflow-hidden">
+    <div className="h-dvh bg-slate-950 flex flex-col overflow-hidden">
       {/* Themed Grid background */}
       <div 
         className="fixed inset-0 pointer-events-none"
@@ -276,7 +277,7 @@ const CreatorPuzzleSelect = ({
       <div className={`fixed ${theme.glow2.pos} w-40 h-40 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
 
       {/* Main Content - Scrollable if needed */}
-      <div className="relative flex-1 flex flex-col overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
         <div className="flex-1 flex flex-col items-center px-4 py-4">
           <div className="w-full max-w-md">
             

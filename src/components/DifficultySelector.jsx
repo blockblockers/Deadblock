@@ -1,3 +1,5 @@
+// DifficultySelector.jsx
+// Scroll fix: h-dvh (iOS Safari fix), overscrollBehavior:'contain' on scroll mode
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -115,8 +117,8 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
 
   return (
     <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-screen bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' } : {}}
+      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-dvh bg-slate-950 overflow-hidden'}
+      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : {}}
     >
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{

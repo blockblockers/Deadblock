@@ -1,5 +1,5 @@
 // Achievements.jsx - Modal displaying all achievements with improved scroll and text
-// v7.14: Fixed text truncation - name and description now wrap properly
+// v7.15: Scroll fixes - dvh modal height (iOS Safari fix), min-h-0 Tailwind class on scroll container
 // Place in src/components/Achievements.jsx
 
 import { useState, useEffect, useRef } from 'react';
@@ -119,7 +119,8 @@ const Achievements = ({ userId, onClose }) => {
       onClick={handleClose}
     >
       <div 
-        className="bg-slate-900 rounded-2xl w-full max-w-md max-h-[85vh] overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)] flex flex-col"
+        className="bg-slate-900 rounded-2xl w-full max-w-md overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)] flex flex-col"
+        style={{ maxHeight: 'calc(100dvh - 32px)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}
@@ -170,12 +171,11 @@ const Achievements = ({ userId, onClose }) => {
         {/* Scrollable Content */}
         <div 
           ref={scrollRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 min-h-0 overflow-y-auto"
           style={{
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',
             touchAction: 'pan-y',
-            minHeight: 0
           }}
         >
           <div className="p-4 space-y-2">

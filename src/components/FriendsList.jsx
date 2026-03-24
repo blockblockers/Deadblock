@@ -1,5 +1,5 @@
 // FriendsList - View and manage friends
-// v7.7 UPDATES:
+// v7.8: Scroll fixes - dvh on both modals, min-h-0 on scroll containers, full iOS properties on SpectateGamesModal
 // - Swapped Eye (watch) icon for Swords (challenge) on friend rows
 // - Shows active game count instead of "Playing vs X"
 // - Added popup to select which game to spectate
@@ -40,7 +40,7 @@ const SpectateGamesModal = ({ friend, games, onSpectate, onClose }) => {
         </div>
 
         {/* Games list */}
-        <div className="p-4 max-h-[60vh] overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="p-4 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(60dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
           <div className="space-y-3">
             {games.map(game => {
               // Determine opponent (the one who is NOT the friend)
@@ -343,7 +343,8 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
       )}
 
       <div 
-        className="bg-slate-900 rounded-xl max-w-md w-full max-h-[85vh] overflow-hidden border border-amber-500/30 shadow-xl flex flex-col"
+        className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border border-amber-500/30 shadow-xl flex flex-col"
+        style={{ maxHeight: 'calc(100dvh - 32px)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-amber-500/20 flex-shrink-0">
@@ -397,7 +398,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
 
         {/* Content - Scrollable */}
         <div 
-          className="flex-1 overflow-y-auto p-4"
+          className="flex-1 min-h-0 overflow-y-auto p-4"
           style={{ 
             WebkitOverflowScrolling: 'touch', 
             overscrollBehavior: 'contain', 

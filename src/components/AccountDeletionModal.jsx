@@ -203,8 +203,8 @@ const AccountDeletionModal = ({ onClose }) => {
         
         {/* Content */}
         <div 
-          className="p-5 space-y-4 max-h-[70vh] overflow-y-auto"
-          style={{ WebkitOverflowScrolling: 'touch' }}
+          className="p-5 space-y-4 overflow-y-auto"
+          style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
         >
           {/* Warning */}
           <div className="p-3 bg-red-900/30 border border-red-500/30 rounded-xl">
