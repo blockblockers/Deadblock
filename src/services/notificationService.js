@@ -1,4 +1,7 @@
 // notificationService.js - Client-side notification handling
+// v7.13: getNotificationBadge now returns monochrome-192x192.png for all types —
+//        per-type /badges/*.png paths caused gray D on in-app notifications (rematch etc)
+//        because the SW fetches the badge at show-time and the file wasn't cached yet
 // v7.12 FIX: notifyYourTurn now accepts gameId and uses game-specific tags
 // - Each game gets its own notification tag to prevent replacement issues
 // - Clicking notification navigates to the correct game
@@ -108,20 +111,15 @@ class NotificationService {
   }
 
   getNotificationBadge(type) {
-    // PNG badges for Android (must be monochrome white-on-transparent)
-    const badgeMap = {
-      'your_turn': '/badges/badge-turn.png',
-      'game_invite': '/badges/badge-invite.png',
-      'invite_accepted': '/badges/badge-invite.png',
-      'rematch_request': '/badges/badge-rematch.png',
-      'rematch_accepted': '/badges/badge-rematch.png',
-      'rematch_declined': '/badges/badge-defeat.png',
-      'chat_message': '/badges/badge-chat.png',
-      'victory': '/badges/badge-victory.png',
-      'defeat': '/badges/badge-defeat.png',
-      'streak_reminder': '/badges/badge-streak.png'
-    };
-    return badgeMap[type] || '/badges/badge-default.png';
+    // v7.13: Use single monochrome icon for all types.
+    // Per-type /badges/*.png paths work for push notifications handled by the SW
+    // (which pre-caches them), but for in-app notifications fired via
+    // swReg.showNotification() the SW fetches the badge at show-time.
+    // If the file isn't cached yet (e.g. first rematch on a fresh install),
+    // Android falls back to the manifest icon → gray D.
+    // monochrome-192x192.png is declared in manifest.json so Android always
+    // has it; it is the correct format (white-on-transparent) for the badge field.
+    return '/icons/monochrome-192x192.png';
   }
 
   async sendNotification(title, options = {}) {

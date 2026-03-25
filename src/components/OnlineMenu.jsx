@@ -1,7 +1,7 @@
 // Online Menu - Hub for online features
-// v7.31: Fix page scroll blocked when Challenge panel is open — removed WebkitOverflowScrolling
-//        and touchAction from the non-scroll expanded panel wrapper (was creating a WebKit scroll
-//        layer that absorbed touches without scrolling, preventing the parent from receiving them)
+// v7.33: Self-heal stale email invite links — acceptInviteByCode runs as receiver whose RLS
+//        blocks the email_invites update; loadInvites now detects this and writes game_id from
+//        the sender's side (which RLS permits), then re-fetches to hide the link
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
 // v7.25: FinalBoardView spacing fix - explicitly clear viewingPlayerId before opening
 // v7.24: Simplified FinalBoardView opening - removed RAF, use conditional hide + key for clean state
@@ -804,9 +804,52 @@ const OnlineMenu = ({
       setReceivedInvites(received.data || []);
       // v7.19: Filter sent invites to only show truly pending ones (not accepted/with game_id)
       setSentInvites((sent.data || []).filter(i => i.status === 'pending' && !i.game_id));
-      // inviteService now returns properly formatted data with recipientName and inviteLink
+
       // Filter out links that have a game_id (game already started)
-      const activeLinks = (links.data || []).filter(link => !link.game_id);
+      let activeLinks = (links.data || []).filter(link => !link.game_id);
+
+      // v7.33: Self-heal stale invite links whose game_id was never set.
+      // acceptInviteByCode runs with the receiver's JWT; RLS only allows from_user_id to
+      // UPDATE email_invites, so that update silently fails. Here we run as the sender
+      // (from_user_id = profile.id), which RLS does permit. We look for games where we
+      // are player1 created after each stale link — email invite link games always set
+      // the link creator as player1. If a match is found we write game_id from our side.
+      if (activeLinks.length > 0 && supabase) {
+        const oldestLinkDate = activeLinks.reduce(
+          (min, l) => (l.created_at < min ? l.created_at : min),
+          activeLinks[0].created_at
+        );
+
+        const { data: gamesAfterLinks } = await supabase
+          .from('games')
+          .select('id, created_at')
+          .eq('player1_id', profile.id)
+          .in('status', ['active', 'completed'])
+          .gte('created_at', oldestLinkDate)
+          .order('created_at', { ascending: true });
+
+        if (gamesAfterLinks?.length > 0) {
+          let healed = false;
+          for (const link of activeLinks) {
+            const match = gamesAfterLinks.find(g => g.created_at >= link.created_at);
+            if (match) {
+              await supabase
+                .from('email_invites')
+                .update({ status: 'accepted', game_id: match.id })
+                .eq('id', link.id)
+                .eq('from_user_id', profile.id)
+                .is('game_id', null); // safety: only update if still unset
+              healed = true;
+            }
+          }
+          if (healed) {
+            // Re-fetch so the now-updated links are excluded by the game_id=is.null filter
+            const { data: healedLinks } = await inviteService.getInviteLinks(profile.id);
+            activeLinks = (healedLinks || []).filter(link => !link.game_id);
+          }
+        }
+      }
+
       setInviteLinks(activeLinks);
       setPendingRematches(rematches.data || []);
     } catch (err) {
@@ -1760,9 +1803,8 @@ const OnlineMenu = ({
                 className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30 space-y-3" 
                 style={{ 
                   boxShadow: '0 0 15px rgba(168,85,247,0.15)',
-                  // NOTE: no touchAction or WebkitOverflowScrolling here — this is not a scroll
-                  // container. Those properties on a non-scroll element create a WebKit scroll
-                  // layer that absorbs touches and breaks the parent page scroll.
+                  touchAction: 'pan-y',
+                  WebkitOverflowScrolling: 'touch',
                 }}>
                 {/* Option 1: Search by Username/Email */}
                 <div className="bg-slate-900/50 rounded-lg p-3 border border-purple-500/20">
