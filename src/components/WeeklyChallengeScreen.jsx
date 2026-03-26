@@ -1,5 +1,8 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
-// v7.18: Added confirmFlashCells for immediate cell-flash feedback on confirm tap
+// v7.19: Fix stale closure bugs in timer callbacks — accumulatedMsRef mirrors accumulatedMs state
+//   so startTimer/stopTimer/pauseTimer always read the current accumulated time regardless of
+//   when the useCallback was last re-created. Fixes: timer resetting on retry, wrong elapsed/best
+//   time display, and attempt count not reflecting correct session state.
 // v7.17: Persistent timer - saves elapsed time on reset/close, restores when returning
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
@@ -297,6 +300,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Refs
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+  const accumulatedMsRef = useRef(0); // Always-current mirror of accumulatedMs; prevents stale closures in timer callbacks
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -314,7 +318,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (challenge?.id && gameStarted && !gameComplete && startTimeRef.current) {
-        const currentTime = accumulatedMs + (Date.now() - startTimeRef.current);
+        const currentTime = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
         saveTimerState(challenge.id, currentTime, attemptCount);
       }
     };
@@ -324,7 +328,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [challenge, gameStarted, gameComplete, accumulatedMs, attemptCount]);
+  }, [challenge, gameStarted, gameComplete, attemptCount]);
   
   // Game state from hook
   const {
@@ -933,6 +937,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         // v7.17: Restore saved timer state if user previously left mid-challenge
         const savedTimer = loadTimerState(challenge.id);
         if (savedTimer) {
+          accumulatedMsRef.current = savedTimer.elapsedMs; // Keep ref in sync
           setAccumulatedMs(savedTimer.elapsedMs);
           setElapsedMs(savedTimer.elapsedMs);
           setAttemptCount(savedTimer.attemptCount || 0);
@@ -953,9 +958,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
-      setElapsedMs(accumulatedMs + (Date.now() - startTimeRef.current));
+      setElapsedMs(accumulatedMsRef.current + (Date.now() - startTimeRef.current));
     }, 10);
-  }, [accumulatedMs]);
+  }, []); // No accumulatedMs dep — reads from ref which is always current
   
   // Stop the timer
   const stopTimer = useCallback(() => {
@@ -964,8 +969,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       timerRef.current = null;
     }
     const sessionTime = Date.now() - startTimeRef.current;
-    return accumulatedMs + sessionTime;
-  }, [accumulatedMs]);
+    return accumulatedMsRef.current + sessionTime;
+  }, []); // No dep — reads from ref
   
   // Pause the timer
   const pauseTimer = useCallback(() => {
@@ -974,9 +979,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       timerRef.current = null;
     }
     const sessionTime = Date.now() - startTimeRef.current;
-    setAccumulatedMs(prev => prev + sessionTime);
-    return accumulatedMs + sessionTime;
-  }, [accumulatedMs]);
+    const newAccumulated = accumulatedMsRef.current + sessionTime;
+    accumulatedMsRef.current = newAccumulated; // Update ref immediately so startTimer sees it
+    setAccumulatedMs(newAccumulated);
+    return newAccumulated;
+  }, []); // No dep — reads/writes ref directly
   
   // Auto-start the game when puzzle is loaded
   useEffect(() => {
@@ -1072,8 +1079,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const handleRestart = useCallback(() => {
     // Save current elapsed time before resetting board
     const currentTime = timerRef.current 
-      ? accumulatedMs + (Date.now() - startTimeRef.current)
-      : accumulatedMs;
+      ? accumulatedMsRef.current + (Date.now() - startTimeRef.current)
+      : accumulatedMsRef.current;
     
     // Stop current timer
     if (timerRef.current) {
@@ -1094,12 +1101,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setWasFirstAttempt(false);
     
     // v7.17: Continue timer from current time (don't reset to 0)
+    accumulatedMsRef.current = currentTime; // Keep ref in sync
     setAccumulatedMs(currentTime);
     setElapsedMs(currentTime);
     // Don't reset attemptCount - it tracks total attempts
     
     setGameStarted(false);
-  }, [resetCurrentPuzzle, accumulatedMs, attemptCount, challenge]);
+  }, [resetCurrentPuzzle, attemptCount, challenge]);
   
   // View leaderboard
   const handleViewLeaderboard = () => {
@@ -1114,8 +1122,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Save current elapsed time before leaving
     if (challenge?.id && !gameComplete) {
       const currentTime = timerRef.current 
-        ? accumulatedMs + (Date.now() - startTimeRef.current)
-        : elapsedMs;
+        ? accumulatedMsRef.current + (Date.now() - startTimeRef.current)
+        : accumulatedMsRef.current;
       saveTimerState(challenge.id, currentTime, attemptCount);
     }
     
@@ -1126,7 +1134,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     }
     
     (onMainMenu || onMenu)();
-  }, [challenge, gameComplete, accumulatedMs, elapsedMs, attemptCount, onMainMenu, onMenu]);
+  }, [challenge, gameComplete, attemptCount, onMainMenu, onMenu]);
   
   // Cleanup - v7.17: Save timer state on unmount
   useEffect(() => {
@@ -1136,12 +1144,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         
         // Save current elapsed time before unmounting
         if (challenge?.id && startTimeRef.current && !gameComplete) {
-          const currentTime = accumulatedMs + (Date.now() - startTimeRef.current);
+          const currentTime = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
           saveTimerState(challenge.id, currentTime, attemptCount);
         }
       }
     };
-  }, [challenge, accumulatedMs, attemptCount, gameComplete]);
+  }, [challenge, attemptCount, gameComplete]);
   
   // =========================================================================
   // RENDER

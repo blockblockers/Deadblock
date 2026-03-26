@@ -731,10 +731,13 @@ function AppContent({ onBgThemeChange }) {
           }
           if (notificationType === 'weekly_challenge') {
             sessionStorage.setItem('deadblock_pending_nav', 'weekly');
+            // Do NOT set pending_online_intent for weekly — the auth completion
+            // effect unconditionally navigates to online-menu when that flag is set,
+            // which would override the weekly_challenge pending nav.
           } else {
             sessionStorage.setItem('deadblock_pending_nav', 'online');
+            localStorage.setItem('deadblock_pending_online_intent', 'true');
           }
-          localStorage.setItem('deadblock_pending_online_intent', 'true');
           return;
         }
         
