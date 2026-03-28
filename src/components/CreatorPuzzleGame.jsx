@@ -1561,7 +1561,6 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       {/* Safe area bottom */}
       <div className="flex-shrink-0" style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
     </div>
-    </div>{/* end inner scroll child */}
     </div>
   );
 };
