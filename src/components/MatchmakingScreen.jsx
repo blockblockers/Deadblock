@@ -1,4 +1,5 @@
 // Matchmaking Screen - Find online opponents
+// v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 import { useState, useEffect, useRef } from 'react';
 import { Search, X, Zap, Trophy, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -175,10 +176,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
   };
 
   return (
-    <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-dvh bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : {}}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -193,8 +191,13 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
       {/* Floating pieces background */}
       <FloatingPieces count={12} theme="online" minOpacity={0.2} maxOpacity={0.4} />
 
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+      >
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-8' : 'py-4'}`}>
+      <div className="relative flex flex-col items-center justify-center px-4 py-8 min-h-full">
         <div className="w-full max-w-md text-center">
           
           {/* Title - Large and centered */}
@@ -368,8 +371,9 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
             </div>
           )}
         </div>
-        {needsScroll && <div className="h-8 flex-shrink-0" />}
+        <div className="h-8 flex-shrink-0" />
       </div>
+      </div>{/* end inner scroll child */}
 
       {/* Animations */}
       <style>{`

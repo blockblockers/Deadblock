@@ -1,6 +1,6 @@
 // CreatorPuzzleSelect.jsx
-// Scroll fixes: h-dvh (iOS Safari fix), min-h-0 + overscrollBehavior + touchAction on scroll container - Selection grid for hand-crafted creator puzzles
-// v1.5: Enhanced layout - larger title, subtitle, pagination, themed puzzle info
+// CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
+// v1.6: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom); root already uses correct h-dvh flex-col shell
 import { useState, useEffect } from 'react';
 import { Check, Lock, Loader, Trophy, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -277,7 +277,7 @@ const CreatorPuzzleSelect = ({
       <div className={`fixed ${theme.glow2.pos} w-40 h-40 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
 
       {/* Main Content - Scrollable if needed */}
-      <div className="relative flex-1 min-h-0 flex flex-col overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', touchAction: 'pan-y' }}>
         <div className="flex-1 flex flex-col items-center px-4 py-4">
           <div className="w-full max-w-md">
             

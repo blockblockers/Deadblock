@@ -1,4 +1,5 @@
 // Weekly Leaderboard - Shows rankings for weekly challenge
+// v7.11: Fixed scroll — two-layer shell pattern; removed nested maxHeight scroll on leaderboard list
 // FIXED: Uses username priority (not display_name)
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Trophy, Crown, Medal, User, Clock, RefreshCw, Calendar } from 'lucide-react';
@@ -92,10 +93,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
   };
   
   return (
-    <div 
-      className="min-h-screen bg-slate-950"
-      style={{ overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
       {/* Background - RED THEME */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
         backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
@@ -105,8 +103,13 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
       {/* Glowing orbs */}
       <div className="fixed top-10 right-20 w-64 h-64 bg-red-500/30 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed bottom-20 left-10 w-48 h-48 bg-rose-500/25 rounded-full blur-3xl pointer-events-none" />
-      
-      <div className="relative min-h-screen px-4 py-6">
+
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+      >
+      <div className="relative min-h-full px-4 py-6">
         <div className="max-w-md mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
@@ -182,7 +185,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
                 <p className="text-slate-500 text-sm">Be the first to complete this week's challenge!</p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-800/50 overflow-y-auto" style={{ maxHeight: 'calc(60dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
+              <div className="divide-y divide-slate-800/50">
                 {leaderboard.map((entry, index) => {
                   const rank = index + 1;
                   const isCurrentUser = entry.user_id === profile?.id;
@@ -254,6 +257,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
         
         <div className="h-8" />
       </div>
+      </div>{/* end inner scroll child */}
     </div>
   );
 };

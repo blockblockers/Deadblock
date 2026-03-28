@@ -1,5 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v2.3: Scroll fixes - h-dvh (iOS Safari fix), overscrollBehavior:'contain' on scroll mode
+// v2.4: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 // v2.1: Fixed freeze on "Next Puzzle" - reset mountedRef and clear timeouts for new puzzles
 // v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
 // v1.5: Attempt persistence - loads/saves attempts to database across sessions
@@ -1344,23 +1344,19 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }
   
   return (
-    <div 
-      className={needsScroll ? 'min-h-screen bg-transparent' : 'h-dvh bg-transparent overflow-hidden'}
-      style={needsScroll ? { 
-        overflowY: 'auto', 
-        overflowX: 'hidden', 
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y',
-      } : {}}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-transparent">
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: isDragging ? 'none' : 'pan-y', overscrollBehavior: 'none' }}
+      >
       {/* Main content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
-        <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
+      <div className="relative min-h-full flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2">
           
           {/* Title */}
           <div className="text-center mb-2">
@@ -1369,7 +1365,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           </div>
 
           {/* Game Area */}
-          <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
+          <div className="w-full max-w-md">
             
             {/* Puzzle Info Bar - Centered */}
             <div className="flex items-center justify-center mb-2 px-1">
@@ -1522,7 +1518,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           </div>
 
           {/* Piece Tray */}
-          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
+          <div>
             <PieceTray
               usedPieces={effectiveUsedPieces}
               selectedPiece={selectedPiece}
@@ -1564,6 +1560,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       
       {/* Safe area bottom */}
       <div className="flex-shrink-0" style={{ height: 'max(16px, env(safe-area-inset-bottom))' }} />
+    </div>
+    </div>{/* end inner scroll child */}
     </div>
   );
 };

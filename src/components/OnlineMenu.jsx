@@ -1,5 +1,6 @@
 // Online Menu - Hub for online features
-// v7.33: Self-heal stale email invite links — acceptInviteByCode runs as receiver whose RLS
+// v7.34: Fixed scroll — outer fixed shell is overflow:hidden; inner flex-1 min-h-0 overflow-y-auto child
+//        is the sole scroll source. iOS WebKit cannot reliably scroll position:fixed elements.
 //        blocks the email_invites update; loadInvites now detects this and writes game_id from
 //        the sender's side (which RLS permits), then re-fetches to hide the link
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
@@ -1393,13 +1394,8 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // v7.10: Fixed scroll container - only ONE element should have scroll properties
-      className="fixed inset-0 bg-transparent overflow-y-auto overflow-x-hidden"
-      style={{ 
-        WebkitOverflowScrolling: 'touch', 
-        overscrollBehavior: 'contain',
-        touchAction: 'pan-y',
-      }}
+      // v7.34: Outer shell is overflow:hidden — scroll lives in the inner child below
+      className="fixed inset-0 overflow-hidden flex flex-col bg-transparent"
     >
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
@@ -1451,14 +1447,19 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* Content - v7.10: Removed duplicate scroll styles, let parent handle scrolling */}
+      {/* Inner scroll child — iOS WebKit cannot reliably scroll position:fixed elements;
+          this non-fixed flex child is the single scroll source for all menu content */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+      >
+      {/* Content */}
       <div 
-        className="relative flex flex-col items-center px-3 sm:px-4 pt-12 sm:pt-16 pb-32"
+        className="relative flex flex-col items-center px-3 sm:px-4"
         style={{ 
           minHeight: '100%',
           paddingBottom: 'max(160px, calc(env(safe-area-inset-bottom) + 160px))',
           paddingTop: 'max(48px, calc(env(safe-area-inset-top) + 48px))',
-          // v7.10: NO scroll styles here - parent handles all scrolling
         }}
       >
         <div className="w-full max-w-md">
@@ -2986,6 +2987,7 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
+      </div>{/* end inner scroll child */}
     </div>
   );
 };

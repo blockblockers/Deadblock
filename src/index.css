@@ -1,5 +1,6 @@
 /* =============================================================================
    DEADBLOCK - Global Styles
+   v7.11: touch-action: pan-y on interactive elements (was manipulation — blocked scroll-over-buttons)
    v7.9: FIXED scroll handling - removed conflicting position:fixed rules
    v7.10: Added iOS scroll fix utility classes
    ============================================================================= */
@@ -67,11 +68,11 @@ body {
    v7.9: Allow scroll to work over buttons, inputs, links, etc.
    ============================================================================= */
 
-/* All interactive elements use 'manipulation' which allows:
-   - Tap/click actions
-   - Pan gestures (scroll)
-   - Pinch zoom
-   But NOT double-tap zoom (which causes 300ms delay) */
+/* v7.11: pan-y instead of manipulation.
+   'manipulation' absorbs the touch when a finger starts on a button,
+   killing the scroll gesture on iOS/Android even if the intent is to scroll.
+   'pan-y' still eliminates the 300ms double-tap delay while letting
+   vertical pan events propagate to the nearest scroll container. */
 button,
 [role="button"],
 input,
@@ -81,7 +82,7 @@ a,
 label,
 .clickable,
 .btn {
-  touch-action: manipulation;
+  touch-action: pan-y;
 }
 
 /* During drag operations, disable scroll completely */

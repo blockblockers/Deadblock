@@ -173,10 +173,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
   };
 
   return (
-    <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-dvh bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : {}}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -190,9 +187,14 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
       
       {/* Floating pieces background */}
       <FloatingPieces count={12} theme="puzzle" minOpacity={0.2} maxOpacity={0.4} />
-      
+
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+      >
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 ${needsScroll ? 'py-6' : 'py-3'}`}>
+      <div className="relative flex flex-col items-center justify-center px-4 py-6 min-h-full">
         <div className="w-full max-w-md">
           {/* Title - Centered and Large */}
           <div className="text-center mb-4">
@@ -372,7 +374,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
             </button>
           </div>
         </div>
-        {needsScroll && <div className="h-6 flex-shrink-0" />}
+        <div className="h-6 flex-shrink-0" />
       </div>
       
       {/* Shine animation */}
@@ -393,6 +395,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
           animation: speed-pulse 2s ease-in-out infinite;
         }
       `}</style>
+      </div>{/* end inner scroll child */}
     </div>
   );
 };

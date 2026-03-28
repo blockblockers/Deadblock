@@ -1,5 +1,6 @@
 // WeeklyChallengeMenu - Weekly puzzle challenge menu with leaderboard
-// UPDATED: Fixed scrolling for all devices including iPad/iOS/Android
+// v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
+//        Prevents iOS WebKit scroll-lock-at-bottom and scroll-through-buttons issues
 import { useState, useEffect } from 'react';
 import { Calendar, Trophy, Clock, Target, Loader, ArrowLeft, Play, Medal, Users, ChevronRight } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -96,22 +97,8 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
     border: 'border-red-500/50',
   };
   
-  // UPDATED: Comprehensive scroll styles for all devices
-  const scrollStyles = {
-    overflowY: 'auto',
-    overflowX: 'hidden',
-    WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y',
-    overscrollBehavior: 'contain',
-    scrollBehavior: 'smooth',
-    minHeight: '100dvh',
-  };
-  
   return (
-    <div 
-      className="min-h-screen bg-slate-950"
-      style={scrollStyles}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -125,9 +112,14 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
       <div className="fixed top-20 left-10 w-80 h-80 bg-red-500/30 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed bottom-32 right-10 w-72 h-72 bg-rose-400/25 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed top-1/2 left-1/2 w-64 h-64 bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
-      
+
+      {/* Inner scroll child — iOS WebKit requires a non-fixed child to scroll reliably */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+      >
       {/* Content */}
-      <div className="relative min-h-screen flex flex-col items-center px-4 py-8">
+      <div className="relative flex flex-col items-center px-4 py-8">
         <div className="w-full max-w-md">
           {/* Title */}
           <div className="text-center mb-6">
@@ -273,6 +265,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
         {/* Bottom safe area padding */}
         <div className="h-8 flex-shrink-0" />
       </div>
+      </div>{/* end inner scroll child */}
     </div>
   );
 };

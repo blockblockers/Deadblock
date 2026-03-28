@@ -1,8 +1,10 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
-// v7.19: Fix stale closure bugs in timer callbacks — accumulatedMsRef mirrors accumulatedMs state
-//   so startTimer/stopTimer/pauseTimer always read the current accumulated time regardless of
-//   when the useCallback was last re-created. Fixes: timer resetting on retry, wrong elapsed/best
-//   time display, and attempt count not reflecting correct session state.
+// v7.19: Fix timer and attempt count bugs
+//   - gameOverHandledRef guard prevents game-over effect re-firing when deps change mid-win/loss
+//   - accumulatedMsRef mirrors accumulatedMs state so timer callbacks never have stale closures
+//   - stopTimer/pauseTimer guard against double-calls (sessionTime grows if startTimeRef not reset)
+//   - Attempt display: removed off-by-one (+1) since count is already incremented before overlay renders
+// v7.18: Added confirmFlashCells for immediate cell-flash feedback on confirm tap
 // v7.17: Persistent timer - saves elapsed time on reset/close, restores when returning
 // UPDATED: Added full drag and drop support from piece tray and board
 // UPDATED: Controls moved above piece tray, dynamic timer colors, removed duplicate home button
@@ -229,7 +231,7 @@ const LoseOverlay = ({ elapsedMs, attemptCount, isFirstAttempt, onRetry, onMenu 
             <div className="text-slate-500 text-xs uppercase mb-1">Time (continues on retry)</div>
             <div className="text-2xl font-black text-white">{formatTime(elapsedMs)}</div>
             {attemptCount > 0 && (
-              <div className="text-slate-500 text-xs mt-1">Attempt #{attemptCount + 1}</div>
+              <div className="text-slate-500 text-xs mt-1">Attempt #{attemptCount}</div>
             )}
           </div>
         </div>
@@ -300,7 +302,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Refs
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
-  const accumulatedMsRef = useRef(0); // Always-current mirror of accumulatedMs; prevents stale closures in timer callbacks
+  const accumulatedMsRef = useRef(0);      // Always-current mirror of accumulatedMs; prevents stale closures in timer intervals
+  const gameOverHandledRef = useRef(false); // Prevents game-over effect re-firing when deps change (e.g. attemptCount increment)
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
@@ -937,7 +940,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         // v7.17: Restore saved timer state if user previously left mid-challenge
         const savedTimer = loadTimerState(challenge.id);
         if (savedTimer) {
-          accumulatedMsRef.current = savedTimer.elapsedMs; // Keep ref in sync
+          accumulatedMsRef.current = savedTimer.elapsedMs; // keep ref in sync
           setAccumulatedMs(savedTimer.elapsedMs);
           setElapsedMs(savedTimer.elapsedMs);
           setAttemptCount(savedTimer.attemptCount || 0);
@@ -960,7 +963,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     timerRef.current = setInterval(() => {
       setElapsedMs(accumulatedMsRef.current + (Date.now() - startTimeRef.current));
     }, 10);
-  }, []); // No accumulatedMs dep — reads from ref which is always current
+  }, []); // no dep — reads ref which is always current
   
   // Stop the timer
   const stopTimer = useCallback(() => {
@@ -968,9 +971,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    // Guard: if timer was already stopped, startTimeRef is stale — return cached accumulated value
+    if (!startTimeRef.current) return accumulatedMsRef.current;
     const sessionTime = Date.now() - startTimeRef.current;
+    startTimeRef.current = null; // prevent double-counting on re-call
     return accumulatedMsRef.current + sessionTime;
-  }, []); // No dep — reads from ref
+  }, []); // no dep — reads ref which is always current
   
   // Pause the timer
   const pauseTimer = useCallback(() => {
@@ -978,12 +984,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    // Guard: if timer was already stopped, startTimeRef is stale — return cached accumulated value
+    if (!startTimeRef.current) return accumulatedMsRef.current;
     const sessionTime = Date.now() - startTimeRef.current;
+    startTimeRef.current = null; // prevent double-counting on re-call
     const newAccumulated = accumulatedMsRef.current + sessionTime;
-    accumulatedMsRef.current = newAccumulated; // Update ref immediately so startTimer sees it
+    accumulatedMsRef.current = newAccumulated; // write ref immediately so startTimer sees it on retry
     setAccumulatedMs(newAccumulated);
     return newAccumulated;
-  }, []); // No dep — reads/writes ref directly
+  }, []); // no dep — reads/writes ref which is always current
   
   // Auto-start the game when puzzle is loaded
   useEffect(() => {
@@ -997,8 +1006,18 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Check for puzzle completion
   useEffect(() => {
-    if (gameStarted && gameOver) {
-      if (winner === 1) {
+    // Reset guard when game is not over so next game-over is handled
+    if (!gameOver) {
+      gameOverHandledRef.current = false;
+      return;
+    }
+    if (!gameStarted) return;
+    // Guard: prevent re-firing when deps change mid-win/loss (stopTimer/pauseTimer recreation,
+    // attemptCount increment, etc. would all cause this effect to re-run without this guard)
+    if (gameOverHandledRef.current) return;
+    gameOverHandledRef.current = true;
+
+    if (winner === 1) {
         const finalTime = stopTimer();
         setCompletionTime(finalTime);
         setWasFirstAttempt(isFirstAttempt);
@@ -1033,16 +1052,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       } else if (winner === 2) {
         const pausedTime = pauseTimer();
         setGameLost(true);
-        setAttemptCount(prev => prev + 1);
         soundManager.playGameOver();
-        
-        // v7.17: Save timer state when AI wins (loss)
-        if (challenge?.id) {
-          saveTimerState(challenge.id, pausedTime, attemptCount + 1);
-        }
+        // Use functional updater so saveTimerState receives the correct post-increment count
+        setAttemptCount(prev => {
+          const next = prev + 1;
+          if (challenge?.id) {
+            saveTimerState(challenge.id, pausedTime, next);
+          }
+          return next;
+        });
       }
-    }
-  }, [gameOver, winner, gameStarted, stopTimer, pauseTimer, isFirstAttempt, challenge, attemptCount]);
+  // stopTimer/pauseTimer are now stable (no deps) so omitting them is safe.
+  // attemptCount removed — its increment was the original cause of the re-fire loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameOver, winner, gameStarted, isFirstAttempt, challenge]);
   
   // Submit result
   const submitResult = async (timeMs) => {
@@ -1069,6 +1092,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Retry after loss
   const handleRetryAfterLoss = useCallback(() => {
+    gameOverHandledRef.current = false; // allow next game-over to be processed
     resetCurrentPuzzle();
     setGameLost(false);
     startTimer();
@@ -1077,34 +1101,30 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Full restart - v7.17: Timer continues, saves state
   const handleRestart = useCallback(() => {
-    // Save current elapsed time before resetting board
     const currentTime = timerRef.current 
       ? accumulatedMsRef.current + (Date.now() - startTimeRef.current)
       : accumulatedMsRef.current;
     
-    // Stop current timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
+    startTimeRef.current = null;
     
-    // Save timer state for persistence
     if (challenge?.id) {
       saveTimerState(challenge.id, currentTime, attemptCount);
     }
     
-    // Reset board state but keep timer
     resetCurrentPuzzle();
     setGameComplete(false);
     setGameLost(false);
     setCompletionTime(null);
     setWasFirstAttempt(false);
     
-    // v7.17: Continue timer from current time (don't reset to 0)
-    accumulatedMsRef.current = currentTime; // Keep ref in sync
+    accumulatedMsRef.current = currentTime; // keep ref in sync
     setAccumulatedMs(currentTime);
     setElapsedMs(currentTime);
-    // Don't reset attemptCount - it tracks total attempts
+    gameOverHandledRef.current = false; // allow next game-over to be processed
     
     setGameStarted(false);
   }, [resetCurrentPuzzle, attemptCount, challenge]);
@@ -1119,7 +1139,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const handleGoToMenu = useCallback(() => {
     soundManager.playButtonClick();
     
-    // Save current elapsed time before leaving
     if (challenge?.id && !gameComplete) {
       const currentTime = timerRef.current 
         ? accumulatedMsRef.current + (Date.now() - startTimeRef.current)
@@ -1127,7 +1146,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       saveTimerState(challenge.id, currentTime, attemptCount);
     }
     
-    // Stop timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -1142,7 +1160,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       if (timerRef.current) {
         clearInterval(timerRef.current);
         
-        // Save current elapsed time before unmounting
         if (challenge?.id && startTimeRef.current && !gameComplete) {
           const currentTime = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
           saveTimerState(challenge.id, currentTime, attemptCount);

@@ -1,5 +1,5 @@
 // User Profile Screen - Enhanced with ELO changes in match history and proper Final Board View
-// FIXES:
+// v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 // 1. Shows +/- ELO changes in match history boxes (with fallback calculation)
 // 2. Fetches game moves for Final Board View
 // 3. Uses username priority (same as PlayerProfileCard)
@@ -277,19 +277,7 @@ const UserProfile = ({ onBack }) => {
   const playerDisplayName = profile?.username || profile?.display_name || 'Player';
 
   return (
-    <div 
-      className="scroll-page bg-slate-950"
-      style={{
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: 'pan-y',
-        minHeight: '100dvh',
-        paddingTop: 'max(16px, env(safe-area-inset-top))',
-        paddingBottom: 'env(safe-area-inset-bottom)'
-      }}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
       <style>{`
         /* v7.9: Scrollable lists within the page */
         .scroll-list {
@@ -314,6 +302,16 @@ const UserProfile = ({ onBack }) => {
           border-radius: 2px;
         }
       `}</style>
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{
+          touchAction: 'pan-y',
+          overscrollBehavior: 'none',
+          paddingTop: 'max(16px, env(safe-area-inset-top))',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
+      >
       <div className="p-4 pb-8 max-w-md mx-auto">
         {/* Header - Title centered with absolute positioning */}
         <div className="relative flex items-center justify-center mb-6">
@@ -623,6 +621,7 @@ const UserProfile = ({ onBack }) => {
           gameDate={selectedGameForFinalView.created_at}
         />
       )}
+      </div>{/* end inner scroll child */}
     </div>
   );
 };

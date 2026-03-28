@@ -1,6 +1,6 @@
 // Achievements.jsx - Modal displaying all achievements with improved scroll and text
+// v7.16: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom)
 // v7.15: Scroll fixes - dvh modal height (iOS Safari fix), min-h-0 Tailwind class on scroll container
-// Place in src/components/Achievements.jsx
 
 import { useState, useEffect, useRef } from 'react';
 import { X, Trophy, Lock, Star, ChevronDown, ChevronUp, Loader } from 'lucide-react';
@@ -174,7 +174,7 @@ const Achievements = ({ userId, onClose }) => {
           className="flex-1 min-h-0 overflow-y-auto"
           style={{
             WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
+            overscrollBehavior: 'none',
             touchAction: 'pan-y',
           }}
         >

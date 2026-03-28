@@ -1,5 +1,5 @@
 // FriendsList - View and manage friends
-// v7.8: Scroll fixes - dvh on both modals, min-h-0 on scroll containers, full iOS properties on SpectateGamesModal
+// v7.9: overscrollBehavior: 'none' on both scroll children (was 'contain' — caused iOS lock-at-bottom)
 // - Swapped Eye (watch) icon for Swords (challenge) on friend rows
 // - Shows active game count instead of "Playing vs X"
 // - Added popup to select which game to spectate
@@ -40,7 +40,7 @@ const SpectateGamesModal = ({ friend, games, onSpectate, onClose }) => {
         </div>
 
         {/* Games list */}
-        <div className="p-4 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(60dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
+        <div className="p-4 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(60dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', touchAction: 'pan-y' }}>
           <div className="space-y-3">
             {games.map(game => {
               // Determine opponent (the one who is NOT the friend)
@@ -401,7 +401,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
           className="flex-1 min-h-0 overflow-y-auto p-4"
           style={{ 
             WebkitOverflowScrolling: 'touch', 
-            overscrollBehavior: 'contain', 
+            overscrollBehavior: 'none', 
             touchAction: 'pan-y',
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(100, 116, 139, 0.4) transparent'

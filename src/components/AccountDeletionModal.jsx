@@ -1,8 +1,7 @@
 // AccountDeletionModal.jsx - Account deletion modal
+// v7.20: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom)
 // v7.19: FIXED - Uses direct fetch for credential verification to avoid triggering
 //   auth state changes that navigate the user away before deletion completes.
-//   Single-screen flow: email + password + type DELETE → verify + delete in one action.
-// Place in src/components/AccountDeletionModal.jsx
 
 import { useState } from 'react';
 import { X, Mail, Lock, Eye, EyeOff, Trash2, AlertTriangle, CheckCircle, Loader } from 'lucide-react';
@@ -204,7 +203,7 @@ const AccountDeletionModal = ({ onClose }) => {
         {/* Content */}
         <div 
           className="p-5 space-y-4 overflow-y-auto"
-          style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+          style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', touchAction: 'pan-y' }}
         >
           {/* Warning */}
           <div className="p-3 bg-red-900/30 border border-red-500/30 rounded-xl">

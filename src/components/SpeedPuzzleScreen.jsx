@@ -1683,20 +1683,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // -------------------------------------------------------------------------
   // RENDER
   // -------------------------------------------------------------------------
-  const scrollStyles = needsScroll ? {
-    overflowY: 'auto',
-    overflowX: 'hidden',
-    WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y',
-    scrollBehavior: 'smooth',
-    overscrollBehavior: 'contain',
-  } : {};
-
   return (
-    <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-dvh bg-slate-950 overflow-hidden'}
-      style={scrollStyles}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
       {/* Grid background */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -1707,8 +1695,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       <div className={`fixed top-10 left-20 w-80 h-80 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-20 right-10 w-72 h-72 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
       
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: isDragging ? 'none' : 'pan-y', overscrollBehavior: 'none' }}
+      >
       {/* Content */}
-      <div className={`relative ${needsScroll ? 'pb-safe min-h-full' : 'h-full'} flex flex-col items-center px-2 py-2`}>
+      <div className="relative min-h-full flex flex-col items-center px-2 py-2">
         {/* Header */}
         <div className="w-full max-w-md mb-2 flex-shrink-0">
           <div className="flex items-center justify-center">
@@ -1887,10 +1880,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               />
             </div>
             
-            {needsScroll && <div className="h-12 flex-shrink-0" />}
+            <div className="h-12 flex-shrink-0" />
           </>
         )}
       </div>
+      </div>{/* end inner scroll child */}
       
       {/* Overlays */}
       {gameState === GAME_STATES.SUCCESS && (

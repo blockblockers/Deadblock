@@ -1,5 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.27: FIX - Board-clearing glitch: isReviewModeRef guard on accepted rematch polling path
+// v7.28: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 //   - FIX - Sender countdown banner replaces static toast (live 5s countdown)
 // v7.26: FIX - Rematch sender: setShowGameOver(false) immediately on Play Again to kill polling
 //   - FIX - Viewing completed game: isReviewModeRef blocks RematchModal from auto-showing
@@ -1565,21 +1565,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }
 
   return (
-    <div 
-      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      className="min-h-dvh bg-transparent overflow-x-hidden"
-      style={{ 
-        overflowY: needsScroll ? 'auto' : 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y'
-      }}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-transparent">
       {/* Background glow effects */}
       <div className={`fixed top-1/4 right-1/4 w-64 h-64 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-1/4 left-1/4 w-64 h-64 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* Drag Overlay */}
+      {/* Drag Overlay — must be outside scroll child so it renders over the whole screen */}
       {isDragging && draggedPiece && (
         <DragOverlay
           isDragging={isDragging}
@@ -1592,9 +1583,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         />
       )}
 
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ touchAction: isDragging ? 'none' : 'pan-y', overscrollBehavior: 'none' }}
+      >
       {/* Main content */}
-      <div className={`relative z-10 ${needsScroll ? 'min-h-dvh' : 'h-dvh flex flex-col'}`}>
-        <div className={`${needsScroll ? '' : 'flex-1 flex flex-col'} max-w-lg mx-auto p-2 sm:p-4`}>
+      <div className="relative z-10 min-h-full flex flex-col">
+        <div className="flex-1 flex flex-col max-w-lg mx-auto p-2 sm:p-4 w-full">
           
           {/* UPDATED v7.21: Header - removed top menu button, centered title */}
           <div className="flex items-center justify-between mb-2">
@@ -2355,6 +2351,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
+      </div>{/* end inner scroll child */}
     </div>
   );
 };
