@@ -1,6 +1,7 @@
 // WeeklyChallengeMenu - Weekly puzzle challenge menu with leaderboard
+// v7.12: Scroll fix — added WebkitOverflowScrolling:'touch' (iOS momentum scroll) and overscrollBehavior:'contain'
+//        (matches ViewPlayerProfile working pattern; 'none' was disabling iOS rubber-band cue for scroll context)
 // v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
-//        Prevents iOS WebKit scroll-lock-at-bottom and scroll-through-buttons issues
 import { useState, useEffect } from 'react';
 import { Calendar, Trophy, Clock, Target, Loader, ArrowLeft, Play, Medal, Users, ChevronRight } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -116,7 +117,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
       {/* Inner scroll child — iOS WebKit requires a non-fixed child to scroll reliably */}
       <div
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}
       <div className="relative flex flex-col items-center px-4 py-8">

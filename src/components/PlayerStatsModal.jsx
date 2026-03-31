@@ -1,5 +1,5 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
-// v7.24: overscrollBehavior: 'none' on scroll child (was 'contain' — caused iOS lock-at-bottom)
+// v7.25: Scroll fix — overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
 // v7.22: AI Battles and Generated Puzzles as independent sections (not sub-dropdowns in Overview)
 // v7.21: Performance - parallel loading with Promise.all for faster modal open
 // v7.20: Fixed double # in rank, added AI/puzzle detail dropdowns, puzzles solved includes both types
@@ -546,7 +546,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
           className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0"
           style={{
             WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'none',
+            overscrollBehavior: 'contain',
             touchAction: 'pan-y',
           }}
         >

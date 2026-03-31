@@ -1,4 +1,6 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.20: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
+//        WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' to match ViewPlayerProfile working pattern
 // v7.19: Fix timer and attempt count bugs
 //   - gameOverHandledRef guard prevents game-over effect re-firing when deps change mid-win/loss
 //   - accumulatedMsRef mirrors accumulatedMs state so timer callbacks never have stale closures
@@ -1229,16 +1231,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Game in progress
   return (
-    <div 
-      className="min-h-screen bg-slate-950 relative z-20"
-      style={{ 
-        overflowY: 'auto', 
-        overflowX: 'hidden', 
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y'
-      }}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950 relative z-20">
       {/* Red Background Grid */}
       <div className="fixed inset-0 opacity-30 pointer-events-none z-0" style={{
         backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
@@ -1255,7 +1248,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         boxShadow: 'inset 0 0 150px rgba(239,68,68,0.2)'
       }} />
       
-      {/* Drag Overlay */}
+      {/* Drag Overlay — outside scroll child so it covers full screen */}
       {isDragging && draggedPiece && (
         <DragOverlay
           isDragging={isDragging}
@@ -1268,9 +1261,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           cellOffset={pieceCellOffset}
         />
       )}
-      
+
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative z-10"
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
+      >
       {/* Content */}
-      <div className="relative z-10 min-h-screen flex flex-col items-center px-2 py-4">
+      <div className="min-h-full flex flex-col items-center px-2 py-4">
         <div className="w-full max-w-lg">
           
           {/* Header with Title and Timer - styled like other game boards */}
@@ -1551,6 +1549,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           onMenu={onMenu}
         />
       )}
+      </div>{/* end inner scroll child */}
     </div>
   );
 };

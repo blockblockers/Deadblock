@@ -1,5 +1,5 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
-// Scroll fix: h-dvh (iOS Safari fix), overscrollBehavior:'contain' on scroll mode
+// v7.11: Fixed scroll — two-layer shell + WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain'
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Flag, XCircle, Move } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -723,24 +723,19 @@ const GameScreen = ({
   }, [isDragging, onCellClick]);
 
   return (
-    <div 
-      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      className={needsScroll ? 'min-h-screen bg-transparent' : 'h-dvh bg-transparent overflow-hidden'}
-      style={needsScroll ? { 
-        overflowY: 'auto', 
-        overflowX: 'hidden', 
-        WebkitOverflowScrolling: 'touch',
-        overscrollBehavior: 'contain',
-        touchAction: isDragging ? 'none' : 'pan-y',
-      } : {}}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-transparent">
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
+      >
       {/* Main content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col`}>
-        <div className={`flex-1 flex flex-col items-center justify-start px-2 sm:px-4 ${needsScroll ? 'pt-4 pb-2' : 'pt-2'}`}>
+      <div className="relative min-h-full flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2">
           
           {/* Title - CONSISTENT sizing across all game modes */}
           <div className="text-center mb-2">
@@ -757,7 +752,7 @@ const GameScreen = ({
           </div>
 
           {/* Game Area */}
-          <div className={`w-full max-w-md ${needsScroll ? '' : 'flex-shrink-0'}`}>
+          <div className="w-full max-w-md">
             
             {/* Player Bar - with difficulty shown between YOU and AI */}
             <PlayerBar 
@@ -852,7 +847,7 @@ const GameScreen = ({
           </div>
 
           {/* Piece Tray with drag handlers */}
-          <div className={needsScroll ? '' : 'flex-1 min-h-0 overflow-auto'}>
+          <div>
             <PieceTray
               usedPieces={usedPieces}
               selectedPiece={selectedPiece}
@@ -869,9 +864,10 @@ const GameScreen = ({
             />
           </div>
           
-          {needsScroll && <div className="h-8" />}
+          <div className="h-8" />
         </div>
       </div>
+      </div>{/* end inner scroll child */}
 
       {/* Drag Overlay - floating piece following cursor/finger */}
       <DragOverlay

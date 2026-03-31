@@ -1,4 +1,5 @@
 // DifficultySelector.jsx
+// v7.12: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
 // v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
@@ -134,7 +135,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       {/* Inner scroll child */}
       <div
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}
       <div className="relative flex flex-col items-center justify-center px-4 py-6 min-h-full">

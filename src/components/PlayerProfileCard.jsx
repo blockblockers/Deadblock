@@ -1,5 +1,5 @@
 // PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, and achievements
-// v7.19: overscrollBehavior: 'none' on scroll child (was 'contain' — caused iOS lock-at-bottom)
+// v7.20: Scroll fix — overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
 // v7.17: Match OnlineMenu profile display style - inline stats with leaderboard rank and achievement count
 // Place in src/components/PlayerProfileCard.jsx
 
@@ -49,7 +49,7 @@ const RatingInfoModal = ({ onClose }) => {
         
         <div 
           className="p-4 space-y-4 overflow-y-auto"
-          style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'none', touchAction: 'pan-y' }}
+          style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
         >
           <p className="text-sm text-slate-400">
             Your ELO rating changes based on match results. Beat higher-rated players to gain more points!

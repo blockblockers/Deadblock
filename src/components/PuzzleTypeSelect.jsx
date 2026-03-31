@@ -1,4 +1,5 @@
 // PuzzleTypeSelect.jsx - Choose between Creator Puzzles and Generated Puzzles
+// v2.2: Fixed scroll — two-layer shell + WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain'
 // v2.1: Compressed spacing for smaller screens
 // v2.0: Animated pentomino showcase + expanded mode comparison cards
 import { useState, useEffect } from 'react';
@@ -256,10 +257,7 @@ const PuzzleTypeSelect = ({
   const selectedTypeData = puzzleTypes.find(t => t.id === selectedType) || puzzleTypes[0];
 
   return (
-    <div 
-      className={needsScroll ? 'min-h-screen bg-slate-950' : 'h-dvh bg-slate-950 overflow-hidden'}
-      style={needsScroll ? { overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' } : {}}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
       {/* Themed Grid background */}
       <div 
         className="fixed inset-0 pointer-events-none"
@@ -280,8 +278,13 @@ const PuzzleTypeSelect = ({
       <div className={`fixed ${theme.glow2.pos} w-56 h-56 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
       <div className={`fixed ${theme.glow3.pos} w-48 h-48 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '5s' }} />
 
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+      >
       {/* Main Content */}
-      <div className={`relative ${needsScroll ? 'min-h-screen' : 'h-full'} flex flex-col items-center justify-center px-4 py-4`}>
+      <div className="relative flex flex-col items-center justify-center px-4 py-4 min-h-full">
         <div className="w-full max-w-md">
           
           {/* Title */}
@@ -388,6 +391,7 @@ const PuzzleTypeSelect = ({
           </button>
         </div>
       </div>
+      </div>{/* end inner scroll child */}
     </div>
   );
 };

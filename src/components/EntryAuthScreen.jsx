@@ -1,4 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.33: Fixed scroll — two-layer shell + WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain'
 // v7.32: Fetch challenger profile from DB if inviteInfo lacks from_username/from_display_name (fixes "A Player" bug)
 // v7.19: Delete Account underlined, footer padding increased to show static Privacy/Terms footer from index.html
 // v7.18: Fixed footer positioning - sits at bottom of screen with proper safe area
@@ -269,17 +270,6 @@ const EntryAuthScreen = ({
     soundManager.playButtonClick?.();
     onCancelInvite?.();
   };
-
-  // Scroll styles for mobile/iPad - v7.18: Added smooth scrolling
-  const scrollStyles = needsScroll ? {
-    overflow: 'auto',
-    WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y pinch-zoom',
-    overscrollBehavior: 'contain',
-    scrollBehavior: 'smooth',
-    height: '100%',
-    minHeight: '100dvh',
-  } : {};
 
   // ============================================
   // INVITE BANNER COMPONENT
@@ -1136,18 +1126,19 @@ const EntryAuthScreen = ({
   const activeTheme = isInviteFlow ? inviteTheme : theme;
 
   return (
-    <div 
-      // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      className="min-h-screen bg-transparent flex flex-col"
-      style={scrollStyles}
-    >
+    <div className="fixed inset-0 overflow-hidden flex flex-col bg-transparent">
       {/* Multiple themed glow orbs - matching PuzzleSelect */}
       <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      
+
+      {/* Inner scroll child */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+      >
       {/* Content - Grouped title+subtitle+card together, positioned in upper-center area */}
-      <div className="relative z-10 flex-1 flex flex-col items-center p-4 pt-12 sm:pt-16"
+      <div className="relative z-10 flex flex-col items-center p-4"
         style={{
           paddingTop: 'max(48px, env(safe-area-inset-top))',
           paddingBottom: '16px',
@@ -1223,6 +1214,8 @@ const EntryAuthScreen = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
+
+      </div>{/* end inner scroll child */}
 
       {/* v7.31: Invite modal — full-screen overlay, renders on top of everything */}
       <InviteModal />

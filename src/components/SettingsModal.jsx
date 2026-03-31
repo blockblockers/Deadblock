@@ -1,6 +1,6 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.16: Scroll fix — added touchAction:'pan-y' to scroll child (matches ViewPlayerProfile working pattern)
 // v7.15: Purple glow orb Change Password, orange glow orb Sign Out (matched Delete Account pattern)
-// v7.14: Fixed push notification toggle - properly checks subscription state after init
 // UPDATED: Added push notification subscription management
 // v7.10: Added iOS scroll fixes for modal content
 // v7.11: Added granular notification preferences
@@ -514,7 +514,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
         {/* Scrollable Content - v7.10: iOS scroll fix */}
         <div 
           className="flex-1 overflow-y-auto p-4 space-y-4"
-          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' }}
+          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
         >
           {/* Sound Settings */}
           <div className="space-y-3">

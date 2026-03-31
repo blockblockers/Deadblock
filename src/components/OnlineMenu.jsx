@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
+// v7.35: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' on inner scroll child
 // v7.34: Fixed scroll — outer fixed shell is overflow:hidden; inner flex-1 min-h-0 overflow-y-auto child
-//        is the sole scroll source. iOS WebKit cannot reliably scroll position:fixed elements.
 //        blocks the email_invites update; loadInvites now detects this and writes game_id from
 //        the sender's side (which RLS permits), then re-fetches to hide the link
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
@@ -1451,7 +1451,7 @@ const OnlineMenu = ({
           this non-fixed flex child is the single scroll source for all menu content */}
       <div
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        style={{ touchAction: 'pan-y', overscrollBehavior: 'none' }}
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}
       <div 

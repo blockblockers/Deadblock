@@ -1698,7 +1698,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       {/* Inner scroll child */}
       <div
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        style={{ touchAction: isDragging ? 'none' : 'pan-y', overscrollBehavior: 'none' }}
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Content */}
       <div className="relative min-h-full flex flex-col items-center px-2 py-2">

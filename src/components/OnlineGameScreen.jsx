@@ -1,4 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.29: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
 // v7.28: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 //   - FIX - Sender countdown banner replaces static toast (live 5s countdown)
 // v7.26: FIX - Rematch sender: setShowGameOver(false) immediately on Play Again to kill polling
@@ -1586,7 +1587,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       {/* Inner scroll child */}
       <div
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
-        style={{ touchAction: isDragging ? 'none' : 'pan-y', overscrollBehavior: 'none' }}
+        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Main content */}
       <div className="relative z-10 min-h-full flex flex-col">
