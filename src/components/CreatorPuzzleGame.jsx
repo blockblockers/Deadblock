@@ -1,5 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v2.5: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
+// v2.6: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
 // v2.4: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 // v2.1: Fixed freeze on "Next Puzzle" - reset mountedRef and clear timeouts for new puzzles
 // v1.6: Fixed AI bugs - correct piece tracking, better scoring, proper winning move detection
@@ -1345,14 +1345,14 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }
   
   return (
-    <div className="fixed inset-0 overflow-hidden flex flex-col bg-transparent">
+    <div className="fixed inset-0 overflow-hidden bg-transparent">
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* Inner scroll child */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Main content */}

@@ -1,6 +1,5 @@
 // DifficultySelector.jsx
-// v7.12: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
-// v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
+// v7.13: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -117,24 +116,20 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
   };
 
   return (
-    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
+    <div className="fixed inset-0 overflow-hidden bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
-      
-      {/* Multiple themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      
-      {/* Floating pieces background */}
       <FloatingPieces count={12} theme="ai" minOpacity={0.2} maxOpacity={0.4} />
 
-      {/* Inner scroll child */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}

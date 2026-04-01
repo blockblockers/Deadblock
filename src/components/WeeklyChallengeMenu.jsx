@@ -1,6 +1,5 @@
 // WeeklyChallengeMenu - Weekly puzzle challenge menu with leaderboard
-// v7.12: Scroll fix — added WebkitOverflowScrolling:'touch' (iOS momentum scroll) and overscrollBehavior:'contain'
-//        (matches ViewPlayerProfile working pattern; 'none' was disabling iOS rubber-band cue for scroll context)
+// v7.13: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
 // v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 import { useState, useEffect } from 'react';
 import { Calendar, Trophy, Clock, Target, Loader, ArrowLeft, Play, Medal, Users, ChevronRight } from 'lucide-react';
@@ -99,24 +98,20 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
   };
   
   return (
-    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
+    <div className="fixed inset-0 overflow-hidden bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
         backgroundSize: '40px 40px'
       }} />
-      
-      {/* Floating Pentomino Pieces */}
       <FloatingPieces count={12} theme="weekly" minOpacity={0.2} maxOpacity={0.4} />
-      
-      {/* Glow orbs */}
       <div className="fixed top-20 left-10 w-80 h-80 bg-red-500/30 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed bottom-32 right-10 w-72 h-72 bg-rose-400/25 rounded-full blur-3xl pointer-events-none" />
       <div className="fixed top-1/2 left-1/2 w-64 h-64 bg-red-600/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Inner scroll child — iOS WebKit requires a non-fixed child to scroll reliably */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}

@@ -1,5 +1,5 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
-// v7.x: Added confirmFlashCells for immediate cell-flash feedback on confirm tap
+// v7.11: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
 // 
 // SENIOR ENGINEER CODE REVIEW - IMPROVEMENTS APPLIED:
 // 1. Extracted magic numbers to named constants
@@ -1684,7 +1684,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
   // RENDER
   // -------------------------------------------------------------------------
   return (
-    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
+    <div className="fixed inset-0 overflow-hidden bg-slate-950">
       {/* Grid background */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -1695,9 +1695,9 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       <div className={`fixed top-10 left-20 w-80 h-80 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-20 right-10 w-72 h-72 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
       
-      {/* Inner scroll child */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Content */}

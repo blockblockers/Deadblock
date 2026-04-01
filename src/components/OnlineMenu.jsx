@@ -1,6 +1,6 @@
 // Online Menu - Hub for online features
+// v7.36: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
 // v7.35: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' on inner scroll child
-// v7.34: Fixed scroll — outer fixed shell is overflow:hidden; inner flex-1 min-h-0 overflow-y-auto child
 //        blocks the email_invites update; loadInvites now detects this and writes game_id from
 //        the sender's side (which RLS permits), then re-fetches to hide the link
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
@@ -1394,15 +1394,15 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // v7.34: Outer shell is overflow:hidden — scroll lives in the inner child below
-      className="fixed inset-0 overflow-hidden flex flex-col bg-transparent"
+      // v7.36: Outer shell is overflow:hidden only — scroll child is absolute inset-0
+      className="fixed inset-0 overflow-hidden bg-transparent"
     >
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* v7.26: Rematch-sent banner */}
+      {/* v7.26: Rematch-sent banner — rendered before scroll child so it stacks above via z-index */}
       {showRematchSentBanner && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <div
@@ -1447,10 +1447,9 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* Inner scroll child — iOS WebKit cannot reliably scroll position:fixed elements;
-          this non-fixed flex child is the single scroll source for all menu content */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}

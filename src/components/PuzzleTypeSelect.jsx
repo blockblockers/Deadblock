@@ -1,6 +1,6 @@
 // PuzzleTypeSelect.jsx - Choose between Creator Puzzles and Generated Puzzles
-// v2.2: Fixed scroll — two-layer shell + WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain'
-// v2.1: Compressed spacing for smaller screens
+// v2.3: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v2.2: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
 // v2.0: Animated pentomino showcase + expanded mode comparison cards
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Sparkles, Cpu, Trophy, Zap, Target, Infinity } from 'lucide-react';
@@ -257,7 +257,7 @@ const PuzzleTypeSelect = ({
   const selectedTypeData = puzzleTypes.find(t => t.id === selectedType) || puzzleTypes[0];
 
   return (
-    <div className="fixed inset-0 overflow-hidden flex flex-col bg-slate-950">
+    <div className="fixed inset-0 overflow-hidden bg-slate-950">
       {/* Themed Grid background */}
       <div 
         className="fixed inset-0 pointer-events-none"
@@ -269,18 +269,14 @@ const PuzzleTypeSelect = ({
           `,
         }}
       />
-      
-      {/* Floating pieces background */}
       <FloatingPieces />
-
-      {/* Animated glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-64 h-64 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '4s' }} />
       <div className={`fixed ${theme.glow2.pos} w-56 h-56 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
       <div className={`fixed ${theme.glow3.pos} w-48 h-48 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '5s' }} />
 
-      {/* Inner scroll child */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Main Content */}

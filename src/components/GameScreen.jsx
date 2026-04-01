@@ -1,5 +1,5 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
-// v7.11: Fixed scroll — two-layer shell + WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain'
+// v7.12: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Flag, XCircle, Move } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -723,14 +723,14 @@ const GameScreen = ({
   }, [isDragging, onCellClick]);
 
   return (
-    <div className="fixed inset-0 overflow-hidden flex flex-col bg-transparent">
+    <div className="fixed inset-0 overflow-hidden bg-transparent">
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* Inner scroll child */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Main content */}

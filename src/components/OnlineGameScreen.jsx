@@ -1,5 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.29: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
+// v7.30: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
 // v7.28: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 //   - FIX - Sender countdown banner replaces static toast (live 5s countdown)
 // v7.26: FIX - Rematch sender: setShowGameOver(false) immediately on Play Again to kill polling
@@ -1566,7 +1566,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden flex flex-col bg-transparent">
+    <div className="fixed inset-0 overflow-hidden bg-transparent">
       {/* Background glow effects */}
       <div className={`fixed top-1/4 right-1/4 w-64 h-64 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-1/4 left-1/4 w-64 h-64 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
@@ -1584,9 +1584,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         />
       )}
 
-      {/* Inner scroll child */}
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Main content */}
