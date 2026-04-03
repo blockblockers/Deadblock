@@ -1263,7 +1263,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Content */}
-      <div className="min-h-full flex flex-col items-center px-2 py-4">
+      <div className="min-h-full flex flex-col items-center px-2 py-4" style={{ paddingTop: 'max(32px, env(safe-area-inset-top))' }}>
         <div className="w-full max-w-lg">
           
           {/* Header with Title and Timer - styled like other game boards */}

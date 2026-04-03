@@ -1,5 +1,6 @@
 // FriendsList - View and manage friends
-// v7.10: Scroll fix — overscrollBehavior:'contain' on both scroll children (matches ViewPlayerProfile working pattern)
+// v7.11: Fix remove friend on iOS PWA — window.confirm() is blocked by WebKit in PWA mode;
+//        replaced with inline two-step confirmation (tap once to arm, tap again to confirm)
 // - Swapped Eye (watch) icon for Swords (challenge) on friend rows
 // - Shows active game count instead of "Playing vs X"
 // - Added popup to select which game to spectate
@@ -125,6 +126,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
   const [error, setError] = useState(null);
   const [sendingInvite, setSendingInvite] = useState(null);
   const [sentGameInvites, setSentGameInvites] = useState(new Set());
+  const [confirmRemoveId, setConfirmRemoveId] = useState(null); // v7.11: replaces window.confirm() for iOS PWA
   
   // v7.7: State for spectate game selection popup
   const [spectateModalFriend, setSpectateModalFriend] = useState(null);
@@ -228,9 +230,8 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
 
   // Remove friend
   const removeFriend = async (friendshipId) => {
-    if (!confirm('Remove this friend?')) return;
-    
     const { error } = await friendsService.removeFriend(friendshipId, userId);
+    setConfirmRemoveId(null);
     if (!error) {
       loadFriendsData();
     }
@@ -502,14 +503,31 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
                             </div>
                           )}
                           
-                          {/* Remove friend button - red */}
-                          <button
-                            onClick={() => removeFriend(friend.friendshipId)}
-                            className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors"
-                            title="Remove friend"
-                          >
-                            <UserMinus size={18} />
-                          </button>
+                          {/* Remove friend button - two-step confirm (replaces window.confirm for iOS PWA) */}
+                          {confirmRemoveId === friend.friendshipId ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => removeFriend(friend.friendshipId)}
+                                className="px-2 py-1 bg-red-500/80 text-white hover:bg-red-500 rounded-lg text-xs font-bold transition-colors"
+                              >
+                                Remove
+                              </button>
+                              <button
+                                onClick={() => setConfirmRemoveId(null)}
+                                className="px-2 py-1 bg-slate-700 text-slate-300 hover:bg-slate-600 rounded-lg text-xs transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmRemoveId(friend.friendshipId)}
+                              className="p-2 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded-lg transition-colors"
+                              title="Remove friend"
+                            >
+                              <UserMinus size={18} />
+                            </button>
+                          )}
                         </div>
                       </div>
                       

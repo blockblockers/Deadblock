@@ -1,5 +1,5 @@
 // GameOverModal.jsx - Game over modal with animations
-// v7.8: Removed duplicate opponent name badge (already in subtitle)
+// v7.9: Online win subtitle shows forfeit/timeout reason when opponent didn't finish naturally
 // v7.7: REMOVED View Final Board button from all game modes
 // Shows AI difficulty level for AI games
 import { useState, useEffect, useMemo } from 'react';
@@ -234,7 +234,8 @@ const GameOverModal = ({
   onDifficultySelect, 
   opponentName,      // Opponent username for online games
   difficulty,        // AI difficulty level for AI games
-  puzzleDifficulty   // v7.8: Puzzle difficulty level
+  puzzleDifficulty,  // v7.8: Puzzle difficulty level
+  reason             // v7.9: Win/loss reason ('opponent_forfeit'|'opponent_timeout'|'forfeit'|'normal'|'draw')
 }) => {
   const [animationType, setAnimationType] = useState(0);
 
@@ -275,9 +276,12 @@ const GameOverModal = ({
     if (is2Player) return winner === 1 ? 'Player 1 dominated the board' : 'Player 2 dominated the board';
     if (isOnline) {
       const oppDisplay = opponentName || 'Opponent';
-      return isWin 
-        ? `You defeated ${oppDisplay}` 
-        : `${oppDisplay} wins this round`;
+      if (isWin) {
+        if (reason === 'opponent_forfeit') return `${oppDisplay} has forfeited.`;
+        if (reason === 'opponent_timeout') return `${oppDisplay} timed out.`;
+        return `You defeated ${oppDisplay}`;
+      }
+      return `${oppDisplay} wins this round`;
     }
     // AI mode - include difficulty level in subtitle
     if (isAI && difficulty) {

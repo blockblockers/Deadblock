@@ -115,7 +115,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}
-      <div className="relative flex flex-col items-center px-4 py-8">
+      <div className="relative flex flex-col items-center px-4 py-8" style={{ paddingTop: 'max(32px, env(safe-area-inset-top))' }}>
         <div className="w-full max-w-md">
           {/* Title */}
           <div className="text-center mb-6">

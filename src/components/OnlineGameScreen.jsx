@@ -1,5 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.30: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.31: Chat push notification only sent when app is in background (document.hidden),
+//        matching the existing your-turn notification pattern — in-app toast handles foreground
 // v7.28: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 //   - FIX - Sender countdown banner replaces static toast (live 5s countdown)
 // v7.26: FIX - Rematch sender: setShowGameOver(false) immediately on Play Again to kill polling
@@ -228,6 +229,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const isDraggingRef = useRef(false);
   const draggedPieceRef = useRef(null);
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
+  const scrollChildRef = useRef(null); // v7.30: imperative touch-action for iOS drag fix
 
   // Placement animation hook
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
@@ -334,6 +336,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
+      if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'pan-y';
       
       window.removeEventListener('touchmove', handleGlobalTouchMove);
       window.removeEventListener('touchend', handleGlobalTouchEnd);
@@ -379,6 +382,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
+    if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'none';
   }, [game?.status, usedPieces, isMyTurn, attachGlobalTouchHandlers]);
 
   // Handle drag from pending piece on board
@@ -432,6 +436,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
+    if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'none';
   }, [game?.status, isMyTurn, pendingMove, attachGlobalTouchHandlers]);
 
   // Update drag position
@@ -501,6 +506,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
+    if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'pan-y';
   }, [isDragging, dragPreviewCell, draggedPiece]);
 
   // Create drag handlers for PieceTray
@@ -712,7 +718,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     return () => {
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
-      // v7.28: Clear countdown interval if component unmounts mid-countdown
+      if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'pan-y';
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
         countdownIntervalRef.current = null;
@@ -1143,8 +1149,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               });
             }, 5000);
             
-            // Send push notification for chat message
-            notificationService.notifyChatMessage(opponentName, message, currentGameId);
+            // Send push notification only when app is in background
+            // (in-app toast handles the foreground case; matches your-turn notification pattern)
+            if (document.visibilityState === 'hidden' || document.hidden) {
+              notificationService.notifyChatMessage(opponentName, message, currentGameId);
+            }
           }
         }
       )
@@ -1586,12 +1595,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
+        ref={scrollChildRef}
         className="absolute inset-0 overflow-y-auto overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Main content */}
       <div className="relative z-10 min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col max-w-lg mx-auto p-2 sm:p-4 w-full">
+        <div className="flex-1 flex flex-col max-w-lg mx-auto p-2 sm:p-4 w-full" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
           
           {/* UPDATED v7.21: Header - removed top menu button, centered title */}
           <div className="flex items-center justify-between mb-2">

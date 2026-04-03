@@ -735,7 +735,7 @@ const GameScreen = ({
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2">
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
           
           {/* Title - CONSISTENT sizing across all game modes */}
           <div className="text-center mb-2">

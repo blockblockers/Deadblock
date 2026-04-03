@@ -457,7 +457,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   
   // Expert AI: Find the best move using minimax-like evaluation
   // For creator puzzles: Find a move that still allows AI to respond after player's next turn
-  // v1.1: Enhanced for Expert puzzles - more thorough evaluation, blocking scoring
+  // v2.0: 4-ply trap detection — AI now checks if ANY of its responses leave player with
+  //       0 winning moves. Without this, "trap moves" (non-immediate wins that set up a forced
+  //       win the AI cannot escape) were invisible to the scoring function.
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
     console.log('[CreatorPuzzle AI] Finding optimal move. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
     
@@ -529,30 +531,66 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       score -= playerMoves.length * 10;
       
       // PRIORITY 3: Look ahead - can AI survive all player responses?
+      // v2.0: Enhanced with 4-ply trap detection.
+      //   Ply 1: AI plays (candidate move, already applied above)
+      //   Ply 2: Player plays (all responses via playerMoves)
+      //   Ply 3: AI responds (up to 6 candidates)
+      //   Ply 4: After AI responds, does player STILL have winning moves?
+      // If no AI response at ply 3 leaves player with 0 winning moves at ply 4,
+      // the player move is a "trap" — invisible to 2-ply evaluation — and is penalised heavily.
       let aiCanAlwaysRespond = true;
       let minAIResponseOptions = Infinity;
-      
+      let trapMoveCount = 0; // player moves that are traps (AI has responses but all still lose)
+
       for (const playerMove of playerMoves) {
         const boardAfterPlayer = applyMoveToBoard(boardAfterAI, playerMove, 1);
-        const playerPiecesAfterMove = playerAvailablePieces.filter(p => p !== playerMove.piece);
-        
-        // Can AI respond to this player move?
-        const aiResponseMoves = getAllPossibleMoves(boardAfterPlayer, aiPiecesAfterMove, false);
-        
+        // Correctly carry the player's reduced piece set forward (was computed but unused before)
+        const playerPiecesAfterPlayerMove = playerAvailablePieces.filter(p => p !== playerMove.piece);
+
+        // Use dedupe=true so minAIResponseOptions reflects unique strategic positions
+        const aiResponseMoves = getAllPossibleMoves(boardAfterPlayer, aiPiecesAfterMove, true);
+
         if (aiResponseMoves.length === 0) {
-          // This player move would win for player (AI blocked)
+          // Immediate win for player — AI has no response at all
           aiCanAlwaysRespond = false;
+        } else {
+          // 4th-ply trap detection: does ANY AI response leave the player with 0 winning moves?
+          // If none do, this player move is a trap regardless of AI being able to "technically respond".
+          let aiHasSafeResponse = false;
+          for (const aiResp of aiResponseMoves.slice(0, 6)) {
+            const boardAfterAIResp = applyMoveToBoard(boardAfterPlayer, aiResp, 2);
+            const aiPiecesAfterResp = aiPiecesAfterMove.filter(p => p !== aiResp.piece);
+            const playerWinsAfterAIResp = countPlayerWinningMoves(
+              boardAfterAIResp,
+              playerPiecesAfterPlayerMove,
+              aiPiecesAfterResp
+            );
+            if (playerWinsAfterAIResp === 0) {
+              aiHasSafeResponse = true;
+              break;
+            }
+          }
+          if (!aiHasSafeResponse) {
+            // Trap: AI can play but every response still leaves player with winning moves
+            trapMoveCount++;
+            aiCanAlwaysRespond = false;
+          }
         }
-        
+
         minAIResponseOptions = Math.min(minAIResponseOptions, aiResponseMoves.length);
       }
-      
-      // Bonus if AI can respond to ALL player moves
+
+      // Bonus if AI can respond safely to ALL player moves
       if (aiCanAlwaysRespond) {
         score += 500;
       }
-      
-      // Small bonus for AI flexibility
+
+      // Heavy penalty per trap move the player can exploit — scaled above the
+      // blocking bonus (2000) so the AI always prefers eliminating traps over
+      // marginal positional gains.
+      score -= trapMoveCount * 3000;
+
+      // Small bonus for AI flexibility (unique response count)
       score += minAIResponseOptions * 5;
       
       // PRIORITY 4: Position preference (center is slightly better)
@@ -569,7 +607,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         blocked: blockedWinningMoves, 
         playerWinsAfter: playerWinningMovesAfter,
         playerMoves: playerMoves.length,
-        canSurvive: aiCanAlwaysRespond
+        canSurvive: aiCanAlwaysRespond,
+        traps: trapMoveCount
       });
     }
     
@@ -580,7 +619,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     console.log('[CreatorPuzzle AI] Top 5 moves:');
     scoredMoves.slice(0, 5).forEach((m, i) => {
       console.log(`  ${i+1}. ${m.piece} at (${m.row},${m.col}) score=${m.score.toFixed(0)} ` +
-        `blocked=${m.blocked} playerWins=${m.playerWinsAfter} survive=${m.canSurvive}`);
+        `blocked=${m.blocked} playerWins=${m.playerWinsAfter} survive=${m.canSurvive} traps=${m.traps}`);
     });
     
     const bestMove = scoredMoves[0];
@@ -1357,7 +1396,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2">
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
           
           {/* Title */}
           <div className="text-center mb-2">

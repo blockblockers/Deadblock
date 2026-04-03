@@ -1,5 +1,5 @@
 // Game Sync Service - Real-time game state management
-// v7.17: Fixed checkAndForfeitStaleGames - now uses RPC function with SECURITY DEFINER to bypass RLS
+// v7.18: forfeitGame accepts optional reason param ('forfeit'|'timeout') stored as end_reason in DB
 // FIXED: 
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
 // - board_state column is now optional (won't break if column doesn't exist)
@@ -704,7 +704,7 @@ class GameSyncService {
   }
 
   // Forfeit a game
-  async forfeitGame(gameId, userId) {
+  async forfeitGame(gameId, userId, reason = 'forfeit') {
     if (!supabase || !gameId || !userId) {
       return { error: { message: 'Invalid parameters' } };
     }
@@ -737,6 +737,7 @@ class GameSyncService {
           body: JSON.stringify({
             status: 'completed',
             winner_id: winnerId,
+            end_reason: reason,
             updated_at: new Date().toISOString()
           })
         }
