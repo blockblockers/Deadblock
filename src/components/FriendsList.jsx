@@ -1,5 +1,5 @@
 // FriendsList - View and manage friends
-// v7.11: Fix remove friend on iOS PWA — window.confirm() is blocked by WebKit in PWA mode;
+// v7.12: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 //        replaced with inline two-step confirmation (tap once to arm, tap again to confirm)
 // - Swapped Eye (watch) icon for Swords (challenge) on friend rows
 // - Shows active game count instead of "Playing vs X"
@@ -41,7 +41,7 @@ const SpectateGamesModal = ({ friend, games, onSpectate, onClose }) => {
         </div>
 
         {/* Games list */}
-        <div className="p-4 min-h-0 overflow-y-auto" style={{ maxHeight: 'calc(60dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
+        <div className="p-4 min-h-0 overflow-y-scroll" style={{ maxHeight: 'calc(60dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
           <div className="space-y-3">
             {games.map(game => {
               // Determine opponent (the one who is NOT the friend)
@@ -399,7 +399,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
 
         {/* Content - Scrollable */}
         <div 
-          className="flex-1 min-h-0 overflow-y-auto p-4"
+          className="flex-1 min-h-0 overflow-y-scroll p-4"
           style={{ 
             WebkitOverflowScrolling: 'touch', 
             overscrollBehavior: 'contain', 

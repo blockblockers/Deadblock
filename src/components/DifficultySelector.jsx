@@ -1,5 +1,5 @@
 // DifficultySelector.jsx
-// v7.13: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -116,7 +116,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
   };
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-slate-950">
+    <div className="fixed inset-0 bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -129,7 +129,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}

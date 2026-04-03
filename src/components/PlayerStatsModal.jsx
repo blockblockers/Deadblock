@@ -1,5 +1,5 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
-// v7.25: Scroll fix — overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
+// v7.26: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.22: AI Battles and Generated Puzzles as independent sections (not sub-dropdowns in Overview)
 // v7.21: Performance - parallel loading with Promise.all for faster modal open
 // v7.20: Fixed double # in rank, added AI/puzzle detail dropdowns, puzzles solved includes both types
@@ -543,7 +543,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         {/* Stats Content - Scrollable */}
         <div 
           ref={scrollContainerRef}
-          className="p-4 space-y-3 overflow-y-auto flex-1 min-h-0"
+          className="p-4 space-y-3 overflow-y-scroll flex-1 min-h-0"
           style={{
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',

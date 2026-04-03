@@ -1,5 +1,5 @@
 // User Profile Screen - Enhanced with ELO changes in match history and proper Final Board View
-// v7.12: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // 1. Shows +/- ELO changes in match history boxes (with fallback calculation)
 // 2. Fetches game moves for Final Board View
 // 3. Uses username priority (same as PlayerProfileCard)
@@ -277,7 +277,7 @@ const UserProfile = ({ onBack }) => {
   const playerDisplayName = profile?.username || profile?.display_name || 'Player';
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-slate-950">
+    <div className="fixed inset-0 bg-slate-950">
       <style>{`
         /* v7.9: Scrollable lists within the page */
         .scroll-list {
@@ -304,7 +304,7 @@ const UserProfile = ({ onBack }) => {
       `}</style>
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',

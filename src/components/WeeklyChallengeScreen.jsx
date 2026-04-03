@@ -1,5 +1,5 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
-// v7.21: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.22: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.20: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
 //   - gameOverHandledRef guard prevents game-over effect re-firing when deps change mid-win/loss
 //   - accumulatedMsRef mirrors accumulatedMs state so timer callbacks never have stale closures
@@ -1230,7 +1230,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Game in progress
   return (
-    <div className="fixed inset-0 overflow-hidden bg-slate-950 relative z-20">
+    <div className="fixed inset-0 bg-slate-950 relative z-20">
       {/* Red Background Grid */}
       <div className="fixed inset-0 opacity-30 pointer-events-none z-0" style={{
         backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
@@ -1259,7 +1259,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden relative z-10"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden relative z-10"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Content */}

@@ -1,5 +1,5 @@
 // Achievements.jsx - Modal displaying all achievements with improved scroll and text
-// v7.17: Scroll fix — overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
+// v7.18: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.16: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom)
 
 import { useState, useEffect, useRef } from 'react';
@@ -171,7 +171,7 @@ const Achievements = ({ userId, onClose }) => {
         {/* Scrollable Content */}
         <div 
           ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto"
+          className="flex-1 min-h-0 overflow-y-scroll"
           style={{
             WebkitOverflowScrolling: 'touch',
             overscrollBehavior: 'contain',

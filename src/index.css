@@ -1,5 +1,9 @@
 /* =============================================================================
    DEADBLOCK - Global Styles
+   v7.12: iOS scroll fix — removed -webkit-overflow-scrolling from html/body
+          (was routing all iOS scroll gestures to body instead of inner divs);
+          reverted button touch-action from pan-y back to manipulation
+          (pan-y was causing iOS to claim scroll gestures for body native scroller)
    v7.11: touch-action: pan-y on interactive elements (was manipulation — blocked scroll-over-buttons)
    v7.9: FIXED scroll handling - removed conflicting position:fixed rules
    v7.10: Added iOS scroll fix utility classes
@@ -32,14 +36,15 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   /* v7.9: Allow scroll behavior */
   overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
+  /* v7.12: REMOVED -webkit-overflow-scrolling: touch from body/html —
+     registering body as an iOS native scroll container causes iOS to route
+     all scroll gestures to the body instead of inner overflow-y divs */
 }
 
 html {
   /* Prevent pull-to-refresh but allow normal scroll */
   overscroll-behavior-y: contain;
-  /* iOS momentum scrolling */
-  -webkit-overflow-scrolling: touch;
+  /* v7.12: -webkit-overflow-scrolling: touch removed — only scroll containers need this */
 }
 
 body {
@@ -68,11 +73,13 @@ body {
    v7.9: Allow scroll to work over buttons, inputs, links, etc.
    ============================================================================= */
 
-/* v7.11: pan-y instead of manipulation.
-   'manipulation' absorbs the touch when a finger starts on a button,
-   killing the scroll gesture on iOS/Android even if the intent is to scroll.
-   'pan-y' still eliminates the 300ms double-tap delay while letting
-   vertical pan events propagate to the nearest scroll container. */
+/* v7.12: Reverted to 'manipulation' from 'pan-y'.
+   'pan-y' told iOS to claim vertical scroll gestures and route them to the
+   body native scroll container (which has -webkit-overflow-scrolling: touch),
+   bypassing inner overflow-y divs entirely. This broke ViewPlayerProfile and
+   all other modals/scroll containers.
+   'manipulation' only disables double-tap-zoom; it does NOT claim scroll
+   gestures — they fall through to the nearest overflow-y scroll container. */
 button,
 [role="button"],
 input,
@@ -82,7 +89,7 @@ a,
 label,
 .clickable,
 .btn {
-  touch-action: pan-y;
+  touch-action: manipulation;
 }
 
 /* During drag operations, disable scroll completely */

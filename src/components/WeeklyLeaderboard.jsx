@@ -1,5 +1,5 @@
 // Weekly Leaderboard - Shows rankings for weekly challenge
-// v7.12: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // FIXED: Uses username priority (not display_name)
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Trophy, Crown, Medal, User, Clock, RefreshCw, Calendar } from 'lucide-react';
@@ -93,7 +93,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
   };
   
   return (
-    <div className="fixed inset-0 overflow-hidden bg-slate-950">
+    <div className="fixed inset-0 bg-slate-950">
       {/* Background - RED THEME */}
       <div className="fixed inset-0 opacity-30 pointer-events-none" style={{
         backgroundImage: 'linear-gradient(rgba(239,68,68,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(239,68,68,0.4) 1px, transparent 1px)',
@@ -104,7 +104,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       <div className="relative min-h-full px-4 py-6">

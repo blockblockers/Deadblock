@@ -1,5 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
-// v7.34: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.35: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.33: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
 // v7.19: Delete Account underlined, footer padding increased to show static Privacy/Terms footer from index.html
 // v7.18: Fixed footer positioning - sits at bottom of screen with proper safe area
@@ -1126,7 +1126,7 @@ const EntryAuthScreen = ({
   const activeTheme = isInviteFlow ? inviteTheme : theme;
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-transparent">
+    <div className="fixed inset-0 bg-transparent">
       {/* Multiple themed glow orbs - matching PuzzleSelect */}
       <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
       <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
@@ -1134,7 +1134,7 @@ const EntryAuthScreen = ({
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content - Grouped title+subtitle+card together, positioned in upper-center area */}

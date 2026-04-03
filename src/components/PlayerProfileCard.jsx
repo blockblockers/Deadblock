@@ -1,5 +1,5 @@
 // PlayerProfileCard.jsx - Enhanced display for main menu with rating info, username editing, and achievements
-// v7.20: Scroll fix — overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
+// v7.21: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.17: Match OnlineMenu profile display style - inline stats with leaderboard rank and achievement count
 // Place in src/components/PlayerProfileCard.jsx
 
@@ -48,7 +48,7 @@ const RatingInfoModal = ({ onClose }) => {
         </div>
         
         <div 
-          className="p-4 space-y-4 overflow-y-auto"
+          className="p-4 space-y-4 overflow-y-scroll"
           style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
         >
           <p className="text-sm text-slate-400">

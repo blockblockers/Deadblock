@@ -1,5 +1,5 @@
 // Online Menu - Hub for online features
-// v7.36: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.37: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.35: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' on inner scroll child
 //        blocks the email_invites update; loadInvites now detects this and writes game_id from
 //        the sender's side (which RLS permits), then re-fetches to hide the link
@@ -1395,7 +1395,7 @@ const OnlineMenu = ({
   return (
     <div 
       // v7.36: Outer shell is overflow:hidden only — scroll child is absolute inset-0
-      className="fixed inset-0 overflow-hidden bg-transparent"
+      className="fixed inset-0 bg-transparent"
     >
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
@@ -1449,7 +1449,7 @@ const OnlineMenu = ({
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}
@@ -1835,7 +1835,7 @@ const OnlineMenu = ({
                   {/* Search Results - v7.11: Android scroll fix */}
                   {searchResults.length > 0 && (
                     <div 
-                      className="space-y-2 mt-3 max-h-48 overflow-y-auto" 
+                      className="space-y-2 mt-3 max-h-48 overflow-y-scroll" 
                       style={{ 
                         WebkitOverflowScrolling: 'touch', 
                         overscrollBehavior: 'contain',
@@ -1944,7 +1944,7 @@ const OnlineMenu = ({
                       <div className="mt-3 pt-3 border-t border-slate-700/50">
                         <p className="text-slate-400 text-xs mb-2 font-medium">Your active invite links:</p>
                         <div 
-                          className="space-y-2 max-h-40 overflow-y-auto" 
+                          className="space-y-2 max-h-40 overflow-y-scroll" 
                           style={{ 
                             WebkitOverflowScrolling: 'touch', 
                             overscrollBehavior: 'contain',
@@ -2027,7 +2027,7 @@ const OnlineMenu = ({
                   REMATCH REQUESTS ({pendingRematches.length})
                 </h3>
                 <div 
-                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
+                  className="space-y-2 max-h-60 overflow-y-scroll pr-1"
                   style={{ 
                     WebkitOverflowScrolling: 'touch', 
                     overscrollBehavior: 'contain',
@@ -2110,7 +2110,7 @@ const OnlineMenu = ({
                   GAME INVITES ({receivedInvites.length})
                 </h3>
                 <div 
-                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
+                  className="space-y-2 max-h-60 overflow-y-scroll pr-1"
                   style={{ 
                     WebkitOverflowScrolling: 'touch', 
                     overscrollBehavior: 'contain',
@@ -2170,7 +2170,7 @@ const OnlineMenu = ({
                   PENDING INVITES ({sentInvites.length})
                 </h3>
                 <div 
-                  className="space-y-2 max-h-40 overflow-y-auto pr-1"
+                  className="space-y-2 max-h-40 overflow-y-scroll pr-1"
                   style={{ 
                     WebkitOverflowScrolling: 'touch', 
                     overscrollBehavior: 'contain',

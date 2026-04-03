@@ -1,5 +1,5 @@
 // AccountDeletionModal.jsx - Account deletion modal
-// v7.21: Scroll fix — overscrollBehavior:'contain' (matches ViewPlayerProfile working pattern)
+// v7.22: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.20: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom)
 //   auth state changes that navigate the user away before deletion completes.
 
@@ -202,7 +202,7 @@ const AccountDeletionModal = ({ onClose }) => {
         
         {/* Content */}
         <div 
-          className="p-5 space-y-4 overflow-y-auto"
+          className="p-5 space-y-4 overflow-y-scroll"
           style={{ maxHeight: 'calc(70dvh)', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
         >
           {/* Warning */}

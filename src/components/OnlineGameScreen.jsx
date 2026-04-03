@@ -1,5 +1,5 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.31: Chat push notification only sent when app is in background (document.hidden),
+// v7.32: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 //        matching the existing your-turn notification pattern — in-app toast handles foreground
 // v7.28: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 //   - FIX - Sender countdown banner replaces static toast (live 5s countdown)
@@ -1575,7 +1575,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   }
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-transparent">
+    <div className="fixed inset-0 bg-transparent">
       {/* Background glow effects */}
       <div className={`fixed top-1/4 right-1/4 w-64 h-64 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-1/4 left-1/4 w-64 h-64 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
@@ -1596,7 +1596,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         ref={scrollChildRef}
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
       >
       {/* Main content */}

@@ -1,5 +1,5 @@
 // Matchmaking Screen - Find online opponents
-// v7.13: Scroll fix — absolute inset-0 scroll child gives iOS explicit pixel bounds (fixes can't scroll up from rest)
+// v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 import { useState, useEffect, useRef } from 'react';
 import { Search, X, Zap, Trophy, AlertCircle } from 'lucide-react';
@@ -177,7 +177,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-slate-950">
+    <div className="fixed inset-0 bg-slate-950">
       {/* Themed Grid background */}
       <div className="fixed inset-0 opacity-40 pointer-events-none" style={{
         backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
@@ -194,7 +194,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
       >
       {/* Content */}

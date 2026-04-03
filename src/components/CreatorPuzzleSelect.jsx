@@ -1,6 +1,6 @@
 // CreatorPuzzleSelect.jsx
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
-// v1.7: Scroll fix — overscrollBehavior:'contain' (was 'none'; matches ViewPlayerProfile working pattern)
+// v1.8: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v1.6: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom); root already uses correct h-dvh flex-col shell
 import { useState, useEffect } from 'react';
 import { Check, Lock, Loader, Trophy, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
@@ -258,7 +258,7 @@ const CreatorPuzzleSelect = ({
   const selectedColors = selectedPuzzle ? getPuzzleColors(selectedPuzzle) : selectedTier.color;
 
   return (
-    <div className="h-dvh bg-slate-950 flex flex-col overflow-hidden">
+    <div className="h-dvh bg-slate-950 flex flex-col">
       {/* Themed Grid background */}
       <div 
         className="fixed inset-0 pointer-events-none"
@@ -278,7 +278,7 @@ const CreatorPuzzleSelect = ({
       <div className={`fixed ${theme.glow2.pos} w-40 h-40 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
 
       {/* Main Content - Scrollable if needed */}
-      <div className="relative flex-1 min-h-0 flex flex-col overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-y-scroll" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
         <div className="flex-1 flex flex-col items-center px-4 py-4">
           <div className="w-full max-w-md">
             

@@ -1,5 +1,5 @@
 // ViewPlayerProfile - View another player's profile
-// v7.32: Fixed scroll - use Tailwind classes (flex-1 min-h-0 overflow-y-auto) for cross-device compatibility
+// v7.33: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.31: Fixed modal appearing at bottom - added scrollRef to reset scroll position on open
 // v7.30: Fixed crash - removed undefined setShowAIDetails/setShowPuzzleDetails calls
 // v7.29: Stats layout aligned with PlayerStatsModal - collapsible sections for all categories
@@ -637,7 +637,7 @@ const ViewPlayerProfile = ({
             {/* Scrollable Content Area - v7.32: Added Tailwind classes for cross-device scroll */}
             <div 
               ref={scrollRef}
-              className="p-4 flex-1 min-h-0 overflow-y-auto"
+              className="p-4 flex-1 min-h-0 overflow-y-scroll"
               style={{ 
                 WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
