@@ -1,4 +1,5 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
+// v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Flag, XCircle, Move } from 'lucide-react';
@@ -731,7 +732,7 @@ const GameScreen = ({
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">

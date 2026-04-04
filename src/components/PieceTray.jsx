@@ -1,4 +1,6 @@
 // PieceTray.jsx - Piece selection tray with drag-and-drop support
+// v2.1: iOS drag fix — uses Pointer Events + setPointerCapture when drag handler
+//       provides onPointerDown, bypassing UIScrollView gesture recognition on iPhone
 // UPDATED: Added drag handlers for dragging pieces to the board
 import { pieces, pieceColors } from '../utils/pieces';
 
@@ -97,6 +99,12 @@ const PieceTray = ({
           // Extract style separately since it needs to be merged
           const { style: dragStyle, ...dragEvents } = dragHandlers;
           
+          // v2.1: Use Pointer Events when the drag handler provides them.
+          // setPointerCapture bypasses iOS UIScrollView gesture recognition,
+          // fixing drag-and-drop inside scroll containers on iPhone.
+          // Falls back to touch events for screens that don't provide onPointerDown.
+          const usePointerEvents = !!dragEvents.onPointerDown;
+          
           // Hold threshold in ms - shorter = faster drag start
           const HOLD_THRESHOLD = 100;
           let holdTimer = null;
@@ -105,6 +113,7 @@ const PieceTray = ({
           let hasMoved = false;
           let dragStarted = false;
           
+          // --- Touch event path (fallback for screens without pointer event support) ---
           const startDragFromTouch = (touchX, touchY) => {
             if (dragStarted) return;
             dragStarted = true;
@@ -181,15 +190,92 @@ const PieceTray = ({
             }
           };
           
+          // --- Pointer event path (v2.1 — used on iOS when drag handler supports it) ---
+          const startDragFromPointer = (clientX, clientY) => {
+            if (dragStarted) return;
+            dragStarted = true;
+            
+            if (dragEvents.onPointerDown) {
+              dragEvents.onPointerDown({
+                isPrimary: true,
+                clientX, clientY,
+                currentTarget: { getBoundingClientRect: () => cachedRect },
+                preventDefault: () => {},
+                stopPropagation: () => {},
+              });
+            }
+          };
+          
+          const handlePointerDown = (e) => {
+            if (!e.isPrimary) return;
+            // CRITICAL: Capture the pointer — all subsequent pointermove/pointerup
+            // events go to THIS element regardless of scroll container state.
+            // This is what bypasses iOS UIScrollView gesture recognition.
+            e.currentTarget.setPointerCapture(e.pointerId);
+            
+            touchStartPos = { x: e.clientX, y: e.clientY };
+            cachedRect = e.currentTarget.getBoundingClientRect();
+            hasMoved = false;
+            dragStarted = false;
+            
+            holdTimer = setTimeout(() => {
+              if (!hasMoved && !dragStarted) {
+                startDragFromPointer(e.clientX, e.clientY);
+              }
+            }, HOLD_THRESHOLD);
+          };
+          
+          const handlePointerMove = (e) => {
+            if (!e.isPrimary) return;
+            const dx = Math.abs(e.clientX - touchStartPos.x);
+            const dy = Math.abs(e.clientY - touchStartPos.y);
+            
+            if (dx > 5 || dy > 5) {
+              hasMoved = true;
+              if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+              if (!dragStarted) {
+                startDragFromPointer(e.clientX, e.clientY);
+              }
+            }
+            
+            if (dragStarted && dragEvents.onPointerMove) {
+              dragEvents.onPointerMove(e);
+            }
+          };
+          
+          const handlePointerUp = (e) => {
+            if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+            
+            if (!dragStarted && !hasMoved) {
+              if (!isUsed && !isGeneratingPuzzle) {
+                onSelectPiece(name);
+              }
+            }
+            
+            if (dragStarted && dragEvents.onPointerUp) {
+              dragEvents.onPointerUp(e);
+            }
+          };
+          
+          // Build event handlers: pointer events when supported, touch events as fallback
+          const pieceEventHandlers = usePointerEvents ? {
+            onPointerDown: handlePointerDown,
+            onPointerMove: handlePointerMove,
+            onPointerUp: handlePointerUp,
+            onPointerCancel: handlePointerUp,
+          } : {
+            onTouchStart: handleTouchStart,
+            onTouchMove: handleTouchMove,
+            onTouchEnd: handleTouchEnd,
+            onMouseDown: dragEvents.onMouseDown,
+          };
+          
           return (
             <div
               key={name}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={dragEvents.onMouseDown}
+              {...pieceEventHandlers}
               onClick={() => {
-                // Desktop click for selection (drag is handled by mousedown)
+                // Desktop click for selection (drag is handled by mousedown/pointerdown)
                 if (!isUsed && !isGeneratingPuzzle && !isDragging) {
                   onSelectPiece(name);
                 }

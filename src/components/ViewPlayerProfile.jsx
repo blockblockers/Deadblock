@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.34: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.33: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.31: Fixed modal appearing at bottom - added scrollRef to reset scroll position on open
 // v7.30: Fixed crash - removed undefined setShowAIDetails/setShowPuzzleDetails calls
@@ -634,14 +635,12 @@ const ViewPlayerProfile = ({
               </button>
             </div>
             
-            {/* Scrollable Content Area - v7.32: Added Tailwind classes for cross-device scroll */}
+            {/* Scrollable Content Area - v7.34: Stripped iOS-conflicting inline styles */}
             <div 
               ref={scrollRef}
               className="p-4 flex-1 min-h-0 overflow-y-scroll"
               style={{ 
-                WebkitOverflowScrolling: 'touch',
-                overscrollBehavior: 'contain',
-                touchAction: 'pan-y',
+                overscrollBehavior: 'none',
               }}
             >
               {loading ? (

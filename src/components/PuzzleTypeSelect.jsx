@@ -1,4 +1,5 @@
 // PuzzleTypeSelect.jsx - Choose between Creator Puzzles and Generated Puzzles
+// v2.5: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v2.4: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v2.2: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
 // v2.0: Animated pentomino showcase + expanded mode comparison cards
@@ -277,7 +278,7 @@ const PuzzleTypeSelect = ({
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Main Content */}
       <div className="relative flex flex-col items-center justify-center px-4 py-4 min-h-full">

@@ -1,4 +1,5 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
+// v7.13: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.12: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // 
 // SENIOR ENGINEER CODE REVIEW - IMPROVEMENTS APPLIED:
@@ -1698,7 +1699,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
       <div className="relative min-h-full flex flex-col items-center px-2 py-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>

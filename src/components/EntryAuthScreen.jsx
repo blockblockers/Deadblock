@@ -1,4 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.36: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.35: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.33: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
 // v7.19: Delete Account underlined, footer padding increased to show static Privacy/Terms footer from index.html
@@ -1135,7 +1136,7 @@ const EntryAuthScreen = ({
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Content - Grouped title+subtitle+card together, positioned in upper-center area */}
       <div className="relative z-10 flex flex-col items-center p-4"

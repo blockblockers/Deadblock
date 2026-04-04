@@ -1,4 +1,5 @@
 // Matchmaking Screen - Find online opponents
+// v7.15: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 import { useState, useEffect, useRef } from 'react';
@@ -195,7 +196,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
       <div className="relative flex flex-col items-center justify-center px-4 py-8 min-h-full">

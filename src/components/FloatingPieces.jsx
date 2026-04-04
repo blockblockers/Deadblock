@@ -1,4 +1,6 @@
 // FloatingPieces.jsx - Animated floating pentomino pieces background
+// v2.1: iOS scroll fix — removed willChange from individual pieces (reduces compositing layers),
+//       added contain:strict to wrapper to isolate from scroll hit-testing
 // v2.0: Added immediateStart and maxDelay props (defaults preserve original behavior)
 // Reusable component with theme support - matches original MenuScreen quality
 import { useMemo, useEffect, useState } from 'react';
@@ -105,7 +107,6 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
         animation: `${keyframeName} ${duration}s ease-in-out infinite`,
         animationDelay: `${delay}s`,
         opacity: opacity,
-        willChange: 'transform, opacity',
         filter: `drop-shadow(0 0 8px ${glowColor})`,
       }}
     >
@@ -220,7 +221,7 @@ function FloatingPieces({
         }
       `}</style>
       
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" style={{ contain: 'strict' }}>
         {floatingPieces.map((p) => (
           <FloatingPiece key={p.id} {...p} />
         ))}

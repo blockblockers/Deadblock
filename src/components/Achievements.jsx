@@ -1,4 +1,5 @@
 // Achievements.jsx - Modal displaying all achievements with improved scroll and text
+// v7.19: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.18: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.16: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom)
 
@@ -173,9 +174,7 @@ const Achievements = ({ userId, onClose }) => {
           ref={scrollRef}
           className="flex-1 min-h-0 overflow-y-scroll"
           style={{
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            touchAction: 'pan-y',
+            overscrollBehavior: 'none',
           }}
         >
           <div className="p-4 space-y-2">

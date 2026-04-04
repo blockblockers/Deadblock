@@ -1,4 +1,7 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.34: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
+// v7.33: iOS drag fix — added Pointer Events to createDragHandlers; PieceTray uses
+//        setPointerCapture to bypass UIScrollView gesture recognition on iPhone
 // v7.32: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 //        matching the existing your-turn notification pattern — in-app toast handles foreground
 // v7.28: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
@@ -336,7 +339,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
-      if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'pan-y';
+      if (scrollChildRef.current) scrollChildRef.current.style.touchAction = '';
       
       window.removeEventListener('touchmove', handleGlobalTouchMove);
       window.removeEventListener('touchend', handleGlobalTouchEnd);
@@ -506,7 +509,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
-    if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'pan-y';
+    if (scrollChildRef.current) scrollChildRef.current.style.touchAction = '';
   }, [isDragging, dragPreviewCell, draggedPiece]);
 
   // Create drag handlers for PieceTray
@@ -565,11 +568,45 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       startDrag(piece, e.clientX, e.clientY, elementRect);
     };
 
+    // v7.33: Pointer event handlers — PieceTray calls these with setPointerCapture,
+    // which bypasses iOS UIScrollView gesture recognition entirely.
+    // When PieceTray detects onPointerDown in dragEvents, it switches from touch
+    // events to pointer events for the full drag lifecycle.
+    const handlePointerDown = (e) => {
+      if (!e.isPrimary) return;
+      
+      elementRect = e.currentTarget?.getBoundingClientRect() || null;
+      
+      if (boardRef?.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      startDrag(piece, e.clientX, e.clientY, elementRect);
+    };
+
+    const handlePointerMove = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        updateDrag(e.clientX, e.clientY);
+      }
+    };
+
+    const handlePointerUp = () => {
+      if (hasDragStartedRef.current) {
+        endDrag();
+      }
+    };
+
     return {
       onTouchStart: handleTouchStart,
       onTouchMove: handleTouchMove,
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
+      // v7.33: Pointer events for iOS — PieceTray uses these with setPointerCapture
+      onPointerDown: handlePointerDown,
+      onPointerMove: handlePointerMove,
+      onPointerUp: handlePointerUp,
+      onPointerCancel: handlePointerUp,
     };
   }, [game?.status, usedPieces, isMyTurn, startDrag, updateDrag, endDrag]);
 
@@ -718,7 +755,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     return () => {
       document.body.style.overflow = '';
       document.body.style.touchAction = '';
-      if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'pan-y';
+      if (scrollChildRef.current) scrollChildRef.current.style.touchAction = '';
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
         countdownIntervalRef.current = null;
@@ -1597,7 +1634,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div
         ref={scrollChildRef}
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Main content */}
       <div className="relative z-10 min-h-full flex flex-col">

@@ -1,4 +1,5 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
+// v7.27: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.26: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.22: AI Battles and Generated Puzzles as independent sections (not sub-dropdowns in Overview)
 // v7.21: Performance - parallel loading with Promise.all for faster modal open
@@ -545,9 +546,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
           ref={scrollContainerRef}
           className="p-4 space-y-3 overflow-y-scroll flex-1 min-h-0"
           style={{
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehavior: 'contain',
-            touchAction: 'pan-y',
+            overscrollBehavior: 'none',
           }}
         >
           {isOffline ? (

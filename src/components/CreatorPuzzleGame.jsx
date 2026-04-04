@@ -1,4 +1,7 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.10: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
+// v2.9: AI rewrite — replaced heuristic scorer with proper minimax + alpha-beta pruning
+// v2.8: AI thinking pause — 800ms delay + visual indicator before AI places piece
 // v2.7: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v2.4: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
 // v2.1: Fixed freeze on "Next Puzzle" - reset mountedRef and clear timeouts for new puzzles
@@ -31,6 +34,7 @@ import { creatorPuzzleService } from '../services/creatorPuzzleService';
 const ANIMATION_CLEAR_DELAY_MS = 500;
 const WRONG_MOVE_DISPLAY_MS = 1500;
 const SUCCESS_DELAY_MS = 300;
+const AI_THINKING_DELAY_MS = 800;
 
 // Game states
 const GAME_STATES = {
@@ -270,6 +274,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   // Animation state
   const [playerAnimatingMove, setPlayerAnimatingMove] = useState(null);
   const [aiAnimatingMove, setAiAnimatingMove] = useState(null);
+  const [aiIsThinking, setAiIsThinking] = useState(false);
   const [showWrongMove, setShowWrongMove] = useState(false);
   const [moveIndex, setMoveIndex] = useState(0); // Track which move we're on in the solution
   
@@ -455,178 +460,134 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     return count;
   }, []);
   
-  // Expert AI: Find the best move using minimax-like evaluation
-  // For creator puzzles: Find a move that still allows AI to respond after player's next turn
-  // v2.0: 4-ply trap detection — AI now checks if ANY of its responses leave player with
-  //       0 winning moves. Without this, "trap moves" (non-immediate wins that set up a forced
-  //       win the AI cannot escape) were invisible to the scoring function.
+  // Expert AI: Find the best move using proper minimax with alpha-beta pruning.
+  // v2.9: Full minimax replacement — the heuristic scorer from v2.0 failed because
+  //       creator puzzles have exactly one correct path and trap moves are invisible
+  //       to shallow heuristic evaluation. With separate, known piece sets and
+  //       typically 2-4 pieces per side, the game tree is small enough to search
+  //       exhaustively. This finds the mathematically optimal move.
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
-    console.log('[CreatorPuzzle AI] Finding optimal move. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
+    console.log('[CreatorPuzzle AI v3] Minimax search. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
     
     const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
     if (aiMoves.length === 0) {
-      console.log('[CreatorPuzzle AI] No valid moves available');
+      console.log('[CreatorPuzzle AI v3] No valid moves available');
       return null;
     }
     
-    // Helper: Count player's winning moves from a given board state
-    // A "winning move" = player plays, then AI has NO valid response
-    const countPlayerWinningMoves = (board, playerPieces, aiPieces) => {
-      const pMoves = getAllPossibleMoves(board, playerPieces, true);
-      let winCount = 0;
+    // Time budget for safety (creator puzzle trees are small, but guard against edge cases)
+    const searchStart = Date.now();
+    const MAX_TIME_MS = 3000;
+    let nodesSearched = 0;
+    
+    // Minimax with alpha-beta pruning for separate piece sets.
+    // AI = player 2 (maximizer), Human = player 1 (minimizer).
+    // Terminal: current side has no legal moves → they lose.
+    const minimax = (board, aiPieces, playerPieces, depth, isAITurn, alpha, beta) => {
+      nodesSearched++;
       
-      // Check all player moves (more thorough for puzzle accuracy)
-      for (const pm of pMoves) {
-        const afterPlayer = applyMoveToBoard(board, pm, 1);
-        const playerPiecesAfter = playerPieces.filter(p => p !== pm.piece);
-        
-        // AI responds - does AI have any valid moves?
-        const aiResponses = getAllPossibleMoves(afterPlayer, aiPieces, false);
-        
-        if (aiResponses.length === 0) {
-          // Player wins with this move
-          winCount++;
-        }
+      // Time check every 2000 nodes
+      if (nodesSearched % 2000 === 0 && Date.now() - searchStart > MAX_TIME_MS) {
+        return 0; // Neutral on timeout
       }
-      return winCount;
+      
+      const currentPieces = isAITurn ? aiPieces : playerPieces;
+      const moves = getAllPossibleMoves(board, currentPieces, true);
+      
+      if (moves.length === 0) {
+        // Current side can't move → they lose.
+        // Depth bonus so AI prefers winning sooner and losing later.
+        return isAITurn ? (-10000 - depth) : (10000 + depth);
+      }
+      
+      if (depth <= 0) {
+        // Leaf evaluation: difference in placeable pieces.
+        // Positive = good for AI, negative = good for player.
+        const aiPlaceable = countPlaceablePieces(board, aiPieces);
+        const playerPlaceable = countPlaceablePieces(board, playerPieces);
+        return (aiPlaceable - playerPlaceable) * 100;
+      }
+      
+      // Sort moves by center preference for better pruning
+      const sorted = moves.map(m => ({
+        ...m,
+        qScore: quickEval(m.row, m.col, m.coords)
+      })).sort((a, b) => isAITurn ? b.qScore - a.qScore : a.qScore - b.qScore);
+      
+      if (isAITurn) {
+        let maxScore = -Infinity;
+        for (const move of sorted) {
+          if (Date.now() - searchStart > MAX_TIME_MS) break;
+          const newBoard = applyMoveToBoard(board, move, 2);
+          const newAiPieces = aiPieces.filter(p => p !== move.piece);
+          const score = minimax(newBoard, newAiPieces, playerPieces, depth - 1, false, alpha, beta);
+          maxScore = Math.max(maxScore, score);
+          alpha = Math.max(alpha, score);
+          if (beta <= alpha) break;
+        }
+        return maxScore;
+      } else {
+        let minScore = Infinity;
+        for (const move of sorted) {
+          if (Date.now() - searchStart > MAX_TIME_MS) break;
+          const newBoard = applyMoveToBoard(board, move, 1);
+          const newPlayerPieces = playerPieces.filter(p => p !== move.piece);
+          const score = minimax(newBoard, aiPieces, newPlayerPieces, depth - 1, true, alpha, beta);
+          minScore = Math.min(minScore, score);
+          beta = Math.min(beta, score);
+          if (beta <= alpha) break;
+        }
+        return minScore;
+      }
     };
     
-    // Count player's winning moves BEFORE AI plays
-    const playerWinningMovesBefore = countPlayerWinningMoves(currentBoard, playerAvailablePieces, aiAvailablePieces);
-    console.log('[CreatorPuzzle AI] Player has', playerWinningMovesBefore, 'winning moves BEFORE AI plays');
+    // Depth = total remaining pieces — covers the complete game tree.
+    // Creator puzzles typically have 2-4 pieces per side (4-8 total plies).
+    // Cap at 8 for safety; alpha-beta makes this tractable.
+    const totalPieces = aiAvailablePieces.length + playerAvailablePieces.length;
+    const depth = Math.min(totalPieces, 8);
     
-    // Score each possible AI move
-    const scoredMoves = [];
-    
-    for (const aiMove of aiMoves) {
-      const boardAfterAI = applyMoveToBoard(currentBoard, aiMove, 2);
-      const aiPiecesAfterMove = aiAvailablePieces.filter(p => p !== aiMove.piece);
-      
-      // Check player's options after this AI move
-      const playerMoves = getAllPossibleMoves(boardAfterAI, playerAvailablePieces, true);
-      
-      // PRIORITY 1: AI wins immediately (player has no moves)
-      if (playerMoves.length === 0) {
-        scoredMoves.push({ ...aiMove, score: 100000, reason: 'wins', playerWinsAfter: 0 });
-        console.log(`[CreatorPuzzle AI] ${aiMove.piece} WINS (blocks all player moves)`);
-        continue;
-      }
-      
-      // Count player's winning moves AFTER this AI move (with reduced AI pieces)
-      const playerWinningMovesAfter = countPlayerWinningMoves(boardAfterAI, playerAvailablePieces, aiPiecesAfterMove);
-      const blockedWinningMoves = playerWinningMovesBefore - playerWinningMovesAfter;
-      
-      // PRIORITY 2: Minimize player's winning moves
-      // Heavily penalize moves that INCREASE player's winning options
-      // Reward moves that DECREASE player's winning options
-      let score = 0;
-      
-      // Big bonus for blocking winning moves
-      score += blockedWinningMoves * 2000;
-      
-      // Heavy penalty for leaving player with winning moves
-      score -= playerWinningMovesAfter * 1000;
-      
-      // Penalty for total player options (prefer constraining player)
-      score -= playerMoves.length * 10;
-      
-      // PRIORITY 3: Look ahead - can AI survive all player responses?
-      // v2.0: Enhanced with 4-ply trap detection.
-      //   Ply 1: AI plays (candidate move, already applied above)
-      //   Ply 2: Player plays (all responses via playerMoves)
-      //   Ply 3: AI responds (up to 6 candidates)
-      //   Ply 4: After AI responds, does player STILL have winning moves?
-      // If no AI response at ply 3 leaves player with 0 winning moves at ply 4,
-      // the player move is a "trap" — invisible to 2-ply evaluation — and is penalised heavily.
-      let aiCanAlwaysRespond = true;
-      let minAIResponseOptions = Infinity;
-      let trapMoveCount = 0; // player moves that are traps (AI has responses but all still lose)
-
-      for (const playerMove of playerMoves) {
-        const boardAfterPlayer = applyMoveToBoard(boardAfterAI, playerMove, 1);
-        // Correctly carry the player's reduced piece set forward (was computed but unused before)
-        const playerPiecesAfterPlayerMove = playerAvailablePieces.filter(p => p !== playerMove.piece);
-
-        // Use dedupe=true so minAIResponseOptions reflects unique strategic positions
-        const aiResponseMoves = getAllPossibleMoves(boardAfterPlayer, aiPiecesAfterMove, true);
-
-        if (aiResponseMoves.length === 0) {
-          // Immediate win for player — AI has no response at all
-          aiCanAlwaysRespond = false;
-        } else {
-          // 4th-ply trap detection: does ANY AI response leave the player with 0 winning moves?
-          // If none do, this player move is a trap regardless of AI being able to "technically respond".
-          let aiHasSafeResponse = false;
-          for (const aiResp of aiResponseMoves.slice(0, 6)) {
-            const boardAfterAIResp = applyMoveToBoard(boardAfterPlayer, aiResp, 2);
-            const aiPiecesAfterResp = aiPiecesAfterMove.filter(p => p !== aiResp.piece);
-            const playerWinsAfterAIResp = countPlayerWinningMoves(
-              boardAfterAIResp,
-              playerPiecesAfterPlayerMove,
-              aiPiecesAfterResp
-            );
-            if (playerWinsAfterAIResp === 0) {
-              aiHasSafeResponse = true;
-              break;
-            }
-          }
-          if (!aiHasSafeResponse) {
-            // Trap: AI can play but every response still leaves player with winning moves
-            trapMoveCount++;
-            aiCanAlwaysRespond = false;
-          }
-        }
-
-        minAIResponseOptions = Math.min(minAIResponseOptions, aiResponseMoves.length);
-      }
-
-      // Bonus if AI can respond safely to ALL player moves
-      if (aiCanAlwaysRespond) {
-        score += 500;
-      }
-
-      // Heavy penalty per trap move the player can exploit — scaled above the
-      // blocking bonus (2000) so the AI always prefers eliminating traps over
-      // marginal positional gains.
-      score -= trapMoveCount * 3000;
-
-      // Small bonus for AI flexibility (unique response count)
-      score += minAIResponseOptions * 5;
-      
-      // PRIORITY 4: Position preference (center is slightly better)
-      const positionBonus = quickEval(aiMove.row, aiMove.col, aiMove.coords) * 0.5;
-      score += positionBonus;
-      
-      // Deterministic tiebreaker for consistency
-      const tiebreaker = aiMove.piece.charCodeAt(0) * 0.01 + aiMove.row * 0.001 + aiMove.col * 0.0001;
-      score += tiebreaker;
-      
-      scoredMoves.push({ 
-        ...aiMove, 
-        score, 
-        blocked: blockedWinningMoves, 
-        playerWinsAfter: playerWinningMovesAfter,
-        playerMoves: playerMoves.length,
-        canSurvive: aiCanAlwaysRespond,
-        traps: trapMoveCount
-      });
-    }
-    
-    // Sort by score (highest = best for AI)
-    scoredMoves.sort((a, b) => b.score - a.score);
-    
-    // Log top moves for debugging
-    console.log('[CreatorPuzzle AI] Top 5 moves:');
-    scoredMoves.slice(0, 5).forEach((m, i) => {
-      console.log(`  ${i+1}. ${m.piece} at (${m.row},${m.col}) score=${m.score.toFixed(0)} ` +
-        `blocked=${m.blocked} playerWins=${m.playerWinsAfter} survive=${m.canSurvive} traps=${m.traps}`);
+    // Sort AI candidate moves by center preference for better pruning
+    aiMoves.sort((a, b) => {
+      const sa = quickEval(a.row, a.col, a.coords);
+      const sb = quickEval(b.row, b.col, b.coords);
+      return sb - sa;
     });
     
-    const bestMove = scoredMoves[0];
-    console.log(`[CreatorPuzzle AI] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col})`);
+    let bestMove = aiMoves[0];
+    let bestScore = -Infinity;
+    
+    for (const move of aiMoves) {
+      if (Date.now() - searchStart > MAX_TIME_MS) {
+        console.log('[CreatorPuzzle AI v3] Time limit reached');
+        break;
+      }
+      
+      const newBoard = applyMoveToBoard(currentBoard, move, 2);
+      const newAiPieces = aiAvailablePieces.filter(p => p !== move.piece);
+      const score = minimax(newBoard, newAiPieces, playerAvailablePieces, depth - 1, false, -Infinity, Infinity);
+      
+      // Tiny position tiebreaker for determinism among equal minimax scores
+      const tiebreaker = quickEval(move.row, move.col, move.coords) * 0.001
+                       + move.piece.charCodeAt(0) * 0.0001;
+      const finalScore = score + tiebreaker;
+      
+      console.log(`[CreatorPuzzle AI v3] ${move.piece} at (${move.row},${move.col}) → minimax=${score} final=${finalScore.toFixed(2)}`);
+      
+      if (finalScore > bestScore) {
+        bestScore = finalScore;
+        bestMove = move;
+      }
+      
+      // Early exit on guaranteed win
+      if (score >= 10000) break;
+    }
+    
+    const elapsed = Date.now() - searchStart;
+    console.log(`[CreatorPuzzle AI v3] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore.toFixed(0)} (${nodesSearched} nodes, ${elapsed}ms)`);
     
     return bestMove;
-  }, [getAllPossibleMoves, applyMoveToBoard, quickEval]);
+  }, [getAllPossibleMoves, applyMoveToBoard, quickEval, countPlaceablePieces]);
   
   // -------------------------------------------------------------------------
   // INITIALIZE PUZZLE
@@ -666,6 +627,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setPendingMove(null);
     setPlayerAnimatingMove(null);
     setAiAnimatingMove(null);
+    setAiIsThinking(false);
     setShowWrongMove(false);
     setErrorMessage(null);
     
@@ -862,6 +824,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           ).catch(err => console.error('[CreatorPuzzleGame] Failed to record completion:', err));
         }
       } else {
+        // v2.8: Show thinking indicator, then act after delay
+        setAiIsThinking(true);
+        
+        safeSetTimeout(() => {
+          setAiIsThinking(false);
+          
         // AI can play - check if this is a "forced" move (player made good move)
         // If AI's score was very negative, player made a winning move - let them continue
         console.log('[CreatorPuzzleGame] AI plays:', aiMove.piece, 'at', aiMove.row, aiMove.col);
@@ -944,6 +912,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             }, WRONG_MOVE_DISPLAY_MS);
           }
         }, ANIMATION_CLEAR_DELAY_MS);
+        }, AI_THINKING_DELAY_MS);
       }
     }, SUCCESS_DELAY_MS);
   }, [pendingMove, selectedPiece, board, boardPieces, rotation, flipped, gameState, puzzle, usedPieces, availablePieces, currentPlayer, safeSetTimeout, initialBoard, initialBoardPieces, profile, startTime, attempts, findExpertAIMove, getPiecesOnBoard, getAllPossibleMoves]);
@@ -963,6 +932,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setRotation(0);
     setFlipped(false);
     setMoveIndex(0);
+    setAiIsThinking(false);
     setGameState(GAME_STATES.PLAYING);
     
     // Increment attempts and save to database
@@ -1392,7 +1362,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">
@@ -1466,15 +1436,15 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               
               {/* Player 2 - AI */}
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
-                currentPlayer === 2 
+                currentPlayer === 2 || aiIsThinking
                   ? `bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]` 
                   : 'bg-slate-800/50 border border-slate-700/50'
               }`}>
                 <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                  currentPlayer === 2 ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse' : 'bg-slate-600'
+                  currentPlayer === 2 || aiIsThinking ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse' : 'bg-slate-600'
                 }`} />
-                <span className={`text-xs font-bold tracking-wide ${currentPlayer === 2 ? 'text-pink-300' : 'text-slate-500'}`}>
-                  AI
+                <span className={`text-xs font-bold tracking-wide ${currentPlayer === 2 || aiIsThinking ? 'text-pink-300' : 'text-slate-500'}`}>
+                  {aiIsThinking ? 'THINKING…' : 'AI'}
                 </span>
               </div>
             </div>

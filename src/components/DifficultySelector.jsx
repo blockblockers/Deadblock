@@ -1,4 +1,5 @@
 // DifficultySelector.jsx
+// v7.15: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 import { useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
@@ -130,7 +131,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
       <div className="relative flex flex-col items-center justify-center px-4 py-6 min-h-full">

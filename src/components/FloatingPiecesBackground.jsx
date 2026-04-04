@@ -1,4 +1,6 @@
 // FloatingPiecesBackground - Reusable animated background with floating pentomino pieces
+// v7.8: iOS scroll fix — removed willChange from individual pieces (reduces compositing layers),
+//       added contain:strict to wrapper to isolate from scroll hit-testing
 // v7.7: Uses negative animation-delay so pieces start mid-animation (already moving)
 // Use this component on any game/menu screen to add the animated block background
 
@@ -23,7 +25,6 @@ const FloatingPiece = memo(({ piece, startX, startY, delay, duration, color, glo
         animation: `${keyframeName} ${duration}s ease-in-out infinite`,
         animationDelay: `${delay}s`,
         opacity: 0.6,
-        willChange: 'transform, opacity',
         filter: `drop-shadow(0 0 8px ${glowColor})`,
       }}
     >
@@ -188,7 +189,7 @@ const FloatingPiecesBackground = memo(({
       `}</style>
       
       {/* Floating pieces container */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" style={{ contain: 'strict' }}>
         {floatingPieces.map((p) => (
           <FloatingPiece key={p.id} {...p} />
         ))}

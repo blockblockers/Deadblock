@@ -1,4 +1,5 @@
 // Weekly Leaderboard - Shows rankings for weekly challenge
+// v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // FIXED: Uses username priority (not display_name)
 import { useState, useEffect } from 'react';
@@ -105,7 +106,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       <div className="relative min-h-full px-4 py-6">
         <div className="max-w-md mx-auto">

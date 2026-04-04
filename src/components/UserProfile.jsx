@@ -1,4 +1,5 @@
 // User Profile Screen - Enhanced with ELO changes in match history and proper Final Board View
+// v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // 1. Shows +/- ELO changes in match history boxes (with fallback calculation)
 // 2. Fetches game moves for Final Board View
@@ -306,9 +307,7 @@ const UserProfile = ({ onBack }) => {
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{
-          WebkitOverflowScrolling: 'touch',
-          overscrollBehavior: 'contain',
-          touchAction: 'pan-y',
+          overscrollBehavior: 'none',
           paddingTop: 'max(16px, env(safe-area-inset-top))',
           paddingBottom: 'env(safe-area-inset-bottom)',
         }}

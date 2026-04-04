@@ -1,3 +1,5 @@
+// MenuScreen.jsx — Main menu
+// v7.1: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 import { lazy, Suspense } from 'react';
 import { Settings, HelpCircle, Globe } from 'lucide-react';
 import NeonTitle from './NeonTitle';
@@ -123,9 +125,7 @@ const MenuScreen = ({
   // Scroll styles for iPad/mobile compatibility
   const scrollStyles = needsScroll ? {
     overflow: 'auto',
-    WebkitOverflowScrolling: 'touch',
-    touchAction: 'pan-y pinch-zoom',
-    overscrollBehavior: 'contain',
+    overscrollBehavior: 'none',
   } : { overflow: 'hidden' };
 
   return (

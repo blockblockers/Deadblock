@@ -1,4 +1,5 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.18: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.17: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.15: Purple glow orb Change Password, orange glow orb Sign Out (matched Delete Account pattern)
 // UPDATED: Added push notification subscription management
@@ -511,10 +512,10 @@ const SettingsModal = ({ isOpen, onClose }) => {
           </button>
         </div>
         
-        {/* Scrollable Content - v7.10: iOS scroll fix */}
+        {/* Scrollable Content - v7.18: Stripped iOS-conflicting inline styles */}
         <div 
           className="flex-1 overflow-y-scroll p-4 space-y-4"
-          style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+          style={{ overscrollBehavior: 'none' }}
         >
           {/* Sound Settings */}
           <div className="space-y-3">

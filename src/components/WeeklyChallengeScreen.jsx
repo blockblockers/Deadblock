@@ -1,4 +1,5 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.23: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.22: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.20: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
 //   - gameOverHandledRef guard prevents game-over effect re-firing when deps change mid-win/loss
@@ -1260,7 +1261,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden relative z-10"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: isDragging ? 'none' : 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
       <div className="min-h-full flex flex-col items-center px-2 py-4" style={{ paddingTop: 'max(32px, env(safe-area-inset-top))' }}>

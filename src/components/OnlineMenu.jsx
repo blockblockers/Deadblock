@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.38: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.37: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.35: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' on inner scroll child
 //        blocks the email_invites update; loadInvites now detects this and writes game_id from
@@ -1450,7 +1451,7 @@ const OnlineMenu = ({
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}
+        style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
       <div 
@@ -1803,8 +1804,6 @@ const OnlineMenu = ({
                 className="bg-slate-800/60 rounded-xl p-3 mb-2 border border-purple-500/30 space-y-3" 
                 style={{ 
                   boxShadow: '0 0 15px rgba(168,85,247,0.15)',
-                  touchAction: 'pan-y',
-                  WebkitOverflowScrolling: 'touch',
                 }}>
                 {/* Option 1: Search by Username/Email */}
                 <div className="bg-slate-900/50 rounded-lg p-3 border border-purple-500/20">
@@ -1837,9 +1836,7 @@ const OnlineMenu = ({
                     <div 
                       className="space-y-2 mt-3 max-h-48 overflow-y-scroll" 
                       style={{ 
-                        WebkitOverflowScrolling: 'touch', 
-                        overscrollBehavior: 'contain',
-                        touchAction: 'pan-y',
+                        overscrollBehavior: 'none',
                         transform: 'translate3d(0, 0, 0)'
                       }}
                     >                      {searchResults.map(user => {
@@ -1946,9 +1943,7 @@ const OnlineMenu = ({
                         <div 
                           className="space-y-2 max-h-40 overflow-y-scroll" 
                           style={{ 
-                            WebkitOverflowScrolling: 'touch', 
-                            overscrollBehavior: 'contain',
-                            touchAction: 'pan-y',
+                            overscrollBehavior: 'none',
                             transform: 'translate3d(0, 0, 0)'
                           }}
                         >
@@ -2029,9 +2024,7 @@ const OnlineMenu = ({
                 <div 
                   className="space-y-2 max-h-60 overflow-y-scroll pr-1"
                   style={{ 
-                    WebkitOverflowScrolling: 'touch', 
-                    overscrollBehavior: 'contain',
-                    touchAction: 'pan-y',
+                    overscrollBehavior: 'none',
                     transform: 'translate3d(0, 0, 0)'
                   }}
                 >
@@ -2112,9 +2105,7 @@ const OnlineMenu = ({
                 <div 
                   className="space-y-2 max-h-60 overflow-y-scroll pr-1"
                   style={{ 
-                    WebkitOverflowScrolling: 'touch', 
-                    overscrollBehavior: 'contain',
-                    touchAction: 'pan-y',
+                    overscrollBehavior: 'none',
                     transform: 'translate3d(0, 0, 0)'
                   }}
                 >
@@ -2172,9 +2163,7 @@ const OnlineMenu = ({
                 <div 
                   className="space-y-2 max-h-40 overflow-y-scroll pr-1"
                   style={{ 
-                    WebkitOverflowScrolling: 'touch', 
-                    overscrollBehavior: 'contain',
-                    touchAction: 'pan-y',
+                    overscrollBehavior: 'none',
                     transform: 'translate3d(0, 0, 0)'
                   }}
                 >
@@ -2355,9 +2344,7 @@ const OnlineMenu = ({
             <div 
               className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"
               style={{ 
-                WebkitOverflowScrolling: 'touch', 
-                overscrollBehavior: 'contain',
-                touchAction: 'pan-y',
+                overscrollBehavior: 'none',
                 transform: 'translate3d(0, 0, 0)',
                 willChange: 'scroll-position'
               }}
@@ -2540,9 +2527,7 @@ const OnlineMenu = ({
             <div 
               className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
-                WebkitOverflowScrolling: 'touch',
-                overscrollBehavior: 'contain',
-                touchAction: 'pan-y',
+                overscrollBehavior: 'none',
                 transform: 'translateZ(0)',
                 willChange: 'scroll-position'
               }}
@@ -2733,9 +2718,7 @@ const OnlineMenu = ({
             <div 
               className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
-                WebkitOverflowScrolling: 'touch',
-                overscrollBehavior: 'contain',
-                touchAction: 'pan-y',
+                overscrollBehavior: 'none',
                 transform: 'translateZ(0)',
                 willChange: 'scroll-position'
               }}

@@ -1,5 +1,6 @@
 // CreatorPuzzleSelect.jsx
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
+// v1.9: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v1.8: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v1.6: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom); root already uses correct h-dvh flex-col shell
 import { useState, useEffect } from 'react';
@@ -278,7 +279,7 @@ const CreatorPuzzleSelect = ({
       <div className={`fixed ${theme.glow2.pos} w-40 h-40 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none animate-pulse`} style={{ animationDuration: '6s' }} />
 
       {/* Main Content - Scrollable if needed */}
-      <div className="relative flex-1 min-h-0 flex flex-col overflow-y-scroll" style={{ WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y' }}>
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-y-scroll" style={{ overscrollBehavior: 'none' }}>
         <div className="flex-1 flex flex-col items-center px-4 py-4">
           <div className="w-full max-w-md">
             
