@@ -1,4 +1,6 @@
 // GlobalBackground.jsx - Animated floating pieces background
+// v7.13: Heat reduction — 16→10 pieces, removed redundant will-change/translateZ from
+//        .gb-piece/.gb-piece-inner/.gb-cell, removed per-piece filter:drop-shadow
 // v7.12: Fixed initial animation stutter with preloading
 // 
 // FIXES:
@@ -15,13 +17,13 @@ import { pieces } from '../utils/pieces';
 // PRE-GENERATE ALL DATA AT MODULE LOAD (runs once when JS is parsed)
 // ============================================================================
 
-const NUM_PIECES = 16;
+const NUM_PIECES = 10;
 const PIECE_NAMES = Object.keys(pieces);
 
 // Pre-generate piece data with grid-based distribution
 const generatePiecesData = () => {
-  const gridCols = 4;
-  const gridRows = 4;
+  const gridCols = 5;
+  const gridRows = 2;
   const cellWidth = 100 / gridCols;
   const cellHeight = 100 / gridRows;
   
@@ -176,23 +178,15 @@ const GLOBAL_STYLES = `
   .gb-piece {
     position: absolute;
     pointer-events: none;
-    /* GPU acceleration - critical for smooth animation */
-    will-change: transform, opacity;
-    transform: translateZ(0);
-    backface-visibility: hidden;
   }
   
   .gb-piece-inner {
-    /* GPU acceleration */
-    will-change: transform, opacity;
-    transform: translateZ(0);
+    position: relative;
   }
   
   .gb-cell {
     position: absolute;
     border-radius: 2px;
-    /* GPU acceleration */
-    transform: translateZ(0);
   }
   
   /* All piece keyframes */
@@ -244,7 +238,6 @@ const FloatingPiece = memo(({ data, colors }) => {
       style={{
         left: `${startX}%`,
         top: `${startY}%`,
-        filter: `drop-shadow(0 0 10px ${glow})`,
       }}
     >
       <div

@@ -1,4 +1,7 @@
 // FloatingPieces.jsx - Animated floating pentomino pieces background
+// v2.2: Heat reduction — default count 15→8, replaced 5×N per-cell sparkle animations with
+//       1×N per-piece opacity-only breathe animation (~90% fewer animations),
+//       removed filter:drop-shadow (cells already have boxShadow glow)
 // v2.1: iOS scroll fix — removed willChange from individual pieces (reduces compositing layers),
 //       added contain:strict to wrapper to isolate from scroll hit-testing
 // v2.0: Added immediateStart and maxDelay props (defaults preserve original behavior)
@@ -107,7 +110,6 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
         animation: `${keyframeName} ${duration}s ease-in-out infinite`,
         animationDelay: `${delay}s`,
         opacity: opacity,
-        filter: `drop-shadow(0 0 8px ${glowColor})`,
       }}
     >
       <style>{`
@@ -126,7 +128,11 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
           }
         }
       `}</style>
-      <div className="relative" style={{ transform: `scale(${size})` }}>
+      <div className="relative" style={{ 
+        transform: `scale(${size})`,
+        animation: 'piece-breathe 3s ease-in-out infinite',
+        animationDelay: `${delay * 0.7}s`,
+      }}>
         {coords.map(([x, y], idx) => (
           <div
             key={idx}
@@ -138,8 +144,6 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
               top: (y - minY) * 12,
               backgroundColor: color,
               boxShadow: `0 0 15px ${glowColor}, 0 0 30px ${glowColor}60, inset 0 0 6px rgba(255,255,255,0.4)`,
-              animation: `sparkle-piece ${1.5 + (idx * 0.2)}s ease-in-out infinite`,
-              animationDelay: `${delay + idx * 0.15}s`,
               border: `1px solid rgba(255,255,255,0.3)`,
             }}
           />
@@ -152,7 +156,7 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
 /**
  * FloatingPieces - Animated background with floating pentomino pieces
  * @param {string} theme - Color theme: 'mixed', 'online', 'weekly', 'puzzle', 'ai', 'game', 'cyan', 'amber', 'purple', 'green', 'pink', 'red'
- * @param {number} count - Number of floating pieces (default: 15)
+ * @param {number} count - Number of floating pieces (default: 8)
  * @param {number} minOpacity - Minimum opacity (default: 0.25)
  * @param {number} maxOpacity - Maximum opacity (default: 0.55)
  * @param {boolean} immediateStart - Skip initial delay, start animating immediately (default: false)
@@ -160,7 +164,7 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
  */
 function FloatingPieces({ 
   theme = 'mixed',
-  count = 15,
+  count = 8,
   minOpacity = 0.25,
   maxOpacity = 0.55,
   immediateStart = false,
@@ -207,20 +211,14 @@ function FloatingPieces({
 
   return (
     <>
-      {/* Global sparkle animation */}
+      {/* Shared breathe animation — 1 per piece, opacity-only (cheapest animation type) */}
       <style>{`
-        @keyframes sparkle-piece {
-          0%, 100% { 
-            opacity: 0.8; 
-            transform: scale(1);
-          }
-          50% { 
-            opacity: 1; 
-            transform: scale(1.15);
-          }
+        @keyframes piece-breathe {
+          0%, 100% { opacity: 0.7; }
+          50% { opacity: 1; }
         }
       `}</style>
-      
+
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" style={{ contain: 'strict' }}>
         {floatingPieces.map((p) => (
           <FloatingPiece key={p.id} {...p} />

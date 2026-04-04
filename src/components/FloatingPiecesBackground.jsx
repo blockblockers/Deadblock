@@ -1,4 +1,7 @@
 // FloatingPiecesBackground - Reusable animated background with floating pentomino pieces
+// v7.9: Heat reduction — default count 20→10, replaced 5×N per-cell sparkle animations with
+//       1×N per-piece opacity-only breathe animation (~90% fewer animations),
+//       removed filter:drop-shadow (cells already have boxShadow glow)
 // v7.8: iOS scroll fix — removed willChange from individual pieces (reduces compositing layers),
 //       added contain:strict to wrapper to isolate from scroll hit-testing
 // v7.7: Uses negative animation-delay so pieces start mid-animation (already moving)
@@ -25,7 +28,6 @@ const FloatingPiece = memo(({ piece, startX, startY, delay, duration, color, glo
         animation: `${keyframeName} ${duration}s ease-in-out infinite`,
         animationDelay: `${delay}s`,
         opacity: 0.6,
-        filter: `drop-shadow(0 0 8px ${glowColor})`,
       }}
     >
       <style>{`
@@ -48,11 +50,15 @@ const FloatingPiece = memo(({ piece, startX, startY, delay, duration, color, glo
           }
         }
       `}</style>
-      <div className="relative" style={{ transform: `scale(${size})` }}>
+      <div className="relative" style={{ 
+        transform: `scale(${size})`,
+        animation: 'piece-breathe-bg 4s ease-in-out infinite',
+        animationDelay: `${delay * 0.5}s`,
+      }}>
         {coords.map(([x, y], idx) => (
           <div
             key={idx}
-            className="absolute rounded-sm animate-sparkle-bg"
+            className="absolute rounded-sm"
             style={{
               width: 8,
               height: 8,
@@ -60,7 +66,6 @@ const FloatingPiece = memo(({ piece, startX, startY, delay, duration, color, glo
               top: (y - minY) * 10,
               backgroundColor: color,
               boxShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}50`,
-              animationDelay: `${delay + idx * 0.1}s`,
             }}
           />
         ))}
@@ -118,7 +123,7 @@ export const COLOR_PRESETS = {
 /**
  * FloatingPiecesBackground - Animated pentomino pieces floating in the background
  * 
- * @param {number} count - Number of floating pieces (default: 20)
+ * @param {number} count - Number of floating pieces (default: 10)
  * @param {Array} colors - Array of {color, glow} objects (default: DEFAULT_COLORS)
  * @param {string} colorPreset - Use a preset: 'default', 'online', 'speed', 'green', 'purple'
  * @param {number} minSize - Minimum piece scale (default: 0.6)
@@ -127,7 +132,7 @@ export const COLOR_PRESETS = {
  * @param {number} maxDuration - Maximum animation duration in seconds (default: 25)
  */
 const FloatingPiecesBackground = memo(({ 
-  count = 20,
+  count = 10,
   colors = null,
   colorPreset = 'default',
   minSize = 0.6,
@@ -171,23 +176,14 @@ const FloatingPiecesBackground = memo(({
 
   return (
     <>
-      {/* Animation keyframes */}
+      {/* Shared breathe animation — 1 per piece, opacity-only (cheapest animation type) */}
       <style>{`
-        @keyframes sparkle-bg {
-          0%, 100% { 
-            opacity: 0.6; 
-            transform: scale(1);
-          }
-          50% { 
-            opacity: 1; 
-            transform: scale(1.1);
-          }
-        }
-        .animate-sparkle-bg {
-          animation: sparkle-bg 2s ease-in-out infinite;
+        @keyframes piece-breathe-bg {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.85; }
         }
       `}</style>
-      
+
       {/* Floating pieces container */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" style={{ contain: 'strict' }}>
         {floatingPieces.map((p) => (
