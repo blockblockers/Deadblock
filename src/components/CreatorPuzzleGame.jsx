@@ -1,4 +1,7 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.11: REGRESSION FIX — aiIsThinking guard on all player inputs (prevented duplicate placements);
+//        AI now uses puzzle.solution_moves for predetermined responses (minimax as fallback);
+//        increased thinking delay 800→1200ms; moveIndex tracked for solution lookup
 // v2.10: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v2.9: AI rewrite — replaced heuristic scorer with proper minimax + alpha-beta pruning
 // v2.8: AI thinking pause — 800ms delay + visual indicator before AI places piece
@@ -34,7 +37,7 @@ import { creatorPuzzleService } from '../services/creatorPuzzleService';
 const ANIMATION_CLEAR_DELAY_MS = 500;
 const WRONG_MOVE_DISPLAY_MS = 1500;
 const SUCCESS_DELAY_MS = 300;
-const AI_THINKING_DELAY_MS = 800;
+const AI_THINKING_DELAY_MS = 1200;
 
 // Game states
 const GAME_STATES = {
@@ -666,7 +669,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   // PIECE SELECTION & MOVEMENT
   // -------------------------------------------------------------------------
   const handleSelectPiece = useCallback((piece) => {
-    if (gameState !== GAME_STATES.PLAYING) return;
+    if (gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     if (effectiveUsedPieces.includes(piece)) return;
     
     soundManager.playPieceSelect();
@@ -674,10 +677,10 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setRotation(0);
     setFlipped(false);
     setPendingMove(null);
-  }, [gameState, effectiveUsedPieces]);
+  }, [gameState, effectiveUsedPieces, aiIsThinking]);
   
   const handleRotate = useCallback(() => {
-    if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;
+    if (!selectedPiece || gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     soundManager.playRotate();
     const newRotation = (rotation + 90) % 360;
     setRotation(newRotation);
@@ -686,10 +689,10 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       const coords = getPieceCoords(selectedPiece, newRotation, flipped);
       setPendingMove({ ...pendingMove, coords });
     }
-  }, [selectedPiece, rotation, flipped, pendingMove, gameState]);
+  }, [selectedPiece, rotation, flipped, pendingMove, gameState, aiIsThinking]);
   
   const handleFlip = useCallback(() => {
-    if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;
+    if (!selectedPiece || gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     soundManager.playRotate();
     const newFlipped = !flipped;
     setFlipped(newFlipped);
@@ -698,24 +701,24 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       const coords = getPieceCoords(selectedPiece, rotation, newFlipped);
       setPendingMove({ ...pendingMove, coords });
     }
-  }, [selectedPiece, rotation, flipped, pendingMove, gameState]);
+  }, [selectedPiece, rotation, flipped, pendingMove, gameState, aiIsThinking]);
   
   // -------------------------------------------------------------------------
   // BOARD CELL CLICK
   // -------------------------------------------------------------------------
   const handleCellClick = useCallback((row, col) => {
-    if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;
+    if (!selectedPiece || gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     
     const coords = getPieceCoords(selectedPiece, rotation, flipped);
     setPendingMove({ row, col, coords, piece: selectedPiece });
     soundManager.playClickSound?.('select');
-  }, [selectedPiece, rotation, flipped, gameState]);
+  }, [selectedPiece, rotation, flipped, gameState, aiIsThinking]);
   
   // -------------------------------------------------------------------------
   // D-PAD MOVEMENT
   // -------------------------------------------------------------------------
   const handleDPadMove = useCallback((direction) => {
-    if (!selectedPiece || gameState !== GAME_STATES.PLAYING) return;
+    if (!selectedPiece || gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     
     const [dRow, dCol] = DIRECTION_DELTAS[direction] || [0, 0];
     
@@ -735,13 +738,13 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     }
     
     soundManager.playClickSound?.('move');
-  }, [selectedPiece, rotation, flipped, pendingMove, gameState]);
+  }, [selectedPiece, rotation, flipped, pendingMove, gameState, aiIsThinking]);
   
   // -------------------------------------------------------------------------
   // VALIDATE AND CONFIRM MOVE
   // -------------------------------------------------------------------------
   const confirmMove = useCallback(() => {
-    if (!pendingMove || !selectedPiece || gameState !== GAME_STATES.PLAYING) return;
+    if (!pendingMove || !selectedPiece || gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     if (!canPlacePiece(board, pendingMove.row, pendingMove.col, pendingMove.coords)) {
       soundManager.playInvalid();
       return;
@@ -799,8 +802,35 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     console.log('[CreatorPuzzleGame] AI can use:', aiPiecesList);
     console.log('[CreatorPuzzleGame] Player can use:', playerPiecesRemaining);
     
-    // Use expert AI to find best move
-    const aiMove = findExpertAIMove(newBoard, aiPiecesList, playerPiecesRemaining);
+    // v2.11: Use puzzle.solution_moves for AI response when available.
+    // The solution alternates: player move (even index), AI response (odd index).
+    // AI response for the current round is at solution_moves[moveIndex + 1].
+    // Falls back to minimax search if solution data is unavailable or can't be placed
+    // (e.g. player made a non-solution move that changed the board).
+    let aiMove = null;
+    const solutionMove = puzzle.solution_moves?.[moveIndex + 1];
+    if (solutionMove && solutionMove.piece) {
+      // Try to place the solution's predetermined AI response
+      const solPiece = solutionMove.piece;
+      const solRow = solutionMove.position?.[0];
+      const solCol = solutionMove.position?.[1];
+      const solRot = solutionMove.rotation || 0;
+      if (solRow != null && solCol != null) {
+        for (const flip of [false, true]) {
+          const coords = getPieceCoords(solPiece, solRot, flip);
+          if (coords && canPlacePiece(newBoard, solRow, solCol, coords)) {
+            aiMove = { piece: solPiece, row: solRow, col: solCol, coords, rotation: solRot, flipped: flip };
+            console.log(`[CreatorPuzzle AI] Using solution_moves[${moveIndex + 1}]: ${solPiece} at (${solRow},${solCol})`);
+            break;
+          }
+        }
+      }
+    }
+    if (!aiMove) {
+      // Fallback: minimax search (for puzzles without solution data or wrong player moves)
+      console.log('[CreatorPuzzle AI] Solution move unavailable, falling back to minimax');
+      aiMove = findExpertAIMove(newBoard, aiPiecesList, playerPiecesRemaining);
+    }
     
     safeSetTimeout(() => {
       if (!aiMove) {
@@ -868,6 +898,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         setBoardPieces(boardPiecesAfterAI);
         soundManager.playPiecePlace();
         
+        // v2.11: Advance moveIndex by 2 (player move + AI response) for solution lookup
+        setMoveIndex(prev => prev + 2);
+        
         // Clear AI animation
         safeSetTimeout(() => {
           setAiAnimatingMove(null);
@@ -915,7 +948,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         }, AI_THINKING_DELAY_MS);
       }
     }, SUCCESS_DELAY_MS);
-  }, [pendingMove, selectedPiece, board, boardPieces, rotation, flipped, gameState, puzzle, usedPieces, availablePieces, currentPlayer, safeSetTimeout, initialBoard, initialBoardPieces, profile, startTime, attempts, findExpertAIMove, getPiecesOnBoard, getAllPossibleMoves]);
+  }, [pendingMove, selectedPiece, board, boardPieces, rotation, flipped, gameState, puzzle, usedPieces, availablePieces, currentPlayer, safeSetTimeout, initialBoard, initialBoardPieces, profile, startTime, attempts, findExpertAIMove, getPiecesOnBoard, getAllPossibleMoves, aiIsThinking, moveIndex]);
   
   // -------------------------------------------------------------------------
   // RESET PUZZLE

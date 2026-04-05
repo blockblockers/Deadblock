@@ -1,5 +1,9 @@
 /* =============================================================================
    DEADBLOCK - Global Styles
+   v7.13: iOS scroll ROOT FIX — html/body/#root locked as non-scrollable
+          (overflow:hidden + height:100dvh); removed body transform:translateZ(0)
+          which was creating a containing block that broke fixed positioning;
+          removed @supports iOS block that added translateZ(0) to ALL .fixed elements
    v7.12: iOS scroll fix — removed -webkit-overflow-scrolling from html/body
           (was routing all iOS scroll gestures to body instead of inner divs);
           reverted button touch-action from pan-y back to manipulation
@@ -30,42 +34,36 @@ html, body {
   margin: 0;
   padding: 0;
   width: 100%;
-  min-height: 100%;
-  /* Allow vertical scroll, prevent horizontal */
-  overflow-x: hidden;
+  /* v7.13: Fixed height, NOT min-height — body must NOT be a scroll container.
+     All screens use fixed inset-0 shells with inner overflow-y-scroll divs.
+     min-height let iOS treat body as scrollable, stealing scroll gestures. */
+  height: 100%;
+  height: 100dvh;
+  /* v7.13: overflow:hidden on BOTH axes — tells iOS body is not scrollable */
+  overflow: hidden;
   -webkit-tap-highlight-color: transparent;
-  /* v7.9: Allow scroll behavior */
-  overscroll-behavior: contain;
-  /* v7.12: REMOVED -webkit-overflow-scrolling: touch from body/html —
-     registering body as an iOS native scroll container causes iOS to route
-     all scroll gestures to the body instead of inner overflow-y divs */
+  overscroll-behavior: none;
 }
 
 html {
-  /* Prevent pull-to-refresh but allow normal scroll */
-  overscroll-behavior-y: contain;
-  /* v7.12: -webkit-overflow-scrolling: touch removed — only scroll containers need this */
+  /* Prevent pull-to-refresh */
+  overscroll-behavior-y: none;
 }
 
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #0f172a;
   color: white;
-  /* v7.9: Use min-height, NOT position:fixed + overflow:hidden */
-  min-height: 100vh;
-  min-height: 100dvh; /* Dynamic viewport height for mobile */
-  /* Hardware acceleration for smooth scrolling */
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
+  /* v7.13: REMOVED transform:translateZ(0) — it creates a containing block
+     that makes position:fixed children relative to body instead of viewport,
+     breaking the fixed inset-0 → absolute inset-0 scroll pattern on iOS */
 }
 
 #root {
   width: 100%;
-  /* v7.9: Use min-height to allow content growth and scrolling */
-  min-height: 100vh;
-  min-height: 100dvh;
-  /* Allow vertical scroll */
-  overflow-x: hidden;
+  /* v7.13: Fixed height + overflow:hidden — #root is also not a scroll container */
+  height: 100%;
+  overflow: hidden;
 }
 
 /* =============================================================================
@@ -185,36 +183,17 @@ body.is-dragging * {
    ============================================================================= */
 
 @supports (-webkit-touch-callout: none) {
-  /* iOS Safari - hardware acceleration for fixed elements */
-  .fixed {
-    position: fixed;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-  }
-  
-  /* Hardware acceleration for body on iOS */
-  body {
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
-  }
+  /* v7.13: REMOVED transform:translateZ(0) from .fixed and body —
+     these were creating containing blocks that made position:fixed 
+     relative to body instead of viewport on iOS, breaking scroll. */
   
   /* Fix iOS scroll-back issues */
   .scroll-container,
   .scroll-fix,
   .scroll-y,
   .scroll-page {
-    /* Enable smooth scrolling on iOS */
-    -webkit-overflow-scrolling: touch;
     /* Prevent scroll momentum causing stuck scroll */
     scroll-behavior: auto;
-  }
-  
-  /* Fix for stuck scroll on iOS after direction change */
-  .ios-scroll-fix {
-    -webkit-overflow-scrolling: touch;
-    transform: translate3d(0, 0, 0);
-    backface-visibility: hidden;
-    perspective: 1000px;
   }
 }
 

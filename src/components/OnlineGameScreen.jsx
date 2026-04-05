@@ -1,4 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.35: iPhone drag fix — updateDrag uses ref fallbacks (isDraggingRef, draggedPieceRef)
+//        so pointer events work before React state commits on first pointermove
 // v7.34: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.33: iOS drag fix — added Pointer Events to createDragHandlers; PieceTray uses
 //        setPointerCapture to bypass UIScrollView gesture recognition on iPhone
@@ -444,7 +446,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
-    if (!isDragging || !draggedPiece) return;
+    // v7.35: Use refs as fallback — pointer events fire before React state commits,
+    // so isDragging/draggedPiece (state) may still be false on the first pointermove
+    if (!isDragging && !isDraggingRef.current) return;
+    const piece = draggedPiece || draggedPieceRef.current;
+    if (!piece) return;
     
     setDragPosition({ x: clientX, y: clientY });
     
@@ -456,7 +462,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     if (cell) {
       // Get piece coordinates to calculate center offset
-      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      const coords = getPieceCoords(piece, rotation, flipped);
       
       // Calculate piece bounds
       const minX = Math.min(...coords.map(([x]) => x));
