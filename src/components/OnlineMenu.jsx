@@ -1,4 +1,6 @@
 // Online Menu - Hub for online features
+// v7.40: iOS scroll fix — added near-transparent background to scroll container so iOS
+//        hit-testing treats it as opaque (prevents touches falling through to fixed bg layers)
 // v7.39: iOS scroll TEST — removed overscrollBehavior:'none' (suspected cause of scroll-lock after first touch)
 // v7.38: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.37: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
@@ -1450,9 +1452,12 @@ const OnlineMenu = ({
       )}
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
+      {/* v7.40: background rgba(0,0,0,0.01) — visually invisible but makes iOS
+          treat this as opaque for touch hit-testing, preventing gestures from
+          falling through to fixed background layers (glow orbs, FloatingPieces) */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        
+        style={{ background: 'rgba(0,0,0,0.01)' }}
       >
       {/* Content */}
       <div 
