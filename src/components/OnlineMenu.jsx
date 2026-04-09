@@ -1,4 +1,5 @@
 // Online Menu - Hub for online features
+// v7.39: iOS scroll TEST — removed overscrollBehavior:'none' (suspected cause of scroll-lock after first touch)
 // v7.38: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.37: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.35: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' on inner scroll child
@@ -1451,7 +1452,7 @@ const OnlineMenu = ({
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ overscrollBehavior: 'none' }}
+        
       >
       {/* Content */}
       <div 
@@ -1836,7 +1837,6 @@ const OnlineMenu = ({
                     <div 
                       className="space-y-2 mt-3 max-h-48 overflow-y-scroll" 
                       style={{ 
-                        overscrollBehavior: 'none',
                         transform: 'translate3d(0, 0, 0)'
                       }}
                     >                      {searchResults.map(user => {
@@ -1943,7 +1943,6 @@ const OnlineMenu = ({
                         <div 
                           className="space-y-2 max-h-40 overflow-y-scroll" 
                           style={{ 
-                            overscrollBehavior: 'none',
                             transform: 'translate3d(0, 0, 0)'
                           }}
                         >
@@ -2024,7 +2023,6 @@ const OnlineMenu = ({
                 <div 
                   className="space-y-2 max-h-60 overflow-y-scroll pr-1"
                   style={{ 
-                    overscrollBehavior: 'none',
                     transform: 'translate3d(0, 0, 0)'
                   }}
                 >
@@ -2105,7 +2103,6 @@ const OnlineMenu = ({
                 <div 
                   className="space-y-2 max-h-60 overflow-y-scroll pr-1"
                   style={{ 
-                    overscrollBehavior: 'none',
                     transform: 'translate3d(0, 0, 0)'
                   }}
                 >
@@ -2163,7 +2160,6 @@ const OnlineMenu = ({
                 <div 
                   className="space-y-2 max-h-40 overflow-y-scroll pr-1"
                   style={{ 
-                    overscrollBehavior: 'none',
                     transform: 'translate3d(0, 0, 0)'
                   }}
                 >
@@ -2344,7 +2340,6 @@ const OnlineMenu = ({
             <div 
               className="p-4 space-y-4 max-h-[70vh] overflow-y-auto"
               style={{ 
-                overscrollBehavior: 'none',
                 transform: 'translate3d(0, 0, 0)',
                 willChange: 'scroll-position'
               }}
@@ -2527,7 +2522,6 @@ const OnlineMenu = ({
             <div 
               className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
-                overscrollBehavior: 'none',
                 transform: 'translateZ(0)',
                 willChange: 'scroll-position'
               }}
@@ -2718,7 +2712,6 @@ const OnlineMenu = ({
             <div 
               className="flex-1 overflow-y-auto overscroll-contain"
               style={{ 
-                overscrollBehavior: 'none',
                 transform: 'translateZ(0)',
                 willChange: 'scroll-position'
               }}

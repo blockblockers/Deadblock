@@ -1,4 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.36: iPhone drag fix — added dragPreviewCellRef for synchronous tracking;
+//        endDrag uses refs as fallback when React state hasn't committed yet
 // v7.35: iPhone drag fix — updateDrag uses ref fallbacks (isDraggingRef, draggedPieceRef)
 //        so pointer events work before React state commits on first pointermove
 // v7.34: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
@@ -235,6 +237,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const draggedPieceRef = useRef(null);
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   const scrollChildRef = useRef(null); // v7.30: imperative touch-action for iOS drag fix
+  const dragPreviewCellRef = useRef(null); // v7.36: synchronous cell tracking for endDrag
 
   // Placement animation hook
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
@@ -317,11 +320,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           const adjustedCol = col - centerOffsetCol;
           
           setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+          dragPreviewCellRef.current = { row: adjustedRow, col: adjustedCol };
           
           const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
           setIsValidDrop(valid);
         } else {
           setDragPreviewCell(null);
+          dragPreviewCellRef.current = null;
           setIsValidDrop(false);
         }
       }
@@ -334,8 +339,16 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     const handleGlobalTouchEnd = () => {
       if (!isDraggingRef.current) return;
       
+      // v7.36: Use refs for pendingMove — same pattern as endDrag
+      const previewCell = dragPreviewCellRef.current;
+      const piece = draggedPieceRef.current;
+      if (previewCell && piece) {
+        setPendingMove({ piece: piece, row: previewCell.row, col: previewCell.col });
+      }
+      
       isDraggingRef.current = false;
       hasDragStartedRef.current = false;
+      dragPreviewCellRef.current = null;
       
       setIsDragging(false);
       
@@ -480,11 +493,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       
       // v7.22: Update dragPreviewCell for live board preview
       setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+      dragPreviewCellRef.current = { row: adjustedRow, col: adjustedCol };
       
       const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
       setIsValidDrop(valid);
     } else {
       setDragPreviewCell(null);
+      dragPreviewCellRef.current = null;
       setIsValidDrop(false);
     }
   }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
@@ -493,9 +508,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const endDrag = useCallback(() => {
     if (!isDragging && !isDraggingRef.current) return;
     
+    // v7.36: Use refs as fallback — React state may not have committed yet
+    // on fast pointer event cycles (especially iOS)
+    const previewCell = dragPreviewCell || dragPreviewCellRef.current;
+    const piece = draggedPiece || draggedPieceRef.current;
+    
     // v7.22: Set pendingMove from dragPreviewCell when drag ends
-    if (dragPreviewCell && draggedPiece) {
-      setPendingMove({ piece: draggedPiece, row: dragPreviewCell.row, col: dragPreviewCell.col });
+    if (previewCell && piece) {
+      setPendingMove({ piece: piece, row: previewCell.row, col: previewCell.col });
     }
     
     // Clear refs
@@ -503,6 +523,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     draggedPieceRef.current = null;
     hasDragStartedRef.current = false;
     pieceCellOffsetRef.current = { row: 0, col: 0 };
+    dragPreviewCellRef.current = null;
     
     // Clear state
     setIsDragging(false);

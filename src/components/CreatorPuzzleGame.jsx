@@ -1,4 +1,6 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.12: FIX — aiIsThinking guard on drag paths (startDrag, getPieceHandlers, handleBoardDragStart)
+//        These were the un-guarded paths allowing duplicate placements during AI thinking
 // v2.11: REGRESSION FIX — aiIsThinking guard on all player inputs (prevented duplicate placements);
 //        AI now uses puzzle.solution_moves for predetermined responses (minimax as fallback);
 //        increased thinking delay 800→1200ms; moveIndex tracked for solution lookup
@@ -1103,7 +1105,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   // Start drag from piece tray
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     if (hasDragStartedRef.current) return;
-    if (gameState !== GAME_STATES.PLAYING) return;
+    if (gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     if (effectiveUsedPieces.includes(piece)) return;
     
     hasDragStartedRef.current = true;
@@ -1132,12 +1134,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameState, effectiveUsedPieces, attachGlobalTouchHandlers]);
+  }, [gameState, effectiveUsedPieces, attachGlobalTouchHandlers, aiIsThinking]);
 
   // Handle starting drag from a pending piece on the board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
     if (hasDragStartedRef.current) return;
-    if (gameState !== GAME_STATES.PLAYING) return;
+    if (gameState !== GAME_STATES.PLAYING || aiIsThinking) return;
     if (!pendingMove || pendingMove.piece !== piece) return;
     
     hasDragStartedRef.current = true;
@@ -1181,7 +1183,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
-  }, [gameState, pendingMove, attachGlobalTouchHandlers]);
+  }, [gameState, pendingMove, attachGlobalTouchHandlers, aiIsThinking]);
 
   // Update drag position (for mouse events)
   const updateDrag = useCallback((clientX, clientY) => {
@@ -1257,7 +1259,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
 
   // Create drag handlers for PieceTray
   const getPieceHandlers = useCallback((piece) => {
-    if (gameState !== GAME_STATES.PLAYING) return {};
+    if (gameState !== GAME_STATES.PLAYING || aiIsThinking) return {};
     if (effectiveUsedPieces.includes(piece)) return {};
 
     let elementRect = null;
@@ -1308,7 +1310,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       onTouchEnd: handleTouchEnd,
       onMouseDown: handleMouseDown,
     };
-  }, [gameState, effectiveUsedPieces, startDrag, updateDrag, endDrag]);
+  }, [gameState, effectiveUsedPieces, startDrag, updateDrag, endDrag, aiIsThinking]);
 
   // Global mouse move/up handlers for desktop drag
   useEffect(() => {
