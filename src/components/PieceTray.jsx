@@ -211,10 +211,14 @@ const PieceTray = ({
           const handlePointerDown = (e) => {
             if (!e.isPrimary) return;
             
-            // v2.2: Desktop mouse — skip pointer path entirely.
-            // Let onMouseDown handle it (proven path that works with DragOverlay).
-            // Pointer events are only needed for iOS touch (setPointerCapture).
-            if (e.pointerType === 'mouse') return;
+            if (e.pointerType === 'mouse') {
+              // v2.2: Desktop mouse — call onMouseDown directly from pointerdown.
+              // Cannot rely on mousedown firing separately after pointerdown.
+              if (dragEvents.onMouseDown) {
+                dragEvents.onMouseDown(e);
+              }
+              return;
+            }
             
             // Touch — capture pointer to bypass iOS UIScrollView + use threshold
             cachedRect = e.currentTarget.getBoundingClientRect();
