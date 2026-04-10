@@ -1767,19 +1767,6 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className={`fixed top-1/4 right-1/4 w-64 h-64 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-1/4 left-1/4 w-64 h-64 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* Drag Overlay — must be outside scroll child so it renders over the whole screen */}
-      {isDragging && draggedPiece && (
-        <DragOverlay
-          isDragging={isDragging}
-          piece={draggedPiece}
-          rotation={rotation}
-          flipped={flipped}
-          position={dragPosition}
-          offset={dragOffset}
-          isValidDrop={isValidDrop}
-        />
-      )}
-
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
         ref={scrollChildRef}
@@ -2550,6 +2537,20 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         }
       `}</style>
       </div>{/* end inner scroll child */}
+
+      {/* v7.37: DragOverlay AFTER scroll child — later DOM order paints on top.
+          Previously rendered BEFORE scroll child and was hidden behind content. */}
+      {isDragging && draggedPiece && (
+        <DragOverlay
+          isDragging={isDragging}
+          piece={draggedPiece}
+          rotation={rotation}
+          flipped={flipped}
+          position={dragPosition}
+          offset={dragOffset}
+          isValidDrop={isValidDrop}
+        />
+      )}
     </div>
   );
 };
