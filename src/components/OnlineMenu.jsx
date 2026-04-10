@@ -1,8 +1,7 @@
 // Online Menu - Hub for online features
-// v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container.
-//        v7.38 removed it from everywhere (body AND scroll containers). Removing from body
-//        was correct (body shouldn't scroll), but the scroll container NEEDS it for iOS
-//        momentum scrolling and native gesture priority.
+// v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
+//        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
+//        inner list containers changed overflow-y-scroll→auto (hides scrollbar on desktop)
 // v7.41: iOS scroll fix — overflow-hidden on outer shell, z-10 on scroll container
 //        (glow orbs' blur-3xl filter creates stacking contexts that intercept iOS gestures)
 // v7.40: iOS scroll fix — added near-transparent background to scroll container so iOS
@@ -1465,6 +1464,7 @@ const OnlineMenu = ({
         className="absolute inset-0 z-10 overflow-y-scroll overflow-x-hidden"
         style={{ 
           WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
           background: 'rgba(0,0,0,0.02)',
         }}
       >
