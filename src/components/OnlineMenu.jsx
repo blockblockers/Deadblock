@@ -1,4 +1,7 @@
 // Online Menu - Hub for online features
+// v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
+//        Glow orbs' blur-3xl filter creates compositor layers that compete with the scroll
+//        container for iOS gesture routing. Moving them inside eliminates competing layers.
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
 //        inner list containers changed overflow-y-scroll→auto (hides scrollbar on desktop)
@@ -1407,11 +1410,6 @@ const OnlineMenu = ({
       // v7.41: Added overflow-hidden so iOS doesn't treat outer shell as scroll candidate
       className="fixed inset-0 bg-transparent overflow-hidden"
     >
-      {/* Themed glow orbs */}
-      <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
-      <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
-      <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
-
       {/* v7.26: Rematch-sent banner — rendered before scroll child so it stacks above via z-index */}
       {showRematchSentBanner && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
@@ -1457,17 +1455,21 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* Inner scroll child — z-10 ensures it stacks above glow orbs whose blur-3xl
-          creates compositor layers; background is visually invisible but makes iOS
-          route all touches to this scroll container instead of background layers */}
+      {/* v7.43: Scroll container is the ONLY top-level interactive element.
+          Glow orbs moved INSIDE so iOS compositor has no competing layers.
+          They stay position:fixed so they don't scroll visually. */}
       <div
-        className="absolute inset-0 z-10 overflow-y-scroll overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ 
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
-          background: 'rgba(0,0,0,0.02)',
         }}
       >
+      {/* Themed glow orbs — inside scroll container but fixed, so they don't scroll */}
+      <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
+
       {/* Content */}
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4"
