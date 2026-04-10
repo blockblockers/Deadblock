@@ -1,4 +1,6 @@
 // Online Menu - Hub for online features
+// v7.41: iOS scroll fix — overflow-hidden on outer shell, z-10 on scroll container
+//        (glow orbs' blur-3xl filter creates stacking contexts that intercept iOS gestures)
 // v7.40: iOS scroll fix — added near-transparent background to scroll container so iOS
 //        hit-testing treats it as opaque (prevents touches falling through to fixed bg layers)
 // v7.39: iOS scroll TEST — removed overscrollBehavior:'none' (suspected cause of scroll-lock after first touch)
@@ -1399,7 +1401,8 @@ const OnlineMenu = ({
   return (
     <div 
       // v7.36: Outer shell is overflow:hidden only — scroll child is absolute inset-0
-      className="fixed inset-0 bg-transparent"
+      // v7.41: Added overflow-hidden so iOS doesn't treat outer shell as scroll candidate
+      className="fixed inset-0 bg-transparent overflow-hidden"
     >
       {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
@@ -1451,13 +1454,12 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
-      {/* v7.40: background rgba(0,0,0,0.01) — visually invisible but makes iOS
-          treat this as opaque for touch hit-testing, preventing gestures from
-          falling through to fixed background layers (glow orbs, FloatingPieces) */}
+      {/* Inner scroll child — z-10 ensures it stacks above glow orbs whose blur-3xl
+          creates compositor layers; background is visually invisible but makes iOS
+          route all touches to this scroll container instead of background layers */}
       <div
-        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ background: 'rgba(0,0,0,0.01)' }}
+        className="absolute inset-0 z-10 overflow-y-scroll overflow-x-hidden"
+        style={{ background: 'rgba(0,0,0,0.02)' }}
       >
       {/* Content */}
       <div 
