@@ -493,8 +493,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       boardBoundsRef.current = boardRef.current.getBoundingClientRect();
     }
     
-    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
-    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
     
     setDraggedPiece(piece);
     setDragPosition({ x: clientX, y: clientY });

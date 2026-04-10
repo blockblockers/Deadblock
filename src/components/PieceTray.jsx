@@ -101,9 +101,6 @@ const PieceTray = ({
           // Extract style separately since it needs to be merged
           const { style: dragStyle, ...dragEvents } = dragHandlers;
           
-          // TEMPORARY DEBUG — log handler availability
-          const hasHandlers = Object.keys(dragEvents).length > 0;
-          
           // v2.1: Use Pointer Events when the drag handler provides them.
           // setPointerCapture bypasses iOS UIScrollView gesture recognition,
           // fixing drag-and-drop inside scroll containers on iPhone.
@@ -213,13 +210,21 @@ const PieceTray = ({
           
           const handlePointerDown = (e) => {
             if (!e.isPrimary) return;
-            console.log('[PieceTray DEBUG]', name, 'pointerdown', e.pointerType, 'hasMouseDown:', !!dragEvents.onMouseDown, 'hasPointerDown:', !!dragEvents.onPointerDown, 'handlers:', Object.keys(dragEvents));
             
             if (e.pointerType === 'mouse') {
-              // v2.2: Desktop mouse — call onMouseDown directly from pointerdown.
-              // Cannot rely on mousedown firing separately after pointerdown.
+              // v2.2: Desktop mouse — call onMouseDown with a synthetic event.
+              // e.currentTarget is nullified by React after dispatch, so we cache
+              // the bounding rect and pass it via a synthetic event object.
+              const rect = e.currentTarget.getBoundingClientRect();
               if (dragEvents.onMouseDown) {
-                dragEvents.onMouseDown(e);
+                dragEvents.onMouseDown({
+                  button: 0,
+                  clientX: e.clientX,
+                  clientY: e.clientY,
+                  currentTarget: { getBoundingClientRect: () => rect },
+                  preventDefault: () => {},
+                  stopPropagation: () => {},
+                });
               }
               return;
             }
@@ -328,13 +333,6 @@ const PieceTray = ({
               )}
               
               <MiniPiece name={name} coords={coords} />
-              
-              {/* TEMPORARY DEBUG — green=has drag handlers, red=no handlers */}
-              <div style={{
-                position: 'absolute', top: 1, right: 1, width: 6, height: 6,
-                borderRadius: '50%', background: hasHandlers ? '#0f0' : '#f00',
-                zIndex: 10,
-              }} />
             </div>
           );
         })}
