@@ -1,4 +1,6 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.13: FIX — effectiveUsedPieces now scans boardPieces (source of truth) so pieces
+//        physically on the board always show as used, regardless of state race conditions
 // v2.12: FIX — aiIsThinking guard on drag paths (startDrag, getPieceHandlers, handleBoardDragStart)
 //        These were the un-guarded paths allowing duplicate placements during AI thinking
 // v2.11: REGRESSION FIX — aiIsThinking guard on all player inputs (prevented duplicate placements);
@@ -331,12 +333,21 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }, [pendingMove]);
   
   // Compute effective used pieces for PieceTray
-  // This includes all pieces NOT in availablePieces + actually placed pieces
+  // v2.13: Includes pieces physically on the board (source of truth) so pieces
+  // can never "reappear" in the tray after being placed, even if usedPieces state
+  // is cleared by init effect re-run or wrong-move reset race condition.
   const effectiveUsedPieces = useMemo(() => {
     const allPieceNames = Object.keys(pieces);
     const notAvailable = allPieceNames.filter(p => !availablePieces.includes(p));
-    return [...new Set([...notAvailable, ...usedPieces])];
-  }, [availablePieces, usedPieces]);
+    // Scan board for physically placed pieces — board is the source of truth
+    const onBoard = new Set();
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (boardPieces[r][c]) onBoard.add(boardPieces[r][c]);
+      }
+    }
+    return [...new Set([...notAvailable, ...usedPieces, ...onBoard])];
+  }, [availablePieces, usedPieces, boardPieces]);
   
   // Show error when placement is invalid (matching GameScreen behavior)
   useEffect(() => {

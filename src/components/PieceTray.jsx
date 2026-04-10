@@ -1,4 +1,6 @@
 // PieceTray.jsx - Piece selection tray with drag-and-drop support
+// v2.2: Desktop drag fix — mouse pointerdown starts drag immediately (no hold threshold);
+//       hold/threshold only applies to touch pointerType for gesture disambiguation
 // v2.1: iOS drag fix — uses Pointer Events + setPointerCapture when drag handler
 //       provides onPointerDown, bypassing UIScrollView gesture recognition on iPhone
 // UPDATED: Added drag handlers for dragging pieces to the board
@@ -208,21 +210,26 @@ const PieceTray = ({
           
           const handlePointerDown = (e) => {
             if (!e.isPrimary) return;
-            // CRITICAL: Capture the pointer — all subsequent pointermove/pointerup
-            // events go to THIS element regardless of scroll container state.
-            // This is what bypasses iOS UIScrollView gesture recognition.
-            e.currentTarget.setPointerCapture(e.pointerId);
             
-            touchStartPos = { x: e.clientX, y: e.clientY };
             cachedRect = e.currentTarget.getBoundingClientRect();
             hasMoved = false;
             dragStarted = false;
             
-            holdTimer = setTimeout(() => {
-              if (!hasMoved && !dragStarted) {
-                startDragFromPointer(e.clientX, e.clientY);
-              }
-            }, HOLD_THRESHOLD);
+            if (e.pointerType === 'mouse') {
+              // v2.2: Desktop mouse — start drag immediately, no setPointerCapture.
+              // Global mousemove/mouseup handlers on window handle move/end.
+              // This restores the pre-pointer-events desktop drag behavior.
+              startDragFromPointer(e.clientX, e.clientY);
+            } else {
+              // Touch — capture pointer to bypass iOS UIScrollView + use threshold
+              e.currentTarget.setPointerCapture(e.pointerId);
+              touchStartPos = { x: e.clientX, y: e.clientY };
+              holdTimer = setTimeout(() => {
+                if (!hasMoved && !dragStarted) {
+                  startDragFromPointer(e.clientX, e.clientY);
+                }
+              }, HOLD_THRESHOLD);
+            }
           };
           
           const handlePointerMove = (e) => {
