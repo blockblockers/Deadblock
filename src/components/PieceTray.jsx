@@ -211,25 +211,23 @@ const PieceTray = ({
           const handlePointerDown = (e) => {
             if (!e.isPrimary) return;
             
+            // v2.2: Desktop mouse — skip pointer path entirely.
+            // Let onMouseDown handle it (proven path that works with DragOverlay).
+            // Pointer events are only needed for iOS touch (setPointerCapture).
+            if (e.pointerType === 'mouse') return;
+            
+            // Touch — capture pointer to bypass iOS UIScrollView + use threshold
             cachedRect = e.currentTarget.getBoundingClientRect();
             hasMoved = false;
             dragStarted = false;
             
-            if (e.pointerType === 'mouse') {
-              // v2.2: Desktop mouse — start drag immediately, no setPointerCapture.
-              // Global mousemove/mouseup handlers on window handle move/end.
-              // This restores the pre-pointer-events desktop drag behavior.
-              startDragFromPointer(e.clientX, e.clientY);
-            } else {
-              // Touch — capture pointer to bypass iOS UIScrollView + use threshold
-              e.currentTarget.setPointerCapture(e.pointerId);
-              touchStartPos = { x: e.clientX, y: e.clientY };
-              holdTimer = setTimeout(() => {
-                if (!hasMoved && !dragStarted) {
-                  startDragFromPointer(e.clientX, e.clientY);
-                }
-              }, HOLD_THRESHOLD);
-            }
+            e.currentTarget.setPointerCapture(e.pointerId);
+            touchStartPos = { x: e.clientX, y: e.clientY };
+            holdTimer = setTimeout(() => {
+              if (!hasMoved && !dragStarted) {
+                startDragFromPointer(e.clientX, e.clientY);
+              }
+            }, HOLD_THRESHOLD);
           };
           
           const handlePointerMove = (e) => {
@@ -264,12 +262,16 @@ const PieceTray = ({
             }
           };
           
-          // Build event handlers: pointer events when supported, touch events as fallback
+          // Build event handlers: pointer events for touch, mouse for desktop
+          // Both are included so each platform uses its proven path
           const pieceEventHandlers = usePointerEvents ? {
             onPointerDown: handlePointerDown,
             onPointerMove: handlePointerMove,
             onPointerUp: handlePointerUp,
             onPointerCancel: handlePointerUp,
+            // v2.2: Include onMouseDown for desktop — pointer path skips mouse,
+            // so onMouseDown fires and uses the proven drag path with DragOverlay
+            onMouseDown: dragEvents.onMouseDown,
           } : {
             onTouchStart: handleTouchStart,
             onTouchMove: handleTouchMove,
