@@ -114,6 +114,7 @@ const PieceTray = ({
           let cachedRect = null;
           let hasMoved = false;
           let dragStarted = false;
+          let pointerIsDown = false; // v2.2: prevents pointermove on hover from starting drag
           
           // --- Touch event path (fallback for screens without pointer event support) ---
           const startDragFromTouch = (touchX, touchY) => {
@@ -233,6 +234,7 @@ const PieceTray = ({
             cachedRect = e.currentTarget.getBoundingClientRect();
             hasMoved = false;
             dragStarted = false;
+            pointerIsDown = true;
             
             e.currentTarget.setPointerCapture(e.pointerId);
             touchStartPos = { x: e.clientX, y: e.clientY };
@@ -245,6 +247,7 @@ const PieceTray = ({
           
           const handlePointerMove = (e) => {
             if (!e.isPrimary) return;
+            if (!pointerIsDown) return; // v2.2: ignore hover — only track after pointerdown
             const dx = Math.abs(e.clientX - touchStartPos.x);
             const dy = Math.abs(e.clientY - touchStartPos.y);
             
@@ -262,6 +265,7 @@ const PieceTray = ({
           };
           
           const handlePointerUp = (e) => {
+            pointerIsDown = false;
             if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
             
             if (!dragStarted && !hasMoved) {
