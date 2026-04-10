@@ -1,4 +1,7 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.37: Desktop drag fix — global mousemove/mouseup now attached synchronously in
+//        startDrag (matching the touch handler pattern). The useEffect-based attachment
+//        was async (waited for React render), causing a gap where mouse events were lost.
 // v7.36: iPhone drag fix — added dragPreviewCellRef for synchronous tracking;
 //        endDrag uses refs as fallback when React state hasn't committed yet
 // v7.35: iPhone drag fix — updateDrag uses ref fallbacks (isDraggingRef, draggedPieceRef)
@@ -238,6 +241,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
   const scrollChildRef = useRef(null); // v7.30: imperative touch-action for iOS drag fix
   const dragPreviewCellRef = useRef(null); // v7.36: synchronous cell tracking for endDrag
+  const mouseHandlersRef = useRef(null); // v7.37: tracks synchronous mouse handlers for cleanup
 
   // Placement animation hook
   const { animation: placementAnimation, triggerAnimation, clearAnimation } = usePlacementAnimation();
@@ -366,6 +370,108 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     window.addEventListener('touchcancel', handleGlobalTouchEnd);
   }, [rotation, flipped, board]);
 
+  // v7.37: Attach global MOUSE handlers synchronously — same pattern as touch handlers.
+  // The useEffect-based mouse handlers wait for isDragging state (async), creating a gap
+  // where desktop mousemove/mouseup events are lost. This attaches immediately in startDrag.
+  const attachGlobalMouseHandlers = useCallback(() => {
+    // Clean up any previous handlers
+    if (mouseHandlersRef.current) {
+      window.removeEventListener('mousemove', mouseHandlersRef.current.move);
+      window.removeEventListener('mouseup', mouseHandlersRef.current.up);
+    }
+    
+    const handleGlobalMouseMove = (e) => {
+      if (!isDraggingRef.current) return;
+      
+      const piece = draggedPieceRef.current;
+      if (!piece) return;
+      
+      setDragPosition({ x: e.clientX, y: e.clientY });
+      
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      if (boardBoundsRef.current) {
+        const { left, top, width, height } = boardBoundsRef.current;
+        const cellWidth = width / BOARD_SIZE;
+        const cellHeight = height / BOARD_SIZE;
+        const isMobile = false; // desktop
+        const fingerOffset = 20;
+        
+        const relX = e.clientX - left;
+        const relY = (e.clientY - fingerOffset) - top;
+        
+        const col = Math.floor(relX / cellWidth);
+        const row = Math.floor(relY / cellHeight);
+        
+        const EXTENSION_MARGIN = 4;
+        if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+            col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+          const coords = getPieceCoords(piece, rotation, flipped);
+          
+          const minX = Math.min(...coords.map(([x]) => x));
+          const maxX = Math.max(...coords.map(([x]) => x));
+          const minY = Math.min(...coords.map(([, y]) => y));
+          const maxY = Math.max(...coords.map(([, y]) => y));
+          
+          const centerOffsetCol = Math.floor((maxX + minX) / 2);
+          const centerOffsetRow = Math.floor((maxY + minY) / 2);
+          
+          const adjustedRow = row - centerOffsetRow;
+          const adjustedCol = col - centerOffsetCol;
+          
+          setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+          dragPreviewCellRef.current = { row: adjustedRow, col: adjustedCol };
+          
+          const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+          setIsValidDrop(valid);
+        } else {
+          setDragPreviewCell(null);
+          dragPreviewCellRef.current = null;
+          setIsValidDrop(false);
+        }
+      }
+    };
+    
+    const handleGlobalMouseUp = () => {
+      if (!isDraggingRef.current) return;
+      
+      const previewCell = dragPreviewCellRef.current;
+      const piece = draggedPieceRef.current;
+      if (previewCell && piece) {
+        setPendingMove({ piece: piece, row: previewCell.row, col: previewCell.col });
+      }
+      
+      isDraggingRef.current = false;
+      draggedPieceRef.current = null;
+      hasDragStartedRef.current = false;
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      dragPreviewCellRef.current = null;
+      
+      setIsDragging(false);
+      setDraggedPiece(null);
+      setDragPosition({ x: 0, y: 0 });
+      setDragOffset({ x: 0, y: 0 });
+      setIsValidDrop(false);
+      setDragPreviewCell(null);
+      setPieceCellOffset({ row: 0, col: 0 });
+      
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+      if (scrollChildRef.current) scrollChildRef.current.style.touchAction = '';
+      
+      // Self-cleanup
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      mouseHandlersRef.current = null;
+    };
+    
+    mouseHandlersRef.current = { move: handleGlobalMouseMove, up: handleGlobalMouseUp };
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+  }, [rotation, flipped, board]);
+
   // Start drag from piece tray
   const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
     if (hasDragStartedRef.current) return;
@@ -379,6 +485,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     // Attach global touch handlers IMMEDIATELY
     attachGlobalTouchHandlers();
+    // v7.37: Also attach global mouse handlers IMMEDIATELY (desktop)
+    attachGlobalMouseHandlers();
     
     // Update board bounds
     if (boardRef.current) {
@@ -401,7 +509,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
     if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'none';
-  }, [game?.status, usedPieces, isMyTurn, attachGlobalTouchHandlers]);
+  }, [game?.status, usedPieces, isMyTurn, attachGlobalTouchHandlers, attachGlobalMouseHandlers]);
 
   // Handle drag from pending piece on board
   const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
@@ -416,6 +524,8 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     
     // Attach global touch handlers IMMEDIATELY
     attachGlobalTouchHandlers();
+    // v7.37: Also attach global mouse handlers IMMEDIATELY (desktop)
+    attachGlobalMouseHandlers();
     
     // Update board bounds
     if (boardRef.current) {
@@ -455,7 +565,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     document.body.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
     if (scrollChildRef.current) scrollChildRef.current.style.touchAction = 'none';
-  }, [game?.status, isMyTurn, pendingMove, attachGlobalTouchHandlers]);
+  }, [game?.status, isMyTurn, pendingMove, attachGlobalTouchHandlers, attachGlobalMouseHandlers]);
 
   // Update drag position
   const updateDrag = useCallback((clientX, clientY) => {
@@ -537,6 +647,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     document.body.style.overflow = '';
     document.body.style.touchAction = '';
     if (scrollChildRef.current) scrollChildRef.current.style.touchAction = '';
+    
+    // v7.37: Clean up synchronous mouse handlers
+    if (mouseHandlersRef.current) {
+      window.removeEventListener('mousemove', mouseHandlersRef.current.move);
+      window.removeEventListener('mouseup', mouseHandlersRef.current.up);
+      mouseHandlersRef.current = null;
+    }
   }, [isDragging, dragPreviewCell, draggedPiece]);
 
   // Create drag handlers for PieceTray
@@ -786,6 +903,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
         countdownIntervalRef.current = null;
+      }
+      // v7.37: Clean up synchronous mouse handlers
+      if (mouseHandlersRef.current) {
+        window.removeEventListener('mousemove', mouseHandlersRef.current.move);
+        window.removeEventListener('mouseup', mouseHandlersRef.current.up);
+        mouseHandlersRef.current = null;
       }
     };
   }, []);
