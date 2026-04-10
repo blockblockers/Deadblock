@@ -1,4 +1,8 @@
 // Online Menu - Hub for online features
+// v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container.
+//        v7.38 removed it from everywhere (body AND scroll containers). Removing from body
+//        was correct (body shouldn't scroll), but the scroll container NEEDS it for iOS
+//        momentum scrolling and native gesture priority.
 // v7.41: iOS scroll fix — overflow-hidden on outer shell, z-10 on scroll container
 //        (glow orbs' blur-3xl filter creates stacking contexts that intercept iOS gestures)
 // v7.40: iOS scroll fix — added near-transparent background to scroll container so iOS
@@ -1459,7 +1463,10 @@ const OnlineMenu = ({
           route all touches to this scroll container instead of background layers */}
       <div
         className="absolute inset-0 z-10 overflow-y-scroll overflow-x-hidden"
-        style={{ background: 'rgba(0,0,0,0.02)' }}
+        style={{ 
+          WebkitOverflowScrolling: 'touch',
+          background: 'rgba(0,0,0,0.02)',
+        }}
       >
       {/* Content */}
       <div 
@@ -1842,7 +1849,7 @@ const OnlineMenu = ({
                   {/* Search Results - v7.11: Android scroll fix */}
                   {searchResults.length > 0 && (
                     <div 
-                      className="space-y-2 mt-3 max-h-48 overflow-y-scroll" 
+                      className="space-y-2 mt-3 max-h-48 overflow-y-auto" 
                       style={{ 
                         transform: 'translate3d(0, 0, 0)'
                       }}
@@ -1948,7 +1955,7 @@ const OnlineMenu = ({
                       <div className="mt-3 pt-3 border-t border-slate-700/50">
                         <p className="text-slate-400 text-xs mb-2 font-medium">Your active invite links:</p>
                         <div 
-                          className="space-y-2 max-h-40 overflow-y-scroll" 
+                          className="space-y-2 max-h-40 overflow-y-auto" 
                           style={{ 
                             transform: 'translate3d(0, 0, 0)'
                           }}
@@ -2028,7 +2035,7 @@ const OnlineMenu = ({
                   REMATCH REQUESTS ({pendingRematches.length})
                 </h3>
                 <div 
-                  className="space-y-2 max-h-60 overflow-y-scroll pr-1"
+                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
                   style={{ 
                     transform: 'translate3d(0, 0, 0)'
                   }}
@@ -2108,7 +2115,7 @@ const OnlineMenu = ({
                   GAME INVITES ({receivedInvites.length})
                 </h3>
                 <div 
-                  className="space-y-2 max-h-60 overflow-y-scroll pr-1"
+                  className="space-y-2 max-h-60 overflow-y-auto pr-1"
                   style={{ 
                     transform: 'translate3d(0, 0, 0)'
                   }}
@@ -2165,7 +2172,7 @@ const OnlineMenu = ({
                   PENDING INVITES ({sentInvites.length})
                 </h3>
                 <div 
-                  className="space-y-2 max-h-40 overflow-y-scroll pr-1"
+                  className="space-y-2 max-h-40 overflow-y-auto pr-1"
                   style={{ 
                     transform: 'translate3d(0, 0, 0)'
                   }}
