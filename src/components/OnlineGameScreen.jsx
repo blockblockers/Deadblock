@@ -2538,8 +2538,19 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       `}</style>
       </div>{/* end inner scroll child */}
 
-      {/* v7.37: DragOverlay AFTER scroll child — later DOM order paints on top.
-          Previously rendered BEFORE scroll child and was hidden behind content. */}
+      {/* TEMPORARY DEBUG — remove after diagnosis */}
+      {isDragging && (
+        <div style={{
+          position: 'fixed', top: 10, left: 10, zIndex: 99999,
+          background: 'red', color: 'white', padding: '8px 12px',
+          borderRadius: '8px', fontSize: '12px', fontFamily: 'monospace',
+          pointerEvents: 'none',
+        }}>
+          DRAG: {draggedPiece || 'null'} | pos: {Math.round(dragPosition.x)},{Math.round(dragPosition.y)}
+        </div>
+      )}
+
+      {/* v7.37: DragOverlay AFTER scroll child — later DOM order paints on top. */}
       {isDragging && draggedPiece && (
         <DragOverlay
           isDragging={isDragging}
