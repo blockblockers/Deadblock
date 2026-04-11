@@ -1,7 +1,9 @@
 // Online Menu - Hub for online features
+// v7.44: iOS scroll FIX — touch-action:none on outer shell (blocks gesture routing to bg layers),
+//        touch-action:pan-y on scroll container (declares it as vertical scroll owner);
+//        bg-transparent preserved for floating pentomino visibility;
+//        flex-1 min-h-0 overflow-y-auto replaces absolute inset-0 overflow-y-scroll
 // v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
-//        Glow orbs' blur-3xl filter creates compositor layers that compete with the scroll
-//        container for iOS gesture routing. Moving them inside eliminates competing layers.
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
 //        inner list containers changed overflow-y-scroll→auto (hides scrollbar on desktop)
@@ -1406,9 +1408,10 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // v7.36: Outer shell is overflow:hidden only — scroll child is absolute inset-0
-      // v7.41: Added overflow-hidden so iOS doesn't treat outer shell as scroll candidate
-      className="fixed inset-0 bg-transparent overflow-hidden"
+      // v7.44: Outer shell stays transparent (floating pieces visible).
+      // touch-action:none on shell tells iOS "don't route gestures here"
+      className="fixed inset-0 bg-transparent overflow-hidden flex flex-col"
+      style={{ touchAction: 'none' }}
     >
       {/* v7.26: Rematch-sent banner — rendered before scroll child so it stacks above via z-index */}
       {showRematchSentBanner && (
@@ -1455,21 +1458,22 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* v7.43: Scroll container is the ONLY top-level interactive element.
-          Glow orbs moved INSIDE so iOS compositor has no competing layers.
-          They stay position:fixed so they don't scroll visually. */}
-      <div
-        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
-        style={{ 
-          WebkitOverflowScrolling: 'touch',
-          overscrollBehavior: 'contain',
-        }}
-      >
-      {/* Themed glow orbs — inside scroll container but fixed, so they don't scroll */}
+      {/* Themed glow orbs — outside scroll container, purely decorative */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
+      {/* v7.44: touch-action:pan-y declares this element as the vertical scroll owner.
+          The compositor routes vertical gestures here, not to background layers.
+          flex-1 min-h-0 is the standard CSS scroll pattern (more reliable than absolute inset-0). */}
+      <div
+        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        style={{ 
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
+          touchAction: 'pan-y',
+        }}
+      >
       {/* Content */}
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4"
