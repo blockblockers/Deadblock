@@ -1,8 +1,8 @@
 // Online Menu - Hub for online features
-// v7.44: iOS scroll FIX — touch-action:none on outer shell (blocks gesture routing to bg layers),
-//        touch-action:pan-y on scroll container (declares it as vertical scroll owner);
-//        bg-transparent preserved for floating pentomino visibility;
-//        flex-1 min-h-0 overflow-y-auto replaces absolute inset-0 overflow-y-scroll
+// v7.45: iOS scroll FIX — implemented ISL (iOS Scroll Lock) pattern from open source library:
+//        inner wrapper with min-height:calc(100%+1px) forces scrollHeight>clientHeight so iOS
+//        always recognizes the scroll container; sticky content wrapper absorbs the +1px;
+//        overflow-y:scroll (not auto) + overscroll-behavior:none; bg-transparent preserved
 // v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
@@ -1408,10 +1408,8 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // v7.44: Outer shell stays transparent (floating pieces visible).
-      // touch-action:none on shell tells iOS "don't route gestures here"
-      className="fixed inset-0 bg-transparent overflow-hidden flex flex-col"
-      style={{ touchAction: 'none' }}
+      // v7.45: Outer shell — fixed, overflow hidden. NO touch-action (was blocking children).
+      className="fixed inset-0 bg-transparent overflow-hidden"
     >
       {/* v7.26: Rematch-sent banner — rendered before scroll child so it stacks above via z-index */}
       {showRematchSentBanner && (
@@ -1458,22 +1456,37 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* Themed glow orbs — outside scroll container, purely decorative */}
+      {/* Themed glow orbs */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* v7.44: touch-action:pan-y declares this element as the vertical scroll owner.
-          The compositor routes vertical gestures here, not to background layers.
-          flex-1 min-h-0 is the standard CSS scroll pattern (more reliable than absolute inset-0). */}
+      {/* v7.45: iOS scroll lock pattern (based on ISL library approach).
+          - Scroll container: absolute inset-0, overflow-y:scroll (not auto — scroll forces
+            iOS to always recognize this as a scroll container), overscroll-behavior:none
+          - Inner wrapper: height calc(100% + 1px) forces scrollHeight > clientHeight, which
+            is what iOS needs to prioritize scroll gestures for this container
+          - Content wrapper: position:sticky absorbs the +1px so no visible jitter */}
       <div
-        className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ 
           WebkitOverflowScrolling: 'touch',
-          overscrollBehavior: 'contain',
-          touchAction: 'pan-y',
+          overscrollBehavior: 'none',
         }}
       >
+      {/* Force-scrollable inner wrapper — the +1px trick */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        minHeight: 'calc(100% + 1px)',
+      }}>
+      {/* Sticky content wrapper absorbs the +1px */}
+      <div style={{
+        position: 'sticky',
+        top: 0,
+        minHeight: 'calc(100% - 1px)',
+      }}>
       {/* Content */}
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4"
@@ -2982,7 +2995,9 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
-      </div>{/* end inner scroll child */}
+      </div>{/* end sticky content wrapper */}
+      </div>{/* end force-scrollable inner wrapper */}
+      </div>{/* end scroll container */}
     </div>
   );
 };
