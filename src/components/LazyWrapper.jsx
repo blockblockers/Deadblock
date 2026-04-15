@@ -1,7 +1,10 @@
 /**
  * Lazy Loading Helpers
  * Utilities for code-splitting and lazy loading components
- * v7.x: Added screenFadeIn animation to LazyWrapper — single implementation covers all lazy screens
+ * v7.1: SCROLL FIX — removed transform from screenFadeIn animation. CSS transform creates
+ *       a containing block, making position:fixed children relative to this div instead of
+ *       viewport. This broke scroll gesture recognition on ALL mobile screens.
+ * v7.x: Added screenFadeIn animation to LazyWrapper
  */
 
 import React, { Suspense, lazy, ComponentType } from 'react';
@@ -14,8 +17,8 @@ const injectFadeStyle = () => {
   const style = document.createElement('style');
   style.textContent = `
     @keyframes screenFadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to   { opacity: 1; transform: translateY(0);   }
+      from { opacity: 0; }
+      to   { opacity: 1; }
     }
     .screen-fade-in {
       animation: screenFadeIn 0.15s ease-out;
