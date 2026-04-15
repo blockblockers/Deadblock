@@ -1,7 +1,8 @@
 // Online Menu - Hub for online features
-// v7.47: iOS/Android scroll fix — backgroundColor rgba(2,6,23,0.15) catches touches on empty
-//        areas (WebKit needs ~15% alpha, not 1%); scrollTop=1 on mount avoids top-boundary
-//        ambiguity (eliminates rocking motion); overflow-y-scroll forces scroll recognition
+// v7.48: iOS/Android scroll fix — raised alpha to 30% (WebKit needs much more than 1% for
+//        touch hit-testing on fixed elements); removed sticky glow wrapper (was confusing
+//        iOS scroll recognition); removed scrollTop=1 hack (caused bounce at boundary);
+//        structure: single fixed div IS the scroll container, nothing else
 // v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
@@ -232,15 +233,6 @@ const OnlineMenu = ({
   const profileLoadedRef = useRef(false);
   const scrollContainerRef = useRef(null); // v7.47: for scrollTop=1 on mount
   
-  // v7.47: Start scroll at 1px to avoid iOS top-boundary ambiguity.
-  // At scrollTop=0, downward swipes are ambiguous (scroll vs overscroll/pull-to-refresh).
-  // Starting at 1px makes the first gesture unambiguously a scroll.
-  useEffect(() => {
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = 1;
-    }
-  }, []);
-
   // Refresh profile on mount to ensure fresh data (only once)
   useEffect(() => {
     // Skip if already loaded or no refresh function
@@ -1418,25 +1410,19 @@ const OnlineMenu = ({
   return (
     <div 
       ref={scrollContainerRef}
-      // v7.47: This div IS the scroll container. overflow-y-scroll forces iOS to always
-      // treat it as scrollable. Background must be high enough alpha for WebKit hit-testing
-      // — 0.01 is UIKit threshold but WebKit needs higher. 15% alpha is reliably opaque
-      // for touch while floating pieces remain clearly visible through it.
+      // v7.48: Simplest possible scroll container. No sticky wrappers, no scrollTop hacks.
+      // 30% alpha background is the minimum that reliably catches touches on all iOS versions.
+      // Floating pieces still visible through 30% dark overlay.
       className="fixed inset-0 overflow-y-scroll overflow-x-hidden"
       style={{ 
         WebkitOverflowScrolling: 'touch',
-        backgroundColor: 'rgba(2, 6, 23, 0.15)',
+        backgroundColor: 'rgba(2, 6, 23, 0.3)',
       }}
     >
-      {/* v7.46: Glow orbs use absolute (not fixed) to stay in the same compositing
-          context as the scroll container. They won't create independent layers
-          that compete for iOS gesture routing. They scroll with content but are
-          positioned relative to the viewport via large negative/positive offsets. */}
-      <div className="pointer-events-none overflow-hidden" style={{ position: 'sticky', top: 0, height: '100vh', marginBottom: '-100vh', zIndex: 0 }}>
-        <div className={`absolute ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl`} />
-        <div className={`absolute ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl`} />
-        <div className={`absolute ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl`} />
-      </div>
+      {/* Glow orbs — simple fixed, pointer-events-none. No sticky wrapper. */}
+      <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
       {/* v7.26: Rematch-sent banner */}
       {showRematchSentBanner && (
