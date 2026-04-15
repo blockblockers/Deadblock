@@ -1,8 +1,7 @@
 // Online Menu - Hub for online features
-// v7.48: iOS/Android scroll fix — raised alpha to 30% (WebKit needs much more than 1% for
-//        touch hit-testing on fixed elements); removed sticky glow wrapper (was confusing
-//        iOS scroll recognition); removed scrollTop=1 hack (caused bounce at boundary);
-//        structure: single fixed div IS the scroll container, nothing else
+// v7.49: iOS/Android scroll fix — onScroll handler keeps scrollTop >= 1 at all times.
+//        At scrollTop=0, mobile browsers treat downward swipes as overscroll, not scroll.
+//        By never letting scrollTop reach 0, every gesture is unambiguously a scroll.
 // v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
@@ -233,6 +232,24 @@ const OnlineMenu = ({
   const profileLoadedRef = useRef(false);
   const scrollContainerRef = useRef(null); // v7.47: for scrollTop=1 on mount
   
+  // v7.49: Prevent scroll boundary ambiguity — keep scrollTop >= 1 at all times.
+  // At scrollTop=0, mobile browsers treat downward swipes as ambiguous (scroll vs
+  // overscroll/pull-to-refresh), requiring a direction reversal to "unstick."
+  // This handler fires on every scroll and nudges back to 1 if the user reaches 0.
+  const handleScrollBoundary = useCallback((e) => {
+    if (e.target.scrollTop <= 0) {
+      e.target.scrollTop = 1;
+    }
+  }, []);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) {
+      // Start at 1px to avoid boundary on mount
+      el.scrollTop = 1;
+    }
+  }, []);
+
   // Refresh profile on mount to ensure fresh data (only once)
   useEffect(() => {
     // Skip if already loaded or no refresh function
@@ -1410,9 +1427,8 @@ const OnlineMenu = ({
   return (
     <div 
       ref={scrollContainerRef}
-      // v7.48: Simplest possible scroll container. No sticky wrappers, no scrollTop hacks.
-      // 30% alpha background is the minimum that reliably catches touches on all iOS versions.
-      // Floating pieces still visible through 30% dark overlay.
+      onScroll={handleScrollBoundary}
+      // v7.49: Scroll container with boundary protection.
       className="fixed inset-0 overflow-y-scroll overflow-x-hidden"
       style={{ 
         WebkitOverflowScrolling: 'touch',
