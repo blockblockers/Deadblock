@@ -1,7 +1,7 @@
 // Online Menu - Hub for online features
-// v7.46: iOS scroll — RADICAL SIMPLIFICATION. The outer shell itself is the scroll container.
-//        No inner scroll div, no +1px wrappers, no absolute inset-0. Glow orbs use absolute
-//        positioning (not fixed) to avoid creating independent compositor layers.
+// v7.47: iOS/Android scroll fix — backgroundColor rgba(2,6,23,0.15) catches touches on empty
+//        areas (WebKit needs ~15% alpha, not 1%); scrollTop=1 on mount avoids top-boundary
+//        ambiguity (eliminates rocking motion); overflow-y-scroll forces scroll recognition
 // v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
@@ -230,7 +230,17 @@ const OnlineMenu = ({
   
   // Ref to track if profile has been loaded (prevents infinite loop)
   const profileLoadedRef = useRef(false);
+  const scrollContainerRef = useRef(null); // v7.47: for scrollTop=1 on mount
   
+  // v7.47: Start scroll at 1px to avoid iOS top-boundary ambiguity.
+  // At scrollTop=0, downward swipes are ambiguous (scroll vs overscroll/pull-to-refresh).
+  // Starting at 1px makes the first gesture unambiguously a scroll.
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 1;
+    }
+  }, []);
+
   // Refresh profile on mount to ensure fresh data (only once)
   useEffect(() => {
     // Skip if already loaded or no refresh function
@@ -1407,11 +1417,16 @@ const OnlineMenu = ({
 
   return (
     <div 
-      // v7.46: The outer shell IS the scroll container. No inner scroll div.
-      // This eliminates all parent/child scroll competition issues.
-      // Body is overflow:hidden (index.css v7.13), so this is the only scrollable element.
-      className="fixed inset-0 overflow-y-auto overflow-x-hidden"
-      style={{ WebkitOverflowScrolling: 'touch' }}
+      ref={scrollContainerRef}
+      // v7.47: This div IS the scroll container. overflow-y-scroll forces iOS to always
+      // treat it as scrollable. Background must be high enough alpha for WebKit hit-testing
+      // — 0.01 is UIKit threshold but WebKit needs higher. 15% alpha is reliably opaque
+      // for touch while floating pieces remain clearly visible through it.
+      className="fixed inset-0 overflow-y-scroll overflow-x-hidden"
+      style={{ 
+        WebkitOverflowScrolling: 'touch',
+        backgroundColor: 'rgba(2, 6, 23, 0.15)',
+      }}
     >
       {/* v7.46: Glow orbs use absolute (not fixed) to stay in the same compositing
           context as the scroll container. They won't create independent layers
