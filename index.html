@@ -1107,18 +1107,10 @@
         }, 1500);
       });
 
-      // Prevent pull-to-refresh
-      let lastTouchY = 0;
-      document.addEventListener('touchstart', (e) => {
-        lastTouchY = e.touches[0].clientY;
-      }, { passive: true });
-      document.addEventListener('touchmove', (e) => {
-        const touchY = e.touches[0].clientY;
-        if (window.scrollY === 0 && touchY > lastTouchY && e.cancelable) {
-          e.preventDefault();
-        }
-        lastTouchY = touchY;
-      }, { passive: false });
+      // NOTE: Removed global touchmove preventDefault handler that was cancelling
+      // scroll on every downward swipe (body overflow:hidden makes window.scrollY always 0,
+      // so the pull-to-refresh check was true on every touch). Pull-to-refresh is already
+      // prevented by body { overflow: hidden } in index.css.
     }
   </script>
 
