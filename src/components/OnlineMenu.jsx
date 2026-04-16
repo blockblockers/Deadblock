@@ -1,4 +1,7 @@
 // Online Menu - Hub for online features
+// v7.53: OverlayScrollbars sizing fix — use width/height:100% instead of absolute:inset:0.
+//        OverlayScrollbars needs its parent to provide explicit dimensions; absolute
+//        positioning caused the internal viewport to have zero scrollable height.
 // v7.52: OverlayScrollbars library — replaces native scroll with battle-tested cross-platform
 //        implementation. Native iOS/Android scroll has been unreliable through v7.38-v7.51;
 //        OverlayScrollbars bypasses browser scroll quirks entirely with its own gesture handling.
@@ -1465,18 +1468,18 @@ const OnlineMenu = ({
       )}
 
       {/* v7.52: OverlayScrollbars handles scroll — battle-tested cross-platform scroll library.
-          Replaces native overflow:scroll with a custom implementation that works reliably on
-          iOS (all versions), Android, and desktop. Eliminates the gesture recognition issues
-          that native scroll containers have on iOS. */}
+          v7.53: Fixed sizing — must use height:100% with parent providing dimensions,
+          NOT position:absolute which doesn't trigger proper scroll viewport sizing. */}
       <OverlayScrollbarsComponent
         defer
+        element="div"
         options={{
           overflow: { x: 'hidden', y: 'scroll' },
           scrollbars: { theme: 'os-theme-light', autoHide: 'scroll' },
         }}
         style={{ 
-          position: 'absolute',
-          inset: 0,
+          width: '100%',
+          height: '100%',
         }}
       >
       {/* Content */}
