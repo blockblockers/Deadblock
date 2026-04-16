@@ -1416,7 +1416,8 @@ const OnlineMenu = ({
   const hasMyTurnGames = activeGames?.some(game => game && gameSyncService.isPlayerTurn(game, profile?.id)) || false;
 
   return (
-    <div className="fixed inset-0 overflow-hidden">
+    <div className="fixed inset-0 overflow-hidden" style={{ border: '3px solid red' }}>
+      {/* DEBUG: red=outer shell, blue=OverlayScrollbars, green=content */}
       {/* Glow orbs — fixed decorative background */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
@@ -1480,6 +1481,7 @@ const OnlineMenu = ({
         style={{ 
           width: '100%',
           height: '100%',
+          border: '3px solid blue',
         }}
       >
       {/* Content */}
@@ -1489,6 +1491,7 @@ const OnlineMenu = ({
           minHeight: '100%',
           paddingBottom: 'max(160px, calc(env(safe-area-inset-bottom) + 160px))',
           paddingTop: 'max(48px, calc(env(safe-area-inset-top) + 48px))',
+          border: '3px solid lime',
         }}
       >
         <div className="w-full max-w-md">
