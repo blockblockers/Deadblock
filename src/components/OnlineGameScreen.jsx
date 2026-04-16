@@ -1,4 +1,9 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.38: FIX — Completed-game 5s review delay was bypassed because updateGameState
+//        fired setShowGameOver(true) immediately on the same data that loadGame was
+//        scheduling a delayed show for. Now: isReviewModeRef is set the moment the
+//        completed game is detected (before any state updates can trigger
+//        updateGameState), and updateGameState gates its immediate-show on that flag.
 // v7.37: Desktop drag fix — global mousemove/mouseup now attached synchronously in
 //        startDrag (matching the touch handler pattern). The useEffect-based attachment
 //        was async (waited for React render), causing a gap where mouse events were lost.
@@ -1025,7 +1030,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       }
 
       // FIXED: Game over detection with animation delay
-      if (gameData.status === 'completed' && !showGameOver && !dismissedGameOverRef.current) {
+      // v7.27: Also gate on isReviewModeRef — when user opens a completed game to
+      // review, loadGame's completed-game branch schedules a 5-second delayed show.
+      // Without this check, updateGameState fires setShowGameOver(true) immediately
+      // on the same data, bypassing the review window.
+      if (gameData.status === 'completed' && !showGameOver && !dismissedGameOverRef.current && !isReviewModeRef.current) {
         const iWon = gameData.winner_id === currentUserId;
         const result = {
           isWin: iWon,
@@ -1115,6 +1124,12 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         // For completed games, we want to show the board first, then the modal
         // So we'll set the game state but NOT trigger game over yet
         if (isCompletedGame) {
+          // v7.27: Set review mode flag IMMEDIATELY — before any state updates can
+          // trigger updateGameState, which would otherwise fire setShowGameOver(true)
+          // right away and bypass the 5-second review window. This flag is checked
+          // in updateGameState's completed-game branch to suppress the immediate show.
+          isReviewModeRef.current = true;
+          
           // Set game result for later use
           const result = {
             isWin: iWon,

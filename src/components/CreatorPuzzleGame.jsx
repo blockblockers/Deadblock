@@ -1,4 +1,8 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.14: AI FIX — replaced "return 0" on mid-search timeout with leaf evaluation.
+//        Previously, moves requiring deeper search than the 3s timeout got scored 0
+//        while completed sibling moves got their real score, causing the AI to
+//        deterministically miss winning moves. Also raised time budget 3s→8s.
 // v2.13: FIX — effectiveUsedPieces now scans boardPieces (source of truth) so pieces
 //        physically on the board always show as used, regardless of state race conditions
 // v2.12: FIX — aiIsThinking guard on drag paths (startDrag, getPieceHandlers, handleBoardDragStart)
@@ -493,7 +497,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     // Time budget for safety (creator puzzle trees are small, but guard against edge cases)
     const searchStart = Date.now();
-    const MAX_TIME_MS = 3000;
+    // v2.10: Raised from 3000ms. Most creator puzzles have 2-4 pieces per side
+    // (4-8 plies) and complete in well under 1s. 8s is effectively "never timeout"
+    // for legitimate puzzles while still preventing a runaway search from freezing
+    // the UI on pathological cases.
+    const MAX_TIME_MS = 8000;
     let nodesSearched = 0;
     
     // Minimax with alpha-beta pruning for separate piece sets.
@@ -502,9 +510,15 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     const minimax = (board, aiPieces, playerPieces, depth, isAITurn, alpha, beta) => {
       nodesSearched++;
       
-      // Time check every 2000 nodes
+      // v2.10 BUG FIX: Previously returned 0 on mid-search timeout. That neutral
+      // value polluted minimax — a winning move that required deeper search got
+      // scored as 0 while a sibling non-winning move completed with +500, causing
+      // the AI to deterministically pick the non-winner. Now return the leaf
+      // evaluation instead (consistent with depth<=0 leaf scoring).
       if (nodesSearched % 2000 === 0 && Date.now() - searchStart > MAX_TIME_MS) {
-        return 0; // Neutral on timeout
+        const aiPlaceable = countPlaceablePieces(board, aiPieces);
+        const playerPlaceable = countPlaceablePieces(board, playerPieces);
+        return (aiPlaceable - playerPlaceable) * 100;
       }
       
       const currentPieces = isAITurn ? aiPieces : playerPieces;

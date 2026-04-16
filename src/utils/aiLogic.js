@@ -1,4 +1,13 @@
 // AI Logic for Deadblock - Optimized for Speed
+// v2.1 - EXPERT AI STRENGTHENED:
+//   - BUG FIX: evaluatePosition sign was inverted (AI preferred positions with fewer
+//     options on its own turn)
+//   - NEW: Immediate win detection before minimax
+//   - NEW: Immediate block detection — filters candidates to moves that prevent
+//     ALL player winning threats
+//   - Raised root candidates 8→16, internal 6→10
+//   - Deeper search: +1 at every pieces-remaining band (3/4/5/6 vs. 2/3/4)
+//   - MAX_SEARCH_TIME 2000→4000ms
 // v2.0 - MAJOR UPDATE: Added PUZZLE_OPTIMAL difficulty
 // 
 // UPDATES:
@@ -134,14 +143,19 @@ const quickEval = (board, row, col, coords) => {
 
 const evaluatePosition = (board, usedPieces, isAITurn) => {
   const placeablePieces = countPlaceablePieces(board, usedPieces);
-  return isAITurn ? -placeablePieces : placeablePieces;
+  // v2.1 BUG FIX: sign was inverted. When it's AI's turn at a leaf, more placeable
+  // pieces is GOOD for AI (more options). Previously returned -placeablePieces here,
+  // which made AI systematically prefer positions where it had fewer options.
+  return isAITurn ? placeablePieces : -placeablePieces;
 };
 
 // ====== TIME-LIMITED MINIMAX ======
 
 let searchStartTime = 0;
 let nodesSearched = 0;
-const MAX_SEARCH_TIME = 2000;
+// v2.1: Raised from 2000ms — users prefer stronger play over slightly faster response.
+// UI shows a thinking indicator so the extra time is expected.
+const MAX_SEARCH_TIME = 4000;
 
 const isTimeUp = () => Date.now() - searchStartTime > MAX_SEARCH_TIME;
 
@@ -162,7 +176,9 @@ const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
     return isMaximizing ? scoreB - scoreA : scoreA - scoreB;
   });
   
-  const movesToEval = moves.slice(0, Math.min(6, moves.length));
+  // v2.1: Raised from 6 to 10 at internal nodes — previous aggressive pruning was
+  // filtering out winning moves that happened to be off-center.
+  const movesToEval = moves.slice(0, Math.min(10, moves.length));
   
   if (isMaximizing) {
     let maxScore = -Infinity;
@@ -208,17 +224,70 @@ const findBestMove = (board, usedPieces) => {
     return scoredMoves[0];
   }
   
-  const piecesRemaining = 12 - usedPieces.length;
-  let depth;
-  if (piecesRemaining <= 4) {
-    depth = 4;
-  } else if (piecesRemaining <= 6) {
-    depth = 3;
-  } else {
-    depth = 2;
+  // v2.1: IMMEDIATE WIN DETECTION — before expensive minimax, check if any AI move
+  // leaves the opponent with zero legal responses (instant win). This catches cases
+  // the deeper search sometimes misses due to candidate pruning.
+  for (const move of scoredMoves) {
+    const newBoard = applyMove(board, move, 2);
+    const newUsed = [...usedPieces, move.pieceType];
+    if (!canAnyMoveBeMade(newBoard, newUsed)) {
+      console.log(`Expert AI: Found immediate winning move ${move.pieceType}`);
+      return move;
+    }
   }
   
-  const candidates = scoredMoves.slice(0, Math.min(8, scoredMoves.length));
+  // v2.1: IMMEDIATE BLOCK DETECTION — identify any player move that would leave AI
+  // with zero legal responses (instant loss). Then filter AI's candidate moves to
+  // only those that prevent ALL such player moves. If filter is non-empty, restrict
+  // search to blocking moves only.
+  const playerMoves = getAllPossibleMoves(board, usedPieces, true);
+  const playerWinningMoves = [];
+  for (const pm of playerMoves) {
+    const afterPlayer = applyMove(board, pm, 1);
+    const afterPlayerUsed = [...usedPieces, pm.pieceType];
+    if (!canAnyMoveBeMade(afterPlayer, afterPlayerUsed)) {
+      playerWinningMoves.push(pm);
+    }
+  }
+  
+  let searchPool = scoredMoves;
+  if (playerWinningMoves.length > 0) {
+    // Filter to only moves that block ALL player winning moves
+    const blockingMoves = scoredMoves.filter(aiMove => {
+      const newBoard = applyMove(board, aiMove, 2);
+      const newUsed = [...usedPieces, aiMove.pieceType];
+      // Verify this AI move prevents every player winning move
+      return playerWinningMoves.every(pm => {
+        if (newUsed.includes(pm.pieceType)) return true; // AI used that piece already
+        return !canPlacePiece(newBoard, pm.row, pm.col, pm.coords);
+      });
+    });
+    
+    if (blockingMoves.length > 0) {
+      console.log(`Expert AI: Restricting search to ${blockingMoves.length} blocking moves (player had ${playerWinningMoves.length} winning threats)`);
+      searchPool = blockingMoves;
+    } else {
+      console.log(`Expert AI: Player has ${playerWinningMoves.length} winning threats but no full block exists — playing best defensive move`);
+    }
+  }
+  
+  const piecesRemaining = 12 - usedPieces.length;
+  let depth;
+  // v2.1: Deeper search at all stages — previous depths (2/3/4) were too shallow.
+  if (piecesRemaining <= 4) {
+    depth = 6;
+  } else if (piecesRemaining <= 6) {
+    depth = 5;
+  } else if (piecesRemaining <= 8) {
+    depth = 4;
+  } else {
+    depth = 3;
+  }
+  
+  // v2.1: Widened root candidates from 8 to 16. Combined with the block filter above,
+  // this won't search 16 moves in the common case — only when there's no immediate
+  // tactical urgency.
+  const candidates = searchPool.slice(0, Math.min(16, searchPool.length));
   
   let bestMove = candidates[0];
   let bestScore = -Infinity;
