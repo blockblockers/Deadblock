@@ -1,7 +1,8 @@
 // Online Menu - Hub for online features
-// v7.49: iOS/Android scroll fix — onScroll handler keeps scrollTop >= 1 at all times.
-//        At scrollTop=0, mobile browsers treat downward swipes as overscroll, not scroll.
-//        By never letting scrollTop reach 0, every gesture is unambiguously a scroll.
+// v7.50: iOS/Android scroll — REMOVED all positioning (fixed/absolute) from scroll container.
+//        Just a regular div with height:100dvh + overflow-y:auto. Mobile browsers treat
+//        positioned scroll containers differently from normal ones. This is the simplest
+//        possible scroll pattern — identical to how every normal website scrolls.
 // v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
@@ -232,24 +233,6 @@ const OnlineMenu = ({
   const profileLoadedRef = useRef(false);
   const scrollContainerRef = useRef(null); // v7.47: for scrollTop=1 on mount
   
-  // v7.49: Prevent scroll boundary ambiguity — keep scrollTop >= 1 at all times.
-  // At scrollTop=0, mobile browsers treat downward swipes as ambiguous (scroll vs
-  // overscroll/pull-to-refresh), requiring a direction reversal to "unstick."
-  // This handler fires on every scroll and nudges back to 1 if the user reaches 0.
-  const handleScrollBoundary = useCallback((e) => {
-    if (e.target.scrollTop <= 0) {
-      e.target.scrollTop = 1;
-    }
-  }, []);
-
-  useEffect(() => {
-    const el = scrollContainerRef.current;
-    if (el) {
-      // Start at 1px to avoid boundary on mount
-      el.scrollTop = 1;
-    }
-  }, []);
-
   // Refresh profile on mount to ensure fresh data (only once)
   useEffect(() => {
     // Skip if already loaded or no refresh function
@@ -1427,15 +1410,17 @@ const OnlineMenu = ({
   return (
     <div 
       ref={scrollContainerRef}
-      onScroll={handleScrollBoundary}
-      // v7.49: Scroll container with boundary protection.
-      className="fixed inset-0 overflow-y-scroll overflow-x-hidden"
+      // v7.50: NO position:fixed, NO position:absolute. Just a regular div with
+      // explicit height and overflow-y:auto. This is how every normal website scrolls.
       style={{ 
+        height: '100dvh',
+        overflowY: 'auto',
+        overflowX: 'hidden',
         WebkitOverflowScrolling: 'touch',
         backgroundColor: 'rgba(2, 6, 23, 0.3)',
       }}
     >
-      {/* Glow orbs — simple fixed, pointer-events-none. No sticky wrapper. */}
+      {/* Glow orbs — fixed, decorative only */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
