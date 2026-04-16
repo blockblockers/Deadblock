@@ -1488,7 +1488,6 @@ const OnlineMenu = ({
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4"
         style={{ 
-          minHeight: '100%',
           paddingBottom: 'max(160px, calc(env(safe-area-inset-bottom) + 160px))',
           paddingTop: 'max(48px, calc(env(safe-area-inset-top) + 48px))',
           border: '3px solid lime',
