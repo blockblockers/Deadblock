@@ -1,4 +1,6 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.19: Added volume sliders for Sound Effects and Background Music; safe-area-inset-top
+//        padding on modal wrapper for iPhone notch clearance
 // v7.18: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.17: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.15: Purple glow orb Change Password, orange glow orb Sign Out (matched Delete Account pattern)
@@ -29,6 +31,9 @@ const SettingsModal = ({ isOpen, onClose }) => {
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isSoundEnabled());
   const [musicEnabled, setMusicEnabled] = useState(soundManager.isMusicEnabled());
   const [vibrationEnabled, setVibrationEnabled] = useState(soundManager.isVibrationEnabled());
+  // v7.19: Volume controls (stored as 0-100 for slider, converted to 0-1 when calling soundManager)
+  const [soundVolume, setSoundVolume] = useState(() => Math.round((soundManager.soundVolume ?? 0.5) * 100));
+  const [musicVolume, setMusicVolume] = useState(() => Math.round((soundManager.musicVolume ?? 0.3) * 100));
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -342,6 +347,19 @@ const SettingsModal = ({ isOpen, onClose }) => {
     }
   };
   
+  // v7.19: Volume change handlers — convert slider 0-100 to soundManager's 0-1 range
+  const handleSoundVolumeChange = (e) => {
+    const vol = parseInt(e.target.value);
+    setSoundVolume(vol);
+    soundManager.setSoundVolume(vol / 100);
+  };
+  
+  const handleMusicVolumeChange = (e) => {
+    const vol = parseInt(e.target.value);
+    setMusicVolume(vol);
+    soundManager.setMusicVolume(vol / 100);
+  };
+  
   // Handle sign out
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -499,7 +517,14 @@ const SettingsModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div 
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50"
+      style={{
+        padding: '1rem',
+        paddingTop: 'max(1rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+      }}
+    >
       <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl w-full max-w-sm max-h-[90vh] overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.2)] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-cyan-500/20 flex-shrink-0">
@@ -538,6 +563,24 @@ const SettingsModal = ({ isOpen, onClose }) => {
               </div>
             </button>
             
+            {/* v7.19: Sound Effects volume slider — only shown when sound is enabled */}
+            {soundEnabled && (
+              <div className="pl-3 pr-1 -mt-1">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 w-12 flex-shrink-0">Volume</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={soundVolume}
+                    onChange={handleSoundVolumeChange}
+                    className="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                  />
+                  <span className="text-xs text-cyan-300 font-medium w-9 text-right tabular-nums">{soundVolume}%</span>
+                </div>
+              </div>
+            )}
+            
             <button
               onClick={toggleMusic}
               className={`w-full flex items-center justify-between p-3 rounded-lg transition-all ${
@@ -554,6 +597,24 @@ const SettingsModal = ({ isOpen, onClose }) => {
                 <div className={`w-4 h-4 rounded-full bg-white transition-transform ${musicEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
               </div>
             </button>
+            
+            {/* v7.19: Background Music volume slider — only shown when music is enabled */}
+            {musicEnabled && (
+              <div className="pl-3 pr-1 -mt-1">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-400 w-12 flex-shrink-0">Volume</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={musicVolume}
+                    onChange={handleMusicVolumeChange}
+                    className="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                  />
+                  <span className="text-xs text-cyan-300 font-medium w-9 text-right tabular-nums">{musicVolume}%</span>
+                </div>
+              </div>
+            )}
             
             <button
               onClick={toggleVibration}

@@ -1,26 +1,7 @@
 // Online Menu - Hub for online features
-// v7.53: OverlayScrollbars sizing fix — use width/height:100% instead of absolute:inset:0.
-//        OverlayScrollbars needs its parent to provide explicit dimensions; absolute
-//        positioning caused the internal viewport to have zero scrollable height.
-// v7.52: OverlayScrollbars library — replaces native scroll with battle-tested cross-platform
-//        implementation. Native iOS/Android scroll has been unreliable through v7.38-v7.51;
-//        OverlayScrollbars bypasses browser scroll quirks entirely with its own gesture handling.
-//        Outer shell stays fixed inset-0 for glow orbs and modal overlays. Scroll happens
-//        inside OverlayScrollbarsComponent which sits absolute inset-0 within the shell.
-// v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
-// v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
-//        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
-//        inner list containers changed overflow-y-scroll→auto (hides scrollbar on desktop)
-// v7.41: iOS scroll fix — overflow-hidden on outer shell, z-10 on scroll container
-//        (glow orbs' blur-3xl filter creates stacking contexts that intercept iOS gestures)
-// v7.40: iOS scroll fix — added near-transparent background to scroll container so iOS
-//        hit-testing treats it as opaque (prevents touches falling through to fixed bg layers)
-// v7.39: iOS scroll TEST — removed overscrollBehavior:'none' (suspected cause of scroll-lock after first touch)
-// v7.38: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
-// v7.37: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
-// v7.35: Scroll fix — WebkitOverflowScrolling:'touch' + overscrollBehavior:'contain' on inner scroll child
-//        blocks the email_invites update; loadInvites now detects this and writes game_id from
-//        the sender's side (which RLS permits), then re-fetches to hide the link
+// v7.54: SCROLL FIX — removed global touchmove preventDefault handler from index.html that
+//        was cancelling scroll on every downward swipe app-wide. Reverted this component to
+//        clean native scroll: fixed inset-0 + overflow-y-auto. No library, no CSS hacks.
 // v7.26: Fixed Challenge buttons in Recent Games, Friends List, ViewPlayerProfile - now refresh pending invites
 // v7.25: FinalBoardView spacing fix - explicitly clear viewingPlayerId before opening
 // v7.24: Simplified FinalBoardView opening - removed RAF, use conditional hide + key for clean state
@@ -31,15 +12,10 @@
 // v7.17: Fixed Active Games modal scroll, user-specific localStorage keys, accurate game count
 // v7.15: Compact player profile card matching main menu, removed sign out/refresh buttons, replaced achievements button with leaderboard
 // v7.14: Real-time "Your turn" updates - no more waiting for refresh!
-// v7.10: Fixed iOS scroll, accept invite clears list, acceptor goes first
-// v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
-// v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
+// v7.11: Android scroll fix for Active Games and Recent Games modals
+// v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
 import { useState, useEffect, useCallback, useRef } from 'react';
-// v7.52: OverlayScrollbars — battle-tested cross-platform scroll library that replaces
-// native scroll with a custom implementation working reliably on iOS/Android/desktop.
-import { OverlayScrollbarsComponent } from 'overlayscrollbars-react';
-import 'overlayscrollbars/overlayscrollbars.css';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
@@ -239,7 +215,6 @@ const OnlineMenu = ({
   
   // Ref to track if profile has been loaded (prevents infinite loop)
   const profileLoadedRef = useRef(false);
-  const scrollContainerRef = useRef(null); // v7.47: for scrollTop=1 on mount
   
   // Refresh profile on mount to ensure fresh data (only once)
   useEffect(() => {
@@ -1416,14 +1391,13 @@ const OnlineMenu = ({
   const hasMyTurnGames = activeGames?.some(game => game && gameSyncService.isPlayerTurn(game, profile?.id)) || false;
 
   return (
-    <div className="fixed inset-0 overflow-hidden" style={{ border: '3px solid red' }}>
-      {/* DEBUG: red=outer shell, blue=OverlayScrollbars, green=content */}
+    <div className="fixed inset-0 overflow-y-auto overflow-x-hidden">
       {/* Glow orbs — fixed decorative background */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* v7.26: Rematch-sent banner — rendered outside scroll container so it stays fixed */}
+      {/* v7.26: Rematch-sent banner */}
       {showRematchSentBanner && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <div
@@ -1455,7 +1429,7 @@ const OnlineMenu = ({
         </div>
       )}
 
-      {/* Active Game Prompt Modal — outside scroll container, stays fixed */}
+      {/* Active Game Prompt Modal */}
       {showActivePrompt && hasMyTurnGames && !loading && (
         <ActiveGamePrompt
           games={activeGames}
@@ -1468,29 +1442,12 @@ const OnlineMenu = ({
         />
       )}
 
-      {/* v7.52: OverlayScrollbars handles scroll — battle-tested cross-platform scroll library.
-          v7.53: Fixed sizing — must use height:100% with parent providing dimensions,
-          NOT position:absolute which doesn't trigger proper scroll viewport sizing. */}
-      <OverlayScrollbarsComponent
-        defer
-        element="div"
-        options={{
-          overflow: { x: 'hidden', y: 'scroll' },
-          scrollbars: { theme: 'os-theme-light', autoHide: 'scroll' },
-        }}
-        style={{ 
-          width: '100%',
-          height: '100%',
-          border: '3px solid blue',
-        }}
-      >
       {/* Content */}
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4"
         style={{ 
           paddingBottom: 'max(160px, calc(env(safe-area-inset-bottom) + 160px))',
           paddingTop: 'max(48px, calc(env(safe-area-inset-top) + 48px))',
-          border: '3px solid lime',
         }}
       >
         <div className="w-full max-w-md">
@@ -2992,7 +2949,6 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
-      </OverlayScrollbarsComponent>
     </div>
   );
 };

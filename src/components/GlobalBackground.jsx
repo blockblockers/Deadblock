@@ -1,8 +1,7 @@
 // GlobalBackground.jsx - Animated floating pieces background
-// v7.14: iOS scroll ROOT FIX — added touch-action:none to .gb-container (tells compositor
-//        to skip this element for gesture routing); removed will-change:transform and
-//        translateZ(0) from .gb-grid (was creating a viewport-wide GPU layer that competed
-//        with scroll containers for iOS gesture ownership)
+// v7.15: REVERT — restored GPU promotion on .gb-grid (will-change + translateZ) for smooth
+//        animation; removed touch-action:none from .gb-container. The scroll issue blamed
+//        on these was actually the global touchmove preventDefault in index.html.
 // v7.13: Heat reduction — 16→10 pieces, removed redundant will-change/translateZ from
 //        .gb-piece/.gb-piece-inner/.gb-cell, removed per-piece filter:drop-shadow
 // v7.12: Fixed initial animation stutter with preloading
@@ -153,10 +152,6 @@ const GLOBAL_STYLES = `
     inset: 0;
     overflow: hidden;
     pointer-events: none;
-    /* v7.14: touch-action:none tells the compositor's gesture system to skip this
-       element entirely. pointer-events:none only blocks JS events, not the
-       compositor's gesture routing that was stealing scroll from OnlineMenu etc. */
-    touch-action: none;
     z-index: 0;
     background-color: #020617;
     /* Fade in to hide any remaining initialization jank */
@@ -173,9 +168,9 @@ const GLOBAL_STYLES = `
     inset: 0;
     opacity: 0.25;
     animation: gb-grid-drift 30s ease-in-out infinite;
-    /* v7.14: REMOVED will-change:transform and translateZ(0) — these promoted
-       the grid to a GPU compositor layer covering the entire viewport, which
-       competed with scroll containers for iOS gesture routing */
+    /* GPU acceleration */
+    will-change: transform;
+    transform: translateZ(0);
   }
   
   @keyframes gb-grid-drift {

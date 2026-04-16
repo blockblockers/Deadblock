@@ -1,9 +1,8 @@
 /**
  * Lazy Loading Helpers
  * Utilities for code-splitting and lazy loading components
- * v7.1: SCROLL FIX — removed transform from screenFadeIn animation. CSS transform creates
- *       a containing block, making position:fixed children relative to this div instead of
- *       viewport. This broke scroll gesture recognition on ALL mobile screens.
+ * v7.2: REVERT — restored transform:translateY for nice slide-in effect. The scroll
+ *       issue blamed on this was actually the global touchmove preventDefault in index.html.
  * v7.x: Added screenFadeIn animation to LazyWrapper
  */
 
@@ -17,8 +16,8 @@ const injectFadeStyle = () => {
   const style = document.createElement('style');
   style.textContent = `
     @keyframes screenFadeIn {
-      from { opacity: 0; }
-      to   { opacity: 1; }
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0);   }
     }
     .screen-fade-in {
       animation: screenFadeIn 0.15s ease-out;

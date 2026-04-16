@@ -1,3 +1,8 @@
+// DPad.jsx - Directional pad for piece movement on game boards
+// v1.2: Shrunk overall size for more compact game screens —
+//       buttons w-10/w-12 → w-8/w-10, container w-28/w-32 → w-24/w-28,
+//       arrows w-5/w-6 → w-4/w-5, center dot w-8/w-10 → w-6/w-8,
+//       tightened vertical margins (mt-3 mb-2 → mt-0 mb-1)
 import { soundManager } from '../utils/soundManager';
 import { useCallback, useRef } from 'react';
 
@@ -7,7 +12,8 @@ const DPad = ({ onMove }) => {
   // Track last move time for debouncing
   const lastMoveTime = useRef(0);
   
-  // SMALLER SIZES: Reduced from w-10 h-10 / w-12 h-12 to w-8 h-8 / w-10 h-10
+  // Touch-manipulation + active:scale-90 give tactile feedback. Cross layout
+  // means the effective tap target extends beyond button bounds (isolated keys).
   const buttonClass = "w-8 h-8 sm:w-10 sm:h-10 bg-cyan-600/80 hover:bg-cyan-500 active:bg-cyan-400 text-white rounded-lg shadow-[0_0_12px_rgba(34,211,238,0.4)] flex items-center justify-center border border-cyan-400/50 active:scale-90 transition-all duration-100 touch-manipulation select-none";
   
   const executeMove = useCallback((direction) => {
@@ -56,7 +62,6 @@ const DPad = ({ onMove }) => {
   });
   
   return (
-    // Reduced margin-top from mt-2 to mt-0 for tighter spacing with board
     <div className="flex justify-center mt-0 mb-1">
       <div className="relative w-24 h-24 sm:w-28 sm:h-28">
         {/* Up */}
@@ -103,7 +108,7 @@ const DPad = ({ onMove }) => {
           </svg>
         </button>
 
-        {/* Center dot - SMALLER: Reduced from w-8 h-8 / w-10 h-10 to w-6 h-6 / w-8 h-8 */}
+        {/* Center dot - decorative hub */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 sm:w-8 sm:h-8 bg-slate-800 rounded-full border border-cyan-500/50 shadow-[0_0_8px_rgba(34,211,238,0.3)]" />
       </div>
     </div>

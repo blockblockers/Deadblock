@@ -1,4 +1,5 @@
 // Leaderboard.jsx - Global leaderboard with scrollable list
+// v7.18: Added safe area top padding for iPhone notch clearance
 // v7.17: Fixed mobile scroll - proper touch-action, safe area padding, hardware acceleration
 // Place in src/components/Leaderboard.jsx
 
@@ -116,10 +117,11 @@ const Leaderboard = ({ onBack }) => {
       {/* Glow */}
       <div className="fixed top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl pointer-events-none" />
 
-      {/* Content - v7.17: Added safe area bottom padding */}
+      {/* Content - v7.17: Added safe area bottom padding; v7.18: added safe area top padding for iPhone notch */}
       <div 
-        className="relative flex-1 flex flex-col min-h-0 px-4 pt-6"
+        className="relative flex-1 flex flex-col min-h-0 px-4"
         style={{
+          paddingTop: 'max(24px, calc(env(safe-area-inset-top) + 16px))',
           paddingBottom: 'max(16px, env(safe-area-inset-bottom))'
         }}
       >

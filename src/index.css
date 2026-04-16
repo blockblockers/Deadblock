@@ -1,20 +1,14 @@
 /* =============================================================================
    DEADBLOCK - Global Styles
-   v7.14: iOS/Android scroll fix — removed overscroll-behavior:none from html/body
-          (was disabling overscroll handling globally, interfering with child scroll
-          containers); removed overflow:hidden from #root (redundant with body,
-          extra boundary interfered with fixed-position scroll containers)
-   v7.13: iOS scroll ROOT FIX — html/body/#root locked as non-scrollable
-          (overflow:hidden + height:100dvh); removed body transform:translateZ(0)
-          which was creating a containing block that broke fixed positioning;
-          removed @supports iOS block that added translateZ(0) to ALL .fixed elements
-   v7.12: iOS scroll fix — removed -webkit-overflow-scrolling from html/body
-          (was routing all iOS scroll gestures to body instead of inner divs);
-          reverted button touch-action from pan-y back to manipulation
-          (pan-y was causing iOS to claim scroll gestures for body native scroller)
-   v7.11: touch-action: pan-y on interactive elements (was manipulation — blocked scroll-over-buttons)
-   v7.9: FIXED scroll handling - removed conflicting position:fixed rules
-   v7.10: Added iOS scroll fix utility classes
+   v7.15: SCROLL FIX RESOLVED — root cause was global touchmove preventDefault handler
+          in index.html (now removed). Cleaned up exploratory CSS changes but kept
+          v7.13 foundation (body/html/root non-scrollable with overflow:hidden).
+          Restored overscroll-behavior-y:none on html for pull-to-refresh prevention.
+   v7.13: iOS scroll foundation — html/body/#root locked as non-scrollable
+          (overflow:hidden + height:100dvh); no transform on body (would create
+          containing block breaking position:fixed children)
+   v7.11: touch-action: manipulation on interactive elements
+   v7.9: Removed conflicting position:fixed rules
    ============================================================================= */
 
 /* Base Tailwind imports */
@@ -23,11 +17,9 @@
 @tailwind utilities;
 
 /* =============================================================================
-   ROOT & BODY STYLES - Scroll Foundation
-   v7.9: CRITICAL - Body and #root must allow content to scroll!
-   
-   THE FIX: Removed the duplicate body/root styles that were setting
-   position:fixed and overflow:hidden, which blocked all scrolling.
+   ROOT & BODY STYLES
+   Body/html/#root are NOT scroll containers. All screens use fixed inset-0
+   + inner overflow-y-auto pattern for scrolling.
    ============================================================================= */
 
 * {
@@ -38,37 +30,27 @@ html, body {
   margin: 0;
   padding: 0;
   width: 100%;
-  /* v7.13: Fixed height, NOT min-height — body must NOT be a scroll container. */
   height: 100%;
   height: 100dvh;
-  /* v7.13: overflow:hidden on BOTH axes — tells iOS body is not scrollable */
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
-  /* v7.14: REMOVED overscroll-behavior:none — this was telling the browser's overscroll
-     system to disable overscroll globally at the document level, which interfered with
-     scroll gesture recognition in ALL child scroll containers (both iOS and Android).
-     Body already has overflow:hidden so overscroll-behavior is redundant here. */
 }
 
 html {
-  /* v7.14: REMOVED overscroll-behavior-y:none — same reason as above.
-     Pull-to-refresh is already prevented by body overflow:hidden. */
+  /* v7.15: Restored — prevents pull-to-refresh at the document level.
+     Safe to re-enable now that global touchmove preventDefault handler
+     is removed from index.html. */
+  overscroll-behavior-y: none;
 }
 
 body {
   font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: #0f172a;
   color: white;
-  /* v7.13: REMOVED transform:translateZ(0) — it creates a containing block
-     that makes position:fixed children relative to body instead of viewport,
-     breaking the fixed inset-0 → absolute inset-0 scroll pattern on iOS */
 }
 
 #root {
   width: 100%;
-  /* v7.14: Use height:100% but REMOVED overflow:hidden — body already has overflow:hidden,
-     and #root's overflow:hidden created an extra scroll boundary that interfered with
-     fixed-position child scroll containers on iOS/Android. */
   height: 100%;
 }
 

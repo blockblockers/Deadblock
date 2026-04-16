@@ -1,5 +1,6 @@
 // CreatorPuzzleSelect.jsx
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
+// v1.10: Added safe area top padding for iPhone notch clearance
 // v1.9: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v1.8: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v1.6: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom); root already uses correct h-dvh flex-col shell
@@ -280,7 +281,12 @@ const CreatorPuzzleSelect = ({
 
       {/* Main Content - Scrollable if needed */}
       <div className="relative flex-1 min-h-0 flex flex-col overflow-y-scroll" style={{ overscrollBehavior: 'none' }}>
-        <div className="flex-1 flex flex-col items-center px-4 py-4">
+        <div 
+          className="flex-1 flex flex-col items-center px-4 pb-4"
+          style={{
+            paddingTop: 'max(16px, calc(env(safe-area-inset-top) + 16px))',
+          }}
+        >
           <div className="w-full max-w-md">
             
             {/* Title - Large like other menus */}
