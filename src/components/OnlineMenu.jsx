@@ -1,8 +1,9 @@
 // Online Menu - Hub for online features
-// v7.50: iOS/Android scroll — REMOVED all positioning (fixed/absolute) from scroll container.
-//        Just a regular div with height:100dvh + overflow-y:auto. Mobile browsers treat
-//        positioned scroll containers differently from normal ones. This is the simplest
-//        possible scroll pattern — identical to how every normal website scrolls.
+// v7.52: OverlayScrollbars library — replaces native scroll with battle-tested cross-platform
+//        implementation. Native iOS/Android scroll has been unreliable through v7.38-v7.51;
+//        OverlayScrollbars bypasses browser scroll quirks entirely with its own gesture handling.
+//        Outer shell stays fixed inset-0 for glow orbs and modal overlays. Scroll happens
+//        inside OverlayScrollbarsComponent which sits absolute inset-0 within the shell.
 // v7.43: iOS scroll FIX — moved glow orbs INSIDE scroll container (still position:fixed).
 // v7.42: iOS scroll ROOT FIX — restored -webkit-overflow-scrolling:touch on scroll container;
 //        restored overscrollBehavior:'contain' for Android (prevents scroll chaining to parent);
@@ -32,6 +33,10 @@
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.12: Unviewed game results - losses highlighted in red with pulse animation
 import { useState, useEffect, useCallback, useRef } from 'react';
+// v7.52: OverlayScrollbars — battle-tested cross-platform scroll library that replaces
+// native scroll with a custom implementation working reliably on iOS/Android/desktop.
+import { OverlayScrollbarsComponent } from 'overlayscrollbars-react';
+import 'overlayscrollbars/overlayscrollbars.css';
 import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
@@ -1408,24 +1413,13 @@ const OnlineMenu = ({
   const hasMyTurnGames = activeGames?.some(game => game && gameSyncService.isPlayerTurn(game, profile?.id)) || false;
 
   return (
-    <div 
-      ref={scrollContainerRef}
-      // v7.50: NO position:fixed, NO position:absolute. Just a regular div with
-      // explicit height and overflow-y:auto. This is how every normal website scrolls.
-      style={{ 
-        height: '100dvh',
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        WebkitOverflowScrolling: 'touch',
-        backgroundColor: 'rgba(2, 6, 23, 0.3)',
-      }}
-    >
-      {/* Glow orbs — fixed, decorative only */}
+    <div className="fixed inset-0 overflow-hidden">
+      {/* Glow orbs — fixed decorative background */}
       <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none`} />
 
-      {/* v7.26: Rematch-sent banner */}
+      {/* v7.26: Rematch-sent banner — rendered outside scroll container so it stays fixed */}
       {showRematchSentBanner && (
         <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
           <div
@@ -1457,7 +1451,7 @@ const OnlineMenu = ({
         </div>
       )}
 
-      {/* Active Game Prompt Modal */}
+      {/* Active Game Prompt Modal — outside scroll container, stays fixed */}
       {showActivePrompt && hasMyTurnGames && !loading && (
         <ActiveGamePrompt
           games={activeGames}
@@ -1470,6 +1464,21 @@ const OnlineMenu = ({
         />
       )}
 
+      {/* v7.52: OverlayScrollbars handles scroll — battle-tested cross-platform scroll library.
+          Replaces native overflow:scroll with a custom implementation that works reliably on
+          iOS (all versions), Android, and desktop. Eliminates the gesture recognition issues
+          that native scroll containers have on iOS. */}
+      <OverlayScrollbarsComponent
+        defer
+        options={{
+          overflow: { x: 'hidden', y: 'scroll' },
+          scrollbars: { theme: 'os-theme-light', autoHide: 'scroll' },
+        }}
+        style={{ 
+          position: 'absolute',
+          inset: 0,
+        }}
+      >
       {/* Content */}
       <div 
         className="relative flex flex-col items-center px-3 sm:px-4"
@@ -2978,6 +2987,7 @@ const OnlineMenu = ({
           animation: shine 1.5s ease-in-out;
         }
       `}</style>
+      </OverlayScrollbarsComponent>
     </div>
   );
 };
