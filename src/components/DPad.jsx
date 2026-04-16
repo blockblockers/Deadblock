@@ -1,4 +1,6 @@
 // DPad.jsx - Directional pad for piece movement on game boards
+// v1.3: Added top margin (mt-0 → mt-3) to create breathing room between game board
+//       and up arrow
 // v1.2: Shrunk overall size for more compact game screens —
 //       buttons w-10/w-12 → w-8/w-10, container w-28/w-32 → w-24/w-28,
 //       arrows w-5/w-6 → w-4/w-5, center dot w-8/w-10 → w-6/w-8,
@@ -62,7 +64,7 @@ const DPad = ({ onMove }) => {
   });
   
   return (
-    <div className="flex justify-center mt-0 mb-1">
+    <div className="flex justify-center mt-3 mb-1">
       <div className="relative w-24 h-24 sm:w-28 sm:h-28">
         {/* Up */}
         <button
