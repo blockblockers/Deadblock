@@ -1,4 +1,7 @@
 // pushNotificationService.js - Client-side push notification management
+// v7.17: Added resubscribeIfNeeded(userId) — silently re-subscribes when permission is
+//        granted but browser subscription was lost (e.g., cache cleared without sign-out).
+//        Prevents "zombie state" where DB has stale endpoint and pushes silently fail.
 // v7.16: Fixed test notification icon/badge to use monochrome-192x192.png (matches all other notifications)
 // v7.15: FIXED - Handles service worker conflicts, proper timeouts, state persistence
 // Place in src/services/pushNotificationService.js
@@ -395,6 +398,59 @@ class PushNotificationService {
       outputArray[i] = rawData.charCodeAt(i);
     }
     return outputArray;
+  }
+
+  // v7.17: Silently re-subscribe if permission was previously granted but browser
+  // subscription was lost (e.g., cache cleared without signing out). This prevents
+  // the "zombie state" where DB has a stale endpoint and pushes silently fail.
+  async resubscribeIfNeeded(userId) {
+    if (!userId) return;
+    if (!this.isSupported()) return;
+    if (Notification.permission !== 'granted') return;
+    
+    try {
+      // Ensure initialized
+      if (!this.initialized) {
+        const ok = await withTimeout(this.init(), 15000, 'Init timed out');
+        if (!ok) return;
+      }
+      
+      if (!this.swRegistration?.pushManager) return;
+      
+      // Check if browser subscription still exists
+      const existing = await withTimeout(
+        this.swRegistration.pushManager.getSubscription(),
+        5000,
+        'Get subscription timed out'
+      );
+      
+      if (existing) {
+        // Subscription is alive — nothing to do
+        this.subscription = existing;
+        return;
+      }
+      
+      // Permission granted but no subscription — re-subscribe silently
+      // console.log('[PushService] Re-subscribing (permission granted, subscription lost)...');
+      const applicationServerKey = this.urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      
+      this.subscription = await withTimeout(
+        this.swRegistration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        }),
+        15000,
+        'Re-subscription timed out'
+      );
+      
+      // Upsert to DB (replaces any stale endpoint)
+      await this.saveSubscription(userId, this.subscription);
+      // console.log('[PushService] Re-subscribed successfully');
+      
+    } catch (e) {
+      console.warn('[PushService] resubscribeIfNeeded failed:', e.message);
+      // Non-fatal — user can still re-subscribe via NotificationPrompt or Settings
+    }
   }
 
   // Send a test notification via the service worker

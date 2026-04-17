@@ -1,22 +1,27 @@
 // Leaderboard.jsx - Global leaderboard with scrollable list
+// v7.19: Added Eye icon per player row to watch their active games. Accepts onSpectateGame prop.
 // v7.18: Added safe area top padding for iPhone notch clearance
 // v7.17: Fixed mobile scroll - proper touch-action, safe area padding, hardware acceleration
 // Place in src/components/Leaderboard.jsx
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Trophy, Crown, Medal, User, RefreshCw, TrendingUp, Gamepad2, Award } from 'lucide-react';
+import { ArrowLeft, Trophy, Crown, Medal, User, RefreshCw, TrendingUp, Gamepad2, Award, Eye, X, Radio, Loader } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
+import { spectatorService } from '../services/spectatorService';
 import TierIcon from './TierIcon';
 
-const Leaderboard = ({ onBack }) => {
+const Leaderboard = ({ onBack, onSpectateGame }) => {
   const { profile } = useAuth();
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('rating'); // 'rating', 'wins', 'games'
   const [myRank, setMyRank] = useState(null);
+  const [watchPlayer, setWatchPlayer] = useState(null);
+  const [watchGames, setWatchGames] = useState([]);
+  const [loadingWatch, setLoadingWatch] = useState(false);
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -82,6 +87,18 @@ const Leaderboard = ({ onBack }) => {
   const handleRefresh = () => {
     soundManager.playClickSound('select');
     loadLeaderboard();
+  };
+
+  const handleWatchPlayer = async (player) => {
+    if (player.id === profile?.id) return; // Can't watch yourself
+    soundManager.playClickSound('select');
+    setWatchPlayer(player);
+    setLoadingWatch(true);
+    try {
+      const { data } = await spectatorService.getFriendGames([player.id]);
+      setWatchGames(data || []);
+    } catch (e) { setWatchGames([]); }
+    setLoadingWatch(false);
   };
 
   const getRankIcon = (rank) => {
@@ -210,6 +227,7 @@ const Leaderboard = ({ onBack }) => {
               <div className="w-20 text-right">
                 {filter === 'rating' ? 'Rating' : filter === 'wins' ? 'Wins' : 'Games'}
               </div>
+              {onSpectateGame && <div className="w-10 text-center">Live</div>}
             </div>
             
             {/* Scrollable List - v7.17: Enhanced mobile scroll */}
@@ -308,6 +326,17 @@ const Leaderboard = ({ onBack }) => {
                             {filter === 'rating' ? 'rating' : filter === 'wins' ? 'wins' : 'games'}
                           </div>
                         </div>
+                        
+                        {/* Watch button */}
+                        {onSpectateGame && !isCurrentUser && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleWatchPlayer(player); }}
+                            className="w-10 flex items-center justify-center text-slate-600 hover:text-slate-300 transition-colors"
+                          >
+                            <Eye size={15} />
+                          </button>
+                        )}
+                        {onSpectateGame && isCurrentUser && <div className="w-10" />}
                       </div>
                     );
                   })}
@@ -317,6 +346,66 @@ const Leaderboard = ({ onBack }) => {
           </div>
         </div>
       </div>
+
+      {/* Watch Games Popup */}
+      {watchPlayer && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+          <div className="bg-slate-900 rounded-xl max-w-sm w-full overflow-hidden border border-slate-500/30 shadow-xl">
+            <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
+              <div className="flex items-center gap-2">
+                <Eye size={18} className="text-slate-300" />
+                <span className="text-white font-bold text-sm">Watch {watchPlayer.username || watchPlayer.display_name}</span>
+              </div>
+              <button onClick={() => { setWatchPlayer(null); setWatchGames([]); }} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4">
+              {loadingWatch ? (
+                <div className="py-6 text-center">
+                  <Loader size={20} className="text-slate-400 animate-spin mx-auto mb-2" />
+                  <p className="text-slate-500 text-xs">Finding active games...</p>
+                </div>
+              ) : watchGames.length === 0 ? (
+                <div className="py-6 text-center">
+                  <Eye size={28} className="text-slate-600 mx-auto mb-2" />
+                  <p className="text-slate-400 text-sm">No active games</p>
+                  <p className="text-slate-500 text-xs mt-1">This player isn't in a live game right now</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {watchGames.map(game => {
+                    const opponent = game.player1?.id === watchPlayer.id ? game.player2 : game.player1;
+                    return (
+                      <button
+                        key={game.id}
+                        onClick={() => {
+                          soundManager.playButtonClick();
+                          setWatchPlayer(null);
+                          setWatchGames([]);
+                          onSpectateGame(game.id);
+                        }}
+                        className="w-full p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 hover:border-slate-500/50 transition-all text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white text-sm font-medium">{watchPlayer.username || '?'}</span>
+                            <span className="text-slate-600 text-xs">vs</span>
+                            <span className="text-slate-300 text-sm">{opponent?.username || '?'}</span>
+                          </div>
+                          <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold animate-pulse">
+                            <Radio size={10} /> LIVE
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

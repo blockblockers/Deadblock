@@ -1,4 +1,5 @@
 // FloatingPieces.jsx - Animated floating pentomino pieces background
+// v2.3: Added 'silver' theme (slate/zinc tones) for SpectatorView
 // v2.2: Heat reduction — default count 15→8, replaced 5×N per-cell sparkle animations with
 //       1×N per-piece opacity-only breathe animation (~90% fewer animations),
 //       removed filter:drop-shadow (cells already have boxShadow glow)
@@ -90,6 +91,12 @@ const THEMES = {
     { color: '#f87171', glow: 'rgba(248,113,113,0.8)' },
     { color: '#fca5a5', glow: 'rgba(252,165,165,0.8)' },
   ],
+  silver: [
+    { color: '#94a3b8', glow: 'rgba(148,163,184,0.8)' },  // slate-400
+    { color: '#cbd5e1', glow: 'rgba(203,213,225,0.75)' }, // slate-300
+    { color: '#a1a1aa', glow: 'rgba(161,161,170,0.7)' },  // zinc-400
+    { color: '#d4d4d8', glow: 'rgba(212,212,216,0.7)' },  // zinc-300
+  ],
 };
 
 // Single floating piece component with smoother animation
@@ -155,7 +162,7 @@ const FloatingPiece = ({ piece, startX, startY, delay, duration, color, glowColo
 
 /**
  * FloatingPieces - Animated background with floating pentomino pieces
- * @param {string} theme - Color theme: 'mixed', 'online', 'weekly', 'puzzle', 'ai', 'game', 'cyan', 'amber', 'purple', 'green', 'pink', 'red'
+ * @param {string} theme - Color theme: 'mixed', 'online', 'weekly', 'puzzle', 'ai', 'game', 'cyan', 'amber', 'purple', 'green', 'pink', 'red', 'silver'
  * @param {number} count - Number of floating pieces (default: 8)
  * @param {number} minOpacity - Minimum opacity (default: 0.25)
  * @param {number} maxOpacity - Maximum opacity (default: 0.55)

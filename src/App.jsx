@@ -17,6 +17,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isSupabaseConfigured } from './utils/supabase';
 import { useRealtimeConnection } from './hooks/useRealtimeConnection';
 import { streakTracker } from './utils/streakTracker';
+import { pushNotificationService } from './services/pushNotificationService';
 
 // Core screens (always loaded - used frequently)
 import MenuScreen from './components/MenuScreen';
@@ -506,6 +507,17 @@ function AppContent({ onBgThemeChange }) {
         streakTracker.checkAndRemind();
       }, 3000);
       
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, profile?.id, authLoading]);
+  
+  // v7.17: Re-subscribe push notifications if permission was granted but subscription
+  // was lost (e.g., user cleared cache without signing out). Silent, non-blocking.
+  useEffect(() => {
+    if (isAuthenticated && profile?.id && !authLoading) {
+      const timer = setTimeout(() => {
+        pushNotificationService.resubscribeIfNeeded(profile.id);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [isAuthenticated, profile?.id, authLoading]);
@@ -1303,6 +1315,7 @@ function AppContent({ onBgThemeChange }) {
       <LazyWrapper message="Loading the rankings…">
         <Leaderboard
           onBack={() => setGameMode('online-menu')}
+          onSpectateGame={handleSpectateGame}
         />
       </LazyWrapper>
     );

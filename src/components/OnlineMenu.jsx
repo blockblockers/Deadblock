@@ -1,4 +1,7 @@
 // Online Menu - Hub for online features
+// v7.58: Replaced Profile button with Watch button (Eye icon, silver theme), reordered to
+//        Leaderboard | Friends | Watch. Added WatchPlayersModal — search users and spectate
+//        their active games. Profile is still accessible via the player info card.
 // v7.57: Notification prompt reliability fixes — user-specific localStorage keys (switching
 //        accounts no longer inherits cooldown/dismiss); removed mobile-only restriction;
 //        cooldown written after prompt shows; 3s timeout on SW ready check.
@@ -25,7 +28,7 @@
 // v7.11: Android scroll fix for Active Games and Recent Games modals
 // v7.10: Prioritize username over display_name (fixes Google OAuth showing account name)
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull, BarChart3 } from 'lucide-react';
+import { Swords, Trophy, User, LogOut, History, ChevronRight, X, Zap, Search, UserPlus, Mail, Check, Clock, Send, Bell, Link, Copy, Share2, Users, Eye, Award, LayoutGrid, RefreshCw, Pencil, Loader, HelpCircle, ArrowLeft, Skull, BarChart3, Radio } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import { gameSyncService } from '../services/gameSync';
@@ -36,6 +39,7 @@ import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
 import { realtimeManager } from '../services/realtimeManager';
 import { rematchService } from '../services/rematchService';
+import { spectatorService } from '../services/spectatorService';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import TierIcon from './TierIcon';
@@ -194,6 +198,166 @@ const ActiveGamePrompt = ({ games, profile, onResume, onDismiss }) => {
   );
 };
 
+// v7.58: Watch Players Modal — search users and spectate their active games
+const WatchPlayersModal = ({ userId, onSpectate, onClose }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userGames, setUserGames] = useState([]);
+  const [loadingGames, setLoadingGames] = useState(false);
+
+  const handleSearch = useCallback(async (query) => {
+    setSearchQuery(query);
+    setSelectedUser(null);
+    setUserGames([]);
+    if (query.length < 2) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      const { data } = await inviteService.searchUsers(query, userId, 15);
+      setSearchResults(data || []);
+    } catch (e) { setSearchResults([]); }
+    setSearching(false);
+  }, [userId]);
+
+  const handleSelectUser = useCallback(async (user) => {
+    setSelectedUser(user);
+    setLoadingGames(true);
+    try {
+      const { data } = await spectatorService.getFriendGames([user.id]);
+      setUserGames(data || []);
+    } catch (e) { setUserGames([]); }
+    setLoadingGames(false);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[55] p-4">
+      <div className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border border-slate-500/30 shadow-xl"
+        style={{ maxHeight: 'min(85vh, 85dvh)' }}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
+          <div className="flex items-center gap-2 text-slate-300">
+            <Eye size={20} />
+            <span className="font-bold">Watch Games</span>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={22} /></button>
+        </div>
+
+        {/* Search */}
+        <div className="p-3 border-b border-slate-700/30">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearch(e.target.value)}
+              placeholder="Search players..."
+              className="w-full pl-9 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:border-slate-500"
+              autoFocus
+            />
+            {searching && <Loader size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="overflow-y-auto" style={{ maxHeight: 'min(55vh, 55dvh)', overscrollBehavior: 'contain' }}>
+          {/* Game selection for selected user */}
+          {selectedUser && (
+            <div className="border-b border-slate-700/30">
+              <div className="flex items-center justify-between p-3 bg-slate-800/50">
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { setSelectedUser(null); setUserGames([]); }} className="text-slate-400 hover:text-white">
+                    <ArrowLeft size={16} />
+                  </button>
+                  <span className="text-sm font-medium text-white">{selectedUser.username || selectedUser.display_name}</span>
+                </div>
+                <span className="text-xs text-slate-500">{userGames.length} active game{userGames.length !== 1 ? 's' : ''}</span>
+              </div>
+              {loadingGames ? (
+                <div className="py-8 text-center">
+                  <Loader size={20} className="text-slate-400 animate-spin mx-auto mb-2" />
+                  <p className="text-slate-500 text-xs">Finding games...</p>
+                </div>
+              ) : userGames.length === 0 ? (
+                <div className="py-8 text-center">
+                  <Eye size={28} className="text-slate-600 mx-auto mb-2" />
+                  <p className="text-slate-400 text-sm">No active games</p>
+                  <p className="text-slate-500 text-xs mt-1">This player isn't in a live game right now</p>
+                </div>
+              ) : (
+                <div className="p-3 space-y-2">
+                  {userGames.map(game => {
+                    const opponent = game.player1?.id === selectedUser.id ? game.player2 : game.player1;
+                    return (
+                      <button
+                        key={game.id}
+                        onClick={() => { soundManager.playButtonClick(); onSpectate(game.id); }}
+                        className="w-full p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 hover:border-slate-500/50 transition-all text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-white text-sm font-medium">{selectedUser.username || '?'}</span>
+                            <span className="text-slate-600 text-xs">vs</span>
+                            <span className="text-slate-300 text-sm">{opponent?.username || '?'}</span>
+                          </div>
+                          <span className="flex items-center gap-1 text-red-400 text-[10px] font-bold animate-pulse">
+                            <Radio size={10} /> LIVE
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Search results */}
+          {!selectedUser && searchResults.length > 0 && (
+            <div className="divide-y divide-slate-800/50">
+              {searchResults.map(user => {
+                const tier = ratingService.getRatingTier(user.rating || 1200);
+                return (
+                  <button
+                    key={user.id}
+                    onClick={() => { soundManager.playClickSound('select'); handleSelectUser(user); }}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/50 transition-colors text-left"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ background: `${tier.glowColor}20` }}>
+                      <TierIcon shape={tier.shape} glowColor={tier.glowColor} size="small" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-sm font-medium truncate">{user.username || user.display_name}</div>
+                      <div className="text-xs" style={{ color: tier.glowColor }}>{tier.name} • {user.rating || 1200}</div>
+                    </div>
+                    <Eye size={16} className="text-slate-500 flex-shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Empty states */}
+          {!selectedUser && searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+            <div className="py-8 text-center">
+              <Search size={28} className="text-slate-600 mx-auto mb-2" />
+              <p className="text-slate-400 text-sm">No players found</p>
+            </div>
+          )}
+          {!selectedUser && searchQuery.length < 2 && (
+            <div className="py-8 text-center">
+              <Eye size={28} className="text-slate-600 mx-auto mb-2" />
+              <p className="text-slate-400 text-sm">Search for a player to watch their games</p>
+              <p className="text-slate-500 text-xs mt-1">Type at least 2 characters</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const OnlineMenu = ({ 
   onFindMatch, 
   onViewProfile, 
@@ -302,6 +466,7 @@ const OnlineMenu = ({
   const [showFriendsList, setShowFriendsList] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
   const [showSpectateList, setShowSpectateList] = useState(false);
+  const [showWatchModal, setShowWatchModal] = useState(false);
   const [viewingPlayerId, setViewingPlayerId] = useState(null);
   const [viewingPlayerData, setViewingPlayerData] = useState(null);
   const [showRecentGames, setShowRecentGames] = useState(false);
@@ -1639,20 +1804,8 @@ const OnlineMenu = ({
               );
             })()}
             
-            {/* Quick Actions - Profile, Leaderboard, Friends */}
+            {/* Quick Actions - Leaderboard, Friends, Watch */}
             <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => { soundManager.playButtonClick(); onViewProfile(); }}
-                className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
-                style={{
-                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
-                  borderColor: 'rgba(59, 130, 246, 0.3)',
-                  boxShadow: '0 0 15px rgba(59, 130, 246, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
-                }}
-              >
-                <User size={14} className="text-blue-400 group-hover:scale-110 transition-transform" />
-                <span className="text-slate-300 group-hover:text-blue-300 transition-colors">Profile</span>
-              </button>
               <button
                 onClick={() => { soundManager.playButtonClick(); onViewLeaderboard(); }}
                 className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
@@ -1681,6 +1834,18 @@ const OnlineMenu = ({
                     {pendingFriendRequests}
                   </span>
                 )}
+              </button>
+              <button
+                onClick={() => { soundManager.playButtonClick(); setShowWatchModal(true); }}
+                className="flex-1 py-2.5 rounded-xl text-xs font-medium transition-all flex items-center justify-center gap-1.5 border group"
+                style={{
+                  background: 'linear-gradient(135deg, rgba(148, 163, 184, 0.15) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                  borderColor: 'rgba(148, 163, 184, 0.3)',
+                  boxShadow: '0 0 15px rgba(148, 163, 184, 0.1), inset 0 1px 0 rgba(255,255,255,0.05)'
+                }}
+              >
+                <Eye size={14} className="text-slate-300 group-hover:scale-110 transition-transform" />
+                <span className="text-slate-300 group-hover:text-slate-100 transition-colors">Watch</span>
               </button>
             </div>
 
@@ -2932,6 +3097,18 @@ const OnlineMenu = ({
         />
       )}
       
+      {/* Watch Players Modal — search users and spectate their games */}
+      {showWatchModal && (
+        <WatchPlayersModal
+          userId={profile?.id}
+          onSpectate={(gameId) => {
+            setShowWatchModal(false);
+            onSpectateGame?.(gameId);
+          }}
+          onClose={() => setShowWatchModal(false)}
+        />
+      )}
+
       {/* Spectatable Games List */}
       {showSpectateList && (
         <SpectatableGamesList

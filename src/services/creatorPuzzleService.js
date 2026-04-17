@@ -1,4 +1,6 @@
 // creatorPuzzleService.js - Service for Creator Puzzles
+// v1.2: FIX — saveProgress now includes ?on_conflict=user_id,puzzle_id so PostgREST
+//       performs an upsert instead of failing with 409 duplicate key on retry attempts.
 // v1.1: Added progress tracking for attempt persistence
 // Handles fetching puzzles, completions, progress, and stats
 
@@ -205,7 +207,7 @@ export const creatorPuzzleService = {
     
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/creator_puzzle_progress`,
+        `${SUPABASE_URL}/rest/v1/creator_puzzle_progress?on_conflict=user_id,puzzle_id`,
         {
           method: 'POST',
           headers: {

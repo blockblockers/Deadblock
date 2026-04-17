@@ -1,4 +1,7 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.19: FIX — aiAnimatingMove used wrong property names (pieceType/rot/flip) vs what
+//        GameBoard expects (piece/rotation/flipped). This caused getPieceCoords(undefined)
+//        to fire ~1000 times per AI move in an infinite re-render cascade.
 // v2.18: CRITICAL FIX — solver used separate AI/player piece lists, but Creator Puzzles
 //        use a shared pool. When AI played V, V stayed in the player's list — the solver
 //        simulated the player "also playing V" as a response (impossible). Now uses a
@@ -84,18 +87,18 @@ const difficultyThemes = {
     panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
   },
   hard: {
-    gridColor: 'rgba(168, 85, 247, 0.3)',
-    glow1: 'bg-purple-500/30',
-    glow2: 'bg-pink-500/25',
-    panelBorder: 'border-purple-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
-  },
-  expert: {
     gridColor: 'rgba(239, 68, 68, 0.3)',
     glow1: 'bg-red-500/30',
     glow2: 'bg-rose-500/25',
     panelBorder: 'border-red-500/40',
     panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
+  },
+  expert: {
+    gridColor: 'rgba(168, 85, 247, 0.3)',
+    glow1: 'bg-purple-500/30',
+    glow2: 'bg-pink-500/25',
+    panelBorder: 'border-purple-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
   },
 };
 
@@ -158,8 +161,8 @@ const PuzzleHeader = memo(({ puzzleNumber, puzzleName, difficulty, onBack }) => 
   const difficultyColors = {
     easy: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/50' },
     medium: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/50' },
-    hard: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/50' },
-    expert: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' },
+    hard: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' },
+    expert: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/50' },
   };
   
   const colors = difficultyColors[difficulty] || difficultyColors.medium;
@@ -877,9 +880,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           row: aiMove.row,
           col: aiMove.col,
           coords: aiMove.coords,
-          pieceType: aiMove.piece,
-          rot: aiMove.rotation,
-          flip: aiMove.flipped,
+          piece: aiMove.piece,
+          rotation: aiMove.rotation,
+          flipped: aiMove.flipped,
         });
         
         // Update board with AI's move
