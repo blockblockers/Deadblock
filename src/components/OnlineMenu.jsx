@@ -1,4 +1,7 @@
 // Online Menu - Hub for online features
+// v7.55: Notification prompt fix — checks actual push subscription status via service worker,
+//        not just browser permission. Previous logic only showed the toast when permission was
+//        'default' (first visit only). Now re-prompts every 3 days if push is not subscribed.
 // v7.54: SCROLL FIX — removed global touchmove preventDefault handler from index.html that
 //        was cancelling scroll on every downward swipe app-wide. Reverted this component to
 //        clean native scroll: fixed inset-0 + overflow-y-auto. No library, no CSS hacks.
@@ -339,36 +342,61 @@ const OnlineMenu = ({
   };
 
   // Initialize notifications
-  // Auto-request notification permission on first online visit (mobile only)
+  // v7.55: Rewritten — checks actual push subscription status, not just browser permission.
+  // Previous logic only showed the toast when permission === 'default' (first visit only).
+  // Now shows the toast when push is supported but not subscribed, with a 3-day cooldown.
   useEffect(() => {
     const initNotifications = async () => {
       await notificationService.init();
       setNotificationsEnabled(notificationService.isEnabled());
       
-      // Only auto-prompt on mobile - desktop notifications require browser to be open
-      // so they're less useful and we don't want to be annoying
+      // Only prompt on mobile — desktop notifications require browser to be open
       if (!notificationService.isMobileDevice()) {
         setShowNotificationPrompt(false);
         return;
       }
       
-      // Check if this is first time in online mode and notifications not yet decided
-      const hasAskedBefore = localStorage.getItem('deadblock_notification_asked');
-      const permission = notificationService.permission;
+      // Check if push is supported at all
+      if (!notificationService.isPushSupported() || !('serviceWorker' in navigator)) {
+        setShowNotificationPrompt(false);
+        return;
+      }
       
-      if (!hasAskedBefore && permission === 'default' && notificationService.isPushSupported()) {
-        // Mark that we've asked (so we only auto-ask once)
-        localStorage.setItem('deadblock_notification_asked', 'true');
-        
-        // Small delay to let the page load, then auto-trigger permission request
-        setTimeout(async () => {
-          const result = await notificationService.requestPermission();
-          setNotificationsEnabled(result === 'granted');
-          // Don't show the manual prompt since we just asked
+      // Check if user permanently dismissed the prompt
+      const permanentlyDismissed = localStorage.getItem('deadblock_notification_prompt_dismissed') === 'true';
+      if (permanentlyDismissed) {
+        setShowNotificationPrompt(false);
+        return;
+      }
+      
+      // Check cooldown — don't prompt more than once every 3 days
+      const lastPrompt = localStorage.getItem('deadblock_notification_last_prompt');
+      if (lastPrompt) {
+        const daysSince = (Date.now() - parseInt(lastPrompt, 10)) / (1000 * 60 * 60 * 24);
+        if (daysSince < 3) {
           setShowNotificationPrompt(false);
-        }, 1500);
-      } else {
-        // For subsequent visits, show prompt only if they haven't decided yet
+          return;
+        }
+      }
+      
+      // Check actual push subscription status via service worker
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (subscription) {
+          // Already subscribed — no need to prompt
+          setShowNotificationPrompt(false);
+        } else {
+          // Not subscribed — show prompt after short delay
+          localStorage.setItem('deadblock_notification_last_prompt', Date.now().toString());
+          setTimeout(() => {
+            setShowNotificationPrompt(true);
+          }, 2000);
+        }
+      } catch (err) {
+        // console.warn('[OnlineMenu] Error checking push subscription:', err);
+        // Fallback: use old shouldPrompt() logic
         setShowNotificationPrompt(notificationService.shouldPrompt());
       }
     };

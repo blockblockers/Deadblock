@@ -1,4 +1,8 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.21: Sign-out notification prompt — when push is subscribed, asks user to keep or
+//        turn off notifications before signing out. Preserves subscription by default.
+// v7.20: Push notifications preserved across sign-out (removed unsubscribe from sign-out flow);
+//        moved Delete Account below Sign Out button
 // v7.19: Added volume sliders for Sound Effects and Background Music; safe-area-inset-top
 //        padding on modal wrapper for iPhone notch clearance
 // v7.18: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
@@ -360,12 +364,12 @@ const SettingsModal = ({ isOpen, onClose }) => {
     soundManager.setMusicVolume(vol / 100);
   };
   
-  // Handle sign out
-  const handleSignOut = async () => {
+  // Handle sign out — v7.21: accepts keepNotifications flag from confirmation UI
+  const handleSignOut = async (keepNotifications = true) => {
     setSigningOut(true);
     try {
-      // Unsubscribe from push notifications before signing out
-      if (pushSubscribed && user?.id) {
+      // v7.21: Only unsubscribe if user explicitly chose to turn off notifications
+      if (!keepNotifications && pushSubscribed && user?.id) {
         await pushNotificationService.unsubscribe(user.id);
       }
       await signOut();
@@ -521,11 +525,14 @@ const SettingsModal = ({ isOpen, onClose }) => {
       className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50"
       style={{
         padding: '1rem',
-        paddingTop: 'max(1rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+        paddingTop: 'max(1.5rem, calc(env(safe-area-inset-top) + 12px))',
+        paddingBottom: 'max(1.5rem, calc(env(safe-area-inset-bottom) + 12px))',
       }}
     >
-      <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl w-full max-w-sm max-h-[90vh] overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.2)] flex flex-col">
+      <div 
+        className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl w-full max-w-sm overflow-hidden border border-cyan-500/30 shadow-[0_0_50px_rgba(34,211,238,0.2)] flex flex-col"
+        style={{ maxHeight: '100%' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-cyan-500/20 flex-shrink-0">
           <h2 className="text-lg font-bold text-cyan-300">Settings</h2>
@@ -1082,7 +1089,67 @@ const SettingsModal = ({ isOpen, onClose }) => {
                 </div>
               )}
               
-              {/* Delete Account */}
+              {/* Sign Out — v7.20: moved above Delete Account */}
+              {!showSignOutConfirm ? (
+                <button
+                  onClick={() => setShowSignOutConfirm(true)}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/20 hover:border-orange-500/60 hover:shadow-[0_0_18px_rgba(249,115,22,0.3)] transition-all group text-left"
+                >
+                  <div className="relative flex-shrink-0">
+                    <div className="absolute inset-0 bg-orange-500/50 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <LogOut size={20} className="relative text-orange-400" />
+                  </div>
+                  <span className="text-orange-300 text-sm font-medium">Sign Out</span>
+                </button>
+              ) : (
+                <div className="space-y-3 p-3 rounded-lg bg-red-900/20 border border-red-500/30">
+                  <p className="text-red-300 text-sm font-medium">Are you sure you want to sign out?</p>
+                  
+                  {/* v7.21: Notification preference — only shown when push is subscribed */}
+                  {pushSubscribed && (
+                    <div className="p-2.5 rounded-lg bg-slate-800/60 border border-slate-700/40">
+                      <p className="text-slate-300 text-xs mb-2">Keep receiving game notifications on this device?</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleSignOut(true)}
+                          disabled={signingOut}
+                          className="flex-1 py-2 bg-green-600/80 hover:bg-green-500 text-white rounded-lg font-bold text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {signingOut ? 'Signing out...' : <><Bell size={12} /> Keep & Sign Out</>}
+                        </button>
+                        <button
+                          onClick={() => handleSignOut(false)}
+                          disabled={signingOut}
+                          className="flex-1 py-2 bg-red-600/80 hover:bg-red-500 text-white rounded-lg font-bold text-xs disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {signingOut ? 'Signing out...' : <><BellOff size={12} /> Turn Off & Sign Out</>}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Simple sign-out when no push subscription */}
+                  {!pushSubscribed && (
+                    <button
+                      onClick={() => handleSignOut(true)}
+                      disabled={signingOut}
+                      className="w-full py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
+                    >
+                      {signingOut ? 'Signing out...' : 'Sign Out'}
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => setShowSignOutConfirm(false)}
+                    disabled={signingOut}
+                    className="w-full py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {/* Delete Account — v7.20: moved below Sign Out */}
               {deleteSuccess ? (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-green-900/30 border border-green-500/30 text-green-400 text-sm">
                   <Check size={16} />
@@ -1146,39 +1213,6 @@ const SettingsModal = ({ isOpen, onClose }) => {
                       ) : (
                         <><Trash2 size={14} /> Delete</>
                       )}
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {/* Sign Out */}
-              {!showSignOutConfirm ? (
-                <button
-                  onClick={() => setShowSignOutConfirm(true)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 hover:bg-orange-500/20 hover:border-orange-500/60 hover:shadow-[0_0_18px_rgba(249,115,22,0.3)] transition-all group text-left"
-                >
-                  <div className="relative flex-shrink-0">
-                    <div className="absolute inset-0 bg-orange-500/50 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
-                    <LogOut size={20} className="relative text-orange-400" />
-                  </div>
-                  <span className="text-orange-300 text-sm font-medium">Sign Out</span>
-                </button>
-              ) : (
-                <div className="space-y-2 p-3 rounded-lg bg-red-900/20 border border-red-500/30">
-                  <p className="text-red-300 text-sm">Are you sure you want to sign out?</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSignOut}
-                      disabled={signingOut}
-                      className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold text-sm disabled:opacity-50"
-                    >
-                      {signingOut ? 'Signing out...' : 'Sign Out'}
-                    </button>
-                    <button
-                      onClick={() => setShowSignOutConfirm(false)}
-                      className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg text-sm"
-                    >
-                      Cancel
                     </button>
                   </div>
                 </div>

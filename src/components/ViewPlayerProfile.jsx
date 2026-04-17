@@ -1,4 +1,7 @@
 // ViewPlayerProfile - View another player's profile
+// v7.35: Stats audit — moved Head to Head under Online Stats card; enhanced Play Streak
+//        with status messages and warnings; Creator Puzzles now shows per-difficulty progress
+//        bars (Easy/Med/Hard/Expert) matching PlayerStatsModal; streak status field captured
 // v7.34: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.33: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.31: Fixed modal appearing at bottom - added scrollRef to reset scroll position on open
@@ -220,9 +223,13 @@ const ViewPlayerProfile = ({
   
   // v7.29: Collapsible sections matching PlayerStatsModal
   const [expandedSection, setExpandedSection] = useState('overview');
-  const [playStreak, setPlayStreak] = useState({ current: 0, longest: 0 });
+  const [playStreak, setPlayStreak] = useState({ current: 0, longest: 0, status: 'none' });
   const [weeklyStats, setWeeklyStats] = useState({ first: 0, second: 0, third: 0, total: 0 });
-  const [creatorStats, setCreatorStats] = useState({ totalCompleted: 0, totalPuzzles: 100 });
+  const [creatorStats, setCreatorStats] = useState({
+    totalCompleted: 0, totalPuzzles: 100,
+    easy: { completed: 0, total: 25 }, medium: { completed: 0, total: 35 },
+    hard: { completed: 0, total: 25 }, expert: { completed: 0, total: 15 }
+  });
 
   // v7.29: Section toggle handler
   const handleSectionToggle = (sectionId) => {
@@ -251,9 +258,13 @@ const ViewPlayerProfile = ({
       setHeadToHead(null);
       setPlayerStats(null);
       setExpandedSection('overview'); // v7.30: Reset to overview (replaced removed showAIDetails/showPuzzleDetails)
-      setPlayStreak({ current: 0, longest: 0 });
+      setPlayStreak({ current: 0, longest: 0, status: 'none' });
       setWeeklyStats({ first: 0, second: 0, third: 0, total: 0 });
-      setCreatorStats({ totalCompleted: 0, totalPuzzles: 100 });
+      setCreatorStats({
+        totalCompleted: 0, totalPuzzles: 100,
+        easy: { completed: 0, total: 25 }, medium: { completed: 0, total: 35 },
+        hard: { completed: 0, total: 25 }, expert: { completed: 0, total: 15 }
+      });
       loadPlayerData();
     }
   }, [playerId]);
@@ -321,7 +332,11 @@ const ViewPlayerProfile = ({
               }
               
               if (data.streak) {
-                setPlayStreak({ current: data.streak.current_streak || 0, longest: data.streak.longest_streak || 0 });
+                setPlayStreak({ 
+                  current: data.streak.current_streak || 0, 
+                  longest: data.streak.longest_streak || 0,
+                  status: data.streak.streak_status || 'none'
+                });
               }
               
               if (data.weekly) {
@@ -329,7 +344,39 @@ const ViewPlayerProfile = ({
               }
               
               if (data.creator) {
-                setCreatorStats({ totalCompleted: data.creator.total_completed || 0, totalPuzzles: data.creator.total_puzzles || 100 });
+                setCreatorStats(prev => ({
+                  ...prev,
+                  totalCompleted: data.creator.total_completed || 0,
+                  totalPuzzles: data.creator.total_puzzles || 100
+                }));
+              }
+              
+              // v7.34: Fetch per-difficulty creator stats (RPC may have them)
+              try {
+                const creatorDetailRes = await fetch(
+                  `${SUPABASE_URL}/rest/v1/rpc/get_creator_puzzle_stats`,
+                  {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ p_user_id: playerId })
+                  }
+                );
+                if (creatorDetailRes.ok) {
+                  const cData = await creatorDetailRes.json();
+                  const cStats = cData?.[0] || cData;
+                  if (cStats && cStats.total_completed !== undefined) {
+                    setCreatorStats({
+                      easy: { completed: cStats.easy_completed || 0, total: cStats.easy_total || 25 },
+                      medium: { completed: cStats.medium_completed || 0, total: cStats.medium_total || 35 },
+                      hard: { completed: cStats.hard_completed || 0, total: cStats.hard_total || 25 },
+                      expert: { completed: cStats.expert_completed || 0, total: cStats.expert_total || 15 },
+                      totalCompleted: cStats.total_completed || 0,
+                      totalPuzzles: cStats.total_puzzles || 100
+                    });
+                  }
+                }
+              } catch (e) {
+                // Per-difficulty data not available — keep totals from main RPC
               }
               
               if (data.friend) {
@@ -489,7 +536,8 @@ const ViewPlayerProfile = ({
         if (streakResult?.data) {
           setPlayStreak({
             current: streakResult.data.current_streak || 0,
-            longest: streakResult.data.longest_streak || 0
+            longest: streakResult.data.longest_streak || 0,
+            status: streakResult.data.streak_status || 'none'
           });
         }
       } catch (e) {
@@ -511,23 +559,49 @@ const ViewPlayerProfile = ({
         // console.log('Weekly stats not available:', e);
       }
       
-      // Creator puzzle completions
+      // Creator puzzle completions — try per-difficulty RPC first, fall back to simple count
       const creatorHeaders = getAuthHeaders();
       if (creatorHeaders) {
         try {
-          const creatorRes = await fetch(
-            `${SUPABASE_URL}/rest/v1/creator_puzzle_completions?user_id=eq.${playerId}&select=puzzle_number`,
-            { headers: creatorHeaders }
+          // v7.34: Try per-difficulty RPC first
+          const rpcRes = await fetch(
+            `${SUPABASE_URL}/rest/v1/rpc/get_creator_puzzle_stats`,
+            {
+              method: 'POST',
+              headers: creatorHeaders,
+              body: JSON.stringify({ p_user_id: playerId })
+            }
           );
-          if (creatorRes.ok) {
-            const creatorData = await creatorRes.json();
-            setCreatorStats({
-              totalCompleted: creatorData?.length || 0,
-              totalPuzzles: 100
-            });
+          if (rpcRes.ok) {
+            const rpcData = await rpcRes.json();
+            const s = rpcData?.[0] || rpcData;
+            if (s && s.total_completed !== undefined) {
+              setCreatorStats({
+                easy: { completed: s.easy_completed || 0, total: s.easy_total || 25 },
+                medium: { completed: s.medium_completed || 0, total: s.medium_total || 35 },
+                hard: { completed: s.hard_completed || 0, total: s.hard_total || 25 },
+                expert: { completed: s.expert_completed || 0, total: s.expert_total || 15 },
+                totalCompleted: s.total_completed || 0,
+                totalPuzzles: s.total_puzzles || 100
+              });
+            }
+          } else {
+            // Fallback: simple completion count
+            const creatorRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/creator_puzzle_completions?user_id=eq.${playerId}&select=puzzle_number`,
+              { headers: creatorHeaders }
+            );
+            if (creatorRes.ok) {
+              const creatorData = await creatorRes.json();
+              setCreatorStats(prev => ({
+                ...prev,
+                totalCompleted: creatorData?.length || 0,
+                totalPuzzles: 100
+              }));
+            }
           }
         } catch (e) {
-          // console.log('Creator puzzle stats not available');
+          // Creator puzzle stats not available
         }
       }
     } catch (err) {
@@ -608,8 +682,8 @@ const ViewPlayerProfile = ({
           transform: 'translate(-50%, -50%)',
           width: 'calc(100% - 32px)',
           maxWidth: '448px',
-          maxHeight: 'calc(100vh - 32px)',
-          maxHeight: 'calc(100dvh - 32px)',
+          // v7.36: Subtract safe area insets so modal doesn't extend behind iPhone notch
+          maxHeight: 'calc(100dvh - max(32px, env(safe-area-inset-top)) - max(32px, env(safe-area-inset-bottom)))',
           borderColor: hexToRgba(glowColor, 0.3),
           boxShadow: `0 0 50px ${hexToRgba(glowColor, 0.2)}`,
           display: 'flex',
@@ -711,6 +785,27 @@ const ViewPlayerProfile = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Head to Head — v7.34: moved directly under Online Stats card */}
+                {headToHead && (
+                  <div 
+                    className="rounded-xl p-3 mb-4"
+                    style={{ 
+                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
+                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
+                    }}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-sm">Head to Head</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-400 font-bold">{headToHead.myWins}</span>
+                        <span className="text-slate-600">-</span>
+                        <span className="text-red-400 font-bold">{headToHead.theirWins}</span>
+                        <span className="text-slate-500 text-xs">({headToHead.total} games)</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* v7.21: Full Stats Section - Enhanced with dropdowns */}
                 {/* v7.29: Collapsible Stats Sections - Matching PlayerStatsModal */}
@@ -860,7 +955,12 @@ const ViewPlayerProfile = ({
                             icon={Flame} 
                             label="Current Streak" 
                             value={playStreak.current}
-                            subValue="days"
+                            subValue={
+                              playStreak.status === 'played_today' ? 'Played today ✓' :
+                              playStreak.status === 'at_risk' ? 'Play today!' :
+                              playStreak.status === 'broken' ? 'Streak broken' :
+                              'days'
+                            }
                             color={playStreak.current >= 7 ? 'orange' : playStreak.current >= 3 ? 'red' : 'cyan'}
                           />
                           <StatCard 
@@ -871,6 +971,22 @@ const ViewPlayerProfile = ({
                             color="amber"
                           />
                         </div>
+                        
+                        {playStreak.status === 'at_risk' && (
+                          <div className="mt-2 p-2 bg-orange-500/10 border border-orange-500/30 rounded-lg text-center">
+                            <span className="text-orange-400 text-sm font-medium">
+                              ⚠️ Play today to keep your {playStreak.current}-day streak!
+                            </span>
+                          </div>
+                        )}
+                        
+                        {playStreak.current >= playStreak.longest && playStreak.current > 0 && (
+                          <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-center">
+                            <span className="text-amber-400 text-sm font-medium">
+                              🏆 On their best streak ever!
+                            </span>
+                          </div>
+                        )}
                       </Section>
                     )}
                     
@@ -910,7 +1026,7 @@ const ViewPlayerProfile = ({
                       </Section>
                     )}
                     
-                    {/* Creator Puzzles Section */}
+                    {/* Creator Puzzles Section — v7.34: added per-difficulty breakdown matching PlayerStatsModal */}
                     {creatorStats.totalCompleted > 0 && (
                       <Section 
                         id="creator" 
@@ -920,7 +1036,8 @@ const ViewPlayerProfile = ({
                         expanded={expandedSection === 'creator'}
                         onToggle={handleSectionToggle}
                       >
-                        <div className="mb-2">
+                        {/* Overall progress bar */}
+                        <div className="mb-3">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs text-slate-400">Overall Progress</span>
                             <span className="text-xs text-cyan-400 font-bold">
@@ -930,36 +1047,84 @@ const ViewPlayerProfile = ({
                           <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-500"
-                              style={{ width: `${(creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100}%` }}
+                              style={{ width: `${creatorStats.totalPuzzles > 0 ? (creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100 : 0}%` }}
                             />
                           </div>
                         </div>
-                        <div className="text-center text-xs text-slate-400">
-                          {Math.round((creatorStats.totalCompleted / creatorStats.totalPuzzles) * 100)}% complete
+                        
+                        {/* Per-difficulty breakdown */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-green-400 text-xs font-bold">Beginner</span>
+                              <span className="text-xs text-slate-400">
+                                {creatorStats.easy?.completed || 0}/{creatorStats.easy?.total || 0}
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-green-500 rounded-full"
+                                style={{ width: `${(creatorStats.easy?.total || 0) > 0 ? ((creatorStats.easy?.completed || 0) / creatorStats.easy.total) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-amber-400 text-xs font-bold">Intermediate</span>
+                              <span className="text-xs text-slate-400">
+                                {creatorStats.medium?.completed || 0}/{creatorStats.medium?.total || 0}
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-cyan-500 rounded-full"
+                                style={{ width: `${(creatorStats.medium?.total || 0) > 0 ? ((creatorStats.medium?.completed || 0) / creatorStats.medium.total) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-red-400 text-xs font-bold">Hard</span>
+                              <span className="text-xs text-slate-400">
+                                {creatorStats.hard?.completed || 0}/{creatorStats.hard?.total || 0}
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-red-500 rounded-full"
+                                style={{ width: `${(creatorStats.hard?.total || 0) > 0 ? ((creatorStats.hard?.completed || 0) / creatorStats.hard.total) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="p-2 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/20">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-fuchsia-400 text-xs font-bold">Expert</span>
+                              <span className="text-xs text-slate-400">
+                                {creatorStats.expert?.completed || 0}/{creatorStats.expert?.total || 0}
+                              </span>
+                            </div>
+                            <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-fuchsia-500 rounded-full"
+                                style={{ width: `${(creatorStats.expert?.total || 0) > 0 ? ((creatorStats.expert?.completed || 0) / creatorStats.expert.total) * 100 : 0}%` }}
+                              />
+                            </div>
+                          </div>
                         </div>
+                        
+                        {/* Completion message */}
+                        {creatorStats.totalCompleted === creatorStats.totalPuzzles && creatorStats.totalPuzzles > 0 && (
+                          <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-center">
+                            <span className="text-amber-400 text-sm font-medium">
+                              🏆 All puzzles completed! Creator Puzzle Master!
+                            </span>
+                          </div>
+                        )}
                       </Section>
                     )}
-                  </div>
-                )}
-
-                {/* Head to Head */}
-                {headToHead && (
-                  <div 
-                    className="rounded-xl p-3 mb-4"
-                    style={{ 
-                      backgroundColor: 'rgba(15, 23, 42, 0.6)',
-                      border: `1px solid ${hexToRgba(glowColor, 0.2)}`
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400 text-sm">Head to Head</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-green-400 font-bold">{headToHead.myWins}</span>
-                        <span className="text-slate-600">-</span>
-                        <span className="text-red-400 font-bold">{headToHead.theirWins}</span>
-                        <span className="text-slate-500 text-xs">({headToHead.total} games)</span>
-                      </div>
-                    </div>
                   </div>
                 )}
 

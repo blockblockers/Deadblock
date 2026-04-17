@@ -422,15 +422,15 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
         style={{
           padding: '16px',
-          paddingTop: 'max(16px, env(safe-area-inset-top))',
-          paddingBottom: 'max(16px, env(safe-area-inset-bottom))',
+          paddingTop: 'max(24px, calc(env(safe-area-inset-top) + 12px))',
+          paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom) + 12px))',
         }}
       >
         {/* Modal - pointer-events-auto captures events */}
         <div 
           className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col pointer-events-auto"
           style={{ 
-            maxHeight: 'calc(100dvh - 32px)',
+            maxHeight: '100%',
             backgroundColor: tierBg,
             border: `1px solid ${hexToRgba(glowColor, 0.3)}`,
             boxShadow: `0 0 60px ${hexToRgba(glowColor, 0.3)}`
@@ -606,91 +606,19 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 </div>
               </Section>
               
-              {/* v7.22: AI Battles Section - Independent */}
+ {/* Achievements Section */}
               <Section 
-                id="ai_battles" 
-                title="AI Battles" 
-                icon={Bot} 
-                color="purple"
-                expanded={expandedSection === 'ai_battles'}
+                id="achievements" 
+                title="Achievements" 
+                icon={Award} 
+                color="amber"
+                expanded={expandedSection === 'achievements'}
                 onToggle={handleSectionToggle}
               >
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <StatCard 
-                    icon={Trophy} 
-                    label="Total Wins" 
-                    value={stats?.aiTotalWins || 0}
-                    subValue={`of ${stats?.aiTotalGames || 0} games`}
-                    color="purple"
-                  />
-                  <StatCard 
-                    icon={Target} 
-                    label="Win Rate" 
-                    value={stats?.aiTotalGames > 0 ? Math.round((stats?.aiTotalWins / stats?.aiTotalGames) * 100) : 0}
-                    subValue="%"
-                    color="cyan"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                    <div className="text-green-400 text-sm font-bold">{stats?.ai_easy_wins || 0}</div>
-                    <div className="text-[10px] text-slate-500">Beginner</div>
-                    <div className="text-[9px] text-slate-600">{(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)} games</div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                    <div className="text-amber-400 text-sm font-bold">{stats?.ai_medium_wins || 0}</div>
-                    <div className="text-[10px] text-slate-500">Intermediate</div>
-                    <div className="text-[9px] text-slate-600">{(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)} games</div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
-                    <div className="text-purple-400 text-sm font-bold">{stats?.ai_hard_wins || 0}</div>
-                    <div className="text-[10px] text-slate-500">Expert</div>
-                    <div className="text-[9px] text-slate-600">{(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)} games</div>
-                  </div>
-                </div>
+                <AchievementsDisplay userId={profile?.id} compact />
               </Section>
-              
-              {/* v7.22: Generated Puzzles Section - Independent */}
-              <Section 
-                id="gen_puzzles" 
-                title="Generated Puzzles" 
-                icon={Zap} 
-                color="green"
-                expanded={expandedSection === 'gen_puzzles'}
-                onToggle={handleSectionToggle}
-              >
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <StatCard 
-                    icon={Target} 
-                    label="Total Solved" 
-                    value={stats?.puzzleTotalSolved || 0}
-                    color="green"
-                  />
-                  <StatCard 
-                    icon={Zap} 
-                    label="Speed Best" 
-                    value={stats?.speed_best_streak || 0}
-                    subValue="in a row"
-                    color="orange"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
-                    <div className="text-green-400 text-sm font-bold">{stats?.puzzles_easy_solved || 0}</div>
-                    <div className="text-[10px] text-slate-500">Beginner</div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                    <div className="text-amber-400 text-sm font-bold">{stats?.puzzles_medium_solved || 0}</div>
-                    <div className="text-[10px] text-slate-500">Intermediate</div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
-                    <div className="text-purple-400 text-sm font-bold">{stats?.puzzles_hard_solved || 0}</div>
-                    <div className="text-[10px] text-slate-500">Expert</div>
-                  </div>
-                </div>
-              </Section>
-              
-              {/* Play Streak Section */}
+
+  {/* Play Streak Section */}
               <Section 
                 id="streak" 
                 title="Play Streak" 
@@ -737,56 +665,52 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                   </div>
                 )}
               </Section>
-              
-              {/* Achievements Section */}
+
+              {/* v7.22: AI Battles Section - Independent */}
               <Section 
-                id="achievements" 
-                title="Achievements" 
-                icon={Award} 
-                color="amber"
-                expanded={expandedSection === 'achievements'}
-                onToggle={handleSectionToggle}
-              >
-                <AchievementsDisplay userId={profile?.id} compact />
-              </Section>
-              
-              {/* Weekly Challenge Section */}
-              <Section 
-                id="weekly" 
-                title="Weekly Challenge" 
-                icon={Clock} 
+                id="ai_battles" 
+                title="AI Battles" 
+                icon={Bot} 
                 color="purple"
-                expanded={expandedSection === 'weekly'}
+                expanded={expandedSection === 'ai_battles'}
                 onToggle={handleSectionToggle}
               >
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <StatCard 
+                    icon={Trophy} 
+                    label="Total Wins" 
+                    value={stats?.aiTotalWins || 0}
+                    subValue={`of ${stats?.aiTotalGames || 0} games`}
+                    color="purple"
+                  />
+                  <StatCard 
+                    icon={Target} 
+                    label="Win Rate" 
+                    value={stats?.aiTotalGames > 0 ? Math.round((stats?.aiTotalWins / stats?.aiTotalGames) * 100) : 0}
+                    subValue="%"
+                    color="cyan"
+                  />
+                </div>
                 <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                    <div className="text-green-400 text-sm font-bold">{stats?.ai_easy_wins || 0}</div>
+                    <div className="text-[10px] text-slate-500">Beginner</div>
+                    <div className="text-[9px] text-slate-600">{(stats?.ai_easy_wins || 0) + (stats?.ai_easy_losses || 0)} games</div>
+                  </div>
                   <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
-                    <div className="text-amber-400 text-lg font-bold">{weeklyStats.first || 0}</div>
-                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
-                      <Medal size={10} className="text-amber-400" /> 1st
-                    </div>
+                    <div className="text-amber-400 text-sm font-bold">{stats?.ai_medium_wins || 0}</div>
+                    <div className="text-[10px] text-slate-500">Intermediate</div>
+                    <div className="text-[9px] text-slate-600">{(stats?.ai_medium_wins || 0) + (stats?.ai_medium_losses || 0)} games</div>
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-400/10 border border-slate-400/20 text-center">
-                    <div className="text-slate-300 text-lg font-bold">{weeklyStats.second || 0}</div>
-                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
-                      <Medal size={10} className="text-slate-300" /> 2nd
-                    </div>
-                  </div>
-                  <div className="p-2 rounded-lg bg-amber-600/10 border border-amber-600/20 text-center">
-                    <div className="text-amber-600 text-lg font-bold">{weeklyStats.third || 0}</div>
-                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
-                      <Medal size={10} className="text-amber-600" /> 3rd
-                    </div>
+                  <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                    <div className="text-purple-400 text-sm font-bold">{stats?.ai_hard_wins || 0}</div>
+                    <div className="text-[10px] text-slate-500">Expert</div>
+                    <div className="text-[9px] text-slate-600">{(stats?.ai_hard_wins || 0) + (stats?.ai_hard_losses || 0)} games</div>
                   </div>
                 </div>
-                {weeklyStats.total > 0 && (
-                  <div className="mt-2 text-center text-sm text-slate-400">
-                    {weeklyStats.total} podium finish{weeklyStats.total !== 1 ? 'es' : ''} total
-                  </div>
-                )}
               </Section>
-              
-              {/* Creator Puzzles Section */}
+
+{/* Creator Puzzles Section */}
               <Section 
                 id="creator" 
                 title="Creator Puzzles" 
@@ -888,6 +812,82 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 )}
               </Section>
               
+              {/* v7.22: Generated Puzzles Section - Independent */}
+              <Section 
+                id="gen_puzzles" 
+                title="Generated Puzzles" 
+                icon={Zap} 
+                color="green"
+                expanded={expandedSection === 'gen_puzzles'}
+                onToggle={handleSectionToggle}
+              >
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <StatCard 
+                    icon={Target} 
+                    label="Total Solved" 
+                    value={stats?.puzzleTotalSolved || 0}
+                    color="green"
+                  />
+                  <StatCard 
+                    icon={Zap} 
+                    label="Speed Best" 
+                    value={stats?.speed_best_streak || 0}
+                    subValue="in a row"
+                    color="orange"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded-lg bg-green-500/10 border border-green-500/20 text-center">
+                    <div className="text-green-400 text-sm font-bold">{stats?.puzzles_easy_solved || 0}</div>
+                    <div className="text-[10px] text-slate-500">Beginner</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                    <div className="text-amber-400 text-sm font-bold">{stats?.puzzles_medium_solved || 0}</div>
+                    <div className="text-[10px] text-slate-500">Intermediate</div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-purple-500/10 border border-purple-500/20 text-center">
+                    <div className="text-purple-400 text-sm font-bold">{stats?.puzzles_hard_solved || 0}</div>
+                    <div className="text-[10px] text-slate-500">Expert</div>
+                  </div>
+                </div>
+              </Section>
+                                        
+              {/* Weekly Challenge Section */}
+              <Section 
+                id="weekly" 
+                title="Weekly Challenge" 
+                icon={Clock} 
+                color="purple"
+                expanded={expandedSection === 'weekly'}
+                onToggle={handleSectionToggle}
+              >
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center">
+                    <div className="text-amber-400 text-lg font-bold">{weeklyStats.first || 0}</div>
+                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                      <Medal size={10} className="text-amber-400" /> 1st
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-400/10 border border-slate-400/20 text-center">
+                    <div className="text-slate-300 text-lg font-bold">{weeklyStats.second || 0}</div>
+                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                      <Medal size={10} className="text-slate-300" /> 2nd
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-lg bg-amber-600/10 border border-amber-600/20 text-center">
+                    <div className="text-amber-600 text-lg font-bold">{weeklyStats.third || 0}</div>
+                    <div className="text-xs text-slate-500 flex items-center justify-center gap-1">
+                      <Medal size={10} className="text-amber-600" /> 3rd
+                    </div>
+                  </div>
+                </div>
+                {weeklyStats.total > 0 && (
+                  <div className="mt-2 text-center text-sm text-slate-400">
+                    {weeklyStats.total} podium finish{weeklyStats.total !== 1 ? 'es' : ''} total
+                  </div>
+                )}
+              </Section>
+                           
               {/* Online Stats Section */}
               <Section 
                 id="online" 
