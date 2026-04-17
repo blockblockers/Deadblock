@@ -1,4 +1,9 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.18: CRITICAL FIX — solver used separate AI/player piece lists, but Creator Puzzles
+//        use a shared pool. When AI played V, V stayed in the player's list — the solver
+//        simulated the player "also playing V" as a response (impossible). Now uses a
+//        single shared pool: when either side plays a piece, it's gone for both.
+//        Also fixed empty cell diagnostic (was === 0, should be falsy check).
 // v2.17: ROOT CAUSE FIX — removed solution_moves shortcut that bypassed the exhaustive
 //        solver. When the player deviated from the expected sequence, the predetermined
 //        move was physically valid but strategically wrong (e.g. P instead of winning V).
@@ -488,55 +493,47 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   }, []);
   
   // Expert AI: Exhaustive solver for creator puzzles.
-  // v2.16: COMPLETE REWRITE — previous versions had timeout checks inside the minimax
-  //   loop that could break out of the minimizer (player's turn) early, causing the AI
-  //   to think a position was safe when an unevaluated player response would have won.
-  //   
-  //   Creator puzzles have 2-4 pieces per side (tiny trees). This solver:
-  //   - NO timeout inside minimax (guaranteed to evaluate every path)
-  //   - NO depth limit (searches to terminal state — someone can't move)
-  //   - NO move ordering inside search (evaluates all moves, no risk of ordering bugs)
-  //   - YES alpha-beta pruning (mathematically proven safe, just an optimization)
-  //   - Safety: if search exceeds 20M nodes, falls back to best move found so far
+  // v2.18: CRITICAL FIX — solver now uses a single shared piece pool. Previously,
+  //   AI and player had separate piece lists, so when AI played V, V remained in the
+  //   player's list. The solver simulated the player "also playing V" as a response,
+  //   which is impossible in a shared-pool game. This caused every V placement to
+  //   score -10000 because the phantom V response beat it.
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
-    console.log('[CreatorPuzzle AI v5] Exhaustive solver. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
+    // Merge into single shared pool (deduplicated)
+    const sharedPool = [...new Set([...aiAvailablePieces, ...playerAvailablePieces])];
+    console.log('[CreatorPuzzle AI v6] Exhaustive solver. Shared pool:', sharedPool);
     
-    // v2.17: Log board state for debugging
+    // Log board state for debugging (use falsy check to match canPlacePiece)
     const emptyCells = [];
     for (let r = 0; r < BOARD_SIZE; r++) {
       for (let c = 0; c < BOARD_SIZE; c++) {
-        if (currentBoard[r][c] === 0) emptyCells.push(`(${r},${c})`);
+        if (!currentBoard[r][c]) emptyCells.push(`(${r},${c})`);
       }
     }
-    console.log(`[CreatorPuzzle AI v5] Empty cells (${emptyCells.length}): ${emptyCells.join(' ')}`);
+    console.log(`[CreatorPuzzle AI v6] Empty cells (${emptyCells.length}): ${emptyCells.join(' ')}`);
     
-    const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
+    const aiMoves = getAllPossibleMoves(currentBoard, sharedPool, true);
     if (aiMoves.length === 0) {
-      console.log('[CreatorPuzzle AI v5] No valid moves');
+      console.log('[CreatorPuzzle AI v6] No valid moves');
       return null;
     }
     
-    const searchStart = Date.now();
     let nodesSearched = 0;
-    const MAX_NODES = 20000000; // 20M node safety cap
+    const MAX_NODES = 20000000;
     let hitNodeLimit = false;
+    const searchStart = Date.now();
     
-    // Clean exhaustive minimax with alpha-beta. No timeouts, no depth limits.
-    // Searches every path to terminal state (someone can't move → they lose).
-    const solve = (board, aiPieces, playerPieces, isAITurn, alpha, beta) => {
+    // Exhaustive minimax with SINGLE shared pool.
+    // When either side plays a piece, it's removed from the pool for both.
+    const solve = (board, remainingPieces, isAITurn, alpha, beta) => {
       nodesSearched++;
       if (nodesSearched > MAX_NODES) {
         hitNodeLimit = true;
-        // Return heuristic — only triggers on pathological puzzles
-        const ap = countPlaceablePieces(board, aiPieces);
-        const pp = countPlaceablePieces(board, playerPieces);
-        return (ap - pp) * 100;
+        return 0;
       }
       
-      const currentPieces = isAITurn ? aiPieces : playerPieces;
-      const moves = getAllPossibleMoves(board, currentPieces, true);
+      const moves = getAllPossibleMoves(board, remainingPieces, true);
       
-      // Terminal: current side can't place any piece → they lose
       if (moves.length === 0) {
         return isAITurn ? -10000 : 10000;
       }
@@ -546,11 +543,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         for (const move of moves) {
           if (hitNodeLimit) break;
           const newBoard = applyMoveToBoard(board, move, 2);
-          const newAiPieces = aiPieces.filter(p => p !== move.piece);
-          const score = solve(newBoard, newAiPieces, playerPieces, false, alpha, beta);
+          const newPool = remainingPieces.filter(p => p !== move.piece);
+          const score = solve(newBoard, newPool, false, alpha, beta);
           best = Math.max(best, score);
           alpha = Math.max(alpha, score);
-          if (beta <= alpha) break; // Alpha-beta cutoff (safe)
+          if (beta <= alpha) break;
         }
         return best;
       } else {
@@ -558,60 +555,52 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         for (const move of moves) {
           if (hitNodeLimit) break;
           const newBoard = applyMoveToBoard(board, move, 1);
-          const newPlayerPieces = playerPieces.filter(p => p !== move.piece);
-          const score = solve(newBoard, aiPieces, newPlayerPieces, true, alpha, beta);
+          const newPool = remainingPieces.filter(p => p !== move.piece);
+          const score = solve(newBoard, newPool, true, alpha, beta);
           best = Math.min(best, score);
           beta = Math.min(beta, score);
-          if (beta <= alpha) break; // Alpha-beta cutoff (safe)
+          if (beta <= alpha) break;
         }
         return best;
       }
     };
     
-    // IMMEDIATE WIN CHECK — instant return if any AI move wins on the spot
+    // IMMEDIATE WIN CHECK — using shared pool
     for (const move of aiMoves) {
       const newBoard = applyMoveToBoard(currentBoard, move, 2);
-      const playerMovesAfter = getAllPossibleMoves(newBoard, playerAvailablePieces, true);
-      if (playerMovesAfter.length === 0) {
-        console.log(`[CreatorPuzzle AI v5] Immediate win: ${move.piece} at (${move.row},${move.col})`);
+      const newPool = sharedPool.filter(p => p !== move.piece);
+      const opponentMoves = getAllPossibleMoves(newBoard, newPool, true);
+      if (opponentMoves.length === 0) {
+        console.log(`[CreatorPuzzle AI v6] Immediate win: ${move.piece} at (${move.row},${move.col})`);
         return move;
       }
     }
     
-    // v2.17: Diagnostic — log all V placements with cell coordinates
-    const vMoves = aiMoves.filter(m => m.piece === 'V');
-    console.log(`[CreatorPuzzle AI v5] V has ${vMoves.length} valid placements:`);
-    for (const vm of vMoves) {
-      const cells = vm.coords.map(([dx, dy]) => `(${vm.row + dy},${vm.col + dx})`).join(' ');
-      console.log(`  V at (${vm.row},${vm.col}) rot=${vm.rotation} flip=${vm.flipped} → cells: ${cells}`);
-    }
-    
-    // Evaluate EVERY AI move exhaustively. No candidate filtering.
+    // Evaluate EVERY AI move exhaustively
     let bestMove = aiMoves[0];
     let bestScore = -Infinity;
     
     for (const move of aiMoves) {
       const newBoard = applyMoveToBoard(currentBoard, move, 2);
-      const newAiPieces = aiAvailablePieces.filter(p => p !== move.piece);
-      const score = solve(newBoard, newAiPieces, playerAvailablePieces, false, -Infinity, Infinity);
+      const newPool = sharedPool.filter(p => p !== move.piece);
+      const score = solve(newBoard, newPool, false, -Infinity, Infinity);
       
       const cells = move.coords.map(([dx, dy]) => `(${move.row + dy},${move.col + dx})`).join(' ');
-      console.log(`[CreatorPuzzle AI v5] ${move.piece} at (${move.row},${move.col}) → score=${score} cells=${cells}`);
+      console.log(`[CreatorPuzzle AI v6] ${move.piece} at (${move.row},${move.col}) → score=${score} cells=${cells}`);
       
       if (score > bestScore) {
         bestScore = score;
         bestMove = move;
       }
       
-      // Proven win — stop searching
       if (score >= 10000) break;
     }
     
     const elapsed = Date.now() - searchStart;
-    console.log(`[CreatorPuzzle AI v5] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore} (${nodesSearched} nodes, ${elapsed}ms${hitNodeLimit ? ' NODE LIMIT HIT' : ''})`);
+    console.log(`[CreatorPuzzle AI v6] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore} (${nodesSearched} nodes, ${elapsed}ms${hitNodeLimit ? ' NODE LIMIT' : ''})`);
     
     return bestMove;
-  }, [getAllPossibleMoves, applyMoveToBoard, countPlaceablePieces]);
+  }, [getAllPossibleMoves, applyMoveToBoard]);
   
   // -------------------------------------------------------------------------
   // INITIALIZE PUZZLE
