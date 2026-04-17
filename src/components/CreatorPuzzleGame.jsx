@@ -501,6 +501,15 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
     console.log('[CreatorPuzzle AI v5] Exhaustive solver. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
     
+    // v2.17: Log board state for debugging
+    const emptyCells = [];
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (currentBoard[r][c] === 0) emptyCells.push(`(${r},${c})`);
+      }
+    }
+    console.log(`[CreatorPuzzle AI v5] Empty cells (${emptyCells.length}): ${emptyCells.join(' ')}`);
+    
     const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
     if (aiMoves.length === 0) {
       console.log('[CreatorPuzzle AI v5] No valid moves');
@@ -569,6 +578,14 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       }
     }
     
+    // v2.17: Diagnostic — log all V placements with cell coordinates
+    const vMoves = aiMoves.filter(m => m.piece === 'V');
+    console.log(`[CreatorPuzzle AI v5] V has ${vMoves.length} valid placements:`);
+    for (const vm of vMoves) {
+      const cells = vm.coords.map(([dx, dy]) => `(${vm.row + dy},${vm.col + dx})`).join(' ');
+      console.log(`  V at (${vm.row},${vm.col}) rot=${vm.rotation} flip=${vm.flipped} → cells: ${cells}`);
+    }
+    
     // Evaluate EVERY AI move exhaustively. No candidate filtering.
     let bestMove = aiMoves[0];
     let bestScore = -Infinity;
@@ -578,7 +595,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       const newAiPieces = aiAvailablePieces.filter(p => p !== move.piece);
       const score = solve(newBoard, newAiPieces, playerAvailablePieces, false, -Infinity, Infinity);
       
-      console.log(`[CreatorPuzzle AI v5] ${move.piece} at (${move.row},${move.col}) → score=${score}`);
+      const cells = move.coords.map(([dx, dy]) => `(${move.row + dy},${move.col + dx})`).join(' ');
+      console.log(`[CreatorPuzzle AI v5] ${move.piece} at (${move.row},${move.col}) → score=${score} cells=${cells}`);
       
       if (score > bestScore) {
         bestScore = score;
