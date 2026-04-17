@@ -1,5 +1,9 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v2.16: AI REWRITE — exhaustive solver replaces timeout-based minimax. Previous versions
+// v2.17: ROOT CAUSE FIX — removed solution_moves shortcut that bypassed the exhaustive
+//        solver. When the player deviated from the expected sequence, the predetermined
+//        move was physically valid but strategically wrong (e.g. P instead of winning V).
+//        Now ALWAYS uses the exhaustive solver regardless of solution_moves data.
+// v2.16: AI REWRITE — exhaustive solver (no timeouts, no depth limits, no move ordering)
 //        had timeout `break` inside the minimizer loop that could skip player winning responses,
 //        making the AI think a position was safe when it wasn't. New solver has:
 //        NO timeouts inside search, NO depth limits, NO move ordering heuristics —
@@ -801,35 +805,14 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     console.log('[CreatorPuzzleGame] AI can use:', aiPiecesList);
     console.log('[CreatorPuzzleGame] Player can use:', playerPiecesRemaining);
     
-    // v2.11: Use puzzle.solution_moves for AI response when available.
-    // The solution alternates: player move (even index), AI response (odd index).
-    // AI response for the current round is at solution_moves[moveIndex + 1].
-    // Falls back to minimax search if solution data is unavailable or can't be placed
-    // (e.g. player made a non-solution move that changed the board).
-    let aiMove = null;
-    const solutionMove = puzzle.solution_moves?.[moveIndex + 1];
-    if (solutionMove && solutionMove.piece) {
-      // Try to place the solution's predetermined AI response
-      const solPiece = solutionMove.piece;
-      const solRow = solutionMove.position?.[0];
-      const solCol = solutionMove.position?.[1];
-      const solRot = solutionMove.rotation || 0;
-      if (solRow != null && solCol != null) {
-        for (const flip of [false, true]) {
-          const coords = getPieceCoords(solPiece, solRot, flip);
-          if (coords && canPlacePiece(newBoard, solRow, solCol, coords)) {
-            aiMove = { piece: solPiece, row: solRow, col: solCol, coords, rotation: solRot, flipped: flip };
-            console.log(`[CreatorPuzzle AI] Using solution_moves[${moveIndex + 1}]: ${solPiece} at (${solRow},${solCol})`);
-            break;
-          }
-        }
-      }
-    }
-    if (!aiMove) {
-      // Fallback: minimax search (for puzzles without solution data or wrong player moves)
-      console.log('[CreatorPuzzle AI] Solution move unavailable, falling back to minimax');
-      aiMove = findExpertAIMove(newBoard, aiPiecesList, playerPiecesRemaining);
-    }
+    // v2.16: ALWAYS use the exhaustive solver. Previous versions tried to use
+    // puzzle.solution_moves (predetermined responses), but those are designed for
+    // one specific sequence of play. When the player deviates (plays a different
+    // piece or position), the predetermined move can be physically valid but
+    // strategically wrong — e.g. playing P when V would win. The exhaustive solver
+    // evaluates every combination and is guaranteed to find the optimal move
+    // regardless of what the player did.
+    const aiMove = findExpertAIMove(newBoard, aiPiecesList, playerPiecesRemaining);
     
     safeSetTimeout(() => {
       if (!aiMove) {
