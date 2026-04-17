@@ -1,19 +1,13 @@
 // AI Logic for Deadblock - Optimized for Speed
-// v2.2 - MAJOR AI OVERHAUL:
-//   - BUG FIX: minimax returned 0 on timeout (same bug as CreatorPuzzle v2.14).
-//     Winning moves needing deeper search got scored 0, losing to shallow mediocre moves.
-//   - NEW: countTotalPlacements — counts all valid placement positions, not just piece types.
-//     A piece with 30 valid spots is vastly stronger than one with 1 spot.
-//   - NEW: evaluatePosition uses totalPlacements*10 + placeablePieces*50 for richer signal.
-//   - NEW: Iterative deepening — searches depth 2,3,4,5... until time expires. Always has
-//     a complete answer; each pass refines. Previous fixed-depth could time out mid-search.
-//   - NEW: 1-ply move ordering at root — sorts by opponent placement count after each move.
-//     Far more accurate than center-bias; dramatically improves alpha-beta pruning.
-//   - NEW: Endgame solver — when ≤4 pieces remain, searches ALL moves to depth 8 (no pruning).
-//   - Internal nodes: endgame (≤6 pieces) searches all moves with eval ordering;
-//     mid-game uses center-bias + top-12 candidate limit.
-//   - Time budget raised to 5000ms for iterative deepening.
-// v2.1 - EXPERT AI STRENGTHENED (evaluation sign fix, win/block detection, wider search)
+// v2.3 - EXHAUSTIVE ENDGAME SOLVER:
+//   - NEW: When ≤6 pieces remain, uses clean exhaustive solver with NO timeouts,
+//     NO depth limits — searches every path to terminal state. Guarantees finding
+//     the optimal blocking/winning move. Same approach as CreatorPuzzle v2.16.
+//   - The timeout-based minimax (with `break` inside loops) is now only used for
+//     mid-game (>6 pieces) where exhaustive search is too expensive.
+//   - 30M node safety cap for pathological endgame positions.
+// v2.2 - Iterative deepening, enhanced evaluation, 1-ply move ordering
+// v2.1 - Evaluation sign fix, win/block detection, wider search
 // v2.0 - Added PUZZLE_OPTIMAL difficulty
 // 
 // UPDATES:
@@ -187,12 +181,60 @@ const evaluatePosition = (board, usedPieces, isAITurn) => {
   return isAITurn ? score : -score;
 };
 
-// ====== TIME-LIMITED MINIMAX ======
+// ====== EXHAUSTIVE ENDGAME SOLVER (v2.3) ======
+// When ≤6 pieces remain, the tree is small enough to solve exhaustively.
+// NO timeouts, NO depth limits — searches every path to terminal state.
+// This guarantees finding the optimal move in the endgame, where blocking
+// and winning moves are decided.
+
+let endgameNodes = 0;
+const MAX_ENDGAME_NODES = 30000000; // 30M safety cap
+let endgameNodeLimitHit = false;
+
+const endgameSolve = (board, usedPieces, isMaximizing, alpha, beta) => {
+  endgameNodes++;
+  if (endgameNodes > MAX_ENDGAME_NODES) {
+    endgameNodeLimitHit = true;
+    return evaluatePosition(board, usedPieces, isMaximizing);
+  }
+  
+  if (!canAnyMoveBeMade(board, usedPieces)) {
+    return isMaximizing ? -10000 : 10000;
+  }
+  
+  const moves = getAllPossibleMoves(board, usedPieces, true);
+  
+  if (isMaximizing) {
+    let best = -Infinity;
+    for (const move of moves) {
+      if (endgameNodeLimitHit) break;
+      const newBoard = applyMove(board, move, 2);
+      const newUsed = [...usedPieces, move.pieceType];
+      const score = endgameSolve(newBoard, newUsed, false, alpha, beta);
+      best = Math.max(best, score);
+      alpha = Math.max(alpha, score);
+      if (beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for (const move of moves) {
+      if (endgameNodeLimitHit) break;
+      const newBoard = applyMove(board, move, 1);
+      const newUsed = [...usedPieces, move.pieceType];
+      const score = endgameSolve(newBoard, newUsed, true, alpha, beta);
+      best = Math.min(best, score);
+      beta = Math.min(beta, score);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+};
+
+// ====== TIME-LIMITED MINIMAX (for mid-game only) ======
 
 let searchStartTime = 0;
 let nodesSearched = 0;
-// v2.2: Raised to 5000ms for iterative deepening — the search always has a
-// complete answer from the previous depth, so extra time only improves quality.
 const MAX_SEARCH_TIME = 5000;
 
 const isTimeUp = () => Date.now() - searchStartTime > MAX_SEARCH_TIME;
@@ -200,9 +242,6 @@ const isTimeUp = () => Date.now() - searchStartTime > MAX_SEARCH_TIME;
 const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
   nodesSearched++;
   
-  // v2.2 BUG FIX: Previously returned 0 on timeout, which polluted minimax scores.
-  // A winning move needing deep search got scored 0 while a mediocre shallow move
-  // got a real score, causing the AI to pick the wrong move. Now returns leaf eval.
   if (isTimeUp()) {
     return evaluatePosition(board, usedPieces, isMaximizing);
   }
@@ -216,33 +255,14 @@ const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
   
   const moves = getAllPossibleMoves(board, usedPieces, true);
   
-  // v2.2: 1-ply move ordering — evaluate how many total placements remain after
-  // each move. Moves that leave fewer placements for the opponent are searched first.
-  // This dramatically improves alpha-beta pruning vs the old center-bias ordering.
-  const piecesLeft = 12 - usedPieces.length;
-  if (piecesLeft <= 6) {
-    // Endgame: use full eval ordering, search all moves
-    moves.sort((a, b) => {
-      const boardA = applyMove(board, a, isMaximizing ? 2 : 1);
-      const usedA = [...usedPieces, a.pieceType];
-      const boardB = applyMove(board, b, isMaximizing ? 2 : 1);
-      const usedB = [...usedPieces, b.pieceType];
-      const scoreA = countTotalPlacements(boardA, usedA);
-      const scoreB = countTotalPlacements(boardB, usedB);
-      // Maximizer wants opponent to have FEWER placements; minimizer wants MORE
-      return isMaximizing ? scoreA - scoreB : scoreB - scoreA;
-    });
-  } else {
-    // Mid-game: center-bias ordering + candidate limit for speed
-    moves.sort((a, b) => {
-      const scoreA = quickEval(board, a.row, a.col, a.coords);
-      const scoreB = quickEval(board, b.row, b.col, b.coords);
-      return isMaximizing ? scoreB - scoreA : scoreA - scoreB;
-    });
-  }
+  // Mid-game: center-bias ordering + candidate limit for speed
+  moves.sort((a, b) => {
+    const scoreA = quickEval(board, a.row, a.col, a.coords);
+    const scoreB = quickEval(board, b.row, b.col, b.coords);
+    return isMaximizing ? scoreB - scoreA : scoreA - scoreB;
+  });
   
-  // v2.2: In endgame (≤6 pieces), search ALL moves. In mid-game, limit to top 12.
-  const movesToEval = piecesLeft <= 6 ? moves : moves.slice(0, Math.min(12, moves.length));
+  const movesToEval = moves.slice(0, Math.min(12, moves.length));
   
   if (isMaximizing) {
     let maxScore = -Infinity;
@@ -332,17 +352,39 @@ const findBestMove = (board, usedPieces) => {
   
   const piecesRemaining = 12 - usedPieces.length;
   
-  // v2.2: ENDGAME SOLVER — when ≤4 pieces remain, search all moves to full depth.
-  // Branching factor is low enough that this is tractable within the time budget.
-  const candidates = piecesRemaining <= 4
-    ? orderedMoves  // all moves, no pruning
-    : orderedMoves.slice(0, Math.min(20, orderedMoves.length));
+  // v2.3: ENDGAME — use exhaustive solver (no timeouts, guaranteed correct)
+  if (piecesRemaining <= 6) {
+    endgameNodes = 0;
+    endgameNodeLimitHit = false;
+    
+    let bestMove = orderedMoves[0];
+    let bestScore = -Infinity;
+    
+    for (const move of orderedMoves) {
+      const newBoard = applyMove(board, move, 2);
+      const newUsed = [...usedPieces, move.pieceType];
+      const score = endgameSolve(newBoard, newUsed, false, -Infinity, Infinity);
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestMove = move;
+      }
+      
+      if (score >= 10000) break; // Proven win
+    }
+    
+    const elapsed = Date.now() - searchStartTime;
+    console.log(`Expert AI [endgame solver]: final=${bestMove.pieceType} score=${bestScore} (${endgameNodes} nodes, ${elapsed}ms${endgameNodeLimitHit ? ' NODE LIMIT' : ''})`);
+    return bestMove;
+  }
   
-  // v2.2: ITERATIVE DEEPENING — always have a complete answer, each deeper pass
-  // refines it. Previous approach committed to one depth and could time out mid-search.
+  // MID-GAME — use iterative deepening with time-limited minimax
+  const candidates = orderedMoves.slice(0, Math.min(20, orderedMoves.length));
+  
+  // v2.3: Iterative deepening for mid-game (>6 pieces remaining)
   let bestMove = candidates[0];
   let bestScore = -Infinity;
-  const maxDepth = piecesRemaining <= 4 ? 8 : piecesRemaining <= 6 ? 6 : 5;
+  const maxDepth = 5;
   
   for (let depth = 2; depth <= maxDepth; depth++) {
     if (isTimeUp()) break;

@@ -60,9 +60,9 @@ const NotificationPrompt = ({ userId, onDismiss }) => {
 
   const handleDismiss = () => {
     soundManager.playClickSound?.('click');
-    // Set cooldown — notification init in OnlineMenu checks this for 3-day interval
+    // v2.0: Set user-specific cooldown — matches OnlineMenu's check
     try {
-      localStorage.setItem('deadblock_notification_last_prompt', Date.now().toString());
+      if (userId) localStorage.setItem(`deadblock_notif_cooldown_${userId}`, Date.now().toString());
     } catch (e) {}
     setVisible(false);
     setTimeout(() => onDismiss?.(), 300);
@@ -70,9 +70,9 @@ const NotificationPrompt = ({ userId, onDismiss }) => {
 
   const handleAlreadyEnabled = () => {
     soundManager.playClickSound?.('click');
-    // Permanently dismiss
+    // v2.0: Permanently dismiss for this user only
     try {
-      localStorage.setItem('deadblock_notification_prompt_dismissed', 'true');
+      if (userId) localStorage.setItem(`deadblock_notif_dismissed_${userId}`, 'true');
     } catch (e) {}
     setVisible(false);
     setTimeout(() => onDismiss?.(), 300);

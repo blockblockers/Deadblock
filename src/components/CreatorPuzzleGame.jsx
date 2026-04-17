@@ -1,8 +1,10 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v2.15: AI OVERHAUL — immediate win detection before minimax; 1-ply move ordering
-//        (sorts by opponent move count, not center-bias); removed root time limit so
-//        ALL candidate moves are evaluated; depth cap raised 8→10; internal timeout
-//        raised 8→15s with 5000-node check interval; timeout returns leaf eval (v2.14 fix).
+// v2.16: AI REWRITE — exhaustive solver replaces timeout-based minimax. Previous versions
+//        had timeout `break` inside the minimizer loop that could skip player winning responses,
+//        making the AI think a position was safe when it wasn't. New solver has:
+//        NO timeouts inside search, NO depth limits, NO move ordering heuristics —
+//        just clean alpha-beta to terminal state. 20M node safety cap for pathological cases.
+// v2.15: AI improvements (immediate win, 1-ply ordering, no root time limit)
 // v2.14: AI FIX — replaced "return 0" on mid-search timeout with leaf evaluation.
 // v2.13: FIX — effectiveUsedPieces now scans boardPieces (source of truth) so pieces
 //        physically on the board always show as used, regardless of state race conditions
@@ -481,147 +483,113 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     return count;
   }, []);
   
-  // Expert AI: Find the best move using proper minimax with alpha-beta pruning.
-  // v2.9: Full minimax replacement — the heuristic scorer from v2.0 failed because
-  //       creator puzzles have exactly one correct path and trap moves are invisible
-  //       to shallow heuristic evaluation. With separate, known piece sets and
-  //       typically 2-4 pieces per side, the game tree is small enough to search
-  //       exhaustively. This finds the mathematically optimal move.
+  // Expert AI: Exhaustive solver for creator puzzles.
+  // v2.16: COMPLETE REWRITE — previous versions had timeout checks inside the minimax
+  //   loop that could break out of the minimizer (player's turn) early, causing the AI
+  //   to think a position was safe when an unevaluated player response would have won.
+  //   
+  //   Creator puzzles have 2-4 pieces per side (tiny trees). This solver:
+  //   - NO timeout inside minimax (guaranteed to evaluate every path)
+  //   - NO depth limit (searches to terminal state — someone can't move)
+  //   - NO move ordering inside search (evaluates all moves, no risk of ordering bugs)
+  //   - YES alpha-beta pruning (mathematically proven safe, just an optimization)
+  //   - Safety: if search exceeds 20M nodes, falls back to best move found so far
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
-    console.log('[CreatorPuzzle AI v4] Minimax search. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
+    console.log('[CreatorPuzzle AI v5] Exhaustive solver. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
     
     const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
     if (aiMoves.length === 0) {
-      console.log('[CreatorPuzzle AI v4] No valid moves available');
+      console.log('[CreatorPuzzle AI v5] No valid moves');
       return null;
     }
     
-    // Time budget for safety (creator puzzle trees are small, but guard against edge cases)
     const searchStart = Date.now();
-    // v2.15: Raised to 15s. Creator puzzles have small trees (2-4 pieces per side).
-    // Most complete in <1s. This is a safety cap, not a performance target.
-    const MAX_TIME_MS = 15000;
     let nodesSearched = 0;
+    const MAX_NODES = 20000000; // 20M node safety cap
+    let hitNodeLimit = false;
     
-    // Minimax with alpha-beta pruning for separate piece sets.
-    // AI = player 2 (maximizer), Human = player 1 (minimizer).
-    // Terminal: current side has no legal moves → they lose.
-    const minimax = (board, aiPieces, playerPieces, depth, isAITurn, alpha, beta) => {
+    // Clean exhaustive minimax with alpha-beta. No timeouts, no depth limits.
+    // Searches every path to terminal state (someone can't move → they lose).
+    const solve = (board, aiPieces, playerPieces, isAITurn, alpha, beta) => {
       nodesSearched++;
-      
-      // v2.14 BUG FIX: Returns leaf evaluation on timeout instead of 0.
-      if (nodesSearched % 5000 === 0 && Date.now() - searchStart > MAX_TIME_MS) {
-        const aiPlaceable = countPlaceablePieces(board, aiPieces);
-        const playerPlaceable = countPlaceablePieces(board, playerPieces);
-        return (aiPlaceable - playerPlaceable) * 100;
+      if (nodesSearched > MAX_NODES) {
+        hitNodeLimit = true;
+        // Return heuristic — only triggers on pathological puzzles
+        const ap = countPlaceablePieces(board, aiPieces);
+        const pp = countPlaceablePieces(board, playerPieces);
+        return (ap - pp) * 100;
       }
       
       const currentPieces = isAITurn ? aiPieces : playerPieces;
       const moves = getAllPossibleMoves(board, currentPieces, true);
       
+      // Terminal: current side can't place any piece → they lose
       if (moves.length === 0) {
-        // Current side can't move → they lose.
-        // Depth bonus so AI prefers winning sooner and losing later.
-        return isAITurn ? (-10000 - depth) : (10000 + depth);
+        return isAITurn ? -10000 : 10000;
       }
-      
-      if (depth <= 0) {
-        // Leaf evaluation: difference in placeable pieces.
-        // Positive = good for AI, negative = good for player.
-        const aiPlaceable = countPlaceablePieces(board, aiPieces);
-        const playerPlaceable = countPlaceablePieces(board, playerPieces);
-        return (aiPlaceable - playerPlaceable) * 100;
-      }
-      
-      // Sort moves by center preference for better pruning
-      const sorted = moves.map(m => ({
-        ...m,
-        qScore: quickEval(m.row, m.col, m.coords)
-      })).sort((a, b) => isAITurn ? b.qScore - a.qScore : a.qScore - b.qScore);
       
       if (isAITurn) {
-        let maxScore = -Infinity;
-        for (const move of sorted) {
-          if (Date.now() - searchStart > MAX_TIME_MS) break;
+        let best = -Infinity;
+        for (const move of moves) {
+          if (hitNodeLimit) break;
           const newBoard = applyMoveToBoard(board, move, 2);
           const newAiPieces = aiPieces.filter(p => p !== move.piece);
-          const score = minimax(newBoard, newAiPieces, playerPieces, depth - 1, false, alpha, beta);
-          maxScore = Math.max(maxScore, score);
+          const score = solve(newBoard, newAiPieces, playerPieces, false, alpha, beta);
+          best = Math.max(best, score);
           alpha = Math.max(alpha, score);
-          if (beta <= alpha) break;
+          if (beta <= alpha) break; // Alpha-beta cutoff (safe)
         }
-        return maxScore;
+        return best;
       } else {
-        let minScore = Infinity;
-        for (const move of sorted) {
-          if (Date.now() - searchStart > MAX_TIME_MS) break;
+        let best = Infinity;
+        for (const move of moves) {
+          if (hitNodeLimit) break;
           const newBoard = applyMoveToBoard(board, move, 1);
           const newPlayerPieces = playerPieces.filter(p => p !== move.piece);
-          const score = minimax(newBoard, aiPieces, newPlayerPieces, depth - 1, true, alpha, beta);
-          minScore = Math.min(minScore, score);
+          const score = solve(newBoard, aiPieces, newPlayerPieces, true, alpha, beta);
+          best = Math.min(best, score);
           beta = Math.min(beta, score);
-          if (beta <= alpha) break;
+          if (beta <= alpha) break; // Alpha-beta cutoff (safe)
         }
-        return minScore;
+        return best;
       }
     };
     
-    // Depth = total remaining pieces — covers the complete game tree.
-    // Creator puzzles typically have 2-4 pieces per side (4-8 total plies).
-    // Cap at 10 for safety; alpha-beta makes this tractable.
-    const totalPieces = aiAvailablePieces.length + playerAvailablePieces.length;
-    const depth = Math.min(totalPieces, 10);
-    
-    // v2.15: IMMEDIATE WIN CHECK — before expensive minimax, check if any AI move
-    // leaves the player with zero legal moves among their pieces.
+    // IMMEDIATE WIN CHECK — instant return if any AI move wins on the spot
     for (const move of aiMoves) {
       const newBoard = applyMoveToBoard(currentBoard, move, 2);
       const playerMovesAfter = getAllPossibleMoves(newBoard, playerAvailablePieces, true);
       if (playerMovesAfter.length === 0) {
-        console.log(`[CreatorPuzzle AI v4] Immediate win: ${move.piece} at (${move.row},${move.col})`);
+        console.log(`[CreatorPuzzle AI v5] Immediate win: ${move.piece} at (${move.row},${move.col})`);
         return move;
       }
     }
     
-    // v2.15: 1-PLY MOVE ORDERING — sort by how few player moves remain after each AI move.
-    // Much better than center-bias for alpha-beta pruning in adversarial search.
-    const orderedMoves = aiMoves.map(move => {
-      const newBoard = applyMoveToBoard(currentBoard, move, 2);
-      const playerMovesAfter = getAllPossibleMoves(newBoard, playerAvailablePieces, true);
-      return { ...move, orderScore: -playerMovesAfter.length };
-    }).sort((a, b) => b.orderScore - a.orderScore);
-    
-    let bestMove = orderedMoves[0];
+    // Evaluate EVERY AI move exhaustively. No candidate filtering.
+    let bestMove = aiMoves[0];
     let bestScore = -Infinity;
     
-    // v2.15: NO ROOT TIME LIMIT — evaluate every candidate move. With 2-4 AI pieces
-    // and alpha-beta pruning, the tree is small enough to complete well within 15s.
-    for (const move of orderedMoves) {
+    for (const move of aiMoves) {
       const newBoard = applyMoveToBoard(currentBoard, move, 2);
       const newAiPieces = aiAvailablePieces.filter(p => p !== move.piece);
-      const score = minimax(newBoard, newAiPieces, playerAvailablePieces, depth - 1, false, -Infinity, Infinity);
+      const score = solve(newBoard, newAiPieces, playerAvailablePieces, false, -Infinity, Infinity);
       
-      // Tiny position tiebreaker for determinism among equal minimax scores
-      const tiebreaker = quickEval(move.row, move.col, move.coords) * 0.001
-                       + move.piece.charCodeAt(0) * 0.0001;
-      const finalScore = score + tiebreaker;
+      console.log(`[CreatorPuzzle AI v5] ${move.piece} at (${move.row},${move.col}) → score=${score}`);
       
-      console.log(`[CreatorPuzzle AI v4] ${move.piece} at (${move.row},${move.col}) → minimax=${score} final=${finalScore.toFixed(2)}`);
-      
-      if (finalScore > bestScore) {
-        bestScore = finalScore;
+      if (score > bestScore) {
+        bestScore = score;
         bestMove = move;
       }
       
-      // Early exit on guaranteed win
+      // Proven win — stop searching
       if (score >= 10000) break;
     }
     
     const elapsed = Date.now() - searchStart;
-    console.log(`[CreatorPuzzle AI v4] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore.toFixed(0)} (${nodesSearched} nodes, ${elapsed}ms)`);
+    console.log(`[CreatorPuzzle AI v5] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore} (${nodesSearched} nodes, ${elapsed}ms${hitNodeLimit ? ' NODE LIMIT HIT' : ''})`);
     
     return bestMove;
-  }, [getAllPossibleMoves, applyMoveToBoard, quickEval, countPlaceablePieces]);
+  }, [getAllPossibleMoves, applyMoveToBoard, countPlaceablePieces]);
   
   // -------------------------------------------------------------------------
   // INITIALIZE PUZZLE

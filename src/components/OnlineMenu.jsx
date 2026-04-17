@@ -1,4 +1,7 @@
 // Online Menu - Hub for online features
+// v7.57: Notification prompt reliability fixes — user-specific localStorage keys (switching
+//        accounts no longer inherits cooldown/dismiss); removed mobile-only restriction;
+//        cooldown written after prompt shows; 3s timeout on SW ready check.
 // v7.56: NotificationPrompt now receives userId and uses pushNotificationService.subscribe()
 //        instead of notificationService.requestPermission(). This creates the actual push
 //        subscription, saves to DB, and sends test notification. Added userId guard in init.
@@ -345,21 +348,17 @@ const OnlineMenu = ({
   };
 
   // Initialize notifications
-  // v7.55: Rewritten — checks actual push subscription status, not just browser permission.
-  // Previous logic only showed the toast when permission === 'default' (first visit only).
-  // Now shows the toast when push is supported but not subscribed, with a 3-day cooldown.
+  // v7.57: Fixed prompt not showing for new users:
+  //   - localStorage keys are now user-specific (previous user's cooldown blocked new accounts)
+  //   - Removed mobile-only restriction (desktop push works when browser is open)
+  //   - Cooldown timestamp written AFTER prompt shows (not before the 2s delay)
+  //   - Added timeout fallback if navigator.serviceWorker.ready hangs on first visit
   useEffect(() => {
     const initNotifications = async () => {
       await notificationService.init();
       setNotificationsEnabled(notificationService.isEnabled());
       
-      // Only prompt on mobile — desktop notifications require browser to be open
-      if (!notificationService.isMobileDevice()) {
-        setShowNotificationPrompt(false);
-        return;
-      }
-      
-      // v7.56: Need userId to subscribe — skip prompt if not logged in
+      // Need userId to subscribe — skip prompt if not logged in
       if (!profile?.id) {
         setShowNotificationPrompt(false);
         return;
@@ -371,15 +370,19 @@ const OnlineMenu = ({
         return;
       }
       
-      // Check if user permanently dismissed the prompt
-      const permanentlyDismissed = localStorage.getItem('deadblock_notification_prompt_dismissed') === 'true';
-      if (permanentlyDismissed) {
+      // v7.57: All localStorage keys are now user-specific so switching accounts
+      // doesn't inherit another user's cooldown/dismiss state.
+      const userDismissKey = `deadblock_notif_dismissed_${profile.id}`;
+      const userCooldownKey = `deadblock_notif_cooldown_${profile.id}`;
+      
+      // Check if this user permanently dismissed the prompt
+      if (localStorage.getItem(userDismissKey) === 'true') {
         setShowNotificationPrompt(false);
         return;
       }
       
-      // Check cooldown — don't prompt more than once every 3 days
-      const lastPrompt = localStorage.getItem('deadblock_notification_last_prompt');
+      // Check cooldown — don't prompt more than once every 3 days per user
+      const lastPrompt = localStorage.getItem(userCooldownKey);
       if (lastPrompt) {
         const daysSince = (Date.now() - parseInt(lastPrompt, 10)) / (1000 * 60 * 60 * 24);
         if (daysSince < 3) {
@@ -388,25 +391,31 @@ const OnlineMenu = ({
         }
       }
       
-      // Check actual push subscription status via service worker
+      // Check actual push subscription status via service worker.
+      // v7.57: Added 3-second timeout — on first visit the SW may not be registered yet,
+      // causing navigator.serviceWorker.ready to hang indefinitely.
+      let isSubscribed = false;
       try {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
-        
-        if (subscription) {
-          // Already subscribed — no need to prompt
-          setShowNotificationPrompt(false);
-        } else {
-          // Not subscribed — show prompt after short delay
-          localStorage.setItem('deadblock_notification_last_prompt', Date.now().toString());
-          setTimeout(() => {
-            setShowNotificationPrompt(true);
-          }, 2000);
-        }
+        const swReady = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((_, reject) => setTimeout(() => reject(new Error('SW timeout')), 3000))
+        ]);
+        const subscription = await swReady.pushManager.getSubscription();
+        isSubscribed = subscription !== null;
       } catch (err) {
-        // console.warn('[OnlineMenu] Error checking push subscription:', err);
-        // Fallback: use old shouldPrompt() logic
-        setShowNotificationPrompt(notificationService.shouldPrompt());
+        // SW not ready or timed out — treat as not subscribed (show prompt)
+        isSubscribed = false;
+      }
+      
+      if (isSubscribed) {
+        setShowNotificationPrompt(false);
+      } else {
+        // Show prompt after short delay, set cooldown AFTER showing
+        setTimeout(() => {
+          setShowNotificationPrompt(true);
+          // v7.57: Write cooldown AFTER prompt actually appears (not before the delay)
+          localStorage.setItem(userCooldownKey, Date.now().toString());
+        }, 2000);
       }
     };
     initNotifications();
