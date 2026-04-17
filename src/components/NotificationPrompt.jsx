@@ -1,12 +1,15 @@
 // NotificationPrompt.jsx - Cyberpunk-themed push notification enablement banner
+// v2.0: FIX — now calls pushNotificationService.subscribe(userId) instead of just
+//       notificationService.requestPermission(). This creates the actual push subscription,
+//       saves it to the database, and sends a test notification to confirm.
 // Styled to match the PWA install prompt with neon glow effects
 
 import { useState, useEffect } from 'react';
 import { Bell, BellOff, X, Zap } from 'lucide-react';
-import { notificationService } from '../services/notificationService';
+import { pushNotificationService } from '../services/pushNotificationService';
 import { soundManager } from '../utils/soundManager';
 
-const NotificationPrompt = ({ onDismiss }) => {
+const NotificationPrompt = ({ userId, onDismiss }) => {
   const [requesting, setRequesting] = useState(false);
   const [result, setResult] = useState(null);
   const [visible, setVisible] = useState(false);
@@ -17,28 +20,50 @@ const NotificationPrompt = ({ onDismiss }) => {
     return () => clearTimeout(timer);
   }, []);
 
+  // v2.0: Use pushNotificationService.subscribe() for full push subscription
   const handleEnable = async () => {
+    if (!userId) {
+      console.warn('[NotificationPrompt] No userId provided');
+      return;
+    }
+    
     setRequesting(true);
     soundManager.playClickSound?.('click');
     
-    const permission = await notificationService.requestPermission();
-    setResult(permission);
-    setRequesting(false);
-    
-    if (permission === 'granted') {
-      soundManager.playClickSound?.('success');
+    try {
+      const subscribeResult = await pushNotificationService.subscribe(userId);
+      
+      if (subscribeResult.success) {
+        setResult('granted');
+        soundManager.playClickSound?.('success');
+        
+        // Send test notification to confirm it works
+        setTimeout(() => {
+          pushNotificationService.sendTestNotification();
+        }, 500);
+      } else {
+        setResult(subscribeResult.reason === 'permission_denied' ? 'denied' : 'denied');
+      }
+    } catch (err) {
+      console.error('[NotificationPrompt] Subscribe error:', err);
+      setResult('denied');
     }
+    
+    setRequesting(false);
     
     // Auto-dismiss after showing result
     setTimeout(() => {
       setVisible(false);
       setTimeout(() => onDismiss?.(), 300);
-    }, permission === 'granted' ? 1500 : 2500);
+    }, result === 'granted' ? 1500 : 2500);
   };
 
   const handleDismiss = () => {
     soundManager.playClickSound?.('click');
-    notificationService.dismissPrompt();
+    // Set cooldown — notification init in OnlineMenu checks this for 3-day interval
+    try {
+      localStorage.setItem('deadblock_notification_last_prompt', Date.now().toString());
+    } catch (e) {}
     setVisible(false);
     setTimeout(() => onDismiss?.(), 300);
   };

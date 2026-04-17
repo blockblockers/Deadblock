@@ -1,8 +1,9 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.15: AI OVERHAUL — immediate win detection before minimax; 1-ply move ordering
+//        (sorts by opponent move count, not center-bias); removed root time limit so
+//        ALL candidate moves are evaluated; depth cap raised 8→10; internal timeout
+//        raised 8→15s with 5000-node check interval; timeout returns leaf eval (v2.14 fix).
 // v2.14: AI FIX — replaced "return 0" on mid-search timeout with leaf evaluation.
-//        Previously, moves requiring deeper search than the 3s timeout got scored 0
-//        while completed sibling moves got their real score, causing the AI to
-//        deterministically miss winning moves. Also raised time budget 3s→8s.
 // v2.13: FIX — effectiveUsedPieces now scans boardPieces (source of truth) so pieces
 //        physically on the board always show as used, regardless of state race conditions
 // v2.12: FIX — aiIsThinking guard on drag paths (startDrag, getPieceHandlers, handleBoardDragStart)
@@ -487,21 +488,19 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   //       typically 2-4 pieces per side, the game tree is small enough to search
   //       exhaustively. This finds the mathematically optimal move.
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
-    console.log('[CreatorPuzzle AI v3] Minimax search. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
+    console.log('[CreatorPuzzle AI v4] Minimax search. AI pieces:', aiAvailablePieces, 'Player pieces:', playerAvailablePieces);
     
     const aiMoves = getAllPossibleMoves(currentBoard, aiAvailablePieces, true);
     if (aiMoves.length === 0) {
-      console.log('[CreatorPuzzle AI v3] No valid moves available');
+      console.log('[CreatorPuzzle AI v4] No valid moves available');
       return null;
     }
     
     // Time budget for safety (creator puzzle trees are small, but guard against edge cases)
     const searchStart = Date.now();
-    // v2.10: Raised from 3000ms. Most creator puzzles have 2-4 pieces per side
-    // (4-8 plies) and complete in well under 1s. 8s is effectively "never timeout"
-    // for legitimate puzzles while still preventing a runaway search from freezing
-    // the UI on pathological cases.
-    const MAX_TIME_MS = 8000;
+    // v2.15: Raised to 15s. Creator puzzles have small trees (2-4 pieces per side).
+    // Most complete in <1s. This is a safety cap, not a performance target.
+    const MAX_TIME_MS = 15000;
     let nodesSearched = 0;
     
     // Minimax with alpha-beta pruning for separate piece sets.
@@ -510,12 +509,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     const minimax = (board, aiPieces, playerPieces, depth, isAITurn, alpha, beta) => {
       nodesSearched++;
       
-      // v2.10 BUG FIX: Previously returned 0 on mid-search timeout. That neutral
-      // value polluted minimax — a winning move that required deeper search got
-      // scored as 0 while a sibling non-winning move completed with +500, causing
-      // the AI to deterministically pick the non-winner. Now return the leaf
-      // evaluation instead (consistent with depth<=0 leaf scoring).
-      if (nodesSearched % 2000 === 0 && Date.now() - searchStart > MAX_TIME_MS) {
+      // v2.14 BUG FIX: Returns leaf evaluation on timeout instead of 0.
+      if (nodesSearched % 5000 === 0 && Date.now() - searchStart > MAX_TIME_MS) {
         const aiPlaceable = countPlaceablePieces(board, aiPieces);
         const playerPlaceable = countPlaceablePieces(board, playerPieces);
         return (aiPlaceable - playerPlaceable) * 100;
@@ -573,26 +568,35 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     // Depth = total remaining pieces — covers the complete game tree.
     // Creator puzzles typically have 2-4 pieces per side (4-8 total plies).
-    // Cap at 8 for safety; alpha-beta makes this tractable.
+    // Cap at 10 for safety; alpha-beta makes this tractable.
     const totalPieces = aiAvailablePieces.length + playerAvailablePieces.length;
-    const depth = Math.min(totalPieces, 8);
+    const depth = Math.min(totalPieces, 10);
     
-    // Sort AI candidate moves by center preference for better pruning
-    aiMoves.sort((a, b) => {
-      const sa = quickEval(a.row, a.col, a.coords);
-      const sb = quickEval(b.row, b.col, b.coords);
-      return sb - sa;
-    });
+    // v2.15: IMMEDIATE WIN CHECK — before expensive minimax, check if any AI move
+    // leaves the player with zero legal moves among their pieces.
+    for (const move of aiMoves) {
+      const newBoard = applyMoveToBoard(currentBoard, move, 2);
+      const playerMovesAfter = getAllPossibleMoves(newBoard, playerAvailablePieces, true);
+      if (playerMovesAfter.length === 0) {
+        console.log(`[CreatorPuzzle AI v4] Immediate win: ${move.piece} at (${move.row},${move.col})`);
+        return move;
+      }
+    }
     
-    let bestMove = aiMoves[0];
+    // v2.15: 1-PLY MOVE ORDERING — sort by how few player moves remain after each AI move.
+    // Much better than center-bias for alpha-beta pruning in adversarial search.
+    const orderedMoves = aiMoves.map(move => {
+      const newBoard = applyMoveToBoard(currentBoard, move, 2);
+      const playerMovesAfter = getAllPossibleMoves(newBoard, playerAvailablePieces, true);
+      return { ...move, orderScore: -playerMovesAfter.length };
+    }).sort((a, b) => b.orderScore - a.orderScore);
+    
+    let bestMove = orderedMoves[0];
     let bestScore = -Infinity;
     
-    for (const move of aiMoves) {
-      if (Date.now() - searchStart > MAX_TIME_MS) {
-        console.log('[CreatorPuzzle AI v3] Time limit reached');
-        break;
-      }
-      
+    // v2.15: NO ROOT TIME LIMIT — evaluate every candidate move. With 2-4 AI pieces
+    // and alpha-beta pruning, the tree is small enough to complete well within 15s.
+    for (const move of orderedMoves) {
       const newBoard = applyMoveToBoard(currentBoard, move, 2);
       const newAiPieces = aiAvailablePieces.filter(p => p !== move.piece);
       const score = minimax(newBoard, newAiPieces, playerAvailablePieces, depth - 1, false, -Infinity, Infinity);
@@ -602,7 +606,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                        + move.piece.charCodeAt(0) * 0.0001;
       const finalScore = score + tiebreaker;
       
-      console.log(`[CreatorPuzzle AI v3] ${move.piece} at (${move.row},${move.col}) → minimax=${score} final=${finalScore.toFixed(2)}`);
+      console.log(`[CreatorPuzzle AI v4] ${move.piece} at (${move.row},${move.col}) → minimax=${score} final=${finalScore.toFixed(2)}`);
       
       if (finalScore > bestScore) {
         bestScore = finalScore;
@@ -614,7 +618,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     }
     
     const elapsed = Date.now() - searchStart;
-    console.log(`[CreatorPuzzle AI v3] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore.toFixed(0)} (${nodesSearched} nodes, ${elapsed}ms)`);
+    console.log(`[CreatorPuzzle AI v4] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore.toFixed(0)} (${nodesSearched} nodes, ${elapsed}ms)`);
     
     return bestMove;
   }, [getAllPossibleMoves, applyMoveToBoard, quickEval, countPlaceablePieces]);

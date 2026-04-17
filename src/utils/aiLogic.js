@@ -1,14 +1,20 @@
 // AI Logic for Deadblock - Optimized for Speed
-// v2.1 - EXPERT AI STRENGTHENED:
-//   - BUG FIX: evaluatePosition sign was inverted (AI preferred positions with fewer
-//     options on its own turn)
-//   - NEW: Immediate win detection before minimax
-//   - NEW: Immediate block detection — filters candidates to moves that prevent
-//     ALL player winning threats
-//   - Raised root candidates 8→16, internal 6→10
-//   - Deeper search: +1 at every pieces-remaining band (3/4/5/6 vs. 2/3/4)
-//   - MAX_SEARCH_TIME 2000→4000ms
-// v2.0 - MAJOR UPDATE: Added PUZZLE_OPTIMAL difficulty
+// v2.2 - MAJOR AI OVERHAUL:
+//   - BUG FIX: minimax returned 0 on timeout (same bug as CreatorPuzzle v2.14).
+//     Winning moves needing deeper search got scored 0, losing to shallow mediocre moves.
+//   - NEW: countTotalPlacements — counts all valid placement positions, not just piece types.
+//     A piece with 30 valid spots is vastly stronger than one with 1 spot.
+//   - NEW: evaluatePosition uses totalPlacements*10 + placeablePieces*50 for richer signal.
+//   - NEW: Iterative deepening — searches depth 2,3,4,5... until time expires. Always has
+//     a complete answer; each pass refines. Previous fixed-depth could time out mid-search.
+//   - NEW: 1-ply move ordering at root — sorts by opponent placement count after each move.
+//     Far more accurate than center-bias; dramatically improves alpha-beta pruning.
+//   - NEW: Endgame solver — when ≤4 pieces remain, searches ALL moves to depth 8 (no pruning).
+//   - Internal nodes: endgame (≤6 pieces) searches all moves with eval ordering;
+//     mid-game uses center-bias + top-12 candidate limit.
+//   - Time budget raised to 5000ms for iterative deepening.
+// v2.1 - EXPERT AI STRENGTHENED (evaluation sign fix, win/block detection, wider search)
+// v2.0 - Added PUZZLE_OPTIMAL difficulty
 // 
 // UPDATES:
 // ✅ Fair random opening move (no piece selection bias)
@@ -123,6 +129,36 @@ const countPlaceablePieces = (board, usedPieces) => {
   return count;
 };
 
+// v2.2: Count TOTAL valid placement positions across all remaining pieces.
+// Unlike countPlaceablePieces (which counts piece types), this measures true flexibility:
+// 5 pieces × 30 spots each = 150 (strong) vs 5 pieces × 1 spot each = 5 (about to lose).
+const countTotalPlacements = (board, usedPieces) => {
+  const available = Object.keys(pieces).filter(p => !usedPieces.includes(p));
+  let totalPlacements = 0;
+  
+  for (const pieceType of available) {
+    const seen = new Set();
+    for (let flip = 0; flip < 2; flip++) {
+      for (let rot = 0; rot < 4; rot++) {
+        const coords = getCachedPieceCoords(pieceType, rot, flip);
+        for (let row = 0; row < BOARD_SIZE; row++) {
+          for (let col = 0; col < BOARD_SIZE; col++) {
+            if (canPlacePiece(board, row, col, coords)) {
+              // Deduplicate by placed-cell hash so rotational equivalents don't double-count
+              const hash = coords.map(([dx, dy]) => `${row + dy},${col + dx}`).sort().join('|');
+              if (!seen.has(hash)) {
+                seen.add(hash);
+                totalPlacements++;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return totalPlacements;
+};
+
 const applyMove = (board, move, player = 2) => {
   const newBoard = board.map(r => [...r]);
   for (const [dx, dy] of move.coords) {
@@ -141,27 +177,36 @@ const quickEval = (board, row, col, coords) => {
   return score;
 };
 
+// v2.2: Enhanced evaluation using total placements (flexibility) weighted with
+// placeable piece count (breadth). Total placements is the primary signal;
+// piece count breaks ties when placement counts are similar.
 const evaluatePosition = (board, usedPieces, isAITurn) => {
+  const totalPlacements = countTotalPlacements(board, usedPieces);
   const placeablePieces = countPlaceablePieces(board, usedPieces);
-  // v2.1 BUG FIX: sign was inverted. When it's AI's turn at a leaf, more placeable
-  // pieces is GOOD for AI (more options). Previously returned -placeablePieces here,
-  // which made AI systematically prefer positions where it had fewer options.
-  return isAITurn ? placeablePieces : -placeablePieces;
+  const score = totalPlacements * 10 + placeablePieces * 50;
+  return isAITurn ? score : -score;
 };
 
 // ====== TIME-LIMITED MINIMAX ======
 
 let searchStartTime = 0;
 let nodesSearched = 0;
-// v2.1: Raised from 2000ms — users prefer stronger play over slightly faster response.
-// UI shows a thinking indicator so the extra time is expected.
-const MAX_SEARCH_TIME = 4000;
+// v2.2: Raised to 5000ms for iterative deepening — the search always has a
+// complete answer from the previous depth, so extra time only improves quality.
+const MAX_SEARCH_TIME = 5000;
 
 const isTimeUp = () => Date.now() - searchStartTime > MAX_SEARCH_TIME;
 
 const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
   nodesSearched++;
-  if (isTimeUp()) return 0;
+  
+  // v2.2 BUG FIX: Previously returned 0 on timeout, which polluted minimax scores.
+  // A winning move needing deep search got scored 0 while a mediocre shallow move
+  // got a real score, causing the AI to pick the wrong move. Now returns leaf eval.
+  if (isTimeUp()) {
+    return evaluatePosition(board, usedPieces, isMaximizing);
+  }
+  
   if (!canAnyMoveBeMade(board, usedPieces)) {
     return isMaximizing ? -10000 : 10000;
   }
@@ -170,15 +215,34 @@ const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
   }
   
   const moves = getAllPossibleMoves(board, usedPieces, true);
-  moves.sort((a, b) => {
-    const scoreA = quickEval(board, a.row, a.col, a.coords);
-    const scoreB = quickEval(board, b.row, b.col, b.coords);
-    return isMaximizing ? scoreB - scoreA : scoreA - scoreB;
-  });
   
-  // v2.1: Raised from 6 to 10 at internal nodes — previous aggressive pruning was
-  // filtering out winning moves that happened to be off-center.
-  const movesToEval = moves.slice(0, Math.min(10, moves.length));
+  // v2.2: 1-ply move ordering — evaluate how many total placements remain after
+  // each move. Moves that leave fewer placements for the opponent are searched first.
+  // This dramatically improves alpha-beta pruning vs the old center-bias ordering.
+  const piecesLeft = 12 - usedPieces.length;
+  if (piecesLeft <= 6) {
+    // Endgame: use full eval ordering, search all moves
+    moves.sort((a, b) => {
+      const boardA = applyMove(board, a, isMaximizing ? 2 : 1);
+      const usedA = [...usedPieces, a.pieceType];
+      const boardB = applyMove(board, b, isMaximizing ? 2 : 1);
+      const usedB = [...usedPieces, b.pieceType];
+      const scoreA = countTotalPlacements(boardA, usedA);
+      const scoreB = countTotalPlacements(boardB, usedB);
+      // Maximizer wants opponent to have FEWER placements; minimizer wants MORE
+      return isMaximizing ? scoreA - scoreB : scoreB - scoreA;
+    });
+  } else {
+    // Mid-game: center-bias ordering + candidate limit for speed
+    moves.sort((a, b) => {
+      const scoreA = quickEval(board, a.row, a.col, a.coords);
+      const scoreB = quickEval(board, b.row, b.col, b.coords);
+      return isMaximizing ? scoreB - scoreA : scoreA - scoreB;
+    });
+  }
+  
+  // v2.2: In endgame (≤6 pieces), search ALL moves. In mid-game, limit to top 12.
+  const movesToEval = piecesLeft <= 6 ? moves : moves.slice(0, Math.min(12, moves.length));
   
   if (isMaximizing) {
     let maxScore = -Infinity;
@@ -214,20 +278,13 @@ const findBestMove = (board, usedPieces) => {
   const moves = getAllPossibleMoves(board, usedPieces, true);
   if (moves.length === 0) return null;
   
-  const scoredMoves = moves.map(move => ({
-    ...move,
-    quickScore: quickEval(board, move.row, move.col, move.coords)
-  })).sort((a, b) => b.quickScore - a.quickScore);
-  
-  if (scoredMoves.length === 1) {
+  if (moves.length === 1) {
     console.log('Expert AI: Only one move available');
-    return scoredMoves[0];
+    return moves[0];
   }
   
-  // v2.1: IMMEDIATE WIN DETECTION — before expensive minimax, check if any AI move
-  // leaves the opponent with zero legal responses (instant win). This catches cases
-  // the deeper search sometimes misses due to candidate pruning.
-  for (const move of scoredMoves) {
+  // v2.2: IMMEDIATE WIN DETECTION — check ALL moves, not just candidates
+  for (const move of moves) {
     const newBoard = applyMove(board, move, 2);
     const newUsed = [...usedPieces, move.pieceType];
     if (!canAnyMoveBeMade(newBoard, newUsed)) {
@@ -236,10 +293,7 @@ const findBestMove = (board, usedPieces) => {
     }
   }
   
-  // v2.1: IMMEDIATE BLOCK DETECTION — identify any player move that would leave AI
-  // with zero legal responses (instant loss). Then filter AI's candidate moves to
-  // only those that prevent ALL such player moves. If filter is non-empty, restrict
-  // search to blocking moves only.
+  // v2.2: IMMEDIATE BLOCK DETECTION — find player winning threats, filter AI moves
   const playerMoves = getAllPossibleMoves(board, usedPieces, true);
   const playerWinningMoves = [];
   for (const pm of playerMoves) {
@@ -250,71 +304,81 @@ const findBestMove = (board, usedPieces) => {
     }
   }
   
-  let searchPool = scoredMoves;
+  let searchPool = moves;
   if (playerWinningMoves.length > 0) {
-    // Filter to only moves that block ALL player winning moves
-    const blockingMoves = scoredMoves.filter(aiMove => {
+    const blockingMoves = moves.filter(aiMove => {
       const newBoard = applyMove(board, aiMove, 2);
       const newUsed = [...usedPieces, aiMove.pieceType];
-      // Verify this AI move prevents every player winning move
       return playerWinningMoves.every(pm => {
-        if (newUsed.includes(pm.pieceType)) return true; // AI used that piece already
+        if (newUsed.includes(pm.pieceType)) return true;
         return !canPlacePiece(newBoard, pm.row, pm.col, pm.coords);
       });
     });
     
     if (blockingMoves.length > 0) {
-      console.log(`Expert AI: Restricting search to ${blockingMoves.length} blocking moves (player had ${playerWinningMoves.length} winning threats)`);
+      console.log(`Expert AI: ${blockingMoves.length} blocking moves (vs ${playerWinningMoves.length} threats)`);
       searchPool = blockingMoves;
-    } else {
-      console.log(`Expert AI: Player has ${playerWinningMoves.length} winning threats but no full block exists — playing best defensive move`);
     }
   }
   
-  const piecesRemaining = 12 - usedPieces.length;
-  let depth;
-  // v2.1: Deeper search at all stages — previous depths (2/3/4) were too shallow.
-  if (piecesRemaining <= 4) {
-    depth = 6;
-  } else if (piecesRemaining <= 6) {
-    depth = 5;
-  } else if (piecesRemaining <= 8) {
-    depth = 4;
-  } else {
-    depth = 3;
-  }
-  
-  // v2.1: Widened root candidates from 8 to 16. Combined with the block filter above,
-  // this won't search 16 moves in the common case — only when there's no immediate
-  // tactical urgency.
-  const candidates = searchPool.slice(0, Math.min(16, searchPool.length));
-  
-  let bestMove = candidates[0];
-  let bestScore = -Infinity;
-  
-  for (const move of candidates) {
-    if (isTimeUp()) {
-      console.log('Expert AI: Time limit reached');
-      break;
-    }
-    
+  // v2.2: 1-PLY MOVE ORDERING — sort by how few placements opponent has after our move.
+  // This is far more accurate than center-bias and dramatically improves pruning.
+  const orderedMoves = searchPool.map(move => {
     const newBoard = applyMove(board, move, 2);
     const newUsed = [...usedPieces, move.pieceType];
-    const score = minimax(newBoard, newUsed, depth, false, -Infinity, Infinity);
+    const opponentPlacements = countTotalPlacements(newBoard, newUsed);
+    return { ...move, orderScore: -opponentPlacements }; // fewer opponent placements = better
+  }).sort((a, b) => b.orderScore - a.orderScore);
+  
+  const piecesRemaining = 12 - usedPieces.length;
+  
+  // v2.2: ENDGAME SOLVER — when ≤4 pieces remain, search all moves to full depth.
+  // Branching factor is low enough that this is tractable within the time budget.
+  const candidates = piecesRemaining <= 4
+    ? orderedMoves  // all moves, no pruning
+    : orderedMoves.slice(0, Math.min(20, orderedMoves.length));
+  
+  // v2.2: ITERATIVE DEEPENING — always have a complete answer, each deeper pass
+  // refines it. Previous approach committed to one depth and could time out mid-search.
+  let bestMove = candidates[0];
+  let bestScore = -Infinity;
+  const maxDepth = piecesRemaining <= 4 ? 8 : piecesRemaining <= 6 ? 6 : 5;
+  
+  for (let depth = 2; depth <= maxDepth; depth++) {
+    if (isTimeUp()) break;
     
-    if (score > bestScore) {
-      bestScore = score;
-      bestMove = move;
+    let depthBestMove = candidates[0];
+    let depthBestScore = -Infinity;
+    
+    for (const move of candidates) {
+      if (isTimeUp()) break;
+      
+      const newBoard = applyMove(board, move, 2);
+      const newUsed = [...usedPieces, move.pieceType];
+      const score = minimax(newBoard, newUsed, depth - 1, false, -Infinity, Infinity);
+      
+      if (score > depthBestScore) {
+        depthBestScore = score;
+        depthBestMove = move;
+      }
+      
+      // Early exit on proven win
+      if (score >= 10000) break;
     }
     
-    if (score > 5000) {
-      console.log('Expert AI: Found strong winning path');
-      break;
+    // Only update best move if this depth completed (wasn't interrupted by timeout)
+    if (!isTimeUp() || depthBestScore >= 10000) {
+      bestMove = depthBestMove;
+      bestScore = depthBestScore;
+      console.log(`Expert AI: depth ${depth} → ${depthBestMove.pieceType} score=${depthBestScore} (${nodesSearched} nodes)`);
     }
+    
+    // Proven win — stop searching
+    if (bestScore >= 10000) break;
   }
   
   const elapsed = Date.now() - searchStartTime;
-  console.log(`Expert AI: ${nodesSearched} nodes in ${elapsed}ms, best score: ${bestScore}`);
+  console.log(`Expert AI: final=${bestMove.pieceType} score=${bestScore} (${nodesSearched} nodes, ${elapsed}ms)`);
   
   return bestMove;
 };

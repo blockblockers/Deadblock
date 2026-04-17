@@ -1,4 +1,7 @@
 // Online Menu - Hub for online features
+// v7.56: NotificationPrompt now receives userId and uses pushNotificationService.subscribe()
+//        instead of notificationService.requestPermission(). This creates the actual push
+//        subscription, saves to DB, and sends test notification. Added userId guard in init.
 // v7.55: Notification prompt fix — checks actual push subscription status via service worker,
 //        not just browser permission. Previous logic only showed the toast when permission was
 //        'default' (first visit only). Now re-prompts every 3 days if push is not subscribed.
@@ -356,6 +359,12 @@ const OnlineMenu = ({
         return;
       }
       
+      // v7.56: Need userId to subscribe — skip prompt if not logged in
+      if (!profile?.id) {
+        setShowNotificationPrompt(false);
+        return;
+      }
+      
       // Check if push is supported at all
       if (!notificationService.isPushSupported() || !('serviceWorker' in navigator)) {
         setShowNotificationPrompt(false);
@@ -401,7 +410,7 @@ const OnlineMenu = ({
       }
     };
     initNotifications();
-  }, []);
+  }, [profile?.id]);
 
   // Auto-scroll when Challenge section expands
   useEffect(() => {
@@ -2328,7 +2337,7 @@ const OnlineMenu = ({
       
       {/* Notification Prompt */}
       {showNotificationPrompt && (
-        <NotificationPrompt onDismiss={() => setShowNotificationPrompt(false)} />
+        <NotificationPrompt userId={profile?.id} onDismiss={() => setShowNotificationPrompt(false)} />
       )}
       
       {/* v7.30: GameInviteNotification removed - now handled globally by App.jsx GlobalNotifications */}
