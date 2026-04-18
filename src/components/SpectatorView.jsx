@@ -1,4 +1,9 @@
 // SpectatorView.jsx - Watch live games
+// v7.19: Added chronological move numbering from game_moves table. Loads move history
+//        on spectate start and reloads on each real-time update. Sorts by move_number
+//        ascending to guarantee correct order. Falls back to piece-group numbering if
+//        unavailable. Fixed player name colors using inline styles (Tailwind class was
+//        rendering as black).
 // v7.18: REDESIGN — Silver cyberpunk theme modeled after FinalBoardView.
 //        Custom board with piece colors, move numbering, last-move gold highlighting,
 //        animated glow orbs, cyberpunk grid background, FloatingPieces.
@@ -10,9 +15,10 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Eye, X, Users, Clock, Trophy, Radio, AlertTriangle, ChevronLeft, ChevronRight, ArrowLeft } from 'lucide-react';
 import { spectatorService } from '../services/spectatorService';
 import { ratingService } from '../services/ratingService';
-import { BOARD_SIZE } from '../utils/gameLogic';
+import { BOARD_SIZE, getPieceCoords } from '../utils/gameLogic';
 import { pieceColors } from '../utils/pieces';
 import { soundManager } from '../utils/soundManager';
+import { replayService } from '../services/replayService';
 import TierIcon from './TierIcon';
 import NeonTitle from './NeonTitle';
 import FloatingPieces from './FloatingPieces';
@@ -27,6 +33,7 @@ const SpectatorView = ({
   const [error, setError] = useState(null);
   const [board, setBoard] = useState(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
   const [boardPieces, setBoardPieces] = useState({});
+  const [moveHistory, setMoveHistory] = useState([]);
   const [lastMovePiece, setLastMovePiece] = useState(null);
   const prevBoardPiecesRef = useRef({});
   const gameSubRef = useRef(null);
@@ -44,16 +51,38 @@ const SpectatorView = ({
     if (gameError) { setError(gameError.message); setLoading(false); return; }
     setGame(gameData);
     updateBoard(gameData);
+    // Load chronological move history from game_moves table
+    await loadMoveHistory();
     const { data: specs } = await spectatorService.getSpectators(gameId);
     setSpectators(specs || []);
     gameSubRef.current = spectatorService.subscribeToGame(gameId,
-      (updatedGame) => { setGame(updatedGame); updateBoard(updatedGame); soundManager.playClickSound('soft'); },
+      (updatedGame) => {
+        setGame(updatedGame);
+        updateBoard(updatedGame);
+        // Reload move history to pick up the new move in chronological order
+        loadMoveHistory();
+        soundManager.playClickSound('soft');
+      },
       (err) => console.error('Spectator subscription error:', err)
     );
     spectatorSubRef.current = spectatorService.subscribeToSpectators(gameId,
       (updatedSpectators) => setSpectators(updatedSpectators)
     );
     setLoading(false);
+  };
+
+  const loadMoveHistory = async () => {
+    try {
+      const { data } = await replayService.getGameMoves(gameId);
+      if (data?.length > 0) {
+        // Sort by move_number ascending — guarantees chronological order
+        // regardless of API return order
+        const sorted = [...data].sort((a, b) => (a.move_number || 0) - (b.move_number || 0));
+        setMoveHistory(sorted);
+      }
+    } catch (e) {
+      // Non-fatal — falls back to piece-group numbering
+    }
   };
 
   const leaveSpectating = async () => {
@@ -93,9 +122,37 @@ const SpectatorView = ({
     setBoardPieces(newPieces);
   };
 
-  // Build cell info map — move numbers by piece group order, last move highlighting
+  // Build cell info map — uses chronological moveHistory when available, falls back to piece groups
   const cellInfoMap = useMemo(() => {
     const map = {};
+    
+    // If we have chronological move history from game_moves table, use it
+    if (moveHistory.length > 0) {
+      moveHistory.forEach((move, idx) => {
+        const moveNum = move.move_number || (idx + 1);
+        const piece = move.piece_type;
+        const row = move.row;
+        const col = move.col;
+        const rot = move.rotation || 0;
+        const flip = move.flipped || false;
+        if (piece === undefined || row === undefined || col === undefined) return;
+        try {
+          const coords = getPieceCoords(piece, rot, flip);
+          if (coords) {
+            coords.forEach(([dx, dy]) => {
+              const r = row + dy;
+              const c = col + dx;
+              if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+                map[`${r},${c}`] = { moveNumber: moveNum, pieceType: piece, isLastMove: idx === moveHistory.length - 1 };
+              }
+            });
+          }
+        } catch (e) { /* skip invalid move */ }
+      });
+      return map;
+    }
+    
+    // Fallback: group by piece type from boardPieces (no guaranteed order)
     const pieceGroups = {};
     getEntries(boardPieces).forEach(([key, pieceType]) => {
       if (!pieceGroups[pieceType]) pieceGroups[pieceType] = [];
@@ -110,7 +167,7 @@ const SpectatorView = ({
       moveNum++;
     });
     return map;
-  }, [boardPieces, lastMovePiece, getEntries]);
+  }, [moveHistory, boardPieces, lastMovePiece, getEntries]);
 
   const getPieceName = useCallback((rowIdx, colIdx) => {
     if (Array.isArray(boardPieces) && boardPieces[rowIdx]) return boardPieces[rowIdx][colIdx] || null;
@@ -203,14 +260,14 @@ const SpectatorView = ({
             {game?.current_player === 1 && !isGameOver && <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-cyan-400 rounded-full animate-pulse" />}
           </div>
           <div>
-            <div className={`font-bold text-xs ${isP1Winner ? 'text-amber-400' : game?.current_player === 1 && !isGameOver ? 'text-cyan-400' : 'text-white'}`}>{p1?.username || 'Player 1'}</div>
+            <div className="font-bold text-xs" style={{ color: isP1Winner ? '#fbbf24' : (game?.current_player === 1 && !isGameOver ? '#38bdf8' : '#e2e8f0') }}>{p1?.username || 'Player 1'}</div>
             <div className="text-slate-500 text-[10px]">{p1Rating}</div>
           </div>
         </div>
         <span className="text-slate-600 font-black text-xs px-2">VS</span>
         <div className="flex items-center gap-2">
           <div className="text-right">
-            <div className={`font-bold text-xs ${isP2Winner ? 'text-amber-400' : game?.current_player === 2 && !isGameOver ? 'text-pink-400' : 'text-white'}`}>{p2?.username || 'Player 2'}</div>
+            <div className="font-bold text-xs" style={{ color: isP2Winner ? '#fbbf24' : (game?.current_player === 2 && !isGameOver ? '#f472b6' : '#e2e8f0') }}>{p2?.username || 'Player 2'}</div>
             <div className="text-slate-500 text-[10px]">{p2Rating}</div>
           </div>
           <div className="relative">
@@ -233,7 +290,7 @@ const SpectatorView = ({
           </span>
         ) : (
           <span className="text-slate-300 text-xs">
-            <span className={game?.current_player === 1 ? 'text-cyan-400 font-bold' : 'text-pink-400 font-bold'}>{currentPlayerName}</span>
+            <span className="font-bold" style={{ color: game?.current_player === 1 ? '#38bdf8' : '#f472b6' }}>{currentPlayerName}</span>
             <span className="text-slate-500">'s turn</span>
             {totalPieces > 0 && <span className="text-slate-500 ml-2">• {totalPieces} pieces placed</span>}
           </span>
