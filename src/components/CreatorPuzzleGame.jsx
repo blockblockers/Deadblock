@@ -53,6 +53,7 @@ import { streakTracker } from '../utils/streakTracker';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { creatorPuzzleService } from '../services/creatorPuzzleService';
+import FloatingPieces from './FloatingPieces';
 
 // ============================================================================
 // CONSTANTS
@@ -87,11 +88,11 @@ const difficultyThemes = {
     panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
   },
   hard: {
-    gridColor: 'rgba(239, 68, 68, 0.3)',
-    glow1: 'bg-red-500/30',
-    glow2: 'bg-rose-500/25',
-    panelBorder: 'border-red-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(239,68,68,0.3)]',
+    gridColor: 'rgba(239, 68, 68, 0.4)',
+    glow1: 'bg-red-500/40',
+    glow2: 'bg-rose-500/30',
+    panelBorder: 'border-red-500/50',
+    panelShadow: 'shadow-[0_0_50px_rgba(239,68,68,0.4)]',
   },
   expert: {
     gridColor: 'rgba(168, 85, 247, 0.3)',
@@ -1383,6 +1384,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       {/* Ambient glow effects */}
       <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
       <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
+      
+      {/* Floating pentomino pieces — themed to difficulty */}
+      <FloatingPieces 
+        theme={puzzle?.difficulty === 'easy' ? 'green' : puzzle?.difficulty === 'hard' ? 'red' : puzzle?.difficulty === 'expert' ? 'purple' : 'cyan'}
+        count={8} minOpacity={0.15} maxOpacity={0.35}
+      />
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
@@ -1441,15 +1448,15 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               <div 
                 className={`px-3 py-1 rounded-full bg-gradient-to-r ${
                   puzzle.difficulty === 'easy' ? 'from-green-600 to-emerald-600' :
-                  puzzle.difficulty === 'hard' ? 'from-purple-500 to-pink-600' :
-                  puzzle.difficulty === 'expert' ? 'from-red-500 to-rose-600' :
+                  puzzle.difficulty === 'hard' ? 'from-red-500 to-rose-600' :
+                  puzzle.difficulty === 'expert' ? 'from-purple-500 to-pink-600' :
                   'from-cyan-500 to-sky-600'
                 } border border-white/20`}
                 style={{ 
                   boxShadow: `0 0 15px ${
                     puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.6)' :
-                    puzzle.difficulty === 'hard' ? 'rgba(168,85,247,0.6)' :
-                    puzzle.difficulty === 'expert' ? 'rgba(239,68,68,0.6)' :
+                    puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.6)' :
+                    puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.6)' :
                     'rgba(34,211,238,0.6)'
                   }` 
                 }}
