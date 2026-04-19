@@ -1,4 +1,5 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
+// v7.14: Removed panel box around game board for visual consistency; floating background shows through
 // v7.13: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.12: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // 
@@ -63,6 +64,35 @@ const GAME_STATES = {
   SUCCESS: 'success',
   GAMEOVER: 'gameover',
   ERROR: 'error',
+};
+
+// Reusable styled button for consistent control styling across game screens
+const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '' }) => {
+  const colorClasses = {
+    cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
+    orange: 'from-orange-500 to-amber-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]',
+    green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
+    red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
+    purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
+    slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+        bg-gradient-to-r ${colorClasses[color]}
+        text-white font-bold rounded-xl px-3 py-2 text-xs
+        transition-all duration-200
+        hover:scale-105 active:scale-95
+        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
+        flex items-center justify-center gap-1
+        ${className}
+      `}
+    >
+      {children}
+    </button>
+  );
 };
 
 // Local storage keys
@@ -1750,8 +1780,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               />
             )}
             
-            {/* Main Game Panel - matches other screens styling */}
-            <div className="bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border border-cyan-500/40 shadow-[0_0_40px_rgba(34,211,238,0.2)]">
+            {/* Main Game Panel */}
+            <div className="mb-2">
               
               {/* Game Board - simplified wrapper for consistent sizing */}
               <div className="flex justify-center pb-2 relative">
@@ -1810,53 +1840,30 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                 </div>
               )}
               
-              {/* Control Buttons (Home/Rotate/Flip/Confirm/Cancel) - matches other game screens */}
+              {/* Control Buttons - GlowOrbButton for consistency */}
               {gameState === GAME_STATES.PLAYING && (
                 <div className="mt-2 w-full flex-shrink-0">
-                  <div className="flex gap-2 justify-between mb-2 flex-wrap">
-                    {/* Home Button - Orange (matches WeeklyChallengeScreen) */}
-                    <button
-                      onClick={handleMenu}
-                      className="flex-1 px-2 py-2 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-white rounded-xl text-xs font-bold flex items-center justify-center shadow-[0_0_15px_rgba(251,146,60,0.4)]"
-                    >
-                      <Home size={16} />
-                    </button>
-                    
-                    {/* Rotate Button - Cyan */}
-                    <button
-                      onClick={rotatePiece}
-                      disabled={!selectedPiece && !pendingMove}
-                      className="flex-1 px-2 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(34,211,238,0.4)] disabled:shadow-none"
-                    >
-                      <RotateCcw size={14} />ROTATE
-                    </button>
-
-                    {/* Flip Button - Purple */}
-                    <button
-                      onClick={flipPiece}
-                      disabled={!selectedPiece && !pendingMove}
-                      className="flex-1 px-2 py-2 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-400 hover:to-violet-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 disabled:opacity-30 shadow-[0_0_15px_rgba(168,85,247,0.4)] disabled:shadow-none"
-                    >
-                      <FlipHorizontal size={14} />FLIP
-                    </button>
+                  <div className="flex gap-1 mb-2">
+                    <GlowOrbButton onClick={handleMenu} color="orange" className="flex-1">
+                      <Home size={14} />
+                    </GlowOrbButton>
+                    <GlowOrbButton onClick={rotatePiece} disabled={!selectedPiece && !pendingMove} color="cyan" className="flex-1">
+                      Rotate
+                    </GlowOrbButton>
+                    <GlowOrbButton onClick={flipPiece} disabled={!selectedPiece && !pendingMove} color="purple" className="flex-1">
+                      Flip
+                    </GlowOrbButton>
                   </div>
                   
                   {/* Confirm/Cancel when pending move */}
                   {pendingMove && (
                     <div className="flex gap-2 justify-center">
-                      <button
-                        onClick={cancelMove}
-                        className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-400 hover:to-slate-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(100,116,139,0.4)]"
-                      >
-                        <X size={14} />CANCEL
-                      </button>
-                      <button
-                        onClick={confirmMove}
-                        disabled={!canConfirm}
-                        className="flex-1 max-w-32 px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-xl text-sm flex items-center justify-center gap-1 font-bold shadow-[0_0_15px_rgba(34,197,94,0.4)] disabled:opacity-30 disabled:shadow-none"
-                      >
-                        <CheckCircle size={14} />CONFIRM
-                      </button>
+                      <GlowOrbButton onClick={cancelMove} color="slate" className="flex-1">
+                        Cancel
+                      </GlowOrbButton>
+                      <GlowOrbButton onClick={confirmMove} disabled={!canConfirm} color="green" className="flex-1">
+                        Confirm
+                      </GlowOrbButton>
                     </div>
                   )}
                 </div>

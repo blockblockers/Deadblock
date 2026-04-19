@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.21: Standardized board padding to pb-2 for cross-screen consistency
 // v2.20: FIX — playerPiecesRemaining was only filtered by newUsedPieces (player's moves),
 //        not by piecesOnBoard. AI-played pieces re-entered the shared pool via the player's
 //        list, allowing the AI to replay them at a different board position.
@@ -1487,7 +1488,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             </div>
 
             {/* Game Board */}
-            <div className="flex justify-center pb-1 relative">
+            <div className="flex justify-center pb-2 relative">
               <WrongMoveFeedback visible={showWrongMove} />
               <GameBoard
                 ref={boardRef}

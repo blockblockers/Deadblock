@@ -1,4 +1,5 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
+// v7.15: Standardized board padding to pb-2 for cross-screen consistency
 // v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -768,7 +769,7 @@ const GameScreen = ({
             <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
 
             {/* Game Board with ref for drag positioning */}
-            <div className="flex justify-center pb-1">
+            <div className="flex justify-center pb-2">
               <GameBoard
                 ref={boardRef}
                 board={board}

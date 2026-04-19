@@ -1,4 +1,5 @@
 // AchievementsDisplay.jsx - Achievements display for PlayerStatsModal
+// v7.13 - Show descriptions in compact view (showDetails={true} on recent badges)
 // v7.12 - FIXED: Now uses getAchievementsWithStatus for consistency with other screens
 // Place in src/components/AchievementsDisplay.jsx
 
@@ -221,7 +222,7 @@ const AchievementsDisplay = ({ compact = false }) => {
               <AchievementBadge
                 key={achievement.id}
                 achievement={achievement}
-                showDetails={false}
+                showDetails={true}
               />
             ))}
           </div>

@@ -1,5 +1,6 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
-// v7.38: FIX — Completed-game 5s review delay was bypassed because updateGameState
+// v7.39: Removed panel box around game board for visual consistency with GameScreen/CreatorPuzzle;
+//        floating background now shows through seamlessly
 //        fired setShowGameOver(true) immediately on the same data that loadGame was
 //        scheduling a delayed show for. Now: isReviewModeRef is set the moment the
 //        completed game is detected (before any state updates can trigger
@@ -1818,7 +1819,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           </div>
 
           {/* Main Game Panel */}
-          <div className={`bg-slate-900/80 backdrop-blur-md rounded-2xl shadow-xl p-2 sm:p-4 mb-2 border ${theme.panelBorder} ${theme.panelShadow}`}>
+          <div className="mb-2">
             
             {/* Player Bar */}
             <OnlinePlayerBar 
@@ -1829,7 +1830,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             />
 
             {/* Game Board - FIXED: Pass ref directly to GameBoard */}
-            <div className="flex justify-center pb-4">
+            <div className="flex justify-center pb-2">
               <div className="relative">
                 <GameBoard
                   ref={boardRef}
