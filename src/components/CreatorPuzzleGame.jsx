@@ -1,4 +1,7 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.20: FIX — playerPiecesRemaining was only filtered by newUsedPieces (player's moves),
+//        not by piecesOnBoard. AI-played pieces re-entered the shared pool via the player's
+//        list, allowing the AI to replay them at a different board position.
 // v2.19: FIX — aiAnimatingMove used wrong property names (pieceType/rot/flip) vs what
 //        GameBoard expects (piece/rotation/flipped). This caused getPieceCoords(undefined)
 //        to fire ~1000 times per AI move in an infinite re-render cascade.
@@ -810,7 +813,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     // AI pieces = puzzle.ai_pieces minus pieces already on the board
     const piecesOnBoard = getPiecesOnBoard(newBoardPieces);
     const aiPiecesList = (puzzle.ai_pieces || []).filter(p => !piecesOnBoard.includes(p));
-    const playerPiecesRemaining = availablePieces.filter(p => !newUsedPieces.includes(p));
+    // v2.20 FIX: Must also filter by piecesOnBoard — otherwise pieces the AI already
+    // played re-enter the shared pool via the player's list and the AI can replay them
+    const playerPiecesRemaining = availablePieces.filter(p => !newUsedPieces.includes(p) && !piecesOnBoard.includes(p));
     
     console.log('[CreatorPuzzleGame] Pieces on board:', piecesOnBoard);
     console.log('[CreatorPuzzleGame] AI can use:', aiPiecesList);

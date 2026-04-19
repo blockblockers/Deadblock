@@ -1,4 +1,5 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.22: Added "View Achievements" button in Account section with Achievements modal rendering
 // v7.21: Sign-out notification prompt — when push is subscribed, asks user to keep or
 //        turn off notifications before signing out. Preserves subscription by default.
 // v7.20: Push notifications preserved across sign-out (removed unsubscribe from sign-out flow);
@@ -14,11 +15,12 @@
 // Place in src/components/SettingsModal.jsx
 
 import { useState, useEffect } from 'react';
-import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music, Key, Lock, Eye, EyeOff, Check, Loader, Mail, Trash2, Bell, BellOff, Download, Smartphone, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Volume2, VolumeX, Vibrate, RotateCcw, LogOut, AlertTriangle, Music, Key, Lock, Eye, EyeOff, Check, Loader, Mail, Trash2, Bell, BellOff, Download, Smartphone, ExternalLink, ChevronDown, ChevronUp, Trophy } from 'lucide-react';
 import { soundManager } from '../utils/soundManager';
 import { useAuth } from '../contexts/AuthContext';
 import { pushNotificationService } from '../services/pushNotificationService';
 import { supabase } from '../utils/supabase';
+import Achievements from './Achievements';
 
 const SettingsModal = ({ isOpen, onClose }) => {
   const { 
@@ -77,6 +79,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
   
   // Delete account states
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showAchievements, setShowAchievements] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -954,6 +957,18 @@ const SettingsModal = ({ isOpen, onClose }) => {
                 )}
               </div>
               
+              {/* View Achievements */}
+              <button
+                onClick={() => { soundManager.playButtonClick(); setShowAchievements(true); }}
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 hover:border-amber-500/60 hover:shadow-[0_0_18px_rgba(251,191,36,0.3)] transition-all group text-left"
+              >
+                <div className="relative flex-shrink-0">
+                  <div className="absolute inset-0 bg-amber-500/50 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <Trophy size={20} className="relative text-amber-400" />
+                </div>
+                <span className="text-amber-300 text-sm font-medium">View Achievements</span>
+              </button>
+              
               {/* Password Reset - Only show for non-Google users or if in recovery mode */}
               {(!isGoogleUser || isPasswordRecovery) && !showPasswordReset && !showSendResetEmail && (
                 <button
@@ -1221,6 +1236,11 @@ const SettingsModal = ({ isOpen, onClose }) => {
           )}
         </div>
       </div>
+
+      {/* Achievements Modal */}
+      {showAchievements && (
+        <Achievements userId={profile?.id} onClose={() => setShowAchievements(false)} />
+      )}
     </div>
   );
 };

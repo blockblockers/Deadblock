@@ -1,4 +1,5 @@
 // Achievements.jsx - Modal displaying all achievements with improved scroll and text
+// v7.20: Added safe area top padding for iPhone notch/Dynamic Island clearance
 // v7.19: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.18: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.16: overscrollBehavior: 'none' (was 'contain' — caused iOS lock-at-bottom)
@@ -117,11 +118,12 @@ const Achievements = ({ userId, onClose }) => {
   return (
     <div 
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
+      style={{ paddingTop: 'max(16px, calc(env(safe-area-inset-top) + 12px))' }}
       onClick={handleClose}
     >
       <div 
         className="bg-slate-900 rounded-2xl w-full max-w-md overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)] flex flex-col"
-        style={{ maxHeight: 'calc(100dvh - 32px)' }}
+        style={{ maxHeight: 'min(calc(100dvh - 32px), calc(100vh - 32px - env(safe-area-inset-top)))' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}

@@ -1,4 +1,5 @@
 // ViewPlayerProfile - View another player's profile
+// v7.36: Added "View Achievements" button above Recent Games and Achievements modal rendering
 // v7.35: Stats audit — moved Head to Head under Online Stats card; enhanced Play Streak
 //        with status messages and warnings; Creator Puzzles now shows per-difficulty progress
 //        bars (Easy/Med/Hard/Expert) matching PlayerStatsModal; streak status field captured
@@ -24,6 +25,7 @@ import achievementService from '../services/achievementService';
 import { streakService } from '../services/streakService';
 import { weeklyChallengeService } from '../services/weeklyChallengeService';
 import TierIcon from './TierIcon';
+import Achievements from './Achievements';
 import { soundManager } from '../utils/soundManager';
 
 // Supabase config for direct fetch
@@ -1147,6 +1149,15 @@ const ViewPlayerProfile = ({
                   </div>
                 )}
 
+                {/* View Achievements Button */}
+                <button
+                  onClick={() => { soundManager.playClickSound('select'); setShowAchievements(true); }}
+                  className="w-full py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all mb-4"
+                >
+                  <Trophy size={14} />
+                  View Achievements
+                </button>
+
                 {/* Recent Games */}
                 {recentGames.length > 0 && (
                   <div className="mt-4">
@@ -1297,6 +1308,11 @@ const ViewPlayerProfile = ({
             </div>
           )}
         </div>
+
+    {/* Achievements Modal */}
+    {showAchievements && (
+      <Achievements userId={playerId} onClose={() => setShowAchievements(false)} />
+    )}
     </>
   );
 };
