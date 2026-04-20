@@ -1,5 +1,6 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
-// v2.23: Cancel button red; merged puzzle info into subtitle line to save space
+// v2.23: Merged puzzle info into subtitle row (smaller font, no dash, single line);
+//        Cancel button red
 // v2.22: Shrunk header spacing; replaced ControlButtons with inline GlowOrbButtons;
 //        Reset button (grey/slate) replaces Retry
 // v2.21: Standardized board padding to pb-2 for cross-screen consistency
@@ -1439,8 +1440,13 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Title */}
           <div className="text-center mb-1">
             <NeonTitle size="medium" />
-            <div className="flex items-center justify-center gap-2 mt-0">
-              <NeonSubtitle text={`CREATOR PUZZLE — #${puzzle.puzzle_number}${puzzle.name ? ' • ' + puzzle.name : ''}${attempts > 1 ? ' • Attempt #' + attempts : ''}`} size="small" inline />
+            <div className="flex items-center justify-center gap-1.5 mt-0 flex-nowrap">
+              <NeonSubtitle text="CREATOR PUZZLE" size="small" inline />
+              <span className="text-[10px] whitespace-nowrap truncate max-w-[45%]" style={{
+                color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
+              }}>
+                #{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name}` : ''}{attempts > 1 ? ` • Att. #${attempts}` : ''}
+              </span>
             </div>
           </div>
 
