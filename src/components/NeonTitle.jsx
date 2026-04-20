@@ -1,11 +1,12 @@
 // NeonTitle - Neon Segments Style (2A-5)
+// v2: Reduced medium size (text-xl sm:text-2xl) for better game screen vertical fit
 // DEA (cyan) | DBL (purple) | OCK (pink)
 
 const NeonTitle = ({ className = '', size = 'default' }) => {
   // Size presets
   const sizeClasses = {
     small: 'text-xl',
-    medium: 'text-2xl sm:text-3xl',
+    medium: 'text-xl sm:text-2xl',
     default: 'text-2xl sm:text-3xl',
     large: 'text-4xl sm:text-5xl md:text-6xl',
     xlarge: 'text-5xl sm:text-6xl md:text-7xl',

@@ -1734,7 +1734,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       {/* Content */}
       <div className="relative min-h-full flex flex-col items-center px-2 py-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
         {/* Header */}
-        <div className="w-full max-w-md mb-2 flex-shrink-0">
+        <div className="w-full max-w-md mb-1 flex-shrink-0">
           <div className="flex items-center justify-center">
             <div className="text-center">
               <NeonTitle size="medium" />

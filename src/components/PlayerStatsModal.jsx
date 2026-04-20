@@ -1,4 +1,5 @@
 // PlayerStatsModal.jsx - Comprehensive stats display
+// v7.28: Added "View All Achievements" button in achievements section with modal
 // v7.27: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.26: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
 // v7.22: AI Battles and Generated Puzzles as independent sections (not sub-dropdowns in Overview)
@@ -21,6 +22,7 @@ import { soundManager } from '../utils/soundManager';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import TierIcon from './TierIcon';
 import AchievementsDisplay from './AchievementsDisplay';
+import Achievements from './Achievements';
 
 // Helper to convert hex to rgba
 const hexToRgba = (hex, alpha) => {
@@ -118,6 +120,7 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
   const [savingUsername, setSavingUsername] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [expandedSection, setExpandedSection] = useState('overview');
+  const [showAchievements, setShowAchievements] = useState(false);
   
   // Play streak (daily streak)
   const [playStreak, setPlayStreak] = useState({ current: 0, longest: 0, status: 'none' });
@@ -616,6 +619,13 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
                 onToggle={handleSectionToggle}
               >
                 <AchievementsDisplay userId={profile?.id} compact />
+                <button
+                  onClick={() => { soundManager.playClickSound?.('select'); setShowAchievements(true); }}
+                  className="w-full mt-3 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
+                >
+                  <Trophy size={14} />
+                  View All Achievements
+                </button>
               </Section>
 
   {/* Play Streak Section */}
@@ -934,6 +944,11 @@ const PlayerStatsModal = ({ isOpen, onClose, isOffline = false }) => {
         </div>
       </div>
     </div>
+    
+    {/* Achievements Modal */}
+    {showAchievements && (
+      <Achievements userId={profile?.id} onClose={() => setShowAchievements(false)} />
+    )}
     </>
   );
 };

@@ -1,4 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.37: Added inline Privacy/Terms links (static footer hidden for users in index.html)
 // v7.36: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.35: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.33: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
@@ -1188,6 +1189,25 @@ const EntryAuthScreen = ({
         <p className="text-slate-600 text-xs mb-2">
           © 2025 Deadblock. All rights reserved.
         </p>
+        <div className="flex items-center justify-center gap-3 text-xs mb-2">
+          <a 
+            href="/privacy.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Privacy Policy
+          </a>
+          <span className="text-slate-700">•</span>
+          <a 
+            href="/terms.html" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+          >
+            Terms of Service
+          </a>
+        </div>
         {/* Delete Account Link - Required for App Store compliance */}
         <button
           onClick={() => {

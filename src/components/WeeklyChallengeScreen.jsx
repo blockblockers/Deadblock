@@ -1,4 +1,5 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.25: Shrunk countdown timer (text-xl→text-sm, smaller padding/icons) for better title centering
 // v7.24: Removed panel box around game board for visual consistency; floating background shows through
 // v7.23: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.22: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
@@ -1298,9 +1299,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         <div className="w-full max-w-lg">
           
           {/* Header with Title and Timer - styled like other game boards */}
-          <div className="flex items-center justify-between mb-2 px-2">
-            {/* Spacer for symmetry (home button moved to controls) */}
-            <div className="w-16" />
+          <div className="flex items-center justify-between mb-1 px-2">
+            {/* Spacer for symmetry (matches compact timer width) */}
+            <div className="w-12" />
             
             <div className="text-center flex-1 mx-2">
               <NeonTitle text="DEADBLOCK" size="medium" color="red" />
@@ -1354,7 +1355,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
               
               return (
                 <div 
-                  className={`relative px-4 py-2 bg-gradient-to-br ${bgGradient} rounded-xl border ${borderColor} overflow-hidden transition-all duration-500`}
+                  className={`relative px-2.5 py-1.5 bg-gradient-to-br ${bgGradient} rounded-xl border ${borderColor} overflow-hidden transition-all duration-500`}
                   style={{ 
                     boxShadow: `0 0 25px ${timerGlow.replace('0.9', '0.35')}, inset 0 0 20px ${timerGlow.replace('0.9', '0.15')}, 0 4px 15px rgba(0,0,0,0.4)` 
                   }}
@@ -1370,37 +1371,37 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                   />
                   
                   {/* Corner accents with dynamic color */}
-                  <div className="absolute top-0 left-0 w-2 h-2 border-l-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
-                  <div className="absolute top-0 right-0 w-2 h-2 border-r-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
-                  <div className="absolute bottom-0 left-0 w-2 h-2 border-l-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
-                  <div className="absolute bottom-0 right-0 w-2 h-2 border-r-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute top-0 left-0 w-1.5 h-1.5 border-l-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute top-0 right-0 w-1.5 h-1.5 border-r-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-l-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+                  <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-r-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
                   
-                  <div className="relative flex items-center gap-2.5">
+                  <div className="relative flex items-center gap-1.5">
                     {/* Animated clock icon with dynamic color */}
                     <div className="relative">
                       <div 
                         className="absolute inset-0 rounded-full blur-md animate-pulse transition-colors duration-500" 
                         style={{ backgroundColor: timerGlow.replace('0.9', '0.3') }}
                       />
-                      <Clock size={18} className={`relative ${iconColor} transition-colors duration-500`} />
+                      <Clock size={14} className={`relative ${iconColor} transition-colors duration-500`} />
                       {elapsedMs > 0 && (
-                        <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]" />
+                        <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse shadow-[0_0_6px_rgba(74,222,128,0.8)]" />
                       )}
                     </div>
                     
                     {/* Time display with dynamic glowing digits */}
                     <div className="flex items-baseline gap-0.5">
                       <span 
-                        className="text-xl font-mono font-black tracking-tight tabular-nums transition-all duration-500"
+                        className="text-sm font-mono font-black tracking-tight tabular-nums transition-all duration-500"
                         style={{ 
                           color: timerColor,
-                          textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}, 0 0 40px ${timerGlow.replace('0.9', '0.3')}`
+                          textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}`
                         }}
                       >
                         {Math.floor(elapsedMs / 60000)}
                       </span>
                       <span 
-                        className="text-xl font-mono font-black animate-pulse transition-colors duration-500"
+                        className="text-sm font-mono font-black animate-pulse transition-colors duration-500"
                         style={{ 
                           color: timerColor,
                           textShadow: `0 0 8px ${timerGlow.replace('0.9', '0.8')}`
@@ -1409,10 +1410,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                         :
                       </span>
                       <span 
-                        className="text-xl font-mono font-black tracking-tight tabular-nums transition-all duration-500"
+                        className="text-sm font-mono font-black tracking-tight tabular-nums transition-all duration-500"
                         style={{ 
                           color: timerColor,
-                          textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}, 0 0 40px ${timerGlow.replace('0.9', '0.3')}`
+                          textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}`
                         }}
                       >
                         {String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0')}

@@ -1,4 +1,5 @@
 // MenuScreen.jsx — Main menu
+// v7.2: Restored inline Privacy/Terms footer (static footer hidden for users in index.html)
 // v7.1: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 import { lazy, Suspense } from 'react';
 import { Settings, HelpCircle, Globe } from 'lucide-react';
@@ -273,7 +274,28 @@ const MenuScreen = ({
             </div>
           </div>
           
-          {/* Footer links removed - now in index.html footer */}
+          {/* Footer with Privacy & Terms links */}
+          <div className="text-center mt-4">
+            <div className="flex items-center justify-center gap-3 text-xs">
+              <a 
+                href="/privacy.html" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+              >
+                Privacy Policy
+              </a>
+              <span className="text-slate-700">•</span>
+              <a 
+                href="/terms.html" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-slate-500 hover:text-cyan-400 transition-colors underline underline-offset-2"
+              >
+                Terms of Service
+              </a>
+            </div>
+          </div>
         </div>
         
         {/* Bottom padding */}

@@ -1794,7 +1794,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
         <div className="flex-1 flex flex-col max-w-lg mx-auto p-2 sm:p-4 w-full" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
           
           {/* UPDATED v7.21: Header - removed top menu button, centered title */}
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1">
             {/* Empty spacer for balance */}
             <div className="w-16" />
             
