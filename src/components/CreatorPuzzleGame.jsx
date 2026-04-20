@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.23: Cancel button red; merged puzzle info into subtitle line to save space
 // v2.22: Shrunk header spacing; replaced ControlButtons with inline GlowOrbButtons;
 //        Reset button (grey/slate) replaces Retry
 // v2.21: Standardized board padding to pb-2 for cross-screen consistency
@@ -1438,30 +1439,13 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Title */}
           <div className="text-center mb-1">
             <NeonTitle size="medium" />
-            <NeonSubtitle text="CREATOR PUZZLE" size="small" className="mt-0" />
+            <div className="flex items-center justify-center gap-2 mt-0">
+              <NeonSubtitle text={`CREATOR PUZZLE — #${puzzle.puzzle_number}${puzzle.name ? ' • ' + puzzle.name : ''}${attempts > 1 ? ' • Attempt #' + attempts : ''}`} size="small" inline />
+            </div>
           </div>
 
           {/* Game Area */}
           <div className="w-full max-w-md">
-            
-            {/* Puzzle Info Bar - Centered */}
-            <div className="flex items-center justify-center mb-1 px-1">
-              <div className="flex items-center gap-2 text-center">
-                <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
-                {puzzle.name && (
-                  <>
-                    <span className="text-slate-500">•</span>
-                    <span className="text-slate-400 text-sm">{puzzle.name}</span>
-                  </>
-                )}
-                {attempts > 1 && (
-                  <>
-                    <span className="text-slate-500">•</span>
-                    <span className="text-slate-500 text-xs">Attempt #{attempts}</span>
-                  </>
-                )}
-              </div>
-            </div>
 
             {/* Player Bar - matches GameScreen layout */}
             <div className="flex items-center justify-center gap-2 mb-1 py-1">
@@ -1594,7 +1578,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             {/* Confirm/Cancel when pending move */}
             {pendingMove && (
               <div className="flex gap-2 mt-2">
-                <GlowOrbButton onClick={cancelMove} color="slate" className="flex-1">
+                <GlowOrbButton onClick={cancelMove} color="red" className="flex-1">
                   Cancel
                 </GlowOrbButton>
                 <GlowOrbButton onClick={confirmMove} disabled={!(canConfirm && !isPieceOffGrid)} color="green" className="flex-1">
