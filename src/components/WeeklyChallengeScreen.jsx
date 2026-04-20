@@ -1484,15 +1484,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
               <GlowOrbButton onClick={flipPiece} disabled={!selectedPiece && !pendingMove} color="purple" className="flex-1">
                 Flip
               </GlowOrbButton>
-              <GlowOrbButton onClick={handleRestart} color="red" className="flex-1">
-                Retry
+              <GlowOrbButton onClick={handleRestart} color="slate" className="flex-1">
+                Reset
               </GlowOrbButton>
             </div>
             
             {/* Confirm/Cancel Controls */}
             {pendingMove && (
               <div className="flex gap-2 justify-center mb-2">
-                <GlowOrbButton onClick={cancelMove} color="slate" className="flex-1">
+                <GlowOrbButton onClick={cancelMove} color="red" className="flex-1">
                   Cancel
                 </GlowOrbButton>
                 <GlowOrbButton

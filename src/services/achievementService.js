@@ -1,4 +1,6 @@
 // achievementService.js - Achievement tracking and display
+// v7.13 - Added checkAchievements with correct online-only stat calculation
+//         (profiles.games_won/games_played include AI — must subtract for online achievements)
 // v7.12 - FIXED: Now queries 'achievements' table instead of 'achievement_definitions'
 // Place in src/services/achievementService.js
 
@@ -381,6 +383,141 @@ class AchievementService {
       console.error('[achievementService] awardAchievement error:', err);
       return { success: false, error: err.message };
     }
+  }
+
+  // ===========================================================================
+  // CHECKING & AWARDING ACHIEVEMENTS
+  // ===========================================================================
+
+  /**
+   * Check all achievement conditions for a user and award any newly earned.
+   * 
+   * CRITICAL: profiles.games_played and profiles.games_won include AI games.
+   * Online achievement checks must subtract AI totals to get true online counts.
+   */
+  async checkAchievements(userId, gameId = null) {
+    if (!isSupabaseConfigured()) return { data: [], error: 'Not configured' };
+
+    const targetUserId = userId || getCurrentUserId();
+    if (!targetUserId) return { data: [], error: 'Not authenticated' };
+
+    try {
+      // Fetch profile stats (includes AI fields)
+      const { data: stats, error: statsError } = await supabase
+        .from('profiles')
+        .select('games_played, games_won, ai_easy_wins, ai_easy_losses, ai_medium_wins, ai_medium_losses, ai_hard_wins, ai_hard_losses, local_games_played, speed_best_streak, puzzles_easy_solved, puzzles_medium_solved, puzzles_hard_solved')
+        .eq('id', targetUserId)
+        .single();
+
+      if (statsError || !stats) {
+        console.error('[achievementService] checkAchievements: Failed to load stats:', statsError);
+        return { data: [], error: statsError?.message || 'No stats' };
+      }
+
+      // Get already-unlocked achievement IDs
+      const { data: existing } = await supabase
+        .from('user_achievements')
+        .select('achievement_id')
+        .eq('user_id', targetUserId);
+
+      const alreadyUnlocked = new Set((existing || []).map(e => e.achievement_id));
+
+      // --- Calculate corrected counts ---
+      const aiTotalWins = (stats.ai_easy_wins || 0) + (stats.ai_medium_wins || 0) + (stats.ai_hard_wins || 0);
+      const aiTotalLosses = (stats.ai_easy_losses || 0) + (stats.ai_medium_losses || 0) + (stats.ai_hard_losses || 0);
+      const aiTotalGames = aiTotalWins + aiTotalLosses;
+
+      // Online-only: subtract AI and local from profile totals
+      const onlineGamesPlayed = Math.max(0, (stats.games_played || 0) - aiTotalGames - (stats.local_games_played || 0));
+      const onlineGamesWon = Math.max(0, (stats.games_won || 0) - aiTotalWins);
+
+      // Puzzle totals
+      const puzzleTotal = (stats.puzzles_easy_solved || 0) + (stats.puzzles_medium_solved || 0) + (stats.puzzles_hard_solved || 0);
+
+      // Total across ALL modes (for general achievements)
+      const totalAllGames = (stats.games_played || 0) + (stats.local_games_played || 0) + puzzleTotal;
+
+      // --- Define conditions: [achievementId, condition] ---
+      const checks = [
+        // Online (use corrected online-only counts)
+        ['online_first_win',   onlineGamesWon >= 1],
+        ['online_wins_10',     onlineGamesWon >= 10],
+        ['online_wins_50',     onlineGamesWon >= 50],
+        ['online_games_10',    onlineGamesPlayed >= 10],
+        ['online_games_50',    onlineGamesPlayed >= 50],
+        ['online_games_100',   onlineGamesPlayed >= 100],
+
+        // AI
+        ['ai_first_win',       aiTotalWins >= 1],
+        ['ai_hard_win',        (stats.ai_hard_wins || 0) >= 1],
+        ['ai_hard_wins_10',    (stats.ai_hard_wins || 0) >= 10],
+        ['ai_expert_win',      false], // Checked separately when expert AI is beaten
+
+        // Speed
+        ['speed_streak_5',     (stats.speed_best_streak || 0) >= 5],
+        ['speed_streak_10',    (stats.speed_best_streak || 0) >= 10],
+        ['speed_streak_25',    (stats.speed_best_streak || 0) >= 25],
+        ['speed_streak_50',    (stats.speed_best_streak || 0) >= 50],
+
+        // Puzzle
+        ['puzzle_first',       puzzleTotal >= 1],
+        ['puzzle_easy_10',     (stats.puzzles_easy_solved || 0) >= 10],
+        ['puzzle_medium_10',   (stats.puzzles_medium_solved || 0) >= 10],
+        ['puzzle_hard_10',     (stats.puzzles_hard_solved || 0) >= 10],
+        ['puzzle_total_100',   puzzleTotal >= 100],
+
+        // General
+        ['games_played_100',   totalAllGames >= 100],
+      ];
+
+      // --- Award newly qualified achievements ---
+      const awarded = [];
+
+      for (const [achId, condition] of checks) {
+        if (condition && !alreadyUnlocked.has(achId)) {
+          const result = await this.awardAchievement(achId, gameId ? { game_id: gameId } : {});
+          if (result.success) {
+            awarded.push({ achievement_id: achId, success: true });
+          }
+        }
+      }
+
+      return { data: awarded, error: null };
+    } catch (err) {
+      console.error('[achievementService] checkAchievements error:', err);
+      return { data: [], error: err.message };
+    }
+  }
+
+  /**
+   * Check weekly challenge achievements (called separately after weekly completion)
+   */
+  async checkWeeklyAchievements(rank, challengeId) {
+    if (!isSupabaseConfigured()) return [];
+
+    const awarded = [];
+
+    try {
+      // First weekly completion
+      const first = await this.awardAchievement('weekly_first', { challenge_id: challengeId });
+      if (first.success) awarded.push('weekly_first');
+
+      // Top 3 finish
+      if (rank <= 3) {
+        const top3 = await this.awardAchievement('weekly_top_3', { challenge_id: challengeId, rank });
+        if (top3.success) awarded.push('weekly_top_3');
+      }
+
+      // Champion (1st place)
+      if (rank === 1) {
+        const champ = await this.awardAchievement('weekly_champion', { challenge_id: challengeId });
+        if (champ.success) awarded.push('weekly_champion');
+      }
+    } catch (err) {
+      console.error('[achievementService] checkWeeklyAchievements error:', err);
+    }
+
+    return awarded;
   }
 
   /**

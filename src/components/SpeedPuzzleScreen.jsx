@@ -1,4 +1,5 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
+// v7.15: Timer left / title center / streak right layout; shrunk timer+streak components
 // v7.14: Removed panel box around game board for visual consistency; floating background shows through
 // v7.13: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.12: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
@@ -191,12 +192,12 @@ const SpeedTimer = memo(({ timeLeft, maxTime }) => {
     return '#22d3ee';
   }, [isUrgent, isCritical, isLow]);
   
-  const circleCircumference = 2 * Math.PI * 12;
+  const circleCircumference = 2 * Math.PI * 9;
   
   return (
     <div 
       className={`
-        relative flex items-center gap-2 px-3 py-1.5 rounded-full 
+        relative flex items-center gap-1.5 px-2 py-1 rounded-full 
         bg-slate-900/90 border transition-all duration-200
         ${isUrgent ? 'animate-timer-shake border-red-500/70' : isCritical ? 'animate-timer-critical border-orange-500/60' : isLow ? 'animate-timer-pulse border-amber-500/50' : 'border-cyan-500/40'}
       `}
@@ -205,11 +206,11 @@ const SpeedTimer = memo(({ timeLeft, maxTime }) => {
       }}
     >
       {/* Mini circular progress */}
-      <div className="relative w-8 h-8">
+      <div className="relative w-6 h-6">
         <svg className="w-full h-full transform -rotate-90">
-          <circle cx="16" cy="16" r="12" fill="none" stroke="rgba(100,116,139,0.3)" strokeWidth="3" />
+          <circle cx="12" cy="12" r="9" fill="none" stroke="rgba(100,116,139,0.3)" strokeWidth="2.5" />
           <circle
-            cx="16" cy="16" r="12" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round"
+            cx="12" cy="12" r="9" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"
             strokeDasharray={circleCircumference}
             strokeDashoffset={circleCircumference * (1 - percentage / 100)}
             className="transition-all duration-100"
@@ -217,7 +218,7 @@ const SpeedTimer = memo(({ timeLeft, maxTime }) => {
           />
         </svg>
         <Timer 
-          size={14} 
+          size={10} 
           className="absolute inset-0 m-auto transition-colors"
           style={{ color }}
         />
@@ -225,7 +226,7 @@ const SpeedTimer = memo(({ timeLeft, maxTime }) => {
       
       {/* Time display */}
       <div 
-        className={`font-black tabular-nums text-xl transition-all ${isUrgent ? 'scale-110' : ''}`}
+        className={`font-black tabular-nums text-base transition-all ${isUrgent ? 'scale-110' : ''}`}
         style={{ color, textShadow: `0 0 10px ${color}` }}
       >
         {timeLeft.toFixed(1)}
@@ -271,7 +272,7 @@ const StreakDisplay = memo(({ streak, isNewRecord, bestStreak = 0 }) => {
   return (
     <div 
       className={`
-        flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900/90 border transition-all duration-300
+        flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/90 border transition-all duration-300
         ${isLegendary ? 'border-amber-400/60' : isOnFire ? 'border-orange-500/50' : isHot ? 'border-orange-400/40' : 'border-slate-700/50'}
       `}
       style={{
@@ -281,7 +282,7 @@ const StreakDisplay = memo(({ streak, isNewRecord, bestStreak = 0 }) => {
       {/* Flame icon */}
       <div className="relative">
         <Flame 
-          size={18} 
+          size={14} 
           className={`transition-all duration-300 ${isOnFire ? 'animate-bounce' : ''}`}
           style={{ color, filter: isHot ? `drop-shadow(0 0 4px ${color})` : 'none' }}
         />
@@ -289,7 +290,7 @@ const StreakDisplay = memo(({ streak, isNewRecord, bestStreak = 0 }) => {
       
       {/* Streak number */}
       <div 
-        className="font-black tabular-nums text-lg"
+        className="font-black tabular-nums text-sm"
         style={{ color, textShadow: isHot ? `0 0 10px ${color}` : 'none' }}
       >
         {streak}
@@ -1733,25 +1734,32 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       >
       {/* Content */}
       <div className="relative min-h-full flex flex-col items-center px-2 py-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
-        {/* Header */}
+        {/* Header - Timer left, Title center, Streak right */}
         <div className="w-full max-w-md mb-1 flex-shrink-0">
-          <div className="flex items-center justify-center">
-            <div className="text-center">
+          <div className="flex items-center justify-between">
+            {/* Timer - left */}
+            <div className="w-28 flex-shrink-0">
+              {gameState === GAME_STATES.PLAYING && (
+                <SpeedTimer timeLeft={timeLeft} maxTime={TIMER_DURATION} />
+              )}
+            </div>
+            
+            {/* Title - center */}
+            <div className="text-center flex-1 mx-1">
               <NeonTitle size="medium" />
-              <div className="speed-subtitle font-black tracking-[0.2em] text-base sm:text-lg mt-1">
+              <div className="speed-subtitle font-black tracking-[0.2em] text-xs sm:text-sm mt-0">
                 ⚡ SPEED MODE ⚡
               </div>
             </div>
+            
+            {/* Streak - right */}
+            <div className="w-28 flex-shrink-0 flex justify-end">
+              {gameState === GAME_STATES.PLAYING && (
+                <StreakDisplay streak={streak} isNewRecord={isNewRecord} bestStreak={effectiveBestStreak} />
+              )}
+            </div>
           </div>
         </div>
-        
-        {/* Timer and Streak */}
-        {gameState === GAME_STATES.PLAYING && (
-          <div className="flex items-center justify-center gap-3 mb-2 flex-shrink-0">
-            <SpeedTimer timeLeft={timeLeft} maxTime={TIMER_DURATION} />
-            <StreakDisplay streak={streak} isNewRecord={isNewRecord} bestStreak={effectiveBestStreak} />
-          </div>
-        )}
         
         {/* Loading state */}
         {gameState === GAME_STATES.LOADING && (
@@ -1858,7 +1866,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                   {/* Confirm/Cancel when pending move */}
                   {pendingMove && (
                     <div className="flex gap-2 justify-center">
-                      <GlowOrbButton onClick={cancelMove} color="slate" className="flex-1">
+                      <GlowOrbButton onClick={cancelMove} color="red" className="flex-1">
                         Cancel
                       </GlowOrbButton>
                       <GlowOrbButton onClick={confirmMove} disabled={!canConfirm} color="green" className="flex-1">

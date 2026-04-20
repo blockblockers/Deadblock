@@ -1911,7 +1911,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
 
             {/* D-Pad with Error Message Layout - matches GameScreen */}
             {pendingMove && isMyTurn && !isDragging && (
-              <div className="flex items-start justify-center gap-3 mb-2">
+              <div className="flex items-start justify-center gap-3 mb-0">
                 {/* Error message box */}
                 <div className="flex-shrink-0 w-24">
                   {errorMessage && (
@@ -1933,7 +1933,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             
             {/* UPDATED: Controls - GLOW ORB STYLE consistent with other boards */}
             {/* Row 1: Home, Rotate, Flip, Forfeit/Quit */}
-            <div className="flex gap-1 mt-3">
+            <div className="flex gap-1 mt-1">
               <GlowOrbButton
                 onClick={() => { soundManager.playButtonClick(); onLeave(); }}
                 color="orange"
@@ -1971,10 +1971,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             
             {/* Row 2: Cancel/Confirm when piece is pending */}
             {pendingMove && (
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-1">
                 <GlowOrbButton
                   onClick={handleCancel}
-                  color="slate"
+                  color="red"
                   className="flex-1"
                 >
                   Cancel

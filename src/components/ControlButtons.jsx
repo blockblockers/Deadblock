@@ -1,4 +1,5 @@
 // ControlButtons.jsx - Unified control buttons for all game screens
+// v7.14: Puzzle retry → "RESET" with slate (grey) color
 // v7.13: Updated button styling per user request
 // Standard: Menu (orange, Home icon only), ROTATE (cyan), FLIP (purple), 
 //           CONFIRM (green, no icon), CANCEL (rose, no icon), 
@@ -185,11 +186,11 @@ const ControlButtons = ({
                   {onRetryPuzzle && (
                     <GlowOrbButton
                       onClick={handleRetry}
-                      color="yellow"
+                      color="slate"
                       className="flex-1"
-                      title="Retry this puzzle from the beginning"
+                      title="Reset this puzzle from the beginning"
                     >
-                      RETRY
+                      RESET
                     </GlowOrbButton>
                   )}
                   {/* New - Blue, no icon */}

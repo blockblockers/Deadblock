@@ -1,4 +1,6 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.22: Shrunk header spacing; replaced ControlButtons with inline GlowOrbButtons;
+//        Reset button (grey/slate) replaces Retry
 // v2.21: Standardized board padding to pb-2 for cross-screen consistency
 // v2.20: FIX — playerPiecesRemaining was only filtered by newUsedPieces (player's moves),
 //        not by piecesOnBoard. AI-played pieces re-entered the shared pool via the player's
@@ -42,12 +44,11 @@
 // v1.2: Enhanced Expert AI - better trap detection, blocking scoring, deterministic tiebreakers
 // v1.1: Updated layout to match GameScreen - cyan theme, proper DPad/controls layout
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { ArrowLeft, RotateCcw, Move, FlipHorizontal, Check, X, Trophy, Sparkles, Lightbulb, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Move, FlipHorizontal, Check, X, Trophy, Sparkles, Lightbulb, RefreshCw, Home } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import GameBoard from './GameBoard';
 import PieceTray from './PieceTray';
-import ControlButtons from './ControlButtons';
 import DPad from './DPad';
 import DragOverlay from './DragOverlay';
 import { pieces } from '../utils/pieces';
@@ -266,6 +267,34 @@ const SuccessOverlay = memo(({ puzzleNumber, onContinue, onBack }) => (
 ));
 
 SuccessOverlay.displayName = 'SuccessOverlay';
+
+// Reusable styled button for consistent control styling
+const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className = '' }) => {
+  const colorClasses = {
+    cyan: 'from-cyan-500 to-blue-600 shadow-[0_0_15px_rgba(34,211,238,0.4)] hover:shadow-[0_0_25px_rgba(34,211,238,0.6)]',
+    orange: 'from-orange-500 to-amber-600 shadow-[0_0_15px_rgba(249,115,22,0.4)] hover:shadow-[0_0_25px_rgba(249,115,22,0.6)]',
+    green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
+    purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
+    slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`
+        bg-gradient-to-r ${colorClasses[color]}
+        text-white font-bold rounded-xl px-3 py-2 text-xs
+        transition-all duration-200
+        hover:scale-105 active:scale-95
+        disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:shadow-none
+        flex items-center justify-center gap-1
+        ${className}
+      `}
+    >
+      {children}
+    </button>
+  );
+};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -1409,14 +1438,14 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Title */}
           <div className="text-center mb-1">
             <NeonTitle size="medium" />
-            <NeonSubtitle text="CREATOR PUZZLE" size="small" className="mt-1" />
+            <NeonSubtitle text="CREATOR PUZZLE" size="small" className="mt-0" />
           </div>
 
           {/* Game Area */}
           <div className="w-full max-w-md">
             
             {/* Puzzle Info Bar - Centered */}
-            <div className="flex items-center justify-center mb-2 px-1">
+            <div className="flex items-center justify-center mb-1 px-1">
               <div className="flex items-center gap-2 text-center">
                 <span className="text-white font-bold text-sm">#{puzzle.puzzle_number}</span>
                 {puzzle.name && (
@@ -1435,7 +1464,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             </div>
 
             {/* Player Bar - matches GameScreen layout */}
-            <div className="flex items-center justify-center gap-2 mb-3 py-2">
+            <div className="flex items-center justify-center gap-2 mb-1 py-1">
               {/* Player 1 - YOU */}
               <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
                 currentPlayer === 1 
@@ -1546,23 +1575,33 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               </div>
             )}
 
-            {/* Control Buttons - No "New" button for creator puzzles */}
-            <ControlButtons
-              selectedPiece={selectedPiece}
-              pendingMove={pendingMove}
-              canConfirm={canConfirm && !isPieceOffGrid}
-              gameOver={gameState === GAME_STATES.SUCCESS}
-              gameMode="puzzle"
-              currentPlayer={currentPlayer}
-              isGeneratingPuzzle={false}
-              moveCount={0}
-              onRotate={handleRotate}
-              onFlip={handleFlip}
-              onConfirm={confirmMove}
-              onCancel={cancelMove}
-              onRetryPuzzle={resetPuzzle}
-              onMenu={onBack}
-            />
+            {/* Control Buttons - inline GlowOrbButtons with grey Reset */}
+            <div className="flex gap-1 mt-2">
+              <GlowOrbButton onClick={onBack} color="orange" className="flex-1">
+                <Home size={14} />
+              </GlowOrbButton>
+              <GlowOrbButton onClick={handleRotate} disabled={!selectedPiece || gameState === GAME_STATES.SUCCESS} color="cyan" className="flex-1">
+                Rotate
+              </GlowOrbButton>
+              <GlowOrbButton onClick={handleFlip} disabled={!selectedPiece || gameState === GAME_STATES.SUCCESS} color="purple" className="flex-1">
+                Flip
+              </GlowOrbButton>
+              <GlowOrbButton onClick={resetPuzzle} disabled={gameState === GAME_STATES.SUCCESS} color="slate" className="flex-1">
+                Reset
+              </GlowOrbButton>
+            </div>
+            
+            {/* Confirm/Cancel when pending move */}
+            {pendingMove && (
+              <div className="flex gap-2 mt-2">
+                <GlowOrbButton onClick={cancelMove} color="slate" className="flex-1">
+                  Cancel
+                </GlowOrbButton>
+                <GlowOrbButton onClick={confirmMove} disabled={!(canConfirm && !isPieceOffGrid)} color="green" className="flex-1">
+                  Confirm
+                </GlowOrbButton>
+              </div>
+            )}
           </div>
 
           {/* Piece Tray */}

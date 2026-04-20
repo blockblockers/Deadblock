@@ -1,4 +1,5 @@
 // User Profile Screen - Enhanced with ELO changes in match history and proper Final Board View
+// v7.15: Added "View Achievements" button above Match History with Achievements modal
 // v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // 1. Shows +/- ELO changes in match history boxes (with fallback calculation)
@@ -18,6 +19,7 @@ import NeonTitle from './NeonTitle';
 import TierIcon from './TierIcon';
 import ViewPlayerProfile from './ViewPlayerProfile';
 import FinalBoardView from './FinalBoardView';
+import Achievements from './Achievements';
 import { soundManager } from '../utils/soundManager';
 
 // Direct fetch helper for game moves
@@ -99,6 +101,7 @@ const UserProfile = ({ onBack }) => {
   const [selectedGameForFinalView, setSelectedGameForFinalView] = useState(null);
   const [loadingMoves, setLoadingMoves] = useState(false);
   const [gameMoves, setGameMoves] = useState([]);
+  const [showAchievements, setShowAchievements] = useState(false);
 
   // Get tier info for theming
   const rankInfo = profile ? getRankInfo(profile.rating || 1000) : null;
@@ -470,6 +473,15 @@ const UserProfile = ({ onBack }) => {
           )}
         </div>
 
+        {/* View Achievements Button */}
+        <button
+          onClick={() => { soundManager.playButtonClick?.(); setShowAchievements(true); }}
+          className="w-full mb-4 py-2.5 rounded-xl text-xs font-medium flex items-center justify-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
+        >
+          <Trophy size={14} />
+          View Achievements
+        </button>
+
         {/* Match History - Tier themed with clickable opponents and ELO changes */}
         <div 
           className="backdrop-blur-md rounded-2xl p-4"
@@ -620,6 +632,11 @@ const UserProfile = ({ onBack }) => {
           viewerIsPlayer1={selectedGameForFinalView.player1_id === profile?.id}
           gameDate={selectedGameForFinalView.created_at}
         />
+      )}
+
+      {/* Achievements Modal */}
+      {showAchievements && (
+        <Achievements userId={profile?.id} onClose={() => setShowAchievements(false)} />
       )}
       </div>{/* end inner scroll child */}
     </div>
