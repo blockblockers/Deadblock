@@ -1613,7 +1613,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           
           {/* Attempt Counter */}
           <div className="text-center mt-1 mb-1">
-            <span className="text-slate-500 text-[10px]">Attempt #{attempts}</span>
+            <span className="text-xs font-medium" style={{
+              color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
+            }}>
+              Attempt #{attempts}
+            </span>
           </div>
         </div>
       </div>

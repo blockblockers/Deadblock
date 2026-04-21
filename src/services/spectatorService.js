@@ -1,4 +1,5 @@
 // spectatorService.js - Spectator functionality for watching live games
+// v7.13 FIX: joinAsSpectator removed single:true (caused 406 when no existing row)
 // v7.12 FIX: getFriendGames now checks both player1_id AND player2_id
 // Previously only checked player1_id, missing games where friend is player2
 import { isSupabaseConfigured, supabase } from '../utils/supabase';
@@ -123,14 +124,13 @@ export const spectatorService = {
   async joinAsSpectator(gameId, userId) {
     if (!isSupabaseConfigured()) return { error: 'Not configured' };
     
-    // Check if already spectating
+    // Check if already spectating (don't use single — 406 when no rows)
     const { data: existing } = await dbSelect('game_spectators', {
       select: 'id',
-      eq: { game_id: gameId, user_id: userId },
-      single: true
+      eq: { game_id: gameId, user_id: userId }
     });
     
-    if (existing) return { error: null }; // Already joined
+    if (existing?.length > 0) return { error: null }; // Already joined
     
     return await dbInsert('game_spectators', {
       game_id: gameId,

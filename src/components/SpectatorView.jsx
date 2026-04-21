@@ -1,5 +1,6 @@
 // SpectatorView.jsx - Watch live games
-// v7.19: Added chronological move numbering from game_moves table. Loads move history
+// v7.20: Fixed fallback move numbering — uses game.used_pieces (chronological) instead of
+//        unordered Object.keys. Fixes "newest piece = 1" bug when game_moves query fails.
 //        on spectate start and reloads on each real-time update. Sorts by move_number
 //        ascending to guarantee correct order. Falls back to piece-group numbering if
 //        unavailable. Fixed player name colors using inline styles (Tailwind class was
@@ -152,22 +153,26 @@ const SpectatorView = ({
       return map;
     }
     
-    // Fallback: group by piece type from boardPieces (no guaranteed order)
+    // Fallback: use game.used_pieces (chronological) to order piece groups from boardPieces
     const pieceGroups = {};
     getEntries(boardPieces).forEach(([key, pieceType]) => {
       if (!pieceGroups[pieceType]) pieceGroups[pieceType] = [];
       pieceGroups[pieceType].push(key);
     });
+    // used_pieces array is in play order (first placed = first element)
+    const orderedPieces = game?.used_pieces || Object.keys(pieceGroups);
     let moveNum = 1;
-    Object.keys(pieceGroups).forEach((pieceType) => {
+    orderedPieces.forEach((pieceType) => {
+      const cells = pieceGroups[pieceType];
+      if (!cells) return;
       const isLast = pieceType === lastMovePiece;
-      pieceGroups[pieceType].forEach(key => {
+      cells.forEach(key => {
         map[key] = { moveNumber: moveNum, pieceType, isLastMove: isLast };
       });
       moveNum++;
     });
     return map;
-  }, [moveHistory, boardPieces, lastMovePiece, getEntries]);
+  }, [moveHistory, boardPieces, lastMovePiece, getEntries, game?.used_pieces]);
 
   const getPieceName = useCallback((rowIdx, colIdx) => {
     if (Array.isArray(boardPieces) && boardPieces[rowIdx]) return boardPieces[rowIdx][colIdx] || null;

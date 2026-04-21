@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.25: Mobile flash fix — cell transition-all→transition-colors, board GPU layer promotion
 // v7.24 - Fixed spacing (justify-start instead of center), increased grid opacity (0.12), larger board (420px max)
 // v7.23 - Enhanced grid background opacity (0.03 -> 0.06) for better visibility
 // v7.22 - FloatingPieces with immediateStart and maxDelay=0 for instant smooth animation
@@ -454,6 +455,9 @@ const FinalBoardView = ({
                 height: 'min(calc(100vw - 32px), calc(100dvh - 280px), calc(100vh - 280px))',
                 maxWidth: '420px',
                 maxHeight: '420px',
+                // v7.25: GPU layer promotion — prevents mobile flash during replay stepping
+                contain: 'layout style',
+                willChange: 'contents',
               }}
             >
             {currentState.board.map((row, rowIdx) =>
@@ -476,7 +480,7 @@ const FinalBoardView = ({
                     key={key}
                     className={`
                       aspect-square rounded-md sm:rounded-lg relative
-                      transition-all duration-150 overflow-hidden
+                      transition-colors duration-100 overflow-hidden
                       ${isOccupied 
                         ? isLastMove
                           ? 'shadow-lg'

@@ -1,4 +1,5 @@
 // Leaderboard.jsx - Global leaderboard with scrollable list
+// v7.20: Fixed stats to show online-only games/wins (subtracts AI + local from profile totals)
 // v7.19: Added Eye icon per player row to watch their active games. Accepts onSpectateGame prop.
 // v7.18: Added safe area top padding for iPhone notch clearance
 // v7.17: Fixed mobile scroll - proper touch-action, safe area padding, hardware acceleration
@@ -12,6 +13,15 @@ import { useAuth } from '../contexts/AuthContext';
 import { getRankInfo } from '../utils/rankUtils';
 import { spectatorService } from '../services/spectatorService';
 import TierIcon from './TierIcon';
+
+// v7.20: Compute online-only stats — profiles.games_played/games_won include AI + local games
+const getOnlineStats = (p) => {
+  const aiWins = (p.ai_easy_wins || 0) + (p.ai_medium_wins || 0) + (p.ai_hard_wins || 0);
+  const aiLosses = (p.ai_easy_losses || 0) + (p.ai_medium_losses || 0) + (p.ai_hard_losses || 0);
+  const onlineGames = Math.max(0, (p.games_played || 0) - aiWins - aiLosses - (p.local_games_played || 0));
+  const onlineWins = Math.max(0, (p.games_won || 0) - aiWins);
+  return { onlineGames, onlineWins };
+};
 
 const Leaderboard = ({ onBack, onSpectateGame }) => {
   const { profile } = useAuth();
@@ -37,38 +47,45 @@ const Leaderboard = ({ onBack, onSpectateGame }) => {
     setLoading(true);
 
     try {
+      // v7.20: Fetch AI stats + local_games_played to compute online-only values
       let query = supabase
         .from('profiles')
-        .select('id, username, display_name, rating, games_played, games_won, avatar_url')
-        .gt('games_played', 0);
+        .select('id, username, display_name, rating, games_played, games_won, avatar_url, ai_easy_wins, ai_easy_losses, ai_medium_wins, ai_medium_losses, ai_hard_wins, ai_hard_losses, local_games_played')
+        .gt('games_played', 0)
+        .order('rating', { ascending: false });
 
-      if (filter === 'rating') {
-        query = query.order('rating', { ascending: false });
-      } else if (filter === 'wins') {
-        query = query.order('games_won', { ascending: false });
-      } else {
-        query = query.order('games_played', { ascending: false });
-      }
-
-      const { data, error } = await query.limit(100);
+      const { data, error } = await query.limit(200);
 
       if (!error && data) {
-        setPlayers(data);
+        // Compute online-only stats for each player
+        const enriched = data.map(p => {
+          const { onlineGames, onlineWins } = getOnlineStats(p);
+          return { ...p, onlineGames, onlineWins };
+        }).filter(p => p.onlineGames > 0);
+
+        // Re-sort by corrected values for wins/games filters
+        if (filter === 'wins') {
+          enriched.sort((a, b) => b.onlineWins - a.onlineWins);
+        } else if (filter === 'games') {
+          enriched.sort((a, b) => b.onlineGames - a.onlineGames);
+        }
+
+        const top100 = enriched.slice(0, 100);
+        setPlayers(top100);
 
         // Find user's rank
         if (profile?.id) {
-          const userIndex = data.findIndex(p => p.id === profile.id);
+          const userIndex = top100.findIndex(p => p.id === profile.id);
           if (userIndex !== -1) {
             setMyRank(userIndex + 1);
           } else {
-            // User not in top 100, get their actual rank
-            const { count } = await supabase
-              .from('profiles')
-              .select('*', { count: 'exact', head: true })
-              .gt(filter === 'rating' ? 'rating' : filter === 'wins' ? 'games_won' : 'games_played', 
-                  filter === 'rating' ? profile.rating : filter === 'wins' ? profile.games_won : profile.games_played);
-            
-            setMyRank((count || 0) + 1);
+            // User not in top 100 — compute rank from full enriched list
+            const allIndex = enriched.findIndex(p => p.id === profile.id);
+            if (allIndex !== -1) {
+              setMyRank(allIndex + 1);
+            } else {
+              setMyRank(null);
+            }
           }
         }
       }
@@ -202,8 +219,8 @@ const Leaderboard = ({ onBack, onSpectateGame }) => {
                     <div className="text-white font-medium">Your Rank</div>
                     <div className="text-slate-400 text-sm">
                       {filter === 'rating' ? `${profile?.rating || 1000} rating` :
-                       filter === 'wins' ? `${profile?.games_won || 0} wins` :
-                       `${profile?.games_played || 0} games`}
+                       filter === 'wins' ? `${profile ? getOnlineStats(profile).onlineWins : 0} wins` :
+                       `${profile ? getOnlineStats(profile).onlineGames : 0} games`}
                     </div>
                   </div>
                 </div>
@@ -319,8 +336,8 @@ const Leaderboard = ({ onBack, onSpectateGame }) => {
                             'text-slate-400'
                           }`}>
                             {filter === 'rating' ? player.rating :
-                             filter === 'wins' ? player.games_won :
-                             player.games_played}
+                             filter === 'wins' ? player.onlineWins :
+                             player.onlineGames}
                           </div>
                           <div className="text-slate-600 text-xs">
                             {filter === 'rating' ? 'rating' : filter === 'wins' ? 'wins' : 'games'}

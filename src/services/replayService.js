@@ -1,4 +1,5 @@
 // Replay Service - Game replay functionality
+// v7.13: Removed board_state from SELECT and INSERT (column doesn't exist in game_moves table)
 // UPDATED: Uses direct fetch to bypass Supabase client timeout issues
 import { isSupabaseConfigured } from '../utils/supabase';
 import { dbSelect, dbInsert, dbCount } from './supabaseDirectFetch';
@@ -16,7 +17,6 @@ export const replayService = {
       col: moveData.col,
       rotation: moveData.rotation || 0,
       flipped: moveData.flipped || false,
-      board_state: moveData.boardState,
       time_taken_seconds: moveData.timeTaken
     }, { returning: true, single: true });
   },
@@ -25,7 +25,7 @@ export const replayService = {
     if (!isSupabaseConfigured()) return { data: [], error: null };
 
     const { data: moves, error } = await dbSelect('game_moves', {
-      select: 'id,move_number,piece_type,row,col,rotation,flipped,board_state,time_taken_seconds,created_at,player_id',
+      select: 'id,move_number,piece_type,row,col,rotation,flipped,time_taken_seconds,created_at,player_id',
       eq: { game_id: gameId },
       order: 'move_number.asc'
     });
