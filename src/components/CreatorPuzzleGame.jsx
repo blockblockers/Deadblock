@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.24: Puzzle info baseline-aligned with subtitle; attempts moved below piece tray
 // v2.23: Merged puzzle info into subtitle row (smaller font, no dash, single line);
 //        Cancel button red
 // v2.22: Shrunk header spacing; replaced ControlButtons with inline GlowOrbButtons;
@@ -1440,12 +1441,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Title */}
           <div className="text-center mb-1">
             <NeonTitle size="medium" />
-            <div className="flex items-center justify-center gap-1.5 mt-0 flex-nowrap">
+            <div className="flex items-baseline justify-center gap-1.5 mt-0 flex-nowrap">
               <NeonSubtitle text="CREATOR PUZZLE" size="small" inline />
               <span className="text-[10px] whitespace-nowrap truncate max-w-[45%]" style={{
                 color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
               }}>
-                #{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name}` : ''}{attempts > 1 ? ` • Att. #${attempts}` : ''}
+                #{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name}` : ''}
               </span>
             </div>
           </div>
@@ -1608,6 +1609,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               onSelectPiece={handleSelectPiece}
               createDragHandlers={getPieceHandlers}
             />
+          </div>
+          
+          {/* Attempt Counter */}
+          <div className="text-center mt-1 mb-1">
+            <span className="text-slate-500 text-[10px]">Attempt #{attempts}</span>
           </div>
         </div>
       </div>

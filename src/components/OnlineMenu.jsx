@@ -1,4 +1,6 @@
 // Online Menu - Hub for online features
+// v7.59: Consolidated 4 Realtime channels into 1 (menu-updates) — reduces Supabase
+//        WebSocket connections from 4 to 1 per user on this screen.
 // v7.58: Replaced Profile button with Watch button (Eye icon, silver theme), reordered to
 //        Leaderboard | Friends | Watch. Added WatchPlayersModal — search users and spectate
 //        their active games. Profile is still accessible via the player info card.
@@ -849,16 +851,15 @@ const OnlineMenu = ({
     };
   }, [sessionReady, profile?.id]);
 
-  // v7.14: Real-time subscription for active games updates
-  // This makes "Your turn" indicators update instantly when opponent makes a move
+  // v7.59: Consolidated 4 Realtime channels into 1 (menu-updates) to reduce
+  // Supabase connection count. All game update, new game, and sent invite listeners
+  // share a single channel with multiple .on() blocks.
   useEffect(() => {
     if (!sessionReady || !profile?.id || !supabase) return;
     
-    // console.log('[OnlineMenu] Setting up real-time game updates subscription');
-    
-    // Subscribe to games where user is player1
-    const player1Channel = supabase
-      .channel(`menu-games-p1-${profile.id}`)
+    const menuChannel = supabase
+      .channel(`menu-updates-${profile.id}`)
+      // Games where user is player1 — UPDATE (turn/status changes)
       .on(
         'postgres_changes',
         {
@@ -870,20 +871,13 @@ const OnlineMenu = ({
         (payload) => {
           const game = payload.new;
           const oldGame = payload.old;
-          
-          // Refresh on turn change or status change
           if (game?.current_player !== oldGame?.current_player || 
               game?.status !== oldGame?.status) {
-            // console.log('[OnlineMenu] Game update (p1): turn/status changed, refreshing');
             loadGames();
           }
         }
       )
-      .subscribe();
-    
-    // Subscribe to games where user is player2
-    const player2Channel = supabase
-      .channel(`menu-games-p2-${profile.id}`)
+      // Games where user is player2 — UPDATE (turn/status changes)
       .on(
         'postgres_changes',
         {
@@ -895,20 +889,13 @@ const OnlineMenu = ({
         (payload) => {
           const game = payload.new;
           const oldGame = payload.old;
-          
-          // Refresh on turn change or status change
           if (game?.current_player !== oldGame?.current_player || 
               game?.status !== oldGame?.status) {
-            // console.log('[OnlineMenu] Game update (p2): turn/status changed, refreshing');
             loadGames();
           }
         }
       )
-      .subscribe();
-    
-    // Also subscribe to new games being created (INSERT)
-    const newGamesChannel = supabase
-      .channel(`menu-new-games-${profile.id}`)
+      // New games where user is player1 — INSERT
       .on(
         'postgres_changes',
         {
@@ -918,13 +905,8 @@ const OnlineMenu = ({
           filter: `player1_id=eq.${profile.id}`
         },
         async (payload) => {
-          // console.log('[OnlineMenu] New game created (p1), refreshing');
           const newGameId = payload?.new?.id;
           // v7.32: Mark any pending invite links as accepted using the SENDER's auth.
-          // acceptInviteByCode runs with the receiver's token, which RLS may block from
-          // updating email_invites (only from_user_id can UPDATE their own rows).
-          // PostgREST returns HTTP 200 with empty body in that case — silent failure.
-          // The sender has from_user_id permission, so we do it here instead.
           if (newGameId && supabase) {
             try {
               await supabase
@@ -941,6 +923,7 @@ const OnlineMenu = ({
           loadInvites();
         }
       )
+      // New games where user is player2 — INSERT
       .on(
         'postgres_changes',
         {
@@ -950,18 +933,11 @@ const OnlineMenu = ({
           filter: `player2_id=eq.${profile.id}`
         },
         () => {
-          // console.log('[OnlineMenu] New game created (p2), refreshing');
           loadGames();
           loadInvites();
         }
       )
-      .subscribe();
-    
-    // v7.20: Subscribe to SENT invites being updated (accepted/declined)
-    // This fixes the issue where sent invites stay in "pending" after opponent accepts
-    // The inviteService subscription only handles RECEIVED invites, not sent ones
-    const sentInvitesChannel = supabase
-      .channel(`menu-sent-invites-${profile.id}`)
+      // Sent invites updated (accepted/declined) — UPDATE on game_invites
       .on(
         'postgres_changes',
         {
@@ -973,17 +949,9 @@ const OnlineMenu = ({
         (payload) => {
           const invite = payload.new;
           const oldInvite = payload.old;
-          
-          // Only act on status changes
           if (invite?.status !== oldInvite?.status) {
-            // console.log('[OnlineMenu] Sent invite status changed:', oldInvite?.status, '->', invite?.status);
-            
-            // Refresh invites to remove from pending list
             loadInvites();
-            
-            // If accepted, also refresh games to show the new active game
             if (invite?.status === 'accepted') {
-              // console.log('[OnlineMenu] Sent invite accepted, refreshing games');
               loadGames();
               soundManager.playSound('notification');
             }
@@ -993,10 +961,7 @@ const OnlineMenu = ({
       .subscribe();
     
     return () => {
-      player1Channel.unsubscribe();
-      player2Channel.unsubscribe();
-      newGamesChannel.unsubscribe();
-      sentInvitesChannel.unsubscribe();
+      menuChannel.unsubscribe();
     };
   }, [sessionReady, profile?.id]);
 
@@ -2788,11 +2753,17 @@ const OnlineMenu = ({
                                     
                                     {/* Game Info */}
                                     <div className="text-left">
-                                      <div className="text-white font-medium flex items-center gap-2">
+                                      <div className="text-white font-medium flex items-center gap-2 flex-wrap">
                                         vs {opponentName}
                                         <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-red-500/30 text-red-300">
                                           LOSS
                                         </span>
+                                        {game.end_reason === 'inactivity' && (
+                                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 flex items-center gap-1">
+                                            <Clock size={10} />
+                                            EXPIRED
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="text-sm text-red-300">
                                         Tap to view final board
@@ -2957,9 +2928,17 @@ const OnlineMenu = ({
             </div>
           </div>
         </button>
-        <span className={`text-lg font-bold ${result.color}`}>
-          {result.text}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-lg font-bold ${result.color}`}>
+            {result.text}
+          </span>
+          {result.text === 'Lost' && game.end_reason === 'inactivity' && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 flex items-center gap-1">
+              <Clock size={10} />
+              EXPIRED
+            </span>
+          )}
+        </div>
       </div>
       {/* Action buttons */}
       <div className="flex justify-end gap-2">
