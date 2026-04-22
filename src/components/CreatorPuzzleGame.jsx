@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.25: Added red to local GlowOrbButton color map (was missing, causing transparent cancel)
 // v2.24: Puzzle info baseline-aligned with subtitle; attempts moved below piece tray
 // v2.23: Merged puzzle info into subtitle row (smaller font, no dash, single line);
 //        Cancel button red
@@ -279,6 +280,7 @@ const GlowOrbButton = ({ onClick, disabled, children, color = 'cyan', className 
     green: 'from-green-500 to-emerald-600 shadow-[0_0_15px_rgba(34,197,94,0.4)] hover:shadow-[0_0_25px_rgba(34,197,94,0.6)]',
     purple: 'from-purple-500 to-violet-600 shadow-[0_0_15px_rgba(168,85,247,0.4)] hover:shadow-[0_0_25px_rgba(168,85,247,0.6)]',
     slate: 'from-slate-600 to-slate-700 shadow-[0_0_10px_rgba(100,116,139,0.3)] hover:shadow-[0_0_15px_rgba(100,116,139,0.5)]',
+    red: 'from-red-500 to-rose-600 shadow-[0_0_15px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)]',
   };
   return (
     <button

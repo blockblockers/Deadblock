@@ -1,4 +1,5 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.26: Player outlines — cyan inset border for P1, pink for P2 on all occupied cells
 // v7.25: Mobile flash fix — cell transition-all→transition-colors, board GPU layer promotion
 // v7.24 - Fixed spacing (justify-start instead of center), increased grid opacity (0.12), larger board (420px max)
 // v7.23 - Enhanced grid background opacity (0.03 -> 0.06) for better visibility
@@ -494,7 +495,9 @@ const FinalBoardView = ({
                     style={isLastMove ? {
                       background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
                       animation: 'last-move-pulse 2s ease-in-out infinite',
-                      boxShadow: '0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3)',
+                      boxShadow: `0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3), inset 0 0 0 1.5px ${cellValue === 1 ? 'rgba(34,211,238,0.8)' : 'rgba(244,114,182,0.8)'}`,
+                    } : isOccupied ? {
+                      boxShadow: `inset 0 0 0 1.5px ${cellValue === 1 ? 'rgba(34,211,238,0.6)' : 'rgba(244,114,182,0.6)'}`,
                     } : undefined}
                   >
                     {/* Inner glow for occupied cells */}
