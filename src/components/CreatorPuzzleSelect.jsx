@@ -1,5 +1,6 @@
 // CreatorPuzzleSelect.jsx
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
+// v1.11: Extended expert range to [86, 101] for puzzle #101
 // v1.10: Added safe area top padding for iPhone notch clearance
 // v1.9: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v1.8: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
@@ -120,7 +121,7 @@ const difficultyTiers = [
     id: 'expert', 
     label: 'EXP', 
     fullLabel: 'EXPERT',
-    range: [86, 100],
+    range: [86, 101],
     color: difficultyColors.expert,
   },
 ];

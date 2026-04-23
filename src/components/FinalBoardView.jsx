@@ -495,9 +495,9 @@ const FinalBoardView = ({
                     style={isLastMove ? {
                       background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
                       animation: 'last-move-pulse 2s ease-in-out infinite',
-                      boxShadow: `0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3), inset 0 0 0 1.5px ${cellValue === 1 ? 'rgba(34,211,238,0.8)' : 'rgba(244,114,182,0.8)'}`,
+                      boxShadow: `0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3), inset 0 0 0 2.5px ${cellValue === 1 ? 'rgba(34,211,238,0.8)' : 'rgba(244,114,182,0.8)'}`,
                     } : isOccupied ? {
-                      boxShadow: `inset 0 0 0 1.5px ${cellValue === 1 ? 'rgba(34,211,238,0.6)' : 'rgba(244,114,182,0.6)'}`,
+                      boxShadow: `inset 0 0 0 2.5px ${cellValue === 1 ? 'rgba(34,211,238,0.6)' : 'rgba(244,114,182,0.6)'}`,
                     } : undefined}
                   >
                     {/* Inner glow for occupied cells */}

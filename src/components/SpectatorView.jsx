@@ -340,7 +340,7 @@ const SpectatorView = ({
               return (
                 <div key={`${rowIdx}-${colIdx}`} className={`aspect-square rounded-md sm:rounded-lg relative transition-colors duration-100 overflow-hidden ${
                   isOccupied ? (isLastMove ? 'shadow-lg' : `${pieceColor || (cellValue === 1 ? 'bg-gradient-to-br from-cyan-400 via-cyan-500 to-blue-600' : 'bg-gradient-to-br from-pink-400 via-pink-500 to-rose-600')} shadow-md`) : 'bg-slate-700/40'
-                }`} style={isLastMove ? { background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)', animation: 'last-move-pulse 2s ease-in-out infinite', boxShadow: `0 0 15px rgba(251,191,36,0.6), inset 0 0 8px rgba(255,255,255,0.3), inset 0 0 0 1.5px ${cellValue === 1 ? 'rgba(34,211,238,0.8)' : 'rgba(244,114,182,0.8)'}` } : isOccupied ? { boxShadow: `inset 0 0 0 1.5px ${cellValue === 1 ? 'rgba(34,211,238,0.6)' : 'rgba(244,114,182,0.6)'}` } : undefined}>
+                }`} style={isLastMove ? { background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)', animation: 'last-move-pulse 2s ease-in-out infinite', boxShadow: `0 0 15px rgba(251,191,36,0.6), inset 0 0 8px rgba(255,255,255,0.3), inset 0 0 0 2.5px ${cellValue === 1 ? 'rgba(34,211,238,0.8)' : 'rgba(244,114,182,0.8)'}` } : isOccupied ? { boxShadow: `inset 0 0 0 2.5px ${cellValue === 1 ? 'rgba(34,211,238,0.6)' : 'rgba(244,114,182,0.6)'}` } : undefined}>
                   {isOccupied && !isLastMove && <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/20 rounded-md sm:rounded-lg" />}
                   {cellInfo && (
                     <div className="absolute inset-0 flex items-center justify-center">
