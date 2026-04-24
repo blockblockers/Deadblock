@@ -745,7 +745,7 @@ const GameScreen = ({
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
           
           {/* Game Area */}
           <div className="w-full max-w-md">
@@ -765,9 +765,9 @@ const GameScreen = ({
             {/* Game Board with side titles */}
             <div className="flex items-center justify-center pb-2 gap-1">
               <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
-                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
-                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
+                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
+                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
+                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
               </div>
               <GameBoard
                 ref={boardRef}
@@ -790,11 +790,11 @@ const GameScreen = ({
                 dragRotation={rotation}
                 dragFlipped={flipped}
               />
-              <div className="text-[10px] font-black tracking-[0.15em] select-none flex-shrink-0" style={{
+              <div className="text-sm font-black tracking-[0.15em] select-none flex-shrink-0" style={{
                 writingMode: 'vertical-rl',
                 color: '#fff',
                 textShadow: `0 0 3px #fff, 0 0 6px #fff, 0 0 12px ${sideGlowColor}, 0 0 24px ${sideGlowColor}, 0 0 36px ${sideGlowColor}`
-              }}>{gameMode === 'ai' ? 'VS AI' : gameMode === 'puzzle' ? 'PUZZLE' : '2 PLAYER'}</div>
+              }}>{gameMode === 'ai' ? 'VS AI' : gameMode === 'puzzle' ? 'GENERATED PUZZLE' : '2 PLAYER'}</div>
             </div>
 
             {/* Off-grid indicator - shows when piece extends beyond board */}
