@@ -1,4 +1,5 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.26: Title/subtitle moved to vertical side labels flanking board to save vertical space
 // v7.25: Shrunk countdown timer (text-xl→text-sm, smaller padding/icons) for better title centering
 // v7.24: Removed panel box around game board for visual consistency; floating background shows through
 // v7.23: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
@@ -1295,20 +1296,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
-      <div className="min-h-full flex flex-col items-center px-2 py-4" style={{ paddingTop: 'max(32px, env(safe-area-inset-top))' }}>
+      <div className="min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
         <div className="w-full max-w-lg">
           
-          {/* Header with Title and Timer - styled like other game boards */}
-          <div className="flex items-center justify-between mb-1 px-2">
-            {/* Spacer for symmetry (matches compact timer width) */}
-            <div className="w-12" />
-            
-            <div className="text-center flex-1 mx-2">
-              <NeonTitle text="DEADBLOCK" size="medium" color="red" />
-              <div className="text-red-400/80 text-[10px] font-bold tracking-[0.3em] uppercase mt-0">
-                WEEKLY CHALLENGE
-              </div>
-            </div>
+          {/* Header with Timer (title moved to board sides) */}
+          <div className="flex items-center justify-end mb-1 px-2">
             
             {/* Enhanced Compact Timer Display - Cyberpunk Stopwatch with Dynamic Colors */}
             {(() => {
@@ -1428,8 +1420,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
           {/* Main Game Panel - RED THEME */}
           <div className="mb-2">
             
-            {/* Game Board */}
-            <div className="flex justify-center pb-2">
+            {/* Game Board with side titles */}
+            <div className="flex items-center justify-center pb-2 gap-1">
+              <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
+              </div>
               <GameBoard
                 ref={boardRef}
                 board={board}
@@ -1454,6 +1451,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                 }}
                 confirmFlashCells={confirmFlashCells}
               />
+              <div className="text-[10px] font-black tracking-[0.15em] select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl',
+                color: '#fff',
+                textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ef4444, 0 0 24px #ef4444, 0 0 36px #ef4444'
+              }}>CHALLENGE</div>
             </div>
             
             {/* Off-grid indicator - shows when piece extends beyond board */}

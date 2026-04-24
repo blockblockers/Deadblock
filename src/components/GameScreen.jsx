@@ -1,4 +1,5 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
+// v7.16: Title/subtitle moved to vertical side labels flanking board to save vertical space
 // v7.15: Standardized board padding to pb-2 for cross-screen consistency
 // v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
@@ -239,6 +240,13 @@ const GameScreen = ({
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
 
   const theme = getTheme(gameMode, aiDifficulty, puzzleDifficulty);
+  
+  // Neon glow color for side label — matches difficulty theme
+  const sideGlowColor = gameMode === 'ai'
+    ? (aiDifficulty === AI_DIFFICULTY.RANDOM ? '#22c55e' : aiDifficulty === AI_DIFFICULTY.PROFESSIONAL ? '#a855f7' : '#fbbf24')
+    : gameMode === 'puzzle'
+    ? (puzzleDifficulty === PUZZLE_DIFFICULTY.EASY ? '#22c55e' : puzzleDifficulty === PUZZLE_DIFFICULTY.HARD ? '#a855f7' : '#fbbf24')
+    : '#22d3ee';
   const isPuzzle = gameMode === 'puzzle';
   const playerWon = winner === 1;
 
@@ -737,22 +745,8 @@ const GameScreen = ({
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
           
-          {/* Title - CONSISTENT sizing across all game modes */}
-          <div className="text-center mb-1">
-            <NeonTitle size="medium" />
-            {gameMode === 'ai' && (
-              <NeonSubtitle text="VS AI" size="small" className="mt-1" />
-            )}
-            {gameMode === 'puzzle' && (
-              <NeonSubtitle text="PUZZLE MODE" size="small" className="mt-1" />
-            )}
-            {gameMode === '2player' && (
-              <NeonSubtitle text="2 PLAYER" size="small" className="mt-1" />
-            )}
-          </div>
-
           {/* Game Area */}
           <div className="w-full max-w-md">
             
@@ -768,8 +762,13 @@ const GameScreen = ({
             
             <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
 
-            {/* Game Board with ref for drag positioning */}
-            <div className="flex justify-center pb-2">
+            {/* Game Board with side titles */}
+            <div className="flex items-center justify-center pb-2 gap-1">
+              <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
+              </div>
               <GameBoard
                 ref={boardRef}
                 board={board}
@@ -791,6 +790,11 @@ const GameScreen = ({
                 dragRotation={rotation}
                 dragFlipped={flipped}
               />
+              <div className="text-[10px] font-black tracking-[0.15em] select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl',
+                color: '#fff',
+                textShadow: `0 0 3px #fff, 0 0 6px #fff, 0 0 12px ${sideGlowColor}, 0 0 24px ${sideGlowColor}, 0 0 36px ${sideGlowColor}`
+              }}>{gameMode === 'ai' ? 'VS AI' : gameMode === 'puzzle' ? 'PUZZLE' : '2 PLAYER'}</div>
             </div>
 
             {/* Off-grid indicator - shows when piece extends beyond board */}

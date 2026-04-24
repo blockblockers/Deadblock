@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.26: Title/subtitle moved to vertical side labels; puzzle info merged with attempt counter
 // v2.25: Added red to local GlowOrbButton color map (was missing, causing transparent cancel)
 // v2.24: Puzzle info baseline-aligned with subtitle; attempts moved below piece tray
 // v2.23: Merged puzzle info into subtitle row (smaller font, no dash, single line);
@@ -1438,21 +1439,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-4 pb-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
           
-          {/* Title */}
-          <div className="text-center mb-1">
-            <NeonTitle size="medium" />
-            <div className="flex items-baseline justify-center gap-1.5 mt-0 flex-nowrap">
-              <NeonSubtitle text="CREATOR PUZZLE" size="small" inline />
-              <span className="text-[10px] whitespace-nowrap truncate max-w-[45%]" style={{
-                color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
-              }}>
-                #{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name}` : ''}
-              </span>
-            </div>
-          </div>
-
           {/* Game Area */}
           <div className="w-full max-w-md">
 
@@ -1510,7 +1498,12 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             </div>
 
             {/* Game Board */}
-            <div className="flex justify-center pb-2 relative">
+            <div className="flex items-center justify-center pb-2 gap-1 relative">
+              <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
+                <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
+              </div>
               <WrongMoveFeedback visible={showWrongMove} />
               <GameBoard
                 ref={boardRef}
@@ -1534,6 +1527,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 dragFlipped={flipped}
                 confirmFlashCells={confirmFlashCells}
               />
+              <div className="text-[10px] font-black tracking-[0.15em] select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl',
+                color: '#fff',
+                textShadow: `0 0 3px #fff, 0 0 6px #fff, 0 0 12px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 24px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 36px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}`
+              }}>PUZZLE</div>
             </div>
 
             {/* Off-grid indicator */}
@@ -1613,8 +1611,14 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             />
           </div>
           
-          {/* Attempt Counter */}
-          <div className="text-center mt-1 mb-1">
+          {/* Puzzle Info & Attempt Counter */}
+          <div className="flex items-center justify-center gap-2 mt-1 mb-1">
+            <span className="text-[10px] whitespace-nowrap truncate max-w-[50%]" style={{
+              color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
+            }}>
+              #{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name}` : ''}
+            </span>
+            <span className="text-slate-600">•</span>
             <span className="text-xs font-medium" style={{
               color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
             }}>

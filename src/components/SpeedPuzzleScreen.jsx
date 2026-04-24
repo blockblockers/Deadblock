@@ -1,4 +1,5 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
+// v7.16: Title/subtitle moved to vertical side labels flanking board to save vertical space
 // v7.15: Timer left / title center / streak right layout; shrunk timer+streak components
 // v7.14: Removed panel box around game board for visual consistency; floating background shows through
 // v7.13: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
@@ -1733,8 +1734,8 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
-      <div className="relative min-h-full flex flex-col items-center px-2 py-2" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
-        {/* Header - Timer left, Title center, Streak right */}
+      <div className="relative min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+        {/* Header - Timer left, Streak right (title moved to board sides) */}
         <div className="w-full max-w-md mb-1 flex-shrink-0">
           <div className="flex items-center justify-between">
             {/* Timer - left */}
@@ -1742,14 +1743,6 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               {gameState === GAME_STATES.PLAYING && (
                 <SpeedTimer timeLeft={timeLeft} maxTime={TIMER_DURATION} />
               )}
-            </div>
-            
-            {/* Title - center */}
-            <div className="text-center flex-1 mx-1">
-              <NeonTitle size="medium" />
-              <div className="speed-subtitle font-black tracking-[0.2em] text-xs sm:text-sm mt-0">
-                ⚡ SPEED MODE ⚡
-              </div>
             </div>
             
             {/* Streak - right */}
@@ -1791,8 +1784,13 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             {/* Main Game Panel */}
             <div className="mb-2">
               
-              {/* Game Board - simplified wrapper for consistent sizing */}
-              <div className="flex justify-center pb-2 relative">
+              {/* Game Board with side titles */}
+              <div className="flex items-center justify-center pb-2 gap-1 relative">
+                <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                  <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
+                  <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
+                  <span className="text-[10px] font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
+                </div>
                 <GameBoard
                   ref={boardRef}
                   board={board}
@@ -1829,6 +1827,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                     </div>
                   </div>
                 )}
+                <div className="text-[10px] font-black tracking-[0.15em] select-none flex-shrink-0" style={{
+                  writingMode: 'vertical-rl',
+                  color: '#fff',
+                  textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ef4444, 0 0 24px #ef4444, 0 0 36px #ef4444'
+                }}>SPEED</div>
               </div>
               
               {/* Off-grid indicator - shows when piece extends beyond board */}
