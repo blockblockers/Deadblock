@@ -167,7 +167,7 @@ const MenuScreen = ({
           
           {/* TITLE - Above the box */}
           <div className="text-center mb-4">
-            <NeonTitle size="large" />
+            <NeonTitle size="xlarge" />
           </div>
           
           {/* Menu Box */}
