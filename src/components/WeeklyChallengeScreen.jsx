@@ -1423,9 +1423,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
             {/* Game Board with side titles */}
             <div className="flex items-center justify-center pb-2 gap-1">
               <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
-                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
-                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
+                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #22d3ee, 0 0 32px #22d3ee, 0 0 48px #22d3ee' }}>DEA</span>
+                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #a855f7, 0 0 32px #a855f7, 0 0 48px #a855f7' }}>DBL</span>
+                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ec4899, 0 0 32px #ec4899, 0 0 48px #ec4899' }}>OCK</span>
               </div>
               <GameBoard
                 ref={boardRef}
@@ -1451,10 +1451,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                 }}
                 confirmFlashCells={confirmFlashCells}
               />
-              <div className="text-sm font-black tracking-[0.15em] select-none flex-shrink-0" style={{
+              <div className="text-lg font-black tracking-wider select-none flex-shrink-0" style={{
                 writingMode: 'vertical-rl',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',
-                textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ef4444, 0 0 24px #ef4444, 0 0 36px #ef4444'
+                textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ef4444, 0 0 32px #ef4444, 0 0 48px #ef4444'
               }}>WEEKLY CHALLENGE</div>
             </div>
             

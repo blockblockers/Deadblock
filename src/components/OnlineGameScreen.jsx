@@ -1822,9 +1822,9 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             {/* Game Board with side titles */}
             <div className="flex items-center justify-center pb-2 gap-1">
               <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #22d3ee, 0 0 24px #22d3ee, 0 0 36px #22d3ee' }}>DEA</span>
-                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #a855f7, 0 0 24px #a855f7, 0 0 36px #a855f7' }}>DBL</span>
-                <span className="text-sm font-black tracking-[0.15em]" style={{ color: '#fff', textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #ec4899, 0 0 24px #ec4899, 0 0 36px #ec4899' }}>OCK</span>
+                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #22d3ee, 0 0 32px #22d3ee, 0 0 48px #22d3ee' }}>DEA</span>
+                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #a855f7, 0 0 32px #a855f7, 0 0 48px #a855f7' }}>DBL</span>
+                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ec4899, 0 0 32px #ec4899, 0 0 48px #ec4899' }}>OCK</span>
               </div>
               <div className="relative">
                 <GameBoard
@@ -1902,10 +1902,11 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   </div>
                 )}
               </div>
-              <div className="text-sm font-black tracking-[0.15em] select-none flex-shrink-0" style={{
+              <div className="text-lg font-black tracking-wider select-none flex-shrink-0" style={{
                 writingMode: 'vertical-rl',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',
-                textShadow: '0 0 3px #fff, 0 0 6px #fff, 0 0 12px #f59e0b, 0 0 24px #f59e0b, 0 0 36px #f59e0b'
+                textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #f59e0b, 0 0 32px #f59e0b, 0 0 48px #f59e0b'
               }}>ONLINE BATTLE</div>
             </div>
 
@@ -2398,7 +2399,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             100% { opacity: 1; transform: translateY(0); }
           }
           @keyframes winning-move-breathe {
-            0%   { box-shadow: 0 0 12px rgba(251,191,36,0.5), 0 0 24px rgba(251,191,36,0.2); }
+            0%   { box-shadow: 0 0 12px rgba(251,191,36,0.5), 0 0 32px rgba(251,191,36,0.2); }
             100% { box-shadow: 0 0 28px rgba(251,191,36,0.9), 0 0 55px rgba(251,191,36,0.5); }
           }
           .winning-move-gold {
