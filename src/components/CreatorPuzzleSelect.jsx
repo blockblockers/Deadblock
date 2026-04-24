@@ -335,7 +335,7 @@ const CreatorPuzzleSelect = ({
             </div>
 
             {/* Card with puzzle grid */}
-            <div className="bg-slate-900/80 backdrop-blur-md rounded-xl p-3 border border-slate-700/50">
+            <div className="bg-slate-900/95 rounded-xl p-3 border border-slate-700/50">
               
               {/* Tier Header with Pagination */}
               <div className="flex items-center justify-between mb-2">
@@ -409,7 +409,7 @@ const CreatorPuzzleSelect = ({
                         disabled={!isAvailable}
                         className={`
                           w-full aspect-square rounded-lg flex flex-col items-center justify-center relative
-                          transition-all duration-150 border
+                          transition-colors duration-150 border
                           ${!isAvailable 
                             ? 'bg-slate-800/50 border-slate-700/30 cursor-not-allowed' 
                             : isCompleted

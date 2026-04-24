@@ -230,7 +230,7 @@ const Leaderboard = ({ onBack, onSpectateGame }) => {
 
           {/* Leaderboard Container - Scrollable v7.17: Improved flex constraints */}
           <div 
-            className="flex-1 min-h-0 bg-slate-900/80 backdrop-blur-sm rounded-2xl border border-amber-500/30 shadow-[0_0_30px_rgba(251,191,36,0.2)] flex flex-col"
+            className="flex-1 min-h-0 bg-slate-900/95 rounded-2xl border border-amber-500/30 shadow-[0_0_30px_rgba(251,191,36,0.2)] flex flex-col"
             style={{
               overflow: 'hidden',
               // Ensure container takes remaining space but doesn't overflow

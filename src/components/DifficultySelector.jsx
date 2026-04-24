@@ -1,4 +1,5 @@
 // DifficultySelector.jsx
+// v7.16: Mobile perf — transition-all→transition-colors on glow orbs/cards, removed backdrop-blur
 // v7.15: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 import { useState } from 'react';
@@ -143,7 +144,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
           </div>
 
           {/* Card with dramatic theme */}
-          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-500`}>
+          <div className={`${theme.cardBg} rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow} transition-colors duration-500`}>
             
             {/* Difficulty Options */}
             <div className="space-y-2 mb-4">
@@ -153,7 +154,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
                   <button 
                     key={diff.id} 
                     onClick={() => handleSelect(diff.id)}
-                    className={`w-full p-3 rounded-xl border-2 transition-all duration-300 text-left relative overflow-hidden ${
+                    className={`w-full p-3 rounded-xl border-2 transition-colors duration-300 text-left relative overflow-hidden ${
                       isSelected 
                         ? `bg-gradient-to-r ${diff.colors.gradient} border-white/40 ring-4 ${diff.colors.ring}` 
                         : `${diff.colors.bg} ${diff.colors.border} hover:bg-opacity-50`
@@ -217,12 +218,12 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
                 </div>
                 
                 {/* Enhanced Toggle Switch */}
-                <div className={`relative w-14 h-7 rounded-full transition-all duration-300 ${
+                <div className={`relative w-14 h-7 rounded-full transition-colors duration-300 ${
                   aiGoesFirst 
                     ? 'bg-gradient-to-r from-purple-600 to-purple-800 shadow-[0_0_15px_rgba(168,85,247,0.5),inset_0_2px_4px_rgba(0,0,0,0.3)]' 
                     : 'bg-gradient-to-r from-cyan-600 to-cyan-800 shadow-[0_0_15px_rgba(34,211,238,0.5),inset_0_2px_4px_rgba(0,0,0,0.3)]'
                 }`}>
-                  <div className={`absolute top-1 w-5 h-5 rounded-full transition-all duration-300 ${
+                  <div className={`absolute top-1 w-5 h-5 rounded-full transition-colors duration-300 ${
                     aiGoesFirst 
                       ? 'translate-x-8 bg-gradient-to-br from-purple-300 to-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.8)]' 
                       : 'translate-x-1 bg-gradient-to-br from-cyan-300 to-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]'
@@ -235,7 +236,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
               {/* Turn Order Visualization */}
               <div className="flex items-center justify-center gap-1.5 mt-3 p-1.5 bg-slate-900/50 rounded-lg">
                 {/* First Player */}
-                <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all duration-300 ${
+                <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors duration-300 ${
                   !aiGoesFirst 
                     ? 'bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
                     : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'
@@ -254,7 +255,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
                 </div>
                 
                 {/* Second Player */}
-                <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all duration-300 ${
+                <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors duration-300 ${
                   aiGoesFirst 
                     ? 'bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]' 
                     : 'bg-purple-500/20 border border-purple-400/50 shadow-[0_0_15px_rgba(168,85,247,0.4)]'

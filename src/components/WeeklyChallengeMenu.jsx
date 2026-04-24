@@ -1,4 +1,5 @@
 // WeeklyChallengeMenu - Weekly puzzle challenge menu with leaderboard
+// v7.16: Mobile perf — transition-all→transition-colors on buttons, removed backdrop-blur
 // v7.15: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
@@ -125,7 +126,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
           </div>
           
           {/* Main Card */}
-          <div className={`bg-gradient-to-br from-slate-900/95 via-red-950/30 to-slate-900/95 backdrop-blur-md rounded-2xl p-5 border ${theme.border} shadow-[0_0_60px_rgba(239,68,68,0.3),inset_0_0_30px_rgba(239,68,68,0.1)]`}>
+          <div className={`bg-gradient-to-br from-slate-900/95 via-red-950/30 to-slate-900/95 rounded-2xl p-5 border ${theme.border} shadow-[0_0_60px_rgba(239,68,68,0.3),inset_0_0_30px_rgba(239,68,68,0.1)]`}>
             
             {loading ? (
               <div className="text-center py-8">
@@ -231,7 +232,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                 <div className="space-y-3">
                   <button
                     onClick={handlePlay}
-                    className="w-full py-4 rounded-xl font-black text-lg text-white bg-gradient-to-r from-red-500 to-rose-600 hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(239,68,68,0.5)] border border-white/10"
+                    className="w-full py-4 rounded-xl font-black text-lg text-white bg-gradient-to-r from-red-500 to-rose-600 hover:brightness-110 transition-colors flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(239,68,68,0.5)] border border-white/10"
                   >
                     <Play size={20} />
                     {userStats?.best_time ? 'PLAY AGAIN' : 'START CHALLENGE'}
@@ -239,7 +240,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
                   
                   <button
                     onClick={handleLeaderboard}
-                    className="w-full py-3 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-all flex items-center justify-center gap-2 border border-slate-600/50"
+                    className="w-full py-3 rounded-xl font-bold text-base text-slate-300 bg-slate-800/70 hover:bg-slate-700/70 transition-colors flex items-center justify-center gap-2 border border-slate-600/50"
                   >
                     <Users size={18} />
                     VIEW LEADERBOARD
@@ -252,7 +253,7 @@ const WeeklyChallengeMenu = ({ onPlay, onLeaderboard, onBack }) => {
           {/* Back Button */}
           <button
             onClick={handleBack}
-            className="w-full mt-4 py-3 rounded-xl font-bold text-base text-slate-400 bg-slate-800/50 hover:bg-slate-700/50 transition-all flex items-center justify-center gap-2 border border-slate-700/50"
+            className="w-full mt-4 py-3 rounded-xl font-bold text-base text-slate-400 bg-slate-800/50 hover:bg-slate-700/50 transition-colors flex items-center justify-center gap-2 border border-slate-700/50"
           >
             <ArrowLeft size={18} />
             BACK TO MENU

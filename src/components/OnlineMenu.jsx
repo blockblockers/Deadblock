@@ -294,7 +294,7 @@ const WatchPlayersModal = ({ userId, onSpectate, onClose }) => {
                       <button
                         key={game.id}
                         onClick={() => { soundManager.playButtonClick(); onSpectate(game.id); }}
-                        className="w-full p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 hover:border-slate-500/50 transition-all text-left"
+                        className="w-full p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 hover:border-slate-500/50 transition-colors text-left"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -1636,7 +1636,7 @@ const OnlineMenu = ({
 
           {/* Profile Loading/Error State */}
           {(profileError || (!profile && user)) && (
-            <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} mb-4`}>
+            <div className={`${theme.cardBg} rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} mb-4`}>
               <div className="text-center py-8">
                 {profileError ? (
                   <>
@@ -1681,7 +1681,7 @@ const OnlineMenu = ({
           {/* Main Card - Only show when profile is loaded */}
           {profile && (
             <div
-              className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}
+              className={`${theme.cardBg} rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow}`}
               style={{ opacity: loading ? 0 : 1, transition: 'opacity 0.15s ease-out' }}
             >
 
@@ -1850,7 +1850,7 @@ const OnlineMenu = ({
 {/* Find Match - Expanded with Queue Count */}
 <button
   onClick={handleFindMatch}
-  className="w-full p-4 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+  className="w-full p-4 mb-2 rounded-xl transition-colors duration-300 relative overflow-hidden group
     bg-gradient-to-br from-cyan-900/40 to-cyan-800/20 border-2 border-cyan-500/50
     hover:border-cyan-400/70 hover:ring-4 ring-cyan-500/30
     active:scale-[0.98]"
@@ -1932,7 +1932,7 @@ const OnlineMenu = ({
                   setSearchResults([]);
                 }
               }}
-              className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+              className="w-full p-3 mb-2 rounded-xl transition-colors duration-300 relative overflow-hidden group
                 bg-purple-900/30 border-2 border-purple-500/40
                 hover:border-white/40 hover:ring-4 ring-purple-500/50
                 active:scale-[0.98]"
@@ -2380,7 +2380,7 @@ const OnlineMenu = ({
                     soundManager.playButtonClick();
                     setShowActiveGames(true);
                   }}
-                  className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+                  className="w-full p-3 mb-2 rounded-xl transition-colors duration-300 relative overflow-hidden group
                     bg-green-900/30 border-2 border-green-500/40
                     hover:border-white/40 hover:ring-4 ring-green-500/50
                     active:scale-[0.98]"
@@ -2420,7 +2420,7 @@ const OnlineMenu = ({
                   soundManager.playButtonClick();
                   setShowRecentGames(true);
                 }}
-                className="w-full p-3 mb-2 rounded-xl transition-all duration-300 relative overflow-hidden group
+                className="w-full p-3 mb-2 rounded-xl transition-colors duration-300 relative overflow-hidden group
                   bg-rose-900/30 border-2 border-rose-500/40
                   hover:border-white/40 hover:ring-4 ring-rose-500/50
                   active:scale-[0.98]"

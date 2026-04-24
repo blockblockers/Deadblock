@@ -243,8 +243,8 @@ const SpectatorView = ({
       <div className="flex-shrink-0" style={{ height: 'max(16px, env(safe-area-inset-top))', background: 'linear-gradient(to bottom, rgba(15,23,42,1), transparent)' }} />
 
       {/* HEADER */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-slate-500/20 flex-shrink-0 relative backdrop-blur-sm">
-        <button onClick={onClose} className="flex items-center gap-1.5 px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/95 border-b border-slate-500/20 flex-shrink-0 relative">
+        <button onClick={onClose} className="flex items-center gap-1.5 px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors">
           <ArrowLeft size={18} /><span className="text-xs">Back</span>
         </button>
         <div className="absolute left-1/2 transform -translate-x-1/2"><NeonTitle text="DEADBLOCK" size="medium" /></div>
@@ -307,16 +307,16 @@ const SpectatorView = ({
       {friendGames.length > 1 && (
         <div className="bg-slate-900/40 border-b border-slate-700/20 py-1.5 px-4 flex-shrink-0">
           <div className="flex items-center justify-center gap-3">
-            <button onClick={handlePrevGame} className="p-1.5 rounded-full bg-slate-700/50 hover:bg-slate-600 text-slate-400 hover:text-white transition-all"><ChevronLeft size={16} /></button>
+            <button onClick={handlePrevGame} className="p-1.5 rounded-full bg-slate-700/50 hover:bg-slate-600 text-slate-400 hover:text-white transition-colors"><ChevronLeft size={16} /></button>
             <div className="flex items-center gap-1.5">
               {friendGames.map((g, idx) => (
                 <button key={g.id} onClick={() => { if (g.id !== gameId && onSwitchGame) { soundManager.playButtonClick(); onSwitchGame(g.id, idx); } }}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
                     g.id === gameId ? 'bg-slate-400 text-slate-900 shadow-lg shadow-slate-400/30' : 'bg-slate-700 text-slate-500 hover:bg-slate-600 hover:text-white'
                   }`}>{idx + 1}</button>
               ))}
             </div>
-            <button onClick={handleNextGame} className="p-1.5 rounded-full bg-slate-700/50 hover:bg-slate-600 text-slate-400 hover:text-white transition-all"><ChevronRight size={16} /></button>
+            <button onClick={handleNextGame} className="p-1.5 rounded-full bg-slate-700/50 hover:bg-slate-600 text-slate-400 hover:text-white transition-colors"><ChevronRight size={16} /></button>
           </div>
         </div>
       )}
@@ -377,7 +377,7 @@ const SpectatorView = ({
 
       {/* STOP WATCHING */}
       <div className="flex-shrink-0 px-4 pb-2">
-        <button onClick={onClose} className="w-full max-w-[340px] mx-auto block py-2.5 bg-slate-800/80 text-slate-400 rounded-xl font-medium text-sm hover:bg-slate-700 hover:text-white border border-slate-700/50 transition-all">
+        <button onClick={onClose} className="w-full max-w-[340px] mx-auto block py-2.5 bg-slate-800/80 text-slate-400 rounded-xl font-medium text-sm hover:bg-slate-700 hover:text-white border border-slate-700/50 transition-colors">
           Stop Watching
         </button>
       </div>
@@ -430,7 +430,7 @@ export const SpectatableGamesList = ({ userId, onSpectate, onClose }) => {
           ) : (
             <div className="space-y-3">
               {games.map(game => (
-                <button key={game.game_id} onClick={() => onSpectate(game.game_id)} className="w-full p-4 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-slate-500/50 transition-all text-left">
+                <button key={game.game_id} onClick={() => onSpectate(game.game_id)} className="w-full p-4 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-slate-500/50 transition-colors text-left">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2"><span className="text-cyan-400 font-medium">{game.player1_username}</span><span className="text-slate-500 text-xs">({game.player1_rating})</span></div>
                     <span className="text-slate-600">vs</span>

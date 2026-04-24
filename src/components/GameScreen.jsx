@@ -749,7 +749,7 @@ const GameScreen = ({
           
           {/* Title */}
           <div className="text-center mb-1">
-            <NeonTitle size="medium" />
+            <NeonTitle size="large" />
           </div>
 
           {/* Game Area */}

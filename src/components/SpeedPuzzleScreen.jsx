@@ -1747,7 +1747,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             
             {/* Title - center */}
             <div className="text-center flex-1 mx-1">
-              <NeonTitle size="medium" />
+              <NeonTitle size="large" />
             </div>
             
             {/* Streak - right */}

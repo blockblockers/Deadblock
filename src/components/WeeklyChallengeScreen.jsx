@@ -1299,15 +1299,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       <div className="min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
         <div className="w-full max-w-lg">
           
-          {/* Title */}
-          <div className="text-center mb-1">
-            <NeonTitle text="DEADBLOCK" size="medium" color="red" />
-          </div>
-
-          {/* Header with Timer */}
-          <div className="flex items-center justify-end mb-1 px-2">
+          {/* Title + Timer on same line */}
+          <div className="flex items-center justify-between mb-1 px-2">
+            <div className="w-20" />
+            <div className="text-center flex-1">
+              <NeonTitle size="large" color="red" />
+            </div>
             
             {/* Enhanced Compact Timer Display - Cyberpunk Stopwatch with Dynamic Colors */}
+            <div className="w-20 flex justify-end">
             {(() => {
               // Color ranges based on time (cool to hot)
               const totalSeconds = Math.floor(elapsedMs / 1000);
@@ -1420,10 +1420,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                 </div>
               );
             })()}
+            </div>
           </div>
           
           {/* Main Game Panel - RED THEME */}
-          <div className="mb-2">
+          <div className="mb-1">
             
             {/* Game Board with side labels */}
             <div className="flex items-center justify-center pb-2 gap-3">

@@ -1798,7 +1798,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
           <div className="flex items-center justify-between mb-1">
             <div className="w-16" />
             <div className="text-center flex-1 mx-2">
-              <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
+              <NeonTitle size="large" color="amber" />
             </div>
             {game?.turn_timer_seconds && game?.status === 'active' ? (
               <TurnTimer
@@ -2066,7 +2066,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
             setChatToast(null);
           }}
         >
-          <div className="bg-gradient-to-r from-cyan-600/95 to-blue-600/95 backdrop-blur-sm rounded-xl px-4 py-3 shadow-2xl border border-cyan-400/30 cursor-pointer hover:scale-[1.02] transition-transform max-w-[90vw] sm:max-w-sm">
+          <div className="bg-gradient-to-r from-cyan-600/95 to-blue-600/95 rounded-xl px-4 py-3 shadow-2xl border border-cyan-400/30 cursor-pointer hover:scale-[1.02] transition-transform max-w-[90vw] sm:max-w-sm">
             <div className="flex items-center gap-3">
               <div className="bg-white/20 rounded-full p-2">
                 <MessageCircle size={18} className="text-white" />
@@ -2262,7 +2262,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       {/* v7.27: Countdown banner for rematch sender */}
       {rematchCountdown !== null && (
         <div className="fixed inset-x-0 top-20 z-[60] flex justify-center pointer-events-none">
-          <div className="px-5 py-4 rounded-xl shadow-2xl max-w-sm mx-4 bg-slate-900/95 border border-amber-500/50 backdrop-blur-sm text-center"
+          <div className="px-5 py-4 rounded-xl shadow-2xl max-w-sm mx-4 bg-slate-900/95 border border-amber-500/50 text-center"
             style={{ animation: 'rematch-sender-in 0.3s ease-out both' }}
           >
             <div className="flex items-center justify-center gap-2 mb-1">
@@ -2280,7 +2280,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       {/* Error toast */}
       {rematchError && (
         <div className="fixed inset-x-0 top-20 z-[60] flex justify-center pointer-events-none">
-          <div className="px-6 py-4 rounded-xl shadow-2xl max-w-sm mx-4 bg-red-900/90 border border-red-500/50 text-red-100 backdrop-blur-sm text-center">
+          <div className="px-6 py-4 rounded-xl shadow-2xl max-w-sm mx-4 bg-red-900/90 border border-red-500/50 text-red-100 text-center">
             <div className="flex items-center justify-center gap-2">
               <span className="text-2xl">❌</span>
               <span className="font-medium">{rematchError}</span>

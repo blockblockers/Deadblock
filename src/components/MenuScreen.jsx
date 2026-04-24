@@ -171,7 +171,7 @@ const MenuScreen = ({
           </div>
           
           {/* Menu Box */}
-          <div className="bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl p-3 sm:p-4 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
+          <div className="bg-slate-900/95 rounded-2xl shadow-2xl p-3 sm:p-4 border border-cyan-500/30 shadow-[0_0_40px_rgba(34,211,238,0.3)]">
             
             {/* Player Profile Card - Inside menu at top */}
             <div className="mb-3">

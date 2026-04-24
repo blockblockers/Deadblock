@@ -1,4 +1,5 @@
 // PuzzleSelect.jsx - Puzzle difficulty selection
+// v7.14: Mobile perf — transition-all→transition-colors on glow orbs/cards, removed backdrop-blur
 // v7.13: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.12: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 
@@ -207,7 +208,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
           </div>
 
           {/* Card with dramatic theme */}
-          <div className={`${theme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} transition-all duration-700`}>
+          <div className={`${theme.cardBg} rounded-2xl p-5 border ${theme.cardBorder} ${theme.cardShadow} transition-colors duration-700`}>
             
             {/* Difficulty Selection */}
             <div className="space-y-2 mb-4">
@@ -219,7 +220,7 @@ const PuzzleSelect = ({ onSelectPuzzle, onSpeedMode, onBack }) => {
                   <button
                     key={diff.id}
                     onClick={() => handleSelectDifficulty(diff.id)}
-                    className={`w-full p-3 rounded-xl transition-all relative overflow-hidden ${
+                    className={`w-full p-3 rounded-xl transition-colors relative overflow-hidden ${
                       isSelected 
                         ? `bg-gradient-to-r ${diff.colors.gradient} text-white shadow-lg` 
                         : `${diff.colors.bg} ${diff.colors.border} border hover:scale-[1.02]`

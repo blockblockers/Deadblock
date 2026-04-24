@@ -564,7 +564,7 @@ const EntryAuthScreen = ({
                 key={option.id}
                 onClick={() => handleOptionClick(option.id)}
                 disabled={isLoading}
-                className={`w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
+                className={`w-full p-3 rounded-xl transition-colors duration-300 relative overflow-hidden group
                   ${option.colors.bg} ${option.colors.border} border-2
                   hover:border-white/40 hover:ring-4 ${option.colors.ring}
                   active:scale-[0.98] disabled:opacity-70 disabled:cursor-wait`}
@@ -588,7 +588,7 @@ const EntryAuthScreen = ({
                 <div className="relative flex items-center gap-3">
                   {/* Icon Circle with Glow */}
                   <div 
-                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
+                    className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-300
                       bg-gradient-to-br ${option.colors.gradient} group-hover:scale-110`}
                     style={{ boxShadow: `0 0 15px ${option.colors.glow}` }}
                   >
@@ -624,7 +624,7 @@ const EntryAuthScreen = ({
                   {/* Arrow indicator */}
                   <ChevronRight 
                     size={20} 
-                    className={`flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white ${option.colors.text}`} 
+                    className={`flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-white ${option.colors.text}`} 
                   />
                 </div>
               </button>
@@ -700,7 +700,7 @@ const EntryAuthScreen = ({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 focus:outline-none transition-colors"
               placeholder="your@email.com"
               required
               autoComplete="email"
@@ -716,7 +716,7 @@ const EntryAuthScreen = ({
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-green-500 focus:ring-1 focus:ring-green-500/50 focus:outline-none transition-colors"
               placeholder="Enter password"
               required
               autoComplete="current-password"
@@ -734,7 +734,7 @@ const EntryAuthScreen = ({
         <button
           type="submit"
           disabled={loading}
-          className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
+          className="w-full p-3 rounded-xl transition-colors duration-300 relative overflow-hidden group
             bg-green-900/30 border-2 border-green-500/40
             hover:border-white/40 hover:ring-4 ring-green-500/50
             active:scale-[0.98] disabled:opacity-50"
@@ -758,7 +758,7 @@ const EntryAuthScreen = ({
           <div className="relative flex items-center justify-center gap-3">
             {/* Icon Circle with Glow */}
             <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
+              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-300
                 bg-gradient-to-br from-green-600 to-emerald-600 group-hover:scale-110"
               style={{ boxShadow: '0 0 15px rgba(34,197,94,0.6)' }}
             >
@@ -777,7 +777,7 @@ const EntryAuthScreen = ({
             {/* Arrow indicator */}
             <ChevronRight 
               size={20} 
-              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-green-300" 
+              className="flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-white text-green-300" 
             />
           </div>
         </button>
@@ -851,7 +851,7 @@ const EntryAuthScreen = ({
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-colors"
               placeholder="Choose a username"
               required
               minLength={3}
@@ -868,7 +868,7 @@ const EntryAuthScreen = ({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-colors"
               placeholder="your@email.com"
               required
               autoComplete="email"
@@ -884,7 +884,7 @@ const EntryAuthScreen = ({
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
+              className="w-full pl-10 pr-12 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-colors"
               placeholder="At least 6 characters"
               required
               minLength={6}
@@ -903,7 +903,7 @@ const EntryAuthScreen = ({
         <button
           type="submit"
           disabled={loading}
-          className="w-full p-3 rounded-xl transition-all duration-300 relative overflow-hidden group
+          className="w-full p-3 rounded-xl transition-colors duration-300 relative overflow-hidden group
             bg-amber-900/30 border-2 border-amber-500/40
             hover:border-white/40 hover:ring-4 ring-amber-500/50
             active:scale-[0.98] disabled:opacity-50"
@@ -927,7 +927,7 @@ const EntryAuthScreen = ({
           <div className="relative flex items-center justify-center gap-3">
             {/* Icon Circle with Glow */}
             <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300
+              className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-colors duration-300
                 bg-gradient-to-br from-amber-500 to-orange-600 group-hover:scale-110"
               style={{ boxShadow: '0 0 15px rgba(251,191,36,0.6)' }}
             >
@@ -946,7 +946,7 @@ const EntryAuthScreen = ({
             {/* Arrow indicator */}
             <ChevronRight 
               size={20} 
-              className="flex-shrink-0 transition-all duration-300 group-hover:translate-x-1 group-hover:text-white text-amber-300" 
+              className="flex-shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-white text-amber-300" 
             />
           </div>
         </button>
@@ -1003,7 +1003,7 @@ const EntryAuthScreen = ({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-all"
+            className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 focus:outline-none transition-colors"
             placeholder="your@email.com"
             required
             autoComplete="email"
@@ -1070,7 +1070,7 @@ const EntryAuthScreen = ({
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:outline-none transition-all"
+            className="w-full pl-10 pr-4 py-3 bg-slate-800/80 rounded-xl text-white border border-slate-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 focus:outline-none transition-colors"
             placeholder="your@email.com"
             required
             autoComplete="email"
@@ -1130,9 +1130,9 @@ const EntryAuthScreen = ({
   return (
     <div className="fixed inset-0 bg-transparent">
       {/* Multiple themed glow orbs - matching PuzzleSelect */}
-      <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
+      <div className={`fixed ${activeTheme.glow1.pos} w-80 h-80 ${activeTheme.glow1.color} rounded-full blur-3xl pointer-events-none transition-colors duration-700`} />
+      <div className={`fixed ${activeTheme.glow2.pos} w-72 h-72 ${activeTheme.glow2.color} rounded-full blur-3xl pointer-events-none transition-colors duration-700`} />
+      <div className={`fixed ${activeTheme.glow3.pos} w-64 h-64 ${activeTheme.glow3.color} rounded-full blur-3xl pointer-events-none transition-colors duration-700`} />
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
@@ -1165,7 +1165,7 @@ const EntryAuthScreen = ({
           </p>
           
           {/* Auth Card - with dramatic PuzzleSelect-style theme */}
-          <div className={`w-full max-w-sm ${activeTheme.cardBg} backdrop-blur-md rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-all duration-500`}>
+          <div className={`w-full max-w-sm ${activeTheme.cardBg} rounded-2xl p-5 border ${activeTheme.cardBorder} ${activeTheme.cardShadow} transition-colors duration-500`}>
             {mode === 'select' && renderSelectMode()}
             {mode === 'login' && renderLoginMode()}
             {mode === 'signup' && renderSignupMode()}

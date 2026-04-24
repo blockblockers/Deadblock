@@ -333,7 +333,7 @@ const UserProfile = ({ onBack }) => {
 
         {/* Profile Card - Tier themed */}
         <div 
-          className="backdrop-blur-md rounded-2xl p-6 mb-6"
+          className="rounded-2xl p-6 mb-6"
           style={{
             background: `linear-gradient(135deg, ${getTierBackground(glowColor)} 0%, rgba(15, 23, 42, 0.95) 100%)`,
             border: `1px solid ${hexToRgba(glowColor, 0.4)}`,
@@ -484,7 +484,7 @@ const UserProfile = ({ onBack }) => {
 
         {/* Match History - Tier themed with clickable opponents and ELO changes */}
         <div 
-          className="backdrop-blur-md rounded-2xl p-4"
+          className="rounded-2xl p-4"
           style={{
             background: `linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, ${hexToRgba(glowColor, 0.05)} 100%)`,
             border: `1px solid ${hexToRgba(glowColor, 0.3)}`,

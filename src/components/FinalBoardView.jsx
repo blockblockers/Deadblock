@@ -340,11 +340,11 @@ const FinalBoardView = ({
       />
       
       {/* HEADER - With Back Button and Deadblock Title */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/80 border-b border-purple-500/20 flex-shrink-0 relative backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/95 border-b border-purple-500/20 flex-shrink-0 relative">
         {/* Back Button */}
         <button 
           onClick={onClose}
-          className="flex items-center gap-1.5 px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all"
+          className="flex items-center gap-1.5 px-2 py-1.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors"
         >
           <ArrowLeft size={18} />
           <span className="text-xs">Back</span>
@@ -562,7 +562,7 @@ const FinalBoardView = ({
                 <button
                   onClick={first}
                   disabled={totalMoves === 0}
-                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors disabled:opacity-30"
                 >
                   <SkipBack size={16} />
                 </button>
@@ -570,7 +570,7 @@ const FinalBoardView = ({
                 <button
                   onClick={prev}
                   disabled={totalMoves === 0}
-                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors disabled:opacity-30"
                 >
                   <ChevronLeft size={20} />
                 </button>
@@ -578,7 +578,7 @@ const FinalBoardView = ({
                 <button
                   onClick={isPlaying ? pause : play}
                   disabled={totalMoves === 0}
-                  className="p-3.5 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-all disabled:opacity-30 mx-2 shadow-lg shadow-purple-500/40"
+                  className="p-3.5 bg-purple-600 hover:bg-purple-500 text-white rounded-full transition-colors disabled:opacity-30 mx-2 shadow-lg shadow-purple-500/40"
                 >
                   {isPlaying ? <Pause size={22} /> : <Play size={22} className="ml-0.5" />}
                 </button>
@@ -586,7 +586,7 @@ const FinalBoardView = ({
                 <button
                   onClick={next}
                   disabled={totalMoves === 0}
-                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors disabled:opacity-30"
                 >
                   <ChevronRight size={20} />
                 </button>
@@ -594,7 +594,7 @@ const FinalBoardView = ({
                 <button
                   onClick={last}
                   disabled={totalMoves === 0}
-                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-all disabled:opacity-30"
+                  className="p-2.5 text-slate-400 hover:text-white hover:bg-slate-800/80 rounded-lg transition-colors disabled:opacity-30"
                 >
                   <SkipForward size={16} />
                 </button>
