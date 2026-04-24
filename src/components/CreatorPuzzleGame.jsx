@@ -1441,6 +1441,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       <div className="relative min-h-full flex flex-col">
         <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
           
+          {/* Title */}
+          <div className="text-center mb-1">
+            <NeonTitle size="medium" />
+          </div>
+
           {/* Game Area */}
           <div className="w-full max-w-md">
 
@@ -1497,13 +1502,14 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
               </div>
             </div>
 
-            {/* Game Board */}
-            <div className="flex items-center justify-center pb-2 gap-1 relative">
-              <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #22d3ee, 0 0 32px #22d3ee, 0 0 48px #22d3ee' }}>DEA</span>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #a855f7, 0 0 32px #a855f7, 0 0 48px #a855f7' }}>DBL</span>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ec4899, 0 0 32px #ec4899, 0 0 48px #ec4899' }}>OCK</span>
-              </div>
+            {/* Game Board with side labels */}
+            <div className="flex items-center justify-center pb-2 gap-3 relative">
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                color: '#fff',
+                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 32px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 48px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}`
+              }}>CREATOR PUZZLE</div>
               <WrongMoveFeedback visible={showWrongMove} />
               <GameBoard
                 ref={boardRef}
@@ -1527,7 +1533,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 dragFlipped={flipped}
                 confirmFlashCells={confirmFlashCells}
               />
-              <div className="text-lg font-black tracking-wider select-none flex-shrink-0" style={{
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
                 writingMode: 'vertical-rl',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',

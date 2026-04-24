@@ -1735,7 +1735,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
       >
       {/* Content */}
       <div className="relative min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
-        {/* Header - Timer left, Streak right (title moved to board sides) */}
+        {/* Header - Timer left, Title center, Streak right */}
         <div className="w-full max-w-md mb-1 flex-shrink-0">
           <div className="flex items-center justify-between">
             {/* Timer - left */}
@@ -1743,6 +1743,11 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
               {gameState === GAME_STATES.PLAYING && (
                 <SpeedTimer timeLeft={timeLeft} maxTime={TIMER_DURATION} />
               )}
+            </div>
+            
+            {/* Title - center */}
+            <div className="text-center flex-1 mx-1">
+              <NeonTitle size="medium" />
             </div>
             
             {/* Streak - right */}
@@ -1784,13 +1789,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
             {/* Main Game Panel */}
             <div className="mb-2">
               
-              {/* Game Board with side titles */}
-              <div className="flex items-center justify-center pb-2 gap-1 relative">
-                <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                  <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #22d3ee, 0 0 32px #22d3ee, 0 0 48px #22d3ee' }}>DEA</span>
-                  <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #a855f7, 0 0 32px #a855f7, 0 0 48px #a855f7' }}>DBL</span>
-                  <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ec4899, 0 0 32px #ec4899, 0 0 48px #ec4899' }}>OCK</span>
-                </div>
+              {/* Game Board with side labels */}
+              <div className="flex items-center justify-center pb-2 gap-3 relative">
+                <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
+                  writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                  fontFamily: 'system-ui, -apple-system, sans-serif',
+                  color: '#fff',
+                  textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ef4444, 0 0 32px #ef4444, 0 0 48px #ef4444'
+                }}>SPEED PUZZLE</div>
                 <GameBoard
                   ref={boardRef}
                   board={board}
@@ -1827,7 +1833,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
                     </div>
                   </div>
                 )}
-                <div className="text-lg font-black tracking-wider select-none flex-shrink-0" style={{
+                <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
                   writingMode: 'vertical-rl',
                   fontFamily: 'system-ui, -apple-system, sans-serif',
                   color: '#fff',

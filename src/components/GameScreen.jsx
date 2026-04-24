@@ -747,6 +747,11 @@ const GameScreen = ({
       <div className="relative min-h-full flex flex-col">
         <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
           
+          {/* Title */}
+          <div className="text-center mb-1">
+            <NeonTitle size="medium" />
+          </div>
+
           {/* Game Area */}
           <div className="w-full max-w-md">
             
@@ -762,13 +767,14 @@ const GameScreen = ({
             
             <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
 
-            {/* Game Board with side titles */}
-            <div className="flex items-center justify-center pb-2 gap-1">
-              <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #22d3ee, 0 0 32px #22d3ee, 0 0 48px #22d3ee' }}>DEA</span>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #a855f7, 0 0 32px #a855f7, 0 0 48px #a855f7' }}>DBL</span>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ec4899, 0 0 32px #ec4899, 0 0 48px #ec4899' }}>OCK</span>
-              </div>
+            {/* Game Board with side labels */}
+            <div className="flex items-center justify-center pb-2 gap-3">
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                color: '#fff',
+                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${sideGlowColor}, 0 0 32px ${sideGlowColor}, 0 0 48px ${sideGlowColor}`
+              }}>{gameMode === 'ai' ? 'VS AI' : gameMode === 'puzzle' ? 'GENERATED PUZZLE' : '2 PLAYER'}</div>
               <GameBoard
                 ref={boardRef}
                 board={board}
@@ -790,7 +796,7 @@ const GameScreen = ({
                 dragRotation={rotation}
                 dragFlipped={flipped}
               />
-              <div className="text-lg font-black tracking-wider select-none flex-shrink-0" style={{
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
                 writingMode: 'vertical-rl',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',

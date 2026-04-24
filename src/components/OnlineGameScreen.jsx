@@ -1794,9 +1794,13 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       <div className="relative z-10 min-h-full flex flex-col">
         <div className="flex-1 flex flex-col max-w-lg mx-auto p-2 sm:p-4 w-full" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
           
-          {/* UPDATED v7.40: Header - turn timer only (title moved to board sides) */}
-          {game?.turn_timer_seconds && game?.status === 'active' && (
-            <div className="flex items-center justify-end mb-1">
+          {/* Header with title and optional turn timer */}
+          <div className="flex items-center justify-between mb-1">
+            <div className="w-16" />
+            <div className="text-center flex-1 mx-2">
+              <NeonTitle text="DEADBLOCK" size="medium" color="amber" />
+            </div>
+            {game?.turn_timer_seconds && game?.status === 'active' ? (
               <TurnTimer
                 seconds={game.turn_timer_seconds}
                 turnStartedAt={game.turn_started_at || turnStartedAt}
@@ -1805,8 +1809,10 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   if (isMyTurn) gameSyncService.forfeitGame(currentGameId, user.id);
                 }}
               />
-            </div>
-          )}
+            ) : (
+              <div className="w-16" />
+            )}
+          </div>
 
           {/* Main Game Panel */}
           <div className="mb-2">
@@ -1819,13 +1825,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
               gameStatus={game?.status}
             />
 
-            {/* Game Board with side titles */}
-            <div className="flex items-center justify-center pb-2 gap-1">
-              <div className="flex-shrink-0 select-none" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #22d3ee, 0 0 32px #22d3ee, 0 0 48px #22d3ee' }}>DEA</span>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #a855f7, 0 0 32px #a855f7, 0 0 48px #a855f7' }}>DBL</span>
-                <span className="text-lg font-black tracking-wider" style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#fff', textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #ec4899, 0 0 32px #ec4899, 0 0 48px #ec4899' }}>OCK</span>
-              </div>
+            {/* Game Board with side labels */}
+            <div className="flex items-center justify-center pb-2 gap-3">
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                color: '#fff',
+                textShadow: '0 0 4px #fff, 0 0 8px #fff, 0 0 16px #f59e0b, 0 0 32px #f59e0b, 0 0 48px #f59e0b'
+              }}>ONLINE BATTLE</div>
               <div className="relative">
                 <GameBoard
                   ref={boardRef}
@@ -1902,7 +1909,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
                   </div>
                 )}
               </div>
-              <div className="text-lg font-black tracking-wider select-none flex-shrink-0" style={{
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
                 writingMode: 'vertical-rl',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',
