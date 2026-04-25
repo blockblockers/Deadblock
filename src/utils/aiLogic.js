@@ -1,4 +1,8 @@
 // AI Logic for Deadblock - Optimized for Speed
+// v2.4 - CPU OPTIMIZATION: Board mutation+undo and usedPieces push/pop in
+//   endgameSolve and minimax eliminates millions of array allocations per turn.
+//   Same search logic, same results, dramatically less memory pressure.
+//   Console.logs commented out for production.
 // v2.3 - EXHAUSTIVE ENDGAME SOLVER:
 //   - NEW: When ≤6 pieces remain, uses clean exhaustive solver with NO timeouts,
 //     NO depth limits — searches every path to terminal state. Guarantees finding
@@ -191,6 +195,8 @@ let endgameNodes = 0;
 const MAX_ENDGAME_NODES = 30000000; // 30M safety cap
 let endgameNodeLimitHit = false;
 
+// v2.4: Uses board mutation+undo and usedPieces push/pop to eliminate
+// millions of array allocations. Same search, same results.
 const endgameSolve = (board, usedPieces, isMaximizing, alpha, beta) => {
   endgameNodes++;
   if (endgameNodes > MAX_ENDGAME_NODES) {
@@ -208,9 +214,18 @@ const endgameSolve = (board, usedPieces, isMaximizing, alpha, beta) => {
     let best = -Infinity;
     for (const move of moves) {
       if (endgameNodeLimitHit) break;
-      const newBoard = applyMove(board, move, 2);
-      const newUsed = [...usedPieces, move.pieceType];
-      const score = endgameSolve(newBoard, newUsed, false, alpha, beta);
+      // Mutate board in place
+      const cells = [];
+      for (const [dx, dy] of move.coords) {
+        const r = move.row + dy, c = move.col + dx;
+        cells.push([r, c, board[r][c]]);
+        board[r][c] = 2;
+      }
+      usedPieces.push(move.pieceType);
+      const score = endgameSolve(board, usedPieces, false, alpha, beta);
+      // Undo
+      usedPieces.pop();
+      for (const [r, c, prev] of cells) board[r][c] = prev;
       best = Math.max(best, score);
       alpha = Math.max(alpha, score);
       if (beta <= alpha) break;
@@ -220,9 +235,16 @@ const endgameSolve = (board, usedPieces, isMaximizing, alpha, beta) => {
     let best = Infinity;
     for (const move of moves) {
       if (endgameNodeLimitHit) break;
-      const newBoard = applyMove(board, move, 1);
-      const newUsed = [...usedPieces, move.pieceType];
-      const score = endgameSolve(newBoard, newUsed, true, alpha, beta);
+      const cells = [];
+      for (const [dx, dy] of move.coords) {
+        const r = move.row + dy, c = move.col + dx;
+        cells.push([r, c, board[r][c]]);
+        board[r][c] = 1;
+      }
+      usedPieces.push(move.pieceType);
+      const score = endgameSolve(board, usedPieces, true, alpha, beta);
+      usedPieces.pop();
+      for (const [r, c, prev] of cells) board[r][c] = prev;
       best = Math.min(best, score);
       beta = Math.min(beta, score);
       if (beta <= alpha) break;
@@ -268,9 +290,16 @@ const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
     let maxScore = -Infinity;
     for (const move of movesToEval) {
       if (isTimeUp()) break;
-      const newBoard = applyMove(board, move, 2);
-      const newUsed = [...usedPieces, move.pieceType];
-      const score = minimax(newBoard, newUsed, depth - 1, false, alpha, beta);
+      const cells = [];
+      for (const [dx, dy] of move.coords) {
+        const r = move.row + dy, c = move.col + dx;
+        cells.push([r, c, board[r][c]]);
+        board[r][c] = 2;
+      }
+      usedPieces.push(move.pieceType);
+      const score = minimax(board, usedPieces, depth - 1, false, alpha, beta);
+      usedPieces.pop();
+      for (const [r, c, prev] of cells) board[r][c] = prev;
       maxScore = Math.max(maxScore, score);
       alpha = Math.max(alpha, score);
       if (beta <= alpha) break;
@@ -280,9 +309,16 @@ const minimax = (board, usedPieces, depth, isMaximizing, alpha, beta) => {
     let minScore = Infinity;
     for (const move of movesToEval) {
       if (isTimeUp()) break;
-      const newBoard = applyMove(board, move, 1);
-      const newUsed = [...usedPieces, move.pieceType];
-      const score = minimax(newBoard, newUsed, depth - 1, true, alpha, beta);
+      const cells = [];
+      for (const [dx, dy] of move.coords) {
+        const r = move.row + dy, c = move.col + dx;
+        cells.push([r, c, board[r][c]]);
+        board[r][c] = 1;
+      }
+      usedPieces.push(move.pieceType);
+      const score = minimax(board, usedPieces, depth - 1, true, alpha, beta);
+      usedPieces.pop();
+      for (const [r, c, prev] of cells) board[r][c] = prev;
       minScore = Math.min(minScore, score);
       beta = Math.min(beta, score);
       if (beta <= alpha) break;
@@ -299,7 +335,7 @@ const findBestMove = (board, usedPieces) => {
   if (moves.length === 0) return null;
   
   if (moves.length === 1) {
-    console.log('Expert AI: Only one move available');
+    // console.log('Expert AI: Only one move available');
     return moves[0];
   }
   
@@ -308,7 +344,7 @@ const findBestMove = (board, usedPieces) => {
     const newBoard = applyMove(board, move, 2);
     const newUsed = [...usedPieces, move.pieceType];
     if (!canAnyMoveBeMade(newBoard, newUsed)) {
-      console.log(`Expert AI: Found immediate winning move ${move.pieceType}`);
+      // console.log(`Expert AI: Found immediate winning move ${move.pieceType}`);
       return move;
     }
   }
@@ -336,7 +372,7 @@ const findBestMove = (board, usedPieces) => {
     });
     
     if (blockingMoves.length > 0) {
-      console.log(`Expert AI: ${blockingMoves.length} blocking moves (vs ${playerWinningMoves.length} threats)`);
+      // console.log(`Expert AI: ${blockingMoves.length} blocking moves (vs ${playerWinningMoves.length} threats)`);
       searchPool = blockingMoves;
     }
   }
@@ -374,7 +410,7 @@ const findBestMove = (board, usedPieces) => {
     }
     
     const elapsed = Date.now() - searchStartTime;
-    console.log(`Expert AI [endgame solver]: final=${bestMove.pieceType} score=${bestScore} (${endgameNodes} nodes, ${elapsed}ms${endgameNodeLimitHit ? ' NODE LIMIT' : ''})`);
+    // console.log(`Expert AI [endgame solver]: ...`);
     return bestMove;
   }
   
@@ -412,7 +448,7 @@ const findBestMove = (board, usedPieces) => {
     if (!isTimeUp() || depthBestScore >= 10000) {
       bestMove = depthBestMove;
       bestScore = depthBestScore;
-      console.log(`Expert AI: depth ${depth} → ${depthBestMove.pieceType} score=${depthBestScore} (${nodesSearched} nodes)`);
+      // console.log(`Expert AI: depth ${depth} ...`);
     }
     
     // Proven win — stop searching
@@ -420,7 +456,7 @@ const findBestMove = (board, usedPieces) => {
   }
   
   const elapsed = Date.now() - searchStartTime;
-  console.log(`Expert AI: final=${bestMove.pieceType} score=${bestScore} (${nodesSearched} nodes, ${elapsed}ms)`);
+  // console.log(`Expert AI: final=...`);
   
   return bestMove;
 };
@@ -449,7 +485,7 @@ const getRandomOpeningMove = (board, usedPieces) => {
   const pool = centerMoves.length > 0 ? centerMoves : pieceMoves;
   const selected = pool[Math.floor(Math.random() * pool.length)];
 
-  console.log(`Random opening: Picked ${randomPiece} (1 of ${pieceTypes.length} pieces, ${pool.length} positions)`);
+  // console.log(`Random opening: Picked ${randomPiece} (1 of ${pieceTypes.length} pieces, ${pool.length} positions)`);
   return selected;
 };
 
@@ -497,7 +533,7 @@ const findPuzzleOptimalMove = (board, usedPieces) => {
   let bestMove = candidates[0];
   let bestScore = -Infinity;
   
-  console.log(`Puzzle AI: Evaluating ${candidates.length} moves, player has ${playerWinningMovesBefore} winning moves`);
+  // console.log(`Puzzle AI: Evaluating ${candidates.length} moves, player has ${playerWinningMovesBefore} winning moves`);
   
   for (const move of candidates) {
     const newBoard = applyMove(board, move, 2); // AI is player 2
@@ -509,7 +545,7 @@ const findPuzzleOptimalMove = (board, usedPieces) => {
     const playerMovesAfter = getAllPossibleMoves(newBoard, newUsed, true);
     if (playerMovesAfter.length === 0) {
       score += 100000; // Winning move - highest priority
-      console.log(`Puzzle AI: Found winning move ${move.pieceType}`);
+      // console.log(`Puzzle AI: Found winning move ${move.pieceType}`);
     }
     
     // 2. HIGH PRIORITY: Count how many player winning moves this blocks
@@ -533,7 +569,7 @@ const findPuzzleOptimalMove = (board, usedPieces) => {
     }
   }
   
-  console.log(`Puzzle AI: Best move ${bestMove.pieceType} with score ${bestScore}`);
+  // console.log(`Puzzle AI: Best move ${bestMove.pieceType} with score ${bestScore}`);
   return bestMove;
 };
 
@@ -553,30 +589,30 @@ export const selectAIMove = async (board, boardPieces, usedPieces, difficulty = 
 
     case AI_DIFFICULTY.PUZZLE_OPTIMAL:
       // NEW: Perfect play for puzzles - blocks player wins, creates threats
-      console.log(`Puzzle Optimal AI thinking... (${usedPieces.length} pieces placed)`);
+      // console.log(`Puzzle Optimal AI thinking... (${usedPieces.length} pieces placed)`);
       await new Promise(r => setTimeout(r, 30)); // Brief yield for UI
       
       const optimalMove = findPuzzleOptimalMove(board, usedPieces);
       if (optimalMove) return optimalMove;
       
       // Fallback to professional if optimal fails
-      console.log('Puzzle AI: Falling back to professional AI');
+      // console.log('Puzzle AI: Falling back to professional AI');
       /* falls through */
 
     case AI_DIFFICULTY.PROFESSIONAL:
       // Fair random opening move
       if (isOpeningMove) {
-        console.log('Expert AI: Using random opening move');
+        // console.log('Expert AI: Using random opening move');
         return getRandomOpeningMove(board, usedPieces);
       }
       
-      console.log(`Expert AI thinking... (${usedPieces.length} pieces placed)`);
+      // console.log(`Expert AI thinking... (${usedPieces.length} pieces placed)`);
       await new Promise(r => setTimeout(r, 50));
       
       const bestMove = findBestMove(board, usedPieces);
       if (bestMove) return bestMove;
       
-      console.log('Expert AI: Falling back to strategic move');
+      // console.log('Expert AI: Falling back to strategic move');
       /* falls through */
 
     case AI_DIFFICULTY.AVERAGE:
