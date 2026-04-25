@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.27: Medium difficulty renamed to INTERMEDIATE; theme changed from cyan to amber
 // v2.26: Title/subtitle moved to vertical side labels; puzzle info merged with attempt counter
 // v2.25: Added red to local GlowOrbButton color map (was missing, causing transparent cancel)
 // v2.24: Puzzle info baseline-aligned with subtitle; attempts moved below piece tray
@@ -91,11 +92,11 @@ const difficultyThemes = {
     panelShadow: 'shadow-[0_0_40px_rgba(34,197,94,0.3)]',
   },
   medium: {
-    gridColor: 'rgba(34, 211, 238, 0.3)',
-    glow1: 'bg-cyan-500/30',
-    glow2: 'bg-sky-500/25',
-    panelBorder: 'border-cyan-500/40',
-    panelShadow: 'shadow-[0_0_40px_rgba(34,211,238,0.3)]',
+    gridColor: 'rgba(251, 191, 36, 0.3)',
+    glow1: 'bg-amber-500/30',
+    glow2: 'bg-orange-500/25',
+    panelBorder: 'border-amber-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.3)]',
   },
   hard: {
     gridColor: 'rgba(239, 68, 68, 0.4)',
@@ -171,7 +172,7 @@ const parsePuzzleBoard = (puzzleBoard, puzzleBoardPieces) => {
 const PuzzleHeader = memo(({ puzzleNumber, puzzleName, difficulty, onBack }) => {
   const difficultyColors = {
     easy: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/50' },
-    medium: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/50' },
+    medium: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/50' },
     hard: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50' },
     expert: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/50' },
   };
@@ -1428,7 +1429,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       
       {/* Floating pentomino pieces — themed to difficulty */}
       <FloatingPieces 
-        theme={puzzle?.difficulty === 'easy' ? 'green' : puzzle?.difficulty === 'hard' ? 'red' : puzzle?.difficulty === 'expert' ? 'purple' : 'cyan'}
+        theme={puzzle?.difficulty === 'easy' ? 'green' : puzzle?.difficulty === 'hard' ? 'red' : puzzle?.difficulty === 'expert' ? 'purple' : 'default'}
         count={8} minOpacity={0.15} maxOpacity={0.35}
       />
 
@@ -1443,7 +1444,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           
           {/* Title */}
           <div className="text-center mb-1">
-            <NeonTitle size="medium" />
+            <NeonTitle size="large" />
           </div>
 
           {/* Game Area */}
@@ -1471,19 +1472,19 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                   puzzle.difficulty === 'easy' ? 'from-green-600 to-emerald-600' :
                   puzzle.difficulty === 'hard' ? 'from-red-500 to-rose-600' :
                   puzzle.difficulty === 'expert' ? 'from-purple-500 to-pink-600' :
-                  'from-cyan-500 to-sky-600'
+                  'from-amber-500 to-orange-600'
                 } border border-white/20`}
                 style={{ 
                   boxShadow: `0 0 15px ${
                     puzzle.difficulty === 'easy' ? 'rgba(34,197,94,0.6)' :
                     puzzle.difficulty === 'hard' ? 'rgba(239,68,68,0.6)' :
                     puzzle.difficulty === 'expert' ? 'rgba(168,85,247,0.6)' :
-                    'rgba(34,211,238,0.6)'
+                    'rgba(251,191,36,0.6)'
                   }` 
                 }}
               >
                 <span className="text-white text-[10px] font-black tracking-wider uppercase">
-                  {puzzle.difficulty || 'MEDIUM'}
+                  {puzzle.difficulty === 'medium' ? 'INTERMEDIATE' : (puzzle.difficulty || 'INTERMEDIATE')}
                 </span>
               </div>
               
@@ -1508,7 +1509,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 writingMode: 'vertical-rl', transform: 'rotate(180deg)',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',
-                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 32px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 48px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}`
+                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 32px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 48px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}`
               }}>CREATOR PUZZLE</div>
               <WrongMoveFeedback visible={showWrongMove} />
               <GameBoard
@@ -1537,7 +1538,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 writingMode: 'vertical-rl',
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',
-                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 32px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}, 0 0 48px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'}`
+                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 32px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 48px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}`
               }}>CREATOR PUZZLE</div>
             </div>
 
@@ -1621,13 +1622,13 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           {/* Puzzle Info & Attempt Counter */}
           <div className="flex items-center justify-center gap-2 mt-1 mb-1">
             <span className="text-[10px] whitespace-nowrap truncate max-w-[50%]" style={{
-              color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
+              color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'
             }}>
               #{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name}` : ''}
             </span>
             <span className="text-slate-600">•</span>
             <span className="text-xs font-medium" style={{
-              color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#22d3ee'
+              color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'
             }}>
               Attempt #{attempts}
             </span>
