@@ -1,4 +1,6 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.28: CPU optimization — board mutation+undo in solver (eliminates millions of array
+//        allocations), console.logs commented out. MAX_NODES kept at 20M for full AI strength.
 // v2.27: Medium difficulty renamed to INTERMEDIATE; theme changed from cyan to amber
 // v2.26: Title/subtitle moved to vertical side labels; puzzle info merged with attempt counter
 // v2.25: Added red to local GlowOrbButton color map (was missing, causing transparent cancel)
@@ -545,7 +547,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
   const findExpertAIMove = useCallback((currentBoard, aiAvailablePieces, playerAvailablePieces) => {
     // Merge into single shared pool (deduplicated)
     const sharedPool = [...new Set([...aiAvailablePieces, ...playerAvailablePieces])];
-    console.log('[CreatorPuzzle AI v6] Exhaustive solver. Shared pool:', sharedPool);
+    // console.log('[CreatorPuzzle AI v6] Exhaustive solver. Shared pool:', sharedPool);
     
     // Log board state for debugging (use falsy check to match canPlacePiece)
     const emptyCells = [];
@@ -554,11 +556,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         if (!currentBoard[r][c]) emptyCells.push(`(${r},${c})`);
       }
     }
-    console.log(`[CreatorPuzzle AI v6] Empty cells (${emptyCells.length}): ${emptyCells.join(' ')}`);
+    // console.log(`[CreatorPuzzle AI v6] Empty cells (${emptyCells.length}): ${emptyCells.join(' ')}`);
     
     const aiMoves = getAllPossibleMoves(currentBoard, sharedPool, true);
     if (aiMoves.length === 0) {
-      console.log('[CreatorPuzzle AI v6] No valid moves');
+      // console.log('[CreatorPuzzle AI v6] No valid moves');
       return null;
     }
     
@@ -569,6 +571,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     // Exhaustive minimax with SINGLE shared pool.
     // When either side plays a piece, it's removed from the pool for both.
+    // v2.27: Uses board mutation + undo to avoid millions of array allocations.
     const solve = (board, remainingPieces, isAITurn, alpha, beta) => {
       nodesSearched++;
       if (nodesSearched > MAX_NODES) {
@@ -586,9 +589,17 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         let best = -Infinity;
         for (const move of moves) {
           if (hitNodeLimit) break;
-          const newBoard = applyMoveToBoard(board, move, 2);
+          // Mutate board in place
+          const cells = [];
+          for (const [dx, dy] of move.coords) {
+            const r = move.row + dy, c = move.col + dx;
+            cells.push([r, c, board[r][c]]);
+            board[r][c] = 2;
+          }
           const newPool = remainingPieces.filter(p => p !== move.piece);
-          const score = solve(newBoard, newPool, false, alpha, beta);
+          const score = solve(board, newPool, false, alpha, beta);
+          // Undo mutation
+          for (const [r, c, prev] of cells) board[r][c] = prev;
           best = Math.max(best, score);
           alpha = Math.max(alpha, score);
           if (beta <= alpha) break;
@@ -598,9 +609,15 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         let best = Infinity;
         for (const move of moves) {
           if (hitNodeLimit) break;
-          const newBoard = applyMoveToBoard(board, move, 1);
+          const cells = [];
+          for (const [dx, dy] of move.coords) {
+            const r = move.row + dy, c = move.col + dx;
+            cells.push([r, c, board[r][c]]);
+            board[r][c] = 1;
+          }
           const newPool = remainingPieces.filter(p => p !== move.piece);
-          const score = solve(newBoard, newPool, true, alpha, beta);
+          const score = solve(board, newPool, true, alpha, beta);
+          for (const [r, c, prev] of cells) board[r][c] = prev;
           best = Math.min(best, score);
           beta = Math.min(beta, score);
           if (beta <= alpha) break;
@@ -609,28 +626,42 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
       }
     };
     
-    // IMMEDIATE WIN CHECK — using shared pool
+    // IMMEDIATE WIN CHECK — using shared pool (mutate + undo)
     for (const move of aiMoves) {
-      const newBoard = applyMoveToBoard(currentBoard, move, 2);
+      const cells = [];
+      for (const [dx, dy] of move.coords) {
+        const r = move.row + dy, c = move.col + dx;
+        cells.push([r, c, currentBoard[r][c]]);
+        currentBoard[r][c] = 2;
+      }
       const newPool = sharedPool.filter(p => p !== move.piece);
-      const opponentMoves = getAllPossibleMoves(newBoard, newPool, true);
+      const opponentMoves = getAllPossibleMoves(currentBoard, newPool, true);
+      // Undo
+      for (const [r, c, prev] of cells) currentBoard[r][c] = prev;
       if (opponentMoves.length === 0) {
-        console.log(`[CreatorPuzzle AI v6] Immediate win: ${move.piece} at (${move.row},${move.col})`);
+        // console.log(`[CreatorPuzzle AI v6] Immediate win: ${move.piece} at (${move.row},${move.col})`);
         return move;
       }
     }
     
-    // Evaluate EVERY AI move exhaustively
+    // Evaluate EVERY AI move exhaustively (mutate + undo)
     let bestMove = aiMoves[0];
     let bestScore = -Infinity;
     
     for (const move of aiMoves) {
-      const newBoard = applyMoveToBoard(currentBoard, move, 2);
+      const cells = [];
+      for (const [dx, dy] of move.coords) {
+        const r = move.row + dy, c = move.col + dx;
+        cells.push([r, c, currentBoard[r][c]]);
+        currentBoard[r][c] = 2;
+      }
       const newPool = sharedPool.filter(p => p !== move.piece);
-      const score = solve(newBoard, newPool, false, -Infinity, Infinity);
+      const score = solve(currentBoard, newPool, false, -Infinity, Infinity);
+      // Undo
+      for (const [r, c, prev] of cells) currentBoard[r][c] = prev;
       
-      const cells = move.coords.map(([dx, dy]) => `(${move.row + dy},${move.col + dx})`).join(' ');
-      console.log(`[CreatorPuzzle AI v6] ${move.piece} at (${move.row},${move.col}) → score=${score} cells=${cells}`);
+      // const cells = move.coords.map(([dx, dy]) => `(${move.row + dy},${move.col + dx})`).join(' ');
+      // console.log(`[CreatorPuzzle AI v6] ${move.piece} at (${move.row},${move.col}) → score=${score} cells=${cells}`);
       
       if (score > bestScore) {
         bestScore = score;
@@ -641,10 +672,10 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     }
     
     const elapsed = Date.now() - searchStart;
-    console.log(`[CreatorPuzzle AI v6] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore} (${nodesSearched} nodes, ${elapsed}ms${hitNodeLimit ? ' NODE LIMIT' : ''})`);
+    // console.log(`[CreatorPuzzle AI v6] Selected: ${bestMove.piece} at (${bestMove.row},${bestMove.col}) score=${bestScore} (${nodesSearched} nodes, ${elapsed}ms${hitNodeLimit ? ' NODE LIMIT' : ''})`);
     
     return bestMove;
-  }, [getAllPossibleMoves, applyMoveToBoard]);
+  }, [getAllPossibleMoves]);
   
   // -------------------------------------------------------------------------
   // INITIALIZE PUZZLE
@@ -659,7 +690,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     pendingTimeoutsRef.current.forEach(clearTimeout);
     pendingTimeoutsRef.current.clear();
     
-    console.log('[CreatorPuzzleGame] Loading puzzle:', puzzle.puzzle_number);
+    // console.log('[CreatorPuzzleGame] Loading puzzle:', puzzle.puzzle_number);
     
     const { board: parsedBoard, boardPieces: parsedBoardPieces } = parsePuzzleBoard(
       puzzle.board,
@@ -694,7 +725,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
         .then(progress => {
           if (mountedRef.current) {
             if (progress?.attempts) {
-              console.log('[CreatorPuzzleGame] Loaded previous attempts:', progress.attempts);
+              // console.log('[CreatorPuzzleGame] Loaded previous attempts:', progress.attempts);
               setAttempts(progress.attempts);
             } else {
               setAttempts(1);
@@ -854,9 +885,9 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     // played re-enter the shared pool via the player's list and the AI can replay them
     const playerPiecesRemaining = availablePieces.filter(p => !newUsedPieces.includes(p) && !piecesOnBoard.includes(p));
     
-    console.log('[CreatorPuzzleGame] Pieces on board:', piecesOnBoard);
-    console.log('[CreatorPuzzleGame] AI can use:', aiPiecesList);
-    console.log('[CreatorPuzzleGame] Player can use:', playerPiecesRemaining);
+    // console.log('[CreatorPuzzleGame] Pieces on board:', piecesOnBoard);
+    // console.log('[CreatorPuzzleGame] AI can use:', aiPiecesList);
+    // console.log('[CreatorPuzzleGame] Player can use:', playerPiecesRemaining);
     
     // v2.16: ALWAYS use the exhaustive solver. Previous versions tried to use
     // puzzle.solution_moves (predetermined responses), but those are designed for
@@ -870,7 +901,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     safeSetTimeout(() => {
       if (!aiMove) {
         // SUCCESS - AI blocked! User wins!
-        console.log('[CreatorPuzzleGame] AI blocked - User wins!');
+        // console.log('[CreatorPuzzleGame] AI blocked - User wins!');
         soundManager.playWin();
         setGameState(GAME_STATES.SUCCESS);
         
@@ -897,7 +928,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           
         // AI can play - check if this is a "forced" move (player made good move)
         // If AI's score was very negative, player made a winning move - let them continue
-        console.log('[CreatorPuzzleGame] AI plays:', aiMove.piece, 'at', aiMove.row, aiMove.col);
+        // console.log('[CreatorPuzzleGame] AI plays:', aiMove.piece, 'at', aiMove.row, aiMove.col);
         
         // Place AI's piece on the board
         const aiPlayer = currentPlayer === 1 ? 2 : 1;
@@ -942,11 +973,11 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
           
           if (playerCanContinue) {
             // Player can continue - this is a multi-move puzzle or player made good move
-            console.log('[CreatorPuzzleGame] Player can continue playing');
+            // console.log('[CreatorPuzzleGame] Player can continue playing');
             // Don't reset - let player make another move
           } else {
             // Player cannot continue after AI's response - wrong move
-            console.log('[CreatorPuzzleGame] Wrong move - Player blocked');
+            // console.log('[CreatorPuzzleGame] Wrong move - Player blocked');
             soundManager.playInvalid();
             setShowWrongMove(true);
             
