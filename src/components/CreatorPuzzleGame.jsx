@@ -1,4 +1,5 @@
 // CreatorPuzzleGame.jsx - Play hand-crafted creator puzzles
+// v2.29: Fixed rotation persisting on reselect — startDrag now resets rotation/flip
 // v2.28: CPU optimization — board mutation+undo in solver (eliminates millions of array
 //        allocations), console.logs commented out. MAX_NODES kept at 20M for full AI strength.
 // v2.27: Medium difficulty renamed to INTERMEDIATE; theme changed from cyan to amber
@@ -1192,6 +1193,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     setIsDragging(true);
     setPieceCellOffset({ row: 0, col: 0 });
     setSelectedPiece(piece);
+    setRotation(0);
+    setFlipped(false);
     setPendingMove(null);
     
     soundManager.playPieceSelect();

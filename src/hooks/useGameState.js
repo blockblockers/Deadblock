@@ -1,4 +1,5 @@
 // useGameState.js - Custom hook for managing local game state
+// v7.17: Fixed rotation persisting on reselect — selectPiece now resets rotation/flip
 // v7.16: Use PUZZLE_OPTIMAL AI for puzzle mode - blocks player wins, creates counter-threats
 // v7.15.4: Use per-difficulty AI move delays from aiLogic
 // v7.12: Added play streak update on game completion
@@ -70,6 +71,8 @@ export const useGameState = () => {
     if (gameOver) return;
     
     setSelectedPiece(piece);
+    setRotation(0);
+    setFlipped(false);
     setPendingMove(null);
     soundManager.playPieceSelect();
   }, [usedPieces, gameOver]);
