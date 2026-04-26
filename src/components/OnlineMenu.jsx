@@ -1630,7 +1630,7 @@ const OnlineMenu = ({
           
           {/* Title - Sized to match game menu */}
           <div className="text-center mb-4">
-            <NeonTitle size="large" />
+            <NeonTitle size="xlarge" />
             <NeonSubtitle text="ONLINE" size="large" className="mt-2" />
           </div>
 

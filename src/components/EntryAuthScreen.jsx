@@ -1153,7 +1153,7 @@ const EntryAuthScreen = ({
         <div className="flex flex-col items-center">
           {/* Title - Large size matching PuzzleSelect */}
           <div className="text-center mb-3">
-            <NeonTitle size="large" />
+            <NeonTitle size="xlarge" />
           </div>
           
           {/* Subtitle - Positioned close to the card below */}
