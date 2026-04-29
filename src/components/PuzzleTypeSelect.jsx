@@ -194,7 +194,7 @@ const puzzleTypes = [
     tagline: 'Hand-Crafted Challenges',
     description: 'Carefully designed puzzles with a single winning path',
     features: [
-      { icon: Trophy, text: '100 unique puzzles' },
+      { icon: Trophy, text: '101 unique puzzles' },
       { icon: Target, text: '4 difficulty tiers' },
       { icon: Sparkles, text: 'Find the winning move' },
     ],
