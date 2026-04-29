@@ -339,7 +339,7 @@ const PuzzleTypeSelect = ({
                   </p>
 
                   {/* Features */}
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="grid grid-cols-2 gap-1.5">
                     {type.features.map((feature, idx) => (
                       <div 
                         key={idx}
