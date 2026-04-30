@@ -166,7 +166,7 @@ const MenuScreen = ({
         <div className="w-full max-w-sm">
           
           {/* TITLE - Above the box */}
-          <div className="text-center mb-4">
+          <div className="flex justify-center mb-4">
             <NeonTitle size="xlarge" />
           </div>
           
