@@ -65,6 +65,7 @@ import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '
 import { soundManager } from '../utils/soundManager';
 import { streakTracker } from '../utils/streakTracker';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import useKeyboardControls from '../hooks/useKeyboardControls';
 import { useAuth } from '../contexts/AuthContext';
 import { creatorPuzzleService } from '../services/creatorPuzzleService';
 import FloatingPieces from './FloatingPieces';
@@ -825,6 +826,14 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
     
     soundManager.playClickSound?.('move');
   }, [selectedPiece, rotation, flipped, pendingMove, gameState, aiIsThinking]);
+  
+  // WASD + R/F keyboard controls for desktop
+  useKeyboardControls({
+    onMove: handleDPadMove,
+    onRotate: handleRotate,
+    onFlip: handleFlip,
+    enabled: gameState === GAME_STATES.PLAYING && !aiIsThinking,
+  });
   
   // -------------------------------------------------------------------------
   // VALIDATE AND CONFIRM MOVE

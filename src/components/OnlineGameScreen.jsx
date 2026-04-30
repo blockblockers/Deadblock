@@ -65,6 +65,7 @@ import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, BOARD_SIZE } from '
 import { soundManager } from '../utils/soundManager';
 import { ratingService } from '../services/ratingService';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import useKeyboardControls from '../hooks/useKeyboardControls';
 import { realtimeManager } from '../services/realtimeManager';
 import { streakService } from '../services/streakService';
 
@@ -1461,6 +1462,14 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
     setFlipped((f) => !f);
     soundManager.playPieceFlip();
   }, [selectedPiece]);
+
+  // WASD + R/F keyboard controls for desktop
+  useKeyboardControls({
+    onMove: handleMovePiece,
+    onRotate: handleRotate,
+    onFlip: handleFlip,
+    enabled: isMyTurn && game?.status === 'active',
+  });
 
   const handleCancel = useCallback(() => {
     setPendingMove(null);

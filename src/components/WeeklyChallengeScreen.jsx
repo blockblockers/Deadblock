@@ -27,6 +27,7 @@ import { streakService } from '../services/streakService';
 import { streakTracker } from '../utils/streakTracker';
 import { useAuth } from '../contexts/AuthContext';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import useKeyboardControls from '../hooks/useKeyboardControls';
 import { getSeededPuzzle } from '../utils/puzzleGenerator';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
@@ -397,6 +398,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setFastAIMode(true);
     return () => setFastAIMode(false); // Reset on unmount
   }, [setFastAIMode]);
+  
+  // WASD + R/F keyboard controls for desktop
+  useKeyboardControls({
+    onMove: movePendingPiece,
+    onRotate: rotatePiece,
+    onFlip: flipPiece,
+    enabled: !gameOver && gameStarted,
+  });
   
   // Helper to check if pending piece has cells off the grid
   const isPieceOffGrid = pendingMove ? (() => {

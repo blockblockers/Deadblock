@@ -30,6 +30,7 @@ import { getPieceCoords, canPlacePiece, canAnyPieceBePlaced, createEmptyBoard, B
 import { getSpeedPuzzle } from '../utils/puzzleGenerator';
 import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import useKeyboardControls from '../hooks/useKeyboardControls';
 import { statsService } from '../utils/statsService';
 import { streakService } from '../services/streakService';
 import { streakTracker } from '../utils/streakTracker';
@@ -1537,6 +1538,14 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
     
     setPendingMove(prev => ({ ...prev, row: newRow, col: newCol }));
   }, [pendingMove, gameState, board]);
+
+  // WASD + R/F keyboard controls for desktop
+  useKeyboardControls({
+    onMove: movePendingPiece,
+    onRotate: rotatePiece,
+    onFlip: flipPiece,
+    enabled: gameState === GAME_STATES.PLAYING,
+  });
 
   const cancelMove = useCallback(() => {
     if (gameState !== GAME_STATES.PLAYING) return;

@@ -20,6 +20,7 @@ import { AI_DIFFICULTY } from '../utils/aiLogic';
 import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import { streakTracker } from '../utils/streakTracker';
+import useKeyboardControls from '../hooks/useKeyboardControls';
 
 // Theme configurations for each difficulty
 const difficultyThemes = {
@@ -240,6 +241,14 @@ const GameScreen = ({
   const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
 
   const theme = getTheme(gameMode, aiDifficulty, puzzleDifficulty);
+  
+  // WASD + R/F keyboard controls for desktop
+  useKeyboardControls({
+    onMove: onMovePiece,
+    onRotate,
+    onFlip,
+    enabled: !gameOver,
+  });
   
   // Neon glow color for side label — matches difficulty theme
   const sideGlowColor = gameMode === 'ai'
