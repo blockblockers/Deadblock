@@ -1,4 +1,6 @@
 // HowToPlayModal.jsx - Tutorial modal for new players
+// v7.13: Added WASD/R/F keyboard controls to Rotating & Flipping step;
+//        updated creator puzzles to 101; fixed difficulty tier names
 // v7.12: Added Creator Puzzles step explaining 100 hand-crafted puzzles
 // v7.11: Shows game rules and how to play when new user joins via invite
 // UPDATED: Removed "Control the center early" strategy tip
@@ -58,7 +60,24 @@ const TUTORIAL_STEPS = [
             <span><strong>Flip</strong> - Mirror the piece</span>
           </div>
         </div>
-        <p className="text-sm text-slate-400">Use the D-pad controls below the board to adjust before confirming.</p>
+        <p className="text-sm text-slate-400">Use the D-pad to reposition before confirming.</p>
+        <div className="bg-slate-800/50 rounded-lg p-3">
+          <p className="text-purple-300 font-semibold text-xs mb-2">KEYBOARD (DESKTOP)</p>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <span className="text-purple-300 font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">W A S D</span>
+              <span className="text-sm">Move piece</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-purple-300 font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">R</span>
+              <span className="text-sm">Rotate</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-purple-300 font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">F</span>
+              <span className="text-sm">Flip</span>
+            </div>
+          </div>
+        </div>
       </div>
     )
   },
@@ -114,7 +133,7 @@ const TUTORIAL_STEPS = [
     color: "purple",
     content: (
       <div className="space-y-3">
-        <p>Test your skills with <span className="text-purple-300 font-semibold">100 hand-crafted puzzles</span>!</p>
+        <p>Test your skills with <span className="text-purple-300 font-semibold">101 hand-crafted puzzles</span>!</p>
         <div className="bg-slate-800/50 rounded-lg p-3 space-y-2">
           <div className="flex items-center gap-2">
             <span className="text-purple-400">•</span>
@@ -122,7 +141,7 @@ const TUTORIAL_STEPS = [
           </div>
           <div className="flex items-center gap-2">
             <span className="text-purple-400">•</span>
-            <span>4 difficulty tiers: Beginner → Expert</span>
+            <span>4 difficulty tiers: Easy → Expert</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-purple-400">•</span>

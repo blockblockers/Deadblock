@@ -212,7 +212,7 @@ const GameBoard = forwardRef(({
     <div className="relative" ref={ref}>
       {/* Main board grid */}
       <div 
-        className="grid grid-cols-8 gap-0.5 p-1.5 sm:p-2 rounded-lg bg-slate-800/80 border border-slate-700/50"
+        className="grid grid-cols-8 gap-0.5 p-1.5 sm:p-2 rounded-lg bg-slate-800/80 border border-slate-700/50 w-fit mx-auto"
         style={{
           boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)'
         }}
