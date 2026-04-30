@@ -1,4 +1,6 @@
 // GameBoard.jsx - Main game board component
+// v7.11: Unified gap to 2px on all viewports (fixes visible grid lines on desktop);
+//        removed backdrop-blur-sm, bumped bg opacity 60→80 to compensate
 // v7.10: Added turnPulse prop (cyan edge ripple when it becomes your turn)
 //        Added confirmFlashCells prop (bright cell flash on confirm button tap)
 // v7.9: Added lastMoveCells for highlighting opponent's previous move
@@ -210,7 +212,7 @@ const GameBoard = forwardRef(({
     <div className="relative" ref={ref}>
       {/* Main board grid */}
       <div 
-        className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-lg bg-slate-800/60 backdrop-blur-sm border border-slate-700/50"
+        className="grid grid-cols-8 gap-0.5 p-1.5 sm:p-2 rounded-lg bg-slate-800/80 border border-slate-700/50"
         style={{
           boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)'
         }}
@@ -438,7 +440,7 @@ const GameBoard = forwardRef(({
         <div className="absolute pointer-events-none" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
           {outOfBoundsCells.map((cell, idx) => {
             const cellSize = window.innerWidth < 640 ? 36 : 48;
-            const gap = window.innerWidth < 640 ? 2 : 4;
+            const gap = 2; // Matches CSS gap-0.5 (2px) on all viewports
             const padding = window.innerWidth < 640 ? 6 : 8;
             
             const left = padding + cell.col * (cellSize + gap);
