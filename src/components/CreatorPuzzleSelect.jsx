@@ -475,6 +475,11 @@ const CreatorPuzzleSelect = ({
               </div>
             )}
 
+            {/* Online-only note */}
+            <div className="mt-2 text-center text-[10px] text-slate-500">
+              Requires internet connection — puzzles are loaded from the server
+            </div>
+
             {/* Back to Menu Button */}
             <button
               onClick={handleBack}

@@ -344,7 +344,7 @@ const PlayerProfileCard = ({ onClick, onSignIn, isOffline = false }) => {
   if (isOffline && !effectiveProfile) {
     return (
       <button
-        onClick={onClick || onSignIn}
+        onClick={onSignIn || onClick}
         className="w-full flex items-center gap-3 p-3 transition-all group"
         style={{
           background: 'linear-gradient(135deg, rgba(51, 65, 85, 0.9) 0%, rgba(30, 41, 59, 0.95) 100%)',

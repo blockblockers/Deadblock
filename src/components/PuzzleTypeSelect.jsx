@@ -4,7 +4,7 @@
 // v2.2: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
 // v2.0: Animated pentomino showcase + expanded mode comparison cards
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Sparkles, Cpu, Trophy, Zap, Target, Infinity } from 'lucide-react';
+import { ArrowLeft, Sparkles, Cpu, Trophy, Zap, Target, Infinity, Globe } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
 import { soundManager } from '../utils/soundManager';
@@ -197,6 +197,7 @@ const puzzleTypes = [
       { icon: Trophy, text: '101 unique puzzles' },
       { icon: Target, text: '4 difficulty tiers' },
       { icon: Sparkles, text: 'Find the winning move' },
+      { icon: Globe, text: 'Online required' },
     ],
     colors: {
       gradient: 'from-cyan-500 to-sky-600',

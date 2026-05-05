@@ -53,6 +53,7 @@ import { SpectatableGamesList } from './SpectatorView';
 // v7.30: GameInviteNotification removed - now handled globally by App.jsx GlobalNotifications
 import FinalBoardView from './FinalBoardView';
 import { soundManager } from '../utils/soundManager';
+import { isNativePlatform } from '../utils/platformUtils';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 
 // Online theme - amber/orange to match the menu button
@@ -1416,25 +1417,31 @@ const OnlineMenu = ({
     }
   };
 
-  // Share link using native share (mobile)
+  // Share link — native share sheet on Capacitor, web share on PWA
   const handleShareLink = async (invite) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Play Deadblock with me!',
-          text: `${profile?.username || profile?.display_name || 'A friend'} wants to challenge you to Deadblock!`,
-          url: invite.inviteLink
-        });
+    const shareData = {
+      title: 'Play Deadblock with me!',
+      text: `${profile?.username || profile?.display_name || 'A friend'} wants to challenge you to Deadblock!`,
+      url: invite.inviteLink
+    };
+
+    try {
+      if (isNativePlatform()) {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({ title: shareData.title, text: shareData.text, url: shareData.url, dialogTitle: 'Share Invite' });
         soundManager.playClickSound('confirm');
         await inviteService.markInviteLinkShared(invite.id, profile.id);
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          console.error('Share failed:', err);
-        }
+      } else if (navigator.share) {
+        await navigator.share(shareData);
+        soundManager.playClickSound('confirm');
+        await inviteService.markInviteLinkShared(invite.id, profile.id);
+      } else {
+        handleCopyLink(invite);
       }
-    } else {
-      // Fallback to copy
-      handleCopyLink(invite);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Share failed:', err);
+      }
     }
   };
 
@@ -1575,7 +1582,7 @@ const OnlineMenu = ({
 
       {/* v7.26: Rematch-sent banner */}
       {showRematchSentBanner && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
+        <div className="fixed top-0 left-0 right-0 z-50 flex justify-center pointer-events-none" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
           <div
             className="mt-3 mx-4 flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/50 bg-slate-900/95 backdrop-blur-sm shadow-[0_0_20px_rgba(251,191,36,0.25)] pointer-events-auto"
             style={{ animation: 'rematch-banner-in 0.35s ease-out both' }}
@@ -2157,7 +2164,7 @@ const OnlineMenu = ({
                                     </>
                                   )}
                                 </button>
-                                {navigator.share && (
+                                {(navigator.share || isNativePlatform()) && (
                                   <button
                                     onClick={() => handleShareLink(invite)}
                                     className="flex-1 py-2 bg-amber-500 text-white rounded-lg text-xs font-medium hover:bg-amber-400 transition-all flex items-center justify-center gap-1.5"

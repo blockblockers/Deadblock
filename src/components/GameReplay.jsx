@@ -1,10 +1,12 @@
 // GameReplay - Watch recorded games move by move
+// v7.1: Capacitor-aware share — uses native share sheet when available
 import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipBack, SkipForward, FastForward, Rewind, Share2, X, Clock, Trophy, User } from 'lucide-react';
 import { replayService } from '../services/replayService';
 import GameBoard from './GameBoard';
 import { BOARD_SIZE } from '../utils/gameLogic';
 import { soundManager } from '../utils/soundManager';
+import { isNativePlatform } from '../utils/platformUtils';
 
 const GameReplay = ({ gameId, onClose }) => {
   const [summary, setSummary] = useState(null);
@@ -114,18 +116,31 @@ const GameReplay = ({ gameId, onClose }) => {
     }
   }, [playbackSpeed]);
 
-  // Share replay
+  // Share replay — native share sheet on Capacitor, web share/clipboard on PWA
   const shareReplay = async () => {
     const link = replayService.getReplayLink(gameId);
-    if (navigator.share) {
-      await navigator.share({
-        title: 'Deadblock Game Replay',
-        text: `Watch this game between ${summary?.player1?.username} and ${summary?.player2?.username}!`,
-        url: link
-      });
-    } else {
-      navigator.clipboard.writeText(link);
-      alert('Replay link copied!');
+    const shareData = {
+      title: 'Deadblock Game Replay',
+      text: `Watch this game between ${summary?.player1?.username} and ${summary?.player2?.username}!`,
+      url: link
+    };
+
+    try {
+      if (isNativePlatform()) {
+        const { Share } = await import('@capacitor/share');
+        await Share.share({ title: shareData.title, text: shareData.text, url: shareData.url, dialogTitle: 'Share Replay' });
+      } else if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(link);
+        alert('Replay link copied!');
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        // Fallback to clipboard
+        try { await navigator.clipboard.writeText(link); } catch {}
+        alert('Replay link copied!');
+      }
     }
   };
 

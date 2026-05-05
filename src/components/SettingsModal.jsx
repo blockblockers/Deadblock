@@ -21,6 +21,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { pushNotificationService } from '../services/pushNotificationService';
 import { supabase } from '../utils/supabase';
 import Achievements from './Achievements';
+import { isNativePlatform } from '../utils/platformUtils';
 
 const SettingsModal = ({ isOpen, onClose }) => {
   const { 
@@ -51,6 +52,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
   const [pushError, setPushError] = useState(null);
+  const [testToast, setTestToast] = useState(null);
   
   // Browser Notification states (fallback)
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -119,6 +121,16 @@ const SettingsModal = ({ isOpen, onClose }) => {
   // Check if user is using Google OAuth (no password auth)
   const isGoogleUser = user?.app_metadata?.provider === 'google' || 
                        user?.identities?.some(i => i.provider === 'google');
+  
+  // Listen for native test notification toast (dispatched by pushNotificationService)
+  useEffect(() => {
+    const handleTestToast = (e) => {
+      setTestToast(e.detail);
+      setTimeout(() => setTestToast(null), 3000);
+    };
+    window.addEventListener('deadblock:test-notification', handleTestToast);
+    return () => window.removeEventListener('deadblock:test-notification', handleTestToast);
+  }, []);
   
   // Initialize push notifications and other states
   useEffect(() => {
@@ -524,6 +536,21 @@ const SettingsModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   
   return (
+    <>
+      {/* In-app test notification toast (native only) */}
+      {testToast && (
+        <div className="fixed top-0 left-0 right-0 z-[200] flex justify-center pointer-events-none" style={{ paddingTop: 'max(16px, env(safe-area-inset-top))' }}>
+          <div className="mx-4 px-4 py-3 rounded-xl bg-green-900/95 border border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.3)] pointer-events-auto animate-pulse" style={{ animationDuration: '2s' }}>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">✅</span>
+              <div>
+                <div className="text-green-300 text-sm font-bold">{testToast.title}</div>
+                <div className="text-green-400/80 text-xs">{testToast.body}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     <div 
       className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50"
       style={{
@@ -878,7 +905,8 @@ const SettingsModal = ({ isOpen, onClose }) => {
             </div>
           )}
           
-          {/* App Installation Section */}
+          {/* App Installation Section — hidden when running as native Capacitor app */}
+          {!isNativePlatform() && (
           <div className="space-y-3">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wide">App Installation</h3>
             
@@ -937,6 +965,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
               </div>
             )}
           </div>
+          )}
           
           {/* Account Section */}
           {isAuthenticated && (
@@ -1242,6 +1271,7 @@ const SettingsModal = ({ isOpen, onClose }) => {
         <Achievements userId={profile?.id} onClose={() => setShowAchievements(false)} />
       )}
     </div>
+    </>
   );
 };
 

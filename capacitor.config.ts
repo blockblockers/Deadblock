@@ -8,51 +8,44 @@ const config: CapacitorConfig = {
   
   // Server configuration
   server: {
-    // Use HTTPS scheme for Android (required for modern APIs)
     androidScheme: 'https',
-    // iOS scheme
     iosScheme: 'https',
-    // Allow navigation to your web domain (for links)
-    allowNavigation: ['deadblock.app', '*.deadblock.app']
+    allowNavigation: ['deadblock.app', '*.deadblock.app', '*.supabase.co'],
+    // NOTE: hostname removed — it caused ERR_NAME_NOT_RESOLVED for Supabase
+    // and prevented Capacitor bridge injection (isNativePlatform() returned false)
   },
 
   // Android-specific configuration
   android: {
-    // Use dark splash screen to match app theme
     backgroundColor: '#020617',
-    // Allow mixed content (http in https)
-    allowMixedContent: true,
-    // Capture all links in the app
+    allowMixedContent: false,
     captureInput: true,
-    // Web View settings
-    webContentsDebuggingEnabled: false, // Set to true for debugging
-    // Build options
+    // TEMPORARY: Enable for debugging — set to false before Play Store release
+    webContentsDebuggingEnabled: true,
+    appendUserAgent: 'DEADBLOCK-Android',
     buildOptions: {
-      keystorePath: undefined, // Set when signing for release
+      keystorePath: undefined,
       keystoreAlias: undefined,
       keystorePassword: undefined,
       keystoreAliasPassword: undefined,
-      releaseType: 'AAB' // Android App Bundle for Play Store
+      releaseType: 'AAB'
     }
   },
 
   // iOS-specific configuration  
   ios: {
-    // Background color for iOS
     backgroundColor: '#020617',
-    // Content inset behavior
     contentInset: 'automatic',
-    // Allow scroll
     allowsLinkPreview: false,
-    // Scheme for deep links
-    scheme: 'deadblock'
+    scheme: 'deadblock',
+    appendUserAgent: 'DEADBLOCK-iOS',
+    preferredContentMode: 'mobile'
   },
 
   // Plugins configuration
   plugins: {
-    // Splash Screen settings
     SplashScreen: {
-      launchShowDuration: 2000,
+      launchShowDuration: 1500,
       launchAutoHide: true,
       backgroundColor: '#020617',
       androidSplashResourceName: 'splash',
@@ -62,25 +55,24 @@ const config: CapacitorConfig = {
       splashImmersive: true
     },
     
-    // Status Bar settings
     StatusBar: {
       style: 'DARK',
-      backgroundColor: '#020617'
+      backgroundColor: '#020617',
+      overlaysWebView: false
     },
     
-    // Keyboard settings
     Keyboard: {
       resize: 'body',
       resizeOnFullScreen: true
     },
 
-    // Haptics (vibration) - already used in your app
-    Haptics: {
-      // Uses system defaults
+    Haptics: {},
+    
+    PushNotifications: {
+      presentationOptions: ['badge', 'sound', 'alert']
     }
   },
 
-  // Logging (disable in production)
   loggingBehavior: 'none'
 };
 

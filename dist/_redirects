@@ -9,6 +9,11 @@ https://deadblock.netlify.app/*  https://deadblock.app/:splat  301!
 /privacy-policy.html    /privacy.html    301
 /terms-of-service.html  /terms.html      301
 
+# Service workers - serve directly (not SPA fallback!)
+# Redirect old sw.js to unified service-worker.js
+/sw.js                /service-worker.js    200
+/service-worker.js    /service-worker.js    200
+
 # Auth callback for Supabase OAuth
 /auth/callback    /index.html    200
 

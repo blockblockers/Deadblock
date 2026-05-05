@@ -5,6 +5,9 @@
     <color name="colorPrimaryDark">#020617</color>
     <color name="colorAccent">#22d3ee</color>
     
+    <!-- App icon background (adaptive icon) -->
+    <color name="ic_launcher_background">#020617</color>
+    
     <!-- Splash screen background -->
     <color name="splash_background">#020617</color>
     

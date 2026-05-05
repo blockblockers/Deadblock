@@ -1,4 +1,6 @@
 // Authentication Context with Local Profile Caching
+// v7.22: Enhanced native OAuth — uses @capacitor/browser for system browser OAuth flow,
+//        @capacitor/app deep link listener for callback, auto-closes browser on return
 // v7.21: Fix Google OAuth on Android — Capacitor WebView reports origin as https://localhost,
 //        so detect native platform and hardcode production URL for OAuth redirectTo
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
@@ -242,6 +244,32 @@ export const AuthProvider = ({ children }) => {
     if (!supabase) {
       setLoading(false);
       return;
+    }
+
+    // Native: listen for deep link OAuth callbacks (from system browser redirect)
+    let appUrlListener = null;
+    if (Capacitor.isNativePlatform()) {
+      import('@capacitor/app').then(({ App }) => {
+        appUrlListener = App.addListener('appUrlOpen', async ({ url }) => {
+          // OAuth callback deep link: https://deadblock.app/auth/callback#access_token=...
+          if (url?.includes('/auth/callback') && (url.includes('access_token=') || url.includes('code='))) {
+            setIsOAuthCallback(true);
+            try {
+              // Close the system browser
+              const { Browser } = await import('@capacitor/browser');
+              await Browser.close();
+            } catch {}
+            // Extract the hash/query and let Supabase handle it
+            const hashPart = url.split('#')[1];
+            if (hashPart) {
+              await supabase.auth.setSession({
+                access_token: new URLSearchParams(hashPart).get('access_token'),
+                refresh_token: new URLSearchParams(hashPart).get('refresh_token'),
+              });
+            }
+          }
+        });
+      }).catch(() => {}); // @capacitor/app not installed — skip
     }
 
     // Check if this is an OAuth callback - must have actual token data, not just the path
@@ -617,7 +645,10 @@ export const AuthProvider = ({ children }) => {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      if (appUrlListener) appUrlListener.remove();
+    };
   }, [fetchProfile]);
 
   const signUp = async (email, password, username) => {
@@ -838,30 +869,35 @@ export const AuthProvider = ({ children }) => {
   const signInWithGoogle = async () => {
     if (!supabase) return { error: { message: 'Online features not configured' } };
 
-    // console.log('[AuthContext] Starting Google OAuth with redirect to:', `${window.location.origin}/auth/callback`);
-    
     try {
+      const isNative = Capacitor.isNativePlatform();
+      
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${Capacitor.isNativePlatform() ? 'https://deadblock.app' : window.location.origin}/auth/callback`,
-          skipBrowserRedirect: false, // Ensure redirect happens
+          redirectTo: `${isNative ? 'https://deadblock.app' : window.location.origin}/auth/callback`,
+          skipBrowserRedirect: isNative, // On native, we open the URL ourselves
         }
       });
-      
-      // console.log('[AuthContext] Google OAuth result:', { data, error });
       
       if (error) {
         console.error('[AuthContext] Google OAuth error:', error);
         return { data, error };
       }
       
-      // If we get here without redirect, there might be an issue
-      // The browser should be redirecting, so wait a moment
       if (data?.url) {
-        // console.log('[AuthContext] OAuth URL received, redirecting to:', data.url);
-        // Manually redirect if the auto-redirect didn't work
-        window.location.href = data.url;
+        if (isNative) {
+          // Open OAuth in system browser — more reliable than in-WebView
+          try {
+            const { Browser } = await import('@capacitor/browser');
+            await Browser.open({ url: data.url, windowName: '_system' });
+          } catch (browserErr) {
+            // Fallback to in-WebView redirect if Browser plugin not available
+            window.location.href = data.url;
+          }
+        } else {
+          window.location.href = data.url;
+        }
       }
       
       return { data, error };

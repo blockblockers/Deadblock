@@ -1124,7 +1124,18 @@ function AppContent({ onBgThemeChange }) {
           isAuthenticated={isAuthenticated}
           isOfflineMode={isOfflineMode}
           onShowProfile={() => setShowProfileModal(true)}
-          onSignIn={() => setGameMode('auth')}
+          onSignIn={() => {
+            if (isOfflineMode && !isAuthenticated && navigator.onLine) {
+              // User chose offline but has internet — show auth screen
+              setShowOnlineAuthPrompt(true);
+            } else if (!navigator.onLine) {
+              // No internet — can't sign in, do nothing (UI already shows offline state)
+            } else {
+              // Fallback — reset to entry auth
+              setHasPassedEntryAuth(false);
+              setGameMode(null);
+            }
+          }}
           // Preload components on hover for better UX
           onPuzzleHover={preloadPuzzleComponents}
           onOnlineHover={preloadOnlineComponents}
@@ -1234,8 +1245,12 @@ function AppContent({ onBgThemeChange }) {
     );
   }
 
-  // Online Menu/Lobby
+  // Online Menu/Lobby — requires authentication and connectivity
   if (gameMode === 'online-menu') {
+    if (!isAuthenticated || isOfflineMode || !navigator.onLine) {
+      setGameMode(null);
+      return null;
+    }
     return (
       <LazyWrapper message="Entering the lobby…">
         <OnlineMenu
@@ -1387,8 +1402,20 @@ function AppContent({ onBgThemeChange }) {
     );
   }
 
-  // Render Creator Puzzle Selection Screen
+  // Render Creator Puzzle Selection Screen — requires authentication (puzzles stored in Supabase)
   if (gameMode === 'creator-puzzle-select') {
+    if (!isAuthenticated || isOfflineMode || !navigator.onLine) {
+      if (isOfflineMode && !isAuthenticated && navigator.onLine) {
+        // User chose offline but has internet — show auth prompt, redirect to creator after login
+        localStorage.setItem('deadblock_pending_online_intent', 'true');
+        localStorage.setItem('deadblock_pending_auth_destination', 'creator-puzzle-select');
+        setPendingOnlineIntent(true);
+        setPendingAuthDestination('creator-puzzle-select');
+        setShowOnlineAuthPrompt(true);
+      }
+      setGameMode('puzzle-type-select');
+      return null;
+    }
     return (
       <LazyWrapper message="Loading creator challenges…">
         <CreatorPuzzleSelect
@@ -1448,8 +1475,12 @@ function AppContent({ onBgThemeChange }) {
   // WEEKLY CHALLENGE MODES (Lazy loaded with Suspense)
   // =====================================================
 
-  // Weekly Challenge Menu
+  // Weekly Challenge Menu — requires authentication and connectivity
   if (gameMode === 'weekly-menu') {
+    if (!isAuthenticated || isOfflineMode || !navigator.onLine) {
+      setGameMode(null);
+      return null;
+    }
     // console.log('Rendering: WeeklyChallengeMenu');
     return (
       <LazyWrapper message="Accessing weekly challenge…">

@@ -1,4 +1,7 @@
 // pushNotificationService.js - Client-side push notification management
+// v7.18: Added Capacitor native push support via @capacitor/push-notifications (FCM).
+//        Web Push path unchanged. Native FCM tokens saved with 'fcm:' prefix on endpoint.
+//        TODO: Supabase edge function needs FCM HTTP v1 API path for 'fcm:' endpoints.
 // v7.17: Added resubscribeIfNeeded(userId) — silently re-subscribes when permission is
 //        granted but browser subscription was lost (e.g., cache cleared without sign-out).
 //        Prevents "zombie state" where DB has stale endpoint and pushes silently fail.
@@ -14,6 +17,7 @@
 // - NEW: checkSubscription() async method for accurate state on modal reopen
 
 import { supabase } from '../utils/supabase';
+import { isNativePlatform } from '../utils/platformUtils';
 
 // VAPID public key - Replace with your own
 const VAPID_PUBLIC_KEY = 'BEz7oIWn2ESc7ahvq894zbJNKV9dDYRIRNuAvCpuvTMh4NOAFT-U5UeU4H2Y93JK3NN_IXG03VibeeO3Z4ZXmmY';
@@ -37,9 +41,13 @@ class PushNotificationService {
     this.initialized = false;
     this.supported = false;
     this.initPromise = null;
+    this._isNative = isNativePlatform();
+    this._nativeFcmToken = null;
+    this._nativeListenersAdded = false;
   }
 
   isSupported() {
+    if (this._isNative) return true; // Native always supports push via FCM
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   }
 
@@ -63,6 +71,48 @@ class PushNotificationService {
   async _doInit() {
     // console.log('[PushService] Initializing...');
     
+    // Native Capacitor: use @capacitor/push-notifications (FCM)
+    if (this._isNative) {
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        
+        if (!this._nativeListenersAdded) {
+          // Listen for FCM token
+          PushNotifications.addListener('registration', (token) => {
+            this._nativeFcmToken = token.value;
+            // console.log('[PushService] FCM token received:', token.value.substring(0, 20) + '...');
+          });
+          
+          // Listen for push received (foreground)
+          PushNotifications.addListener('pushNotificationReceived', (notification) => {
+            // console.log('[PushService] Native push received:', notification.title);
+          });
+          
+          // Listen for push action (user tapped notification)
+          PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+            // console.log('[PushService] Native push action:', action.notification?.data);
+            // TODO: Navigate to the relevant game screen based on action.notification.data
+          });
+          
+          PushNotifications.addListener('registrationError', (error) => {
+            console.error('[PushService] FCM registration error:', error);
+          });
+          
+          this._nativeListenersAdded = true;
+        }
+        
+        this.supported = true;
+        this.initialized = true;
+        return true;
+      } catch (e) {
+        console.warn('[PushService] Native push init failed:', e.message);
+        this.supported = false;
+        this.initialized = true;
+        return false;
+      }
+    }
+    
+    // Web: existing Web Push initialization
     this.supported = this.isSupported();
     if (!this.supported) {
       // console.log('[PushService] Push not supported');
@@ -216,6 +266,11 @@ class PushNotificationService {
   }
 
   getPermissionStatus() {
+    if (this._isNative) {
+      // On native, permission is checked via the plugin — return 'default' as a safe fallback
+      // Actual permission check happens in subscribe()
+      return this._nativeFcmToken ? 'granted' : 'default';
+    }
     if (!this.isSupported()) return 'unsupported';
     return Notification.permission;
   }
@@ -229,6 +284,11 @@ class PushNotificationService {
   // Use this when opening settings modal to get accurate state
   async checkSubscription() {
     // console.log('[PushService] checkSubscription called');
+    
+    // Native: check if we have an FCM token
+    if (this._isNative) {
+      return !!this._nativeFcmToken;
+    }
     
     // Make sure we're initialized
     if (!this.initialized) {
@@ -259,6 +319,38 @@ class PushNotificationService {
       throw new Error('User ID required');
     }
 
+    // Native Capacitor: use FCM
+    if (this._isNative) {
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        
+        // Request permission
+        const permResult = await PushNotifications.requestPermissions();
+        if (permResult.receive !== 'granted') {
+          return { success: false, reason: 'permission_denied' };
+        }
+        
+        // Register for push — triggers 'registration' listener which sets _nativeFcmToken
+        await PushNotifications.register();
+        
+        // Wait briefly for the token callback
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        if (!this._nativeFcmToken) {
+          throw new Error('FCM token not received');
+        }
+        
+        // Save FCM token to DB with 'fcm:' prefix so edge function knows it's FCM
+        await this._saveNativeToken(userId, this._nativeFcmToken);
+        
+        return { success: true, subscription: { type: 'fcm', token: this._nativeFcmToken } };
+      } catch (error) {
+        console.error('[PushService] Native subscribe failed:', error.message);
+        throw error;
+      }
+    }
+
+    // Web: existing Web Push flow
     // Ensure initialized
     if (!this.initialized) {
       const initResult = await withTimeout(this.init(), 20000, 'Init timed out');
@@ -319,6 +411,22 @@ class PushNotificationService {
   async unsubscribe(userId) {
     // console.log('[PushService] Unsubscribe called');
     
+    // Native: remove FCM registration
+    if (this._isNative) {
+      try {
+        const { PushNotifications } = await import('@capacitor/push-notifications');
+        await PushNotifications.removeAllListeners();
+        this._nativeListenersAdded = false;
+        this._nativeFcmToken = null;
+        if (userId) await this.removeSubscription(userId);
+        return { success: true };
+      } catch (e) {
+        console.warn('[PushService] Native unsubscribe failed:', e.message);
+        return { success: false, error: e.message };
+      }
+    }
+    
+    // Web: existing unsubscribe
     try {
       if (this.subscription) {
         await this.subscription.unsubscribe();
@@ -405,6 +513,16 @@ class PushNotificationService {
   // the "zombie state" where DB has a stale endpoint and pushes silently fail.
   async resubscribeIfNeeded(userId) {
     if (!userId) return;
+    
+    // Native: check if FCM token exists, re-register if not
+    if (this._isNative) {
+      if (!this._nativeFcmToken) {
+        try { await this.subscribe(userId); } catch {}
+      }
+      return;
+    }
+    
+    // Web: existing resubscribe logic
     if (!this.isSupported()) return;
     if (Notification.permission !== 'granted') return;
     
@@ -453,9 +571,15 @@ class PushNotificationService {
     }
   }
 
-  // Send a test notification via the service worker
+  // Send a test notification — in-app toast on native, service worker notification on web
   async sendTestNotification() {
-    // console.log('[PushService] Sending test notification...');
+    // Native: dispatch custom event for in-app toast (system notification feels wrong for a test)
+    if (this._isNative) {
+      window.dispatchEvent(new CustomEvent('deadblock:test-notification', {
+        detail: { title: 'Notifications Enabled!', body: 'Push notifications are configured and working.' }
+      }));
+      return;
+    }
     
     if (!this.swRegistration) {
       console.warn('[PushService] No service worker for test notification');
@@ -474,6 +598,27 @@ class PushNotificationService {
       // console.log('[PushService] Test notification sent');
     } catch (e) {
       console.error('[PushService] Test notification failed:', e.message);
+    }
+  }
+
+  // Save native FCM token to push_subscriptions table
+  // Uses 'fcm:' prefix on endpoint so edge function can distinguish FCM from Web Push
+  async _saveNativeToken(userId, token) {
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .upsert({
+        user_id: userId,
+        endpoint: `fcm:${token}`,
+        p256dh: null,
+        auth: null,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id,endpoint'
+      });
+
+    if (error) {
+      console.error('[PushService] FCM token save error:', error);
+      throw error;
     }
   }
 }

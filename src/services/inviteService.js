@@ -540,7 +540,7 @@ class InviteService {
         return { data: null, error: { message: 'Invite code not generated' } };
       }
 
-      const appUrl = window.location.origin;
+      const appUrl = (window.Capacitor?.isNativePlatform?.()) ? 'https://deadblock.app' : window.location.origin;
       const inviteLink = `${appUrl}/?invite=${invite.invite_code}`;
 
       // console.log('[InviteService] Invite link created successfully:', inviteLink);
@@ -593,7 +593,7 @@ class InviteService {
       // v7.7: No additional client-side filtering needed since query is more precise
       // console.log('[InviteService] Got', data?.length || 0, 'active invite links');
       
-      const appUrl = window.location.origin;
+      const appUrl = (window.Capacitor?.isNativePlatform?.()) ? 'https://deadblock.app' : window.location.origin;
       
       const invitesWithLinks = (data || []).map(invite => ({
         ...invite,
