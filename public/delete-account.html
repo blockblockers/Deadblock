@@ -464,15 +464,17 @@
       
       <!-- Step 4: Success -->
       <div id="success-view" class="hidden success-view">
-        <div class="icon-circle">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+        <div style="background: rgba(34, 197, 94, 0.1); border: 2px solid rgba(34, 197, 94, 0.4); border-radius: 16px; padding: 30px; text-align: center; box-shadow: 0 0 40px rgba(34, 197, 94, 0.2);">
+          <div class="icon-circle" style="width: 80px; height: 80px; margin-bottom: 20px;">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width: 40px; height: 40px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 style="font-size: 1.5rem; color: #4ade80; margin-bottom: 12px;">Account Successfully Deleted</h3>
+          <p style="color: #e2e8f0; font-size: 1rem; margin-bottom: 8px;">Your account and all associated data have been permanently removed.</p>
+          <p style="color: #94a3b8; font-size: 0.85rem;">This action cannot be reversed.</p>
         </div>
-        <h3>Account Deleted</h3>
-        <p>Your account has been permanently deleted.</p>
-        <p style="margin-top: 16px; font-size: 0.8rem; color: #64748b;">Redirecting to home page...</p>
-        <div class="spinner" style="border-top-color: #4ade80; margin-top: 20px;"></div>
+        <p style="margin-top: 20px; font-size: 0.85rem; color: #64748b; text-align: center;">Redirecting to home page in a few seconds...</p>
       </div>
     </div>
     
@@ -497,7 +499,7 @@
     const SUPABASE_URL = 'https://oyeibyrednwlolmsjlwk.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im95ZWlieXJlZG53bG9sbXNqbHdrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyMzMyNzQsImV4cCI6MjA4MDgwOTI3NH0.GNMI2HOyOn_YHPPgsrkinB5FipLedqo0bTN9PKRQJMY';
     
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     let currentUser = null;
     
@@ -534,7 +536,7 @@
       loginBtn.textContent = 'Verifying...';
       
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
           email: email,
           password: password
         });
@@ -596,7 +598,7 @@
         let edgeFunctionSuccess = false;
         
         try {
-          const session = await supabase.auth.getSession();
+          const session = await supabaseClient.auth.getSession();
           const accessToken = session.data?.session?.access_token;
           
           if (accessToken) {
@@ -625,7 +627,7 @@
         
         // If Edge Function didn't work, try RPC
         if (!edgeFunctionSuccess) {
-          const { data: rpcResult, error: rpcError } = await supabase.rpc('delete_user_account', {
+          const { data: rpcResult, error: rpcError } = await supabaseClient.rpc('delete_user_account', {
             p_user_id: currentUser.id
           });
           
@@ -634,7 +636,7 @@
             
             // Fallback: Delete profile directly
             if (rpcError.message?.includes('does not exist') || rpcError.code === '42883') {
-              const { error: profileError } = await supabase
+              const { error: profileError } = await supabaseClient
                 .from('profiles')
                 .delete()
                 .eq('id', currentUser.id);
@@ -649,7 +651,7 @@
         }
         
         // Sign out
-        await supabase.auth.signOut();
+        await supabaseClient.auth.signOut();
         
         // Show success
         document.getElementById('deleting-view').classList.add('hidden');
@@ -658,7 +660,7 @@
         // Redirect after delay
         setTimeout(() => {
           window.location.href = '/';
-        }, 3000);
+        }, 5000);
         
       } catch (err) {
         console.error('[WebDeletion] Error:', err);
