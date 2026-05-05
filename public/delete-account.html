@@ -594,12 +594,13 @@
       try {
         console.log('[WebDeletion] Starting deletion for user:', currentUser.id);
         
-        // Try Edge Function first
-        let edgeFunctionSuccess = false;
+        let deleted = false;
         
+        // Try Edge Function first (same approach as in-game SettingsModal)
         try {
           const session = await supabaseClient.auth.getSession();
           const accessToken = session.data?.session?.access_token;
+          console.log('[WebDeletion] Access token:', accessToken ? 'present' : 'MISSING');
           
           if (accessToken) {
             const edgeResponse = await fetch(
@@ -613,44 +614,50 @@
               }
             );
             
+            console.log('[WebDeletion] Edge Function status:', edgeResponse.status);
+            
             if (edgeResponse.ok) {
               const edgeResult = await edgeResponse.json();
               console.log('[WebDeletion] Edge Function result:', edgeResult);
               if (edgeResult.success) {
-                edgeFunctionSuccess = true;
+                deleted = true;
               }
+            } else {
+              const errorText = await edgeResponse.text();
+              console.warn('[WebDeletion] Edge Function error:', edgeResponse.status, errorText);
             }
           }
         } catch (edgeError) {
-          console.warn('[WebDeletion] Edge Function not available:', edgeError);
+          console.warn('[WebDeletion] Edge Function exception:', edgeError);
         }
         
-        // If Edge Function didn't work, try RPC
-        if (!edgeFunctionSuccess) {
-          const { data: rpcResult, error: rpcError } = await supabaseClient.rpc('delete_user_account', {
+        // Fallback to RPC (same as in-game SettingsModal)
+        if (!deleted) {
+          console.log('[WebDeletion] Edge function did not succeed, trying RPC...');
+          const { error: rpcError } = await supabaseClient.rpc('delete_user_account', {
             p_user_id: currentUser.id
           });
           
           if (rpcError) {
             console.warn('[WebDeletion] RPC failed:', rpcError.message);
             
-            // Fallback: Delete profile directly
-            if (rpcError.message?.includes('does not exist') || rpcError.code === '42883') {
-              const { error: profileError } = await supabaseClient
-                .from('profiles')
-                .delete()
-                .eq('id', currentUser.id);
-              
-              if (profileError) {
-                throw new Error('Failed to delete profile');
-              }
-            } else {
-              throw rpcError;
+            // Last resort: delete profile directly
+            const { error: profileError } = await supabaseClient
+              .from('profiles')
+              .delete()
+              .eq('id', currentUser.id);
+            
+            if (profileError) {
+              throw new Error('All deletion methods failed. Please contact support.');
             }
+            console.log('[WebDeletion] Direct profile delete succeeded');
+          } else {
+            console.log('[WebDeletion] RPC succeeded');
+            deleted = true;
           }
         }
         
-        // Sign out
+        // Sign out and clear local data
         await supabaseClient.auth.signOut();
         
         // Show success
@@ -668,7 +675,7 @@
         // Go back to confirm view with error
         document.getElementById('deleting-view').classList.add('hidden');
         document.getElementById('confirm-view').classList.remove('hidden');
-        errorBox.textContent = 'Failed to delete account. Please contact support at deadblock.game@gmail.com';
+        errorBox.textContent = 'Failed to delete account: ' + (err.message || 'Unknown error. Please contact deadblock.game@gmail.com');
         errorBox.classList.add('visible');
       }
     }
