@@ -659,7 +659,20 @@
         
         // Sign out and clear local data
         await supabaseClient.auth.signOut();
-        
+
+        // Clear React app's localStorage flags so it shows EntryAuthScreen
+        // (not MenuScreen) if the user navigates back to the app.
+        // Mirrors the prefix sweep used by SettingsModal/AccountDeletionModal.
+        try {
+          Object.keys(localStorage).forEach(function (key) {
+            if (key.indexOf('deadblock_') === 0 || key.indexOf('sb-') === 0) {
+              localStorage.removeItem(key);
+            }
+          });
+        } catch (e) {
+          console.warn('[WebDeletion] localStorage clear failed:', e);
+        }
+
         // Show success
         document.getElementById('deleting-view').classList.add('hidden');
         document.getElementById('success-view').classList.remove('hidden');
