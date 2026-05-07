@@ -1,4 +1,10 @@
 // GameBoard.jsx - Main game board component
+// v7.12: Out-of-bounds ghost cell alignment fix — added 1px `border` offset to position math.
+//        Grid has `border` (1px) which with box-sizing: border-box lives INSIDE the grid's outer
+//        edge, so cells start at (border + padding) not just (padding). Missing this caused every
+//        ghost cell to render 1px up-and-left of its gridline, with the dashed outline drifting
+//        off the grid and adjacent ghost / pending borders visually overlapping (reading as
+//        cells "missing" from the pentomino).
 // v7.11: Unified gap to 2px on all viewports (fixes visible grid lines on desktop);
 //        removed backdrop-blur-sm, bumped bg opacity 60→80 to compensate
 // v7.10: Added turnPulse prop (cyan edge ripple when it becomes your turn)
@@ -442,10 +448,17 @@ const GameBoard = forwardRef(({
             const cellSize = window.innerWidth < 640 ? 36 : 48;
             const gap = 2; // Matches CSS gap-0.5 (2px) on all viewports
             const padding = window.innerWidth < 640 ? 6 : 8;
-            
-            const left = padding + cell.col * (cellSize + gap);
-            const top = padding + cell.row * (cellSize + gap);
-            
+            // v7.12: The grid container has `border` (1px). With box-sizing: border-box that border
+            // lives INSIDE the grid's outer edge, so the first cell starts at (border + padding) —
+            // not just (padding) — from the grid's outer edge. Without this offset, every ghost
+            // cell was 1px up-and-left of its true gridline position, which (combined with the 2px
+            // dashed ghost border) made the outline look off-grid and caused adjacent ghost / pending
+            // cells to visually overlap, reading as cells "missing" from the pentomino.
+            const border = 1;
+
+            const left = border + padding + cell.col * (cellSize + gap);
+            const top = border + padding + cell.row * (cellSize + gap);
+
             return (
               <div
                 key={idx}

@@ -1,913 +1,1014 @@
-// GameBoard.jsx - Main game board component
-// v7.12: Out-of-bounds ghost cell alignment fix — added 1px `border` offset to position math.
-//        Grid has `border` (1px) which with box-sizing: border-box lives INSIDE the grid's outer
-//        edge, so cells start at (border + padding) not just (padding). Missing this caused every
-//        ghost cell to render 1px up-and-left of its gridline, with the dashed outline drifting
-//        off the grid and adjacent ghost / pending borders visually overlapping (reading as
-//        cells "missing" from the pentomino).
-// v7.11: Unified gap to 2px on all viewports (fixes visible grid lines on desktop);
-//        removed backdrop-blur-sm, bumped bg opacity 60→80 to compensate
-// v7.10: Added turnPulse prop (cyan edge ripple when it becomes your turn)
-//        Added confirmFlashCells prop (bright cell flash on confirm button tap)
-// v7.9: Added lastMoveCells for highlighting opponent's previous move
-// v7.8: Breathing glow animation - pieces glow up/down at random intervals
-// CHANGED: Allow dropping pieces even with conflicts (for rotation adjustment)
-// This applies to all game boards (VS AI, Puzzle, Online, Weekly Challenge, Speed Puzzle)
-
-import { forwardRef, useState, useEffect } from 'react';
+// GameScreen.jsx - Main game screen with drag-and-drop support
+// v7.17: Desktop board overlap fix — split single max-w-md wrapper into 3 sections
+//        (header / unconstrained board / controls). The 8-col grid + flanking labels
+//        exceeded 448px on desktop; max-w-md forced grid columns to shrink while button
+//        widths stayed fixed at sm:w-12 (48px), causing buttons to overflow their cells
+//        and visually overlap right-to-left. Mirrors SpeedPuzzleScreen's pattern.
+// v7.16: Title/subtitle moved to vertical side labels flanking board to save vertical space
+// v7.15: Standardized board padding to pb-2 for cross-screen consistency
+// v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
+// v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Flag, XCircle, Move } from 'lucide-react';
+import NeonTitle from './NeonTitle';
+import NeonSubtitle from './NeonSubtitle';
+import GameBoard from './GameBoard';
+import PieceTray from './PieceTray';
+import ControlButtons from './ControlButtons';
+import DPad from './DPad';
+import GameStatus from './GameStatus';
+import GameOverModal from './GameOverModal';
+import DragOverlay from './DragOverlay';
 import { getPieceCoords, canPlacePiece, BOARD_SIZE } from '../utils/gameLogic';
-import { pieceColors } from '../utils/pieces';
+import { soundManager } from '../utils/soundManager';
+import { AI_DIFFICULTY } from '../utils/aiLogic';
+import { PUZZLE_DIFFICULTY } from '../utils/puzzleGenerator';
+import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
+import { streakTracker } from '../utils/streakTracker';
+import useKeyboardControls from '../hooks/useKeyboardControls';
 
-/**
- * GameBoard Component
- * 
- * Renders the 8x8 game grid with placed pieces and pending move preview.
- * v7.8: Breathing glow effect - pieces slowly pulse in intensity at random intervals
- * v7.9: Added lastMoveCells prop for highlighting opponent's previous move
- * v7.7 ENHANCED: Shows drag preview highlighting on board during drag
- */
-const GameBoard = forwardRef(({
-  board,
-  boardPieces,
-  pendingMove,
-  rotation = 0,
-  flipped = false,
-  gameOver = false,
-  gameMode,
-  currentPlayer = 1,
-  onCellClick,
-  aiAnimatingMove,
-  playerAnimatingMove,
-  selectedPiece,
-  customColors,
-  onPendingPieceDragStart,
-  // v7.7: Drag preview props for highlighting during drag
-  isDragging = false,
-  dragPreviewCell = null,
-  draggedPiece = null,
-  dragRotation = 0,
-  dragFlipped = false,
-  // v7.9: Last move highlighting for online play
-  lastMoveCells = null, // Array of { row, col } for opponent's last placed piece
-  // v7.10: Turn transition pulse — set true briefly when it becomes player's turn
-  turnPulse = false,
-  // v7.10: Confirm flash cells — array of { row, col } for immediate tap feedback
-  confirmFlashCells = null,
-}, ref) => {
-  // Ensure board is properly formatted
-  const safeBoard = Array.isArray(board) 
-    ? board.map(row => Array.isArray(row) ? row : Array(BOARD_SIZE).fill(null))
-    : Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+// Theme configurations for each difficulty
+const difficultyThemes = {
+  beginner: {
+    gridColor: 'rgba(34,197,94,0.4)',
+    glow1: 'bg-green-500/30',
+    glow2: 'bg-emerald-400/20',
+    panelBorder: 'border-green-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(34,197,94,0.3)]',
+    label: 'BEGINNER',
+    labelBg: 'from-green-600 via-emerald-500 to-green-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(34,197,94,0.8)]',
+    labelBorder: 'border-green-400/50',
+  },
+  intermediate: {
+    gridColor: 'rgba(251,191,36,0.4)',
+    glow1: 'bg-amber-500/30',
+    glow2: 'bg-orange-400/20',
+    panelBorder: 'border-amber-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(251,191,36,0.3)]',
+    label: 'INTERMEDIATE',
+    labelBg: 'from-amber-600 via-orange-500 to-amber-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(251,191,36,0.8)]',
+    labelBorder: 'border-amber-400/50',
+  },
+  expert: {
+    gridColor: 'rgba(168,85,247,0.4)',
+    glow1: 'bg-purple-500/30',
+    glow2: 'bg-pink-400/20',
+    panelBorder: 'border-purple-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
+    label: 'EXPERT',
+    labelBg: 'from-purple-600 via-pink-500 to-purple-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(168,85,247,0.8)]',
+    labelBorder: 'border-purple-400/50',
+  },
+  hard: {
+    gridColor: 'rgba(168,85,247,0.4)',
+    glow1: 'bg-purple-500/30',
+    glow2: 'bg-pink-400/20',
+    panelBorder: 'border-purple-500/40',
+    panelShadow: 'shadow-[0_0_40px_rgba(168,85,247,0.3)]',
+    label: 'EXPERT',
+    labelBg: 'from-purple-600 via-pink-500 to-purple-600',
+    labelGlow: 'shadow-[0_0_30px_rgba(168,85,247,0.8)]',
+    labelBorder: 'border-purple-400/50',
+  },
+  default: {
+    gridColor: 'rgba(34,211,238,0.3)',
+    glow1: 'bg-cyan-500/20',
+    glow2: 'bg-pink-500/15',
+    panelBorder: 'border-cyan-500/20',
+    panelShadow: '',
+    label: '',
+    labelBg: '',
+    labelGlow: '',
+    labelBorder: '',
+  },
+};
+
+const getTheme = (gameMode, aiDifficulty, puzzleDifficulty) => {
+  if (gameMode === 'ai') {
+    switch (aiDifficulty) {
+      case AI_DIFFICULTY.RANDOM: return difficultyThemes.beginner;
+      case AI_DIFFICULTY.AVERAGE: return difficultyThemes.intermediate;
+      case AI_DIFFICULTY.PROFESSIONAL: return difficultyThemes.expert;
+      default: return difficultyThemes.intermediate;
+    }
+  }
+  if (gameMode === 'puzzle') {
+    switch (puzzleDifficulty) {
+      case PUZZLE_DIFFICULTY.EASY: return difficultyThemes.beginner;
+      case PUZZLE_DIFFICULTY.MEDIUM: return difficultyThemes.intermediate;
+      case PUZZLE_DIFFICULTY.HARD: return difficultyThemes.hard;
+      default: return difficultyThemes.beginner;
+    }
+  }
+  return difficultyThemes.default;
+};
+
+// Player indicator component
+const PlayerBar = ({ currentPlayer, gameMode, theme, isAIThinking, aiDifficulty, puzzleDifficulty }) => {
+  const isVsAI = gameMode === 'ai';
+  const isPuzzle = gameMode === 'puzzle';
+  const p1Label = (isVsAI || isPuzzle) ? 'YOU' : 'PLAYER 1';
+  const p2Label = (isVsAI || isPuzzle) ? 'AI' : 'PLAYER 2';
   
-  const safeBoardPieces = boardPieces || {};
-  
-  // Breathing glow effect with random timing per cell
-  // v7.9: Edge-only glow using piece colors (no white flash inside)
-  const [glowTimings, setGlowTimings] = useState({});
-  
-  useEffect(() => {
-    // Generate random timing for breathing glow effect on each cell
-    // v7.9: Each piece glows up and down at its own rhythm
-    // - Random delay ensures pieces don't pulse in sync
-    // - Duration controls how long each breath takes (one direction)
-    // - With 'alternate', a 12s duration = 12s up + 12s down = 24s full cycle
-    const timings = {};
-    
-    for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE; col++) {
-        if (safeBoard[row]?.[col]) {
-          timings[`${row},${col}`] = {
-            // Wide random delay so pieces glow at different times (0-30 seconds)
-            delay: Math.random() * 30,
-            // Duration for one direction of breathing (8-14 seconds for slower effect)
-            // Full cycle will be 16-28 seconds (up + down)
-            duration: 8 + Math.random() * 6,
-          };
-        }
+  // Get difficulty label for AI or Puzzle mode
+  const getDifficultyLabel = () => {
+    if (isVsAI) {
+      switch (aiDifficulty) {
+        case AI_DIFFICULTY.RANDOM: return { text: 'BEGINNER', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
+        case AI_DIFFICULTY.AVERAGE: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+        case AI_DIFFICULTY.PROFESSIONAL: return { text: 'EXPERT', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
+        default: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
       }
     }
-    setGlowTimings(timings);
-  }, [safeBoard]);
-  
-  // Helper to get piece name - handles both 2D array and object formats
-  const getPieceName = (rowIdx, colIdx) => {
-    if (Array.isArray(safeBoardPieces) && safeBoardPieces[rowIdx]) {
-      return safeBoardPieces[rowIdx][colIdx];
-    }
-    if (typeof safeBoardPieces === 'object') {
-      return safeBoardPieces[`${rowIdx},${colIdx}`];
+    if (isPuzzle) {
+      switch (puzzleDifficulty) {
+        case PUZZLE_DIFFICULTY.EASY: return { text: 'BEGINNER', color: 'from-green-600 to-emerald-600', glow: 'rgba(34,197,94,0.6)' };
+        case PUZZLE_DIFFICULTY.MEDIUM: return { text: 'INTERMEDIATE', color: 'from-amber-500 to-orange-600', glow: 'rgba(251,191,36,0.6)' };
+        case PUZZLE_DIFFICULTY.HARD: return { text: 'EXPERT', color: 'from-purple-500 to-pink-600', glow: 'rgba(168,85,247,0.6)' };
+        default: return { text: 'PUZZLE', color: 'from-cyan-500 to-blue-600', glow: 'rgba(34,211,238,0.6)' };
+      }
     }
     return null;
   };
   
-  const isDisabled = gameOver || ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2);
-
-  // Calculate pending piece cells (both in-bounds and out-of-bounds)
-  let pendingCells = [];
-  let outOfBoundsCells = [];
-  let overlappingCells = [];
-  let isPendingValid = false;
-  let pendingPieceColor = null;
+  const difficultyInfo = getDifficultyLabel();
   
-  if (pendingMove) {
-    const pieceCoords = getPieceCoords(pendingMove.piece, rotation, flipped);
-    pendingPieceColor = pieceColors[pendingMove.piece] || 'bg-gradient-to-br from-cyan-400 to-blue-500';
-    
-    pieceCoords.forEach(([dx, dy]) => {
+  return (
+    <div className="flex items-center justify-center gap-2 mb-3 py-2">
+      {/* Player 1 - YOU */}
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
+        currentPlayer === 1 
+          ? `bg-cyan-500/20 border border-cyan-400/50 shadow-[0_0_15px_rgba(34,211,238,0.4)]` 
+          : 'bg-slate-800/50 border border-slate-700/50'
+      }`}>
+        <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+          currentPlayer === 1 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)] animate-pulse' : 'bg-slate-600'
+        }`} />
+        <span className={`text-xs font-bold tracking-wide ${currentPlayer === 1 ? 'text-cyan-300' : 'text-slate-500'}`}>
+          {p1Label}
+        </span>
+      </div>
+      
+      {/* Difficulty Badge - Neon Glow Square (for AI or Puzzle mode) or VS text */}
+      {(isVsAI || isPuzzle) && difficultyInfo ? (
+        <div 
+          className={`px-4 py-1.5 rounded-lg bg-gradient-to-r ${difficultyInfo.color} border border-white/30`}
+          style={{ 
+            boxShadow: `0 0 20px ${difficultyInfo.glow}, inset 0 1px 0 rgba(255,255,255,0.2)` 
+          }}
+        >
+          <span className="text-white text-xs font-black tracking-wider drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">
+            {difficultyInfo.text}
+          </span>
+        </div>
+      ) : (
+        <span className="text-slate-600 font-bold text-sm">VS</span>
+      )}
+      
+      {/* Player 2 - AI or PLAYER 2 */}
+      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-300 ${
+        currentPlayer === 2 
+          ? `bg-pink-500/20 border border-pink-400/50 shadow-[0_0_15px_rgba(236,72,153,0.4)]` 
+          : 'bg-slate-800/50 border border-slate-700/50'
+      }`}>
+        <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+          currentPlayer === 2 ? 'bg-pink-400 shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-pulse' : 'bg-slate-600'
+        }`} />
+        <span className={`text-xs font-bold tracking-wide ${currentPlayer === 2 ? 'text-pink-300' : 'text-slate-500'}`}>
+          {p2Label}
+          {isAIThinking && currentPlayer === 2 && (
+            <span className="ml-1 text-[10px] text-pink-400/70">...</span>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const GameScreen = ({
+  board,
+  boardPieces,
+  usedPieces,
+  currentPlayer,
+  selectedPiece,
+  rotation,
+  flipped,
+  pendingMove,
+  gameOver,
+  winner,
+  gameMode,
+  aiDifficulty,
+  puzzleDifficulty,
+  isAIThinking,
+  isGeneratingPuzzle,
+  aiAnimatingMove,
+  playerAnimatingMove,
+  moveCount = 0,  // Number of moves made
+  onCellClick,
+  onSelectPiece,
+  onRotate,
+  onFlip,
+  onMovePiece,
+  onConfirm,
+  onCancel,
+  onReset,
+  onMenu,
+  onRetryPuzzle,
+  onDifficultySelect,
+  onQuitGame,  // Handler for quit/forfeit
+  // Add setter for pending move (needed for drag-and-drop)
+  setPendingMove,
+}) => {
+  const { needsScroll, viewportHeight } = useResponsiveLayout(850);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [showQuitConfirmModal, setShowQuitConfirmModal] = useState(false);
+  const [quitIsForfeit, setQuitIsForfeit] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+  
+  // Drag-and-drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedPiece, setDraggedPiece] = useState(null);
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isValidDrop, setIsValidDrop] = useState(false);
+  const [dragPreviewCell, setDragPreviewCell] = useState(null); // v7.22: Live preview cell during drag
+  const [pieceCellOffset, setPieceCellOffset] = useState({ row: 0, col: 0 }); // Offset from anchor to touched cell
+  const boardRef = useRef(null);
+  const boardBoundsRef = useRef(null);
+  const hasDragStartedRef = useRef(false);
+  // Refs for synchronous access in touch handlers
+  const isDraggingRef = useRef(false);
+  const draggedPieceRef = useRef(null);
+  const pieceCellOffsetRef = useRef({ row: 0, col: 0 });
+
+  const theme = getTheme(gameMode, aiDifficulty, puzzleDifficulty);
+  
+  // WASD + R/F keyboard controls for desktop
+  useKeyboardControls({
+    onMove: onMovePiece,
+    onRotate,
+    onFlip,
+    enabled: !gameOver,
+  });
+  
+  // Neon glow color for side label — matches difficulty theme
+  const sideGlowColor = gameMode === 'ai'
+    ? (aiDifficulty === AI_DIFFICULTY.RANDOM ? '#22c55e' : aiDifficulty === AI_DIFFICULTY.PROFESSIONAL ? '#a855f7' : '#fbbf24')
+    : gameMode === 'puzzle'
+    ? (puzzleDifficulty === PUZZLE_DIFFICULTY.EASY ? '#22c55e' : puzzleDifficulty === PUZZLE_DIFFICULTY.HARD ? '#a855f7' : '#fbbf24')
+    : '#22d3ee';
+  const isPuzzle = gameMode === 'puzzle';
+  const playerWon = winner === 1;
+
+  // Refs for drag function access in global handlers
+  const endDragRef = useRef(null);
+  const dragCellRef = useRef(null);
+
+  // Calculate if confirm should be enabled
+  const canConfirm = pendingMove && (() => {
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+    return isValid;
+  })();
+
+  // Helper to check if pending piece has cells off the grid
+  const isPieceOffGrid = pendingMove ? (() => {
+    const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+    return coords.some(([dx, dy]) => {
       const cellRow = pendingMove.row + dy;
       const cellCol = pendingMove.col + dx;
-      
-      if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-        const existingCell = safeBoard[cellRow]?.[cellCol];
-        if (existingCell !== null && existingCell !== 0 && existingCell !== undefined) {
-          overlappingCells.push({ row: cellRow, col: cellCol });
-        } else {
-          pendingCells.push({ row: cellRow, col: cellCol });
-        }
+      return cellRow < 0 || cellRow >= BOARD_SIZE || cellCol < 0 || cellCol >= BOARD_SIZE;
+    });
+  })() : false;
+
+  // Show error when placement is invalid
+  useEffect(() => {
+    if (pendingMove) {
+      const coords = getPieceCoords(pendingMove.piece, rotation, flipped);
+      const isValid = canPlacePiece(board, pendingMove.row, pendingMove.col, coords);
+      if (!isValid) {
+        setErrorMessage('Invalid placement!');
       } else {
-        outOfBoundsCells.push({ row: cellRow, col: cellCol });
+        setErrorMessage(null);
       }
-    });
-    
-    isPendingValid = outOfBoundsCells.length === 0 && overlappingCells.length === 0 &&
-      canPlacePiece(safeBoard, pendingMove.row, pendingMove.col, pieceCoords);
-  }
-
-  // Calculate AI animating cells (for drag animation)
-  let aiAnimatingCells = [];
-  const isAiWinningMove = aiAnimatingMove?.isWinning || false;
-  if (aiAnimatingMove) {
-    const aiCoords = getPieceCoords(aiAnimatingMove.piece, aiAnimatingMove.rotation || 0, aiAnimatingMove.flipped || false);
-    aiCoords.forEach(([dx, dy]) => {
-      const cellRow = aiAnimatingMove.row + dy;
-      const cellCol = aiAnimatingMove.col + dx;
-      if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-        aiAnimatingCells.push({ row: cellRow, col: cellCol });
-      }
-    });
-  }
-
-  // Calculate player animating cells (after confirm)
-  let playerAnimatingCells = [];
-  const isPlayerWinningMove = playerAnimatingMove?.isWinning || false;
-  if (playerAnimatingMove) {
-    const playerCoords = getPieceCoords(playerAnimatingMove.piece, playerAnimatingMove.rotation || 0, playerAnimatingMove.flipped || false);
-    playerCoords.forEach(([dx, dy]) => {
-      const cellRow = playerAnimatingMove.row + dy;
-      const cellCol = playerAnimatingMove.col + dx;
-      if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-        playerAnimatingCells.push({ row: cellRow, col: cellCol });
-      }
-    });
-  }
-
-  // v7.7: Calculate drag preview cells (highlighting during drag)
-  let dragPreviewCells = [];
-  let dragPreviewValid = false;
-  let dragPreviewPieceColor = null;
-  if (isDragging && dragPreviewCell && draggedPiece) {
-    const dragCoords = getPieceCoords(draggedPiece, dragRotation, dragFlipped);
-    dragPreviewPieceColor = pieceColors[draggedPiece] || 'bg-gradient-to-br from-cyan-400 to-blue-500';
-    
-    let validCells = 0;
-    let totalCells = dragCoords.length;
-    
-    dragCoords.forEach(([dx, dy]) => {
-      const cellRow = dragPreviewCell.row + dy;
-      const cellCol = dragPreviewCell.col + dx;
-      if (cellRow >= 0 && cellRow < BOARD_SIZE && cellCol >= 0 && cellCol < BOARD_SIZE) {
-        const existingCell = safeBoard[cellRow]?.[cellCol];
-        const isValid = existingCell === null || existingCell === 0 || existingCell === undefined;
-        if (isValid) validCells++;
-        dragPreviewCells.push({ row: cellRow, col: cellCol, isValid });
-      }
-    });
-    
-    // Valid if all cells can be placed
-    dragPreviewValid = validCells === totalCells && canPlacePiece(safeBoard, dragPreviewCell.row, dragPreviewCell.col, dragCoords);
-  }
-
-  // Get color classes based on game mode and player
-  const getPlayerColorClass = (cellValue) => {
-    if (customColors) {
-      if (cellValue === 1) return customColors.player1 || 'bg-gradient-to-br from-cyan-400 to-blue-500';
-      if (cellValue === 2) return customColors.player2 || 'bg-gradient-to-br from-orange-400 to-red-500';
+    } else {
+      setErrorMessage(null);
     }
-    
-    if (cellValue === 1) {
-      return 'bg-gradient-to-br from-cyan-400 via-cyan-500 to-blue-600';
-    }
-    if (cellValue === 2) {
-      if (gameMode === '2player') {
-        return 'bg-gradient-to-br from-pink-400 via-pink-500 to-rose-600';
+  }, [pendingMove, rotation, flipped, board]);
+
+  // Show game over modal when game ends
+  useEffect(() => {
+    if (gameOver && winner !== null) {
+      // v7.15.2: Record daily play for streak tracking (VS AI game completed)
+      if (gameMode === 'ai') {
+        streakTracker.recordPlay();
       }
-      return 'bg-gradient-to-br from-orange-400 via-orange-500 to-red-600';
+      
+      const delay = setTimeout(() => {
+        setShowGameOverModal(true);
+      }, 500);
+      return () => clearTimeout(delay);
     }
-    return '';
+  }, [gameOver, winner, gameMode]);
+
+  const handleCloseModal = () => {
+    setShowGameOverModal(false);
   };
 
-  // Handle cell click
-  const handleCellClick = (rowIdx, colIdx) => {
-    if (isDisabled) return;
-    if (onCellClick) {
-      onCellClick(rowIdx, colIdx);
+  // ==========================================
+  // Drag-and-drop handlers
+  // ==========================================
+  
+  // Calculate which board cell the drag position is over
+  // Allow positions outside the board for pieces that extend beyond their anchor
+  // Account for fingerOffset to match DragOverlay visual position
+  const calculateBoardCell = useCallback((clientX, clientY) => {
+    if (!boardBoundsRef.current) return null;
+    
+    const { left, top, width, height } = boardBoundsRef.current;
+    const cellWidth = width / BOARD_SIZE;
+    const cellHeight = height / BOARD_SIZE;
+    
+    // Match DragOverlay fingerOffset - piece is shown above finger
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    const fingerOffset = isMobile ? 40 : 20;
+    
+    // Adjust Y position to match where piece visually appears
+    const relX = clientX - left;
+    const relY = (clientY - fingerOffset) - top;
+    
+    const col = Math.floor(relX / cellWidth);
+    const row = Math.floor(relY / cellHeight);
+    
+    // Allow anchor position up to 4 cells outside board for piece extension
+    const EXTENSION_MARGIN = 4;
+    if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+        col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+      return { row, col };
     }
-  };
+    return null;
+  }, []);
+
+  // Attach global touch handlers synchronously (critical for mobile drag from board)
+  const attachGlobalTouchHandlers = useCallback(() => {
+    const handleGlobalTouchMove = (e) => {
+      if (!isDraggingRef.current) return;
+      
+      const touch = e.touches?.[0];
+      if (!touch) return;
+      
+      // Update drag position using state setter directly
+      setDragPosition({ x: touch.clientX, y: touch.clientY });
+      
+      // Update board bounds
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Calculate board cell and preview
+      if (boardBoundsRef.current && draggedPieceRef.current) {
+        const { left, top, width, height } = boardBoundsRef.current;
+        const cellWidth = width / BOARD_SIZE;
+        const cellHeight = height / BOARD_SIZE;
+        const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+        const fingerOffset = isMobile ? 40 : 20;
+        
+        const relX = touch.clientX - left;
+        const relY = (touch.clientY - fingerOffset) - top;
+        
+        const col = Math.floor(relX / cellWidth);
+        const row = Math.floor(relY / cellHeight);
+        
+        const EXTENSION_MARGIN = 4;
+        if (row >= -EXTENSION_MARGIN && row < BOARD_SIZE + EXTENSION_MARGIN && 
+            col >= -EXTENSION_MARGIN && col < BOARD_SIZE + EXTENSION_MARGIN) {
+          // Get piece coordinates to calculate center offset
+          const coords = getPieceCoords(draggedPieceRef.current, rotation, flipped);
+          
+          const minX = Math.min(...coords.map(([x]) => x));
+          const maxX = Math.max(...coords.map(([x]) => x));
+          const minY = Math.min(...coords.map(([, y]) => y));
+          const maxY = Math.max(...coords.map(([, y]) => y));
+          
+          const centerOffsetCol = Math.floor((maxX + minX) / 2);
+          const centerOffsetRow = Math.floor((maxY + minY) / 2);
+          
+          const adjustedRow = row - centerOffsetRow;
+          const adjustedCol = col - centerOffsetCol;
+          
+          // Store in ref for endDrag to access
+          dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+          setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+          
+          const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+          setIsValidDrop(valid);
+        } else {
+          dragCellRef.current = null;
+          setDragPreviewCell(null);
+          setIsValidDrop(false);
+        }
+      }
+      
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    };
+    
+    const handleGlobalTouchEnd = () => {
+      if (!isDraggingRef.current) return;
+      
+      // Call endDrag via ref to properly set pendingMove
+      endDragRef.current?.();
+      
+      // Clean up listeners
+      window.removeEventListener('touchmove', handleGlobalTouchMove);
+      window.removeEventListener('touchend', handleGlobalTouchEnd);
+      window.removeEventListener('touchcancel', handleGlobalTouchEnd);
+    };
+    
+    window.addEventListener('touchmove', handleGlobalTouchMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalTouchEnd);
+    window.addEventListener('touchcancel', handleGlobalTouchEnd);
+  }, [rotation, flipped, board]);
+
+  // Start drag from piece tray
+  const startDrag = useCallback((piece, clientX, clientY, elementRect) => {
+    if (hasDragStartedRef.current) return;
+    if (gameOver || usedPieces.includes(piece)) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    
+    // Set refs synchronously FIRST
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    
+    // Attach global touch handlers IMMEDIATELY (synchronous)
+    attachGlobalTouchHandlers();
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    const offsetX = clientX - (elementRect.left + elementRect.width / 2);
+    const offsetY = clientY - (elementRect.top + elementRect.height / 2);
+    
+    // Update React state (async)
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    setPieceCellOffset({ row: 0, col: 0 });
+    
+    // Also select the piece
+    onSelectPiece?.(piece);
+    soundManager.playPieceSelect();
+    
+    // Prevent scroll while dragging
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameOver, usedPieces, gameMode, currentPlayer, onSelectPiece, attachGlobalTouchHandlers]);
+
+  // Handle starting drag from a pending piece on the board
+  const handleBoardDragStart = useCallback((piece, clientX, clientY, elementRect) => {
+    // Guard against duplicate calls
+    if (hasDragStartedRef.current) return;
+    if (gameOver) return;
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return;
+    if (!pendingMove || pendingMove.piece !== piece) return;
+    
+    // Set refs synchronously FIRST
+    hasDragStartedRef.current = true;
+    isDraggingRef.current = true;
+    draggedPieceRef.current = piece;
+    
+    // Attach global touch handlers IMMEDIATELY (synchronous)
+    attachGlobalTouchHandlers();
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // Calculate which cell of the piece was touched
+    if (pendingMove && boardBoundsRef.current) {
+      const { left, top, width, height } = boardBoundsRef.current;
+      const cellWidth = width / BOARD_SIZE;
+      const cellHeight = height / BOARD_SIZE;
+      
+      const fingerCol = Math.floor((clientX - left) / cellWidth);
+      const fingerRow = Math.floor((clientY - top) / cellHeight);
+      
+      const offset = {
+        row: fingerRow - pendingMove.row,
+        col: fingerCol - pendingMove.col
+      };
+      pieceCellOffsetRef.current = offset;
+      setPieceCellOffset(offset);
+    } else {
+      pieceCellOffsetRef.current = { row: 0, col: 0 };
+      setPieceCellOffset({ row: 0, col: 0 });
+    }
+    
+    const offsetX = elementRect ? clientX - (elementRect.left + elementRect.width / 2) : 0;
+    const offsetY = elementRect ? clientY - (elementRect.top + elementRect.height / 2) : 0;
+    
+    // Update React state (async)
+    setDraggedPiece(piece);
+    setDragPosition({ x: clientX, y: clientY });
+    setDragOffset({ x: offsetX, y: offsetY });
+    setIsDragging(true);
+    
+    // Piece is already selected, just play sound
+    soundManager.playPieceSelect();
+    
+    // Prevent scroll while dragging
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+  }, [gameOver, gameMode, currentPlayer, pendingMove, attachGlobalTouchHandlers]);
+
+  // Update drag position
+  const updateDrag = useCallback((clientX, clientY) => {
+    if (!isDragging || !draggedPiece) return;
+    
+    setDragPosition({ x: clientX, y: clientY });
+    
+    // Update board bounds
+    if (boardRef.current) {
+      boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+    }
+    
+    // Calculate which cell the finger is over
+    const cell = calculateBoardCell(clientX, clientY);
+    
+    if (cell) {
+      // Get piece coordinates to calculate center offset
+      const coords = getPieceCoords(draggedPiece, rotation, flipped);
+      
+      // Calculate piece bounds
+      const minX = Math.min(...coords.map(([x]) => x));
+      const maxX = Math.max(...coords.map(([x]) => x));
+      const minY = Math.min(...coords.map(([, y]) => y));
+      const maxY = Math.max(...coords.map(([, y]) => y));
+      
+      // Calculate center offset (piece anchor is at 0,0, we want center under finger)
+      const centerOffsetCol = Math.floor((maxX + minX) / 2);
+      const centerOffsetRow = Math.floor((maxY + minY) / 2);
+      
+      // Offset the cell so piece CENTER is under finger, not anchor
+      const adjustedRow = cell.row - centerOffsetRow;
+      const adjustedCol = cell.col - centerOffsetCol;
+      
+      // Store in ref for endDrag to access (sync) and state for render
+      dragCellRef.current = { row: adjustedRow, col: adjustedCol };
+      setDragPreviewCell({ row: adjustedRow, col: adjustedCol });
+      
+      // Check if valid drop position
+      const valid = canPlacePiece(board, adjustedRow, adjustedCol, coords);
+      setIsValidDrop(valid);
+    } else {
+      dragCellRef.current = null;
+      setDragPreviewCell(null);
+      setIsValidDrop(false);
+    }
+  }, [isDragging, draggedPiece, rotation, flipped, board, calculateBoardCell]);
+
+  // End drag
+  const endDrag = useCallback(() => {
+    // Check if we were actually dragging
+    const wasDragging = isDragging || isDraggingRef.current || hasDragStartedRef.current;
+    if (!wasDragging) return;
+    
+    // Set pendingMove from dragCellRef (sync) or dragPreviewCell (state)
+    // dragCellRef is more reliable as it's updated synchronously in global handlers
+    const piece = draggedPiece || draggedPieceRef.current;
+    const cell = dragCellRef.current || dragPreviewCell;
+    
+    if (cell && piece && setPendingMove) {
+      setPendingMove({ piece, row: cell.row, col: cell.col });
+    }
+    
+    // Clear refs
+    isDraggingRef.current = false;
+    draggedPieceRef.current = null;
+    hasDragStartedRef.current = false;
+    pieceCellOffsetRef.current = { row: 0, col: 0 };
+    dragCellRef.current = null;
+    
+    // Clear state
+    setIsDragging(false);
+    setDraggedPiece(null);
+    setDragPosition({ x: 0, y: 0 });
+    setDragOffset({ x: 0, y: 0 });
+    setIsValidDrop(false);
+    setDragPreviewCell(null);
+    setPieceCellOffset({ row: 0, col: 0 });
+    
+    // Re-enable scroll
+    document.body.style.overflow = '';
+    document.body.style.touchAction = '';
+  }, [isDragging, dragPreviewCell, draggedPiece, setPendingMove]);
+
+  // Keep endDragRef current for global touch handlers
+  endDragRef.current = endDrag;
+
+  // Create drag handlers for PieceTray
+  // Since pieces have touch-action: none, we start drag immediately on touchstart
+  const createDragHandlers = useCallback((piece) => {
+    if (gameOver || usedPieces.includes(piece)) return {};
+    if ((gameMode === 'ai' || gameMode === 'puzzle') && currentPlayer === 2) return {};
+
+    let elementRect = null;
+
+    const handleTouchStart = (e) => {
+      if (hasDragStartedRef.current) return; // Guard against double-start
+      
+      const touch = e.touches[0];
+      elementRect = e.currentTarget.getBoundingClientRect();
+      
+      // Update board bounds for accurate cell calculation
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      // Start drag immediately - touch-action: none prevents scrolling
+      startDrag(piece, touch.clientX, touch.clientY, elementRect);
+    };
+
+    const handleTouchMove = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      if (hasDragStartedRef.current) {
+        e.preventDefault();
+        endDrag();
+      }
+    };
+
+    // Mouse handlers for desktop
+    const handleMouseDown = (e) => {
+      if (e.button !== 0) return;
+      if (hasDragStartedRef.current) return;
+      
+      elementRect = e.currentTarget.getBoundingClientRect();
+      
+      if (boardRef.current) {
+        boardBoundsRef.current = boardRef.current.getBoundingClientRect();
+      }
+      
+      startDrag(piece, e.clientX, e.clientY, elementRect);
+    };
+
+    return {
+      onTouchStart: handleTouchStart,
+      onTouchMove: handleTouchMove,
+      onTouchEnd: handleTouchEnd,
+      onMouseDown: handleMouseDown,
+    };
+  }, [gameOver, usedPieces, gameMode, currentPlayer, startDrag, updateDrag, endDrag]);
+
+  // Global mouse move/up handlers for desktop drag
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e) => {
+      updateDrag(e.clientX, e.clientY);
+    };
+
+    const handleMouseUp = () => {
+      endDrag();
+    };
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        endDrag();
+        onCancel?.();
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDragging, updateDrag, endDrag, onCancel]);
+
+  // Global touch handlers for drag (needed for board drag on mobile)
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleTouchMove = (e) => {
+      if (e.touches && e.touches[0]) {
+        updateDrag(e.touches[0].clientX, e.touches[0].clientY);
+        if (e.cancelable) {
+          e.preventDefault();
+        }
+      }
+    };
+
+    const handleTouchEnd = () => {
+      endDrag();
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isDragging, updateDrag, endDrag]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.touchAction = '';
+    };
+  }, []);
+
+  // Handle cell click (ignore during drag)
+  const handleCellClick = useCallback((row, col) => {
+    if (isDragging) return;
+    onCellClick?.(row, col);
+  }, [isDragging, onCellClick]);
 
   return (
-    <div className="relative" ref={ref}>
-      {/* Main board grid */}
-      <div 
-        className="grid grid-cols-8 gap-0.5 p-1.5 sm:p-2 rounded-lg bg-slate-800/80 border border-slate-700/50 w-fit mx-auto"
-        style={{
-          boxShadow: '0 0 30px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.2)'
-        }}
+    <div className="fixed inset-0 bg-transparent">
+      {/* Ambient glow effects */}
+      <div className={`fixed top-0 right-0 w-96 h-96 ${theme.glow1} rounded-full blur-3xl pointer-events-none`} />
+      <div className={`fixed bottom-0 left-0 w-80 h-80 ${theme.glow2} rounded-full blur-3xl pointer-events-none`} />
+
+      {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
+      <div
+        className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
+        style={{ overscrollBehavior: 'none' }}
       >
-        {safeBoard.map((row, rowIdx) =>
-          row.map((cellValue, colIdx) => {
-            const isPending = pendingCells.some(p => p.row === rowIdx && p.col === colIdx);
-            const isOverlapping = overlappingCells.some(p => p.row === rowIdx && p.col === colIdx);
-            const isAiAnimating = aiAnimatingCells.some(p => p.row === rowIdx && p.col === colIdx);
-            const isPlayerAnimating = playerAnimatingCells.some(p => p.row === rowIdx && p.col === colIdx);
-            const isOccupied = cellValue !== null && cellValue !== 0 && cellValue !== undefined;
-            const pieceName = getPieceName(rowIdx, colIdx);
-            
-            // v7.9: Check if this cell is part of opponent's last move
-            const isLastMove = lastMoveCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
-            
-            // v7.10: Check if this cell is part of confirm flash
-            const isConfirmFlash = confirmFlashCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
-            
-            // v7.7: Check if this cell is part of drag preview
-            const dragPreviewInfo = dragPreviewCells.find(p => p.row === rowIdx && p.col === colIdx);
-            const isDragPreview = !!dragPreviewInfo;
-            const isDragPreviewValid = dragPreviewInfo?.isValid !== false;
-            
-            // Get piece-specific color or player color
-            const pieceColor = pieceName ? pieceColors[pieceName] : null;
-            const colorClass = isOccupied 
-              ? (pieceColor || getPlayerColorClass(cellValue))
-              : '';
-            
-            // Rolling glow timing for this cell
-            const glowTiming = glowTimings[`${rowIdx},${colIdx}`];
-            
-            // Calculate pending index for stagger effect
-            const pendingIndex = isPending ? pendingCells.findIndex(p => p.row === rowIdx && p.col === colIdx) : -1;
-            
-            // v7.8: Handle touch start for re-dragging pending pieces
-            // v7.17: Fixed - use touch-action: none instead of preventDefault
-            const handlePendingTouchStart = (e) => {
-              if (!isPending || !onPendingPieceDragStart || !pendingMove) {
-                return;
-              }
-              
-              // Don't call preventDefault - it fails on passive listeners
-              // touch-action: none on the element handles scroll prevention
-              e.stopPropagation();
-              
-              // Get touch position
-              const touch = e.touches?.[0];
-              if (!touch) return;
-              
-              const rect = e.currentTarget?.getBoundingClientRect() || null;
-              
-              // Start drag of the pending piece
-              onPendingPieceDragStart(pendingMove.piece, touch.clientX, touch.clientY, rect);
-            };
-            
-            // v7.8: Handle mouse down for re-dragging pending pieces (desktop)
-            const handlePendingMouseDown = (e) => {
-              if (!isPending || !onPendingPieceDragStart || !pendingMove) return;
-              if (e.button !== 0) return; // Left click only
-              
-              e.stopPropagation();
-              
-              const rect = e.currentTarget?.getBoundingClientRect() || null;
-              onPendingPieceDragStart(pendingMove.piece, e.clientX, e.clientY, rect);
-            };
-            
-            return (
-              <div
-                key={`${rowIdx}-${colIdx}`}
-                onClick={() => handleCellClick(rowIdx, colIdx)}
-                onTouchStart={isPending ? handlePendingTouchStart : undefined}
-                onMouseDown={isPending ? handlePendingMouseDown : undefined}
-                className={`
-                  game-cell w-9 h-9 sm:w-12 sm:h-12 rounded-md relative overflow-hidden
-                  transition-all duration-300 cursor-pointer
-                  ${isOccupied ? colorClass : 'bg-slate-700/40 hover:bg-slate-600/50'}
-                  ${isOccupied ? 'shadow-lg' : ''}
-                  ${isOverlapping ? 'overlap-cell' : ''}
-                  ${isAiAnimating ? (isAiWinningMove ? 'ai-winning-cell' : 'ai-placing-cell') : ''}
-                  ${isPlayerAnimating ? (isPlayerWinningMove ? 'player-winning-cell' : 'player-placing-cell') : ''}
-                  ${isPending ? 'pending cursor-grab active:cursor-grabbing' : ''}
-                  ${isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating ? 'last-move-cell' : ''}
-                  ${isConfirmFlash ? 'confirm-flash-cell' : ''}
-                `}
-                style={isPending ? {
-                  animationDelay: `${pendingIndex * 0.15}s`,
-                  touchAction: 'none',
-                  userSelect: 'none',
-                  // v7.22: Do NOT change any styles during drag - DOM changes cancel touch events
-                } : undefined}
-              >
-                {/* Base shine layer for occupied cells - subtle highlight */}
-                {isOccupied && (
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/15 pointer-events-none" />
-                )}
-                
-                {/* v7.9: Breathing edge glow effect - slow pulse on edges using piece's own color */}
-                {isOccupied && glowTiming && (
-                  <div 
-                    className={`absolute inset-0 pointer-events-none rounded-md ${
-                      cellValue === 1 ? 'breathing-glow-cyan' : 
-                      gameMode === '2player' ? 'breathing-glow-pink' : 'breathing-glow-orange'
-                    }`}
-                    style={{ 
-                      animationDelay: `-${glowTiming.delay}s`,
-                      animationDuration: `${glowTiming.duration}s`,
-                    }}
-                  />
-                )}
+      {/* Main content */}
+      <div className="relative min-h-full flex flex-col">
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
+          
+          {/* Title */}
+          <div className="text-center mb-1">
+            <NeonTitle size="large" />
+          </div>
 
-                {/* Pending piece display - original color with subtle glow */}
-                {/* Wrap in pointer-events-none div so opacity change doesn't affect touch */}
-                {isPending && (
-                  <div 
-                    className="absolute inset-0 pointer-events-none transition-opacity duration-75"
-                    style={{ opacity: isDragging ? 0 : 1 }}
-                  >
-                    {/* Base color */}
-                    <div className={`absolute inset-0 ${pendingPieceColor} rounded-md`} />
-                    
-                    {/* Subtle highlight overlay - reduced white */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/15 via-transparent to-black/15 rounded-md" />
-                    
-                    {/* Subtle pulse glow */}
-                    <div className={`absolute inset-0 pending-glow ${isPendingValid ? 'valid' : 'invalid'} rounded-md`} />
-                    
-                    {/* Rolling edge glow effect - slow and elegant */}
-                    <div className="absolute inset-0 pending-shine rounded-md overflow-hidden" />
-                  </div>
-                )}
-                
-                {/* Validity border indicator */}
-                {/* Also hide during drag */}
-                {isPending && (
-                  <div 
-                    className="absolute inset-0 rounded-md pointer-events-none transition-opacity duration-75"
-                    style={{
-                      opacity: isDragging ? 0 : 1,
-                      border: isPendingValid ? '2px solid rgba(34, 211, 238, 0.7)' : '2px solid rgba(239, 68, 68, 0.7)',
-                      boxShadow: isPendingValid 
-                        ? '0 0 10px rgba(34, 211, 238, 0.4), inset 0 0 8px rgba(34, 211, 238, 0.2)'
-                        : '0 0 10px rgba(239, 68, 68, 0.4), inset 0 0 8px rgba(239, 68, 68, 0.2)'
-                    }}
-                  />
-                )}
+          {/* v7.17: Header section — max-w-md keeps PlayerBar / GameStatus visually constrained */}
+          <div className="w-full max-w-md">
+            
+            {/* Player Bar - with difficulty shown between YOU and AI */}
+            <PlayerBar 
+              currentPlayer={currentPlayer} 
+              gameMode={gameMode} 
+              theme={theme}
+              isAIThinking={isAIThinking}
+              aiDifficulty={aiDifficulty}
+              puzzleDifficulty={puzzleDifficulty}
+            />
+            
+            <GameStatus isAIThinking={isAIThinking} gameOver={gameOver} winner={winner} gameMode={gameMode} aiDifficulty={aiDifficulty} />
+          </div>
 
-                {/* Overlapping cell warning - more visible */}
-                {isOverlapping && (
-                  <div className="absolute inset-0 overlap-warning rounded-md" />
-                )}
+          {/* v7.17: Board section — UNCONSTRAINED so the 8-col grid renders at natural width on desktop
+                    (was inside max-w-md, which forced the grid to shrink and caused buttons to overlap their cells).
+                    Mirrors SpeedPuzzleScreen's pattern. */}
+          <div className="mb-0">
 
-                {/* AI drop effect */}
-                {isAiAnimating && (
-                  <div className="absolute inset-0 ai-drop-effect rounded-md" />
-                )}
-
-                {/* Player drop effect */}
-                {isPlayerAnimating && (
-                  <div className="absolute inset-0 player-drop-effect rounded-md" />
-                )}
-
-                {/* v7.7: Drag preview highlighting - shows where piece will land during drag */}
-                {isDragPreview && !isOccupied && (
-                  <>
-                    {/* Preview background with piece color */}
-                    <div 
-                      className={`absolute inset-0 ${dragPreviewPieceColor} rounded-md opacity-60`}
-                    />
-                    
-                    {/* Subtle highlight overlay - reduced */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/10 rounded-md" />
-                    
-                    {/* Validity border */}
-                    <div 
-                      className="absolute inset-0 rounded-md pointer-events-none drag-preview-pulse"
-                      style={{
-                        border: isDragPreviewValid 
-                          ? '2px solid rgba(34, 211, 238, 0.8)' 
-                          : '2px solid rgba(239, 68, 68, 0.8)',
-                        boxShadow: isDragPreviewValid 
-                          ? '0 0 12px rgba(34, 211, 238, 0.5), inset 0 0 8px rgba(34, 211, 238, 0.3)'
-                          : '0 0 12px rgba(239, 68, 68, 0.5), inset 0 0 8px rgba(239, 68, 68, 0.3)'
-                      }}
-                    />
-                  </>
-                )}
-                
-                {/* v7.7: Drag preview on occupied cell (invalid) */}
-                {isDragPreview && isOccupied && (
-                  <div 
-                    className="absolute inset-0 rounded-md pointer-events-none"
-                    style={{
-                      border: '2px solid rgba(239, 68, 68, 0.9)',
-                      boxShadow: '0 0 15px rgba(239, 68, 68, 0.6), inset 0 0 10px rgba(239, 68, 68, 0.4)',
-                      background: 'rgba(239, 68, 68, 0.2)'
-                    }}
-                  />
-                )}
-                
-                {/* v7.9: Last move highlight - shows opponent's most recent move */}
-                {isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating && (
-                  <div 
-                    className="absolute inset-0 rounded-md pointer-events-none last-move-indicator"
-                    style={{
-                      border: '2px solid rgba(251, 191, 36, 0.8)',
-                      boxShadow: '0 0 12px rgba(251, 191, 36, 0.5), inset 0 0 6px rgba(251, 191, 36, 0.3)'
-                    }}
-                  />
-                )}
-                
-                {/* v7.10: Confirm flash - bright burst on the placed cells immediately on confirm tap */}
-                {isConfirmFlash && (
-                  <div className="absolute inset-0 rounded-md pointer-events-none confirm-flash-overlay" />
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* Ghost cells for out-of-bounds preview */}
-      {outOfBoundsCells.length > 0 && (
-        <div className="absolute pointer-events-none" style={{ top: 0, left: 0, right: 0, bottom: 0 }}>
-          {outOfBoundsCells.map((cell, idx) => {
-            const cellSize = window.innerWidth < 640 ? 36 : 48;
-            const gap = 2; // Matches CSS gap-0.5 (2px) on all viewports
-            const padding = window.innerWidth < 640 ? 6 : 8;
-            // v7.12: The grid container has `border` (1px). With box-sizing: border-box that border
-            // lives INSIDE the grid's outer edge, so the first cell starts at (border + padding) —
-            // not just (padding) — from the grid's outer edge. Without this offset, every ghost
-            // cell was 1px up-and-left of its true gridline position, which (combined with the 2px
-            // dashed ghost border) made the outline look off-grid and caused adjacent ghost / pending
-            // cells to visually overlap, reading as cells "missing" from the pentomino.
-            const border = 1;
-
-            const left = border + padding + cell.col * (cellSize + gap);
-            const top = border + padding + cell.row * (cellSize + gap);
-
-            return (
-              <div
-                key={idx}
-                className="absolute ghost-cell-warning rounded-md"
-                style={{
-                  width: cellSize,
-                  height: cellSize,
-                  left,
-                  top,
-                }}
+            {/* Game Board with side labels */}
+            <div className="flex items-center justify-center pb-2 gap-3">
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                color: '#fff',
+                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${sideGlowColor}, 0 0 32px ${sideGlowColor}, 0 0 48px ${sideGlowColor}`
+              }}>{gameMode === 'ai' ? 'VS AI' : gameMode === 'puzzle' ? 'GENERATED PUZZLE' : '2 PLAYER'}</div>
+              <GameBoard
+                ref={boardRef}
+                board={board}
+                boardPieces={boardPieces}
+                pendingMove={pendingMove}
+                rotation={rotation}
+                flipped={flipped}
+                gameOver={gameOver}
+                gameMode={gameMode}
+                currentPlayer={currentPlayer}
+                onCellClick={handleCellClick}
+                onPendingPieceDragStart={handleBoardDragStart}
+                aiAnimatingMove={aiAnimatingMove}
+                playerAnimatingMove={playerAnimatingMove}
+                selectedPiece={selectedPiece}
+                isDragging={isDragging}
+                dragPreviewCell={dragPreviewCell}
+                draggedPiece={draggedPiece}
+                dragRotation={rotation}
+                dragFlipped={flipped}
               />
-            );
-          })}
-        </div>
-      )}
+              <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
+                writingMode: 'vertical-rl',
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                color: '#fff',
+                textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${sideGlowColor}, 0 0 32px ${sideGlowColor}, 0 0 48px ${sideGlowColor}`
+              }}>{gameMode === 'ai' ? 'VS AI' : gameMode === 'puzzle' ? 'GENERATED PUZZLE' : '2 PLAYER'}</div>
+            </div>
+          </div>
 
-      {/* v7.10: Turn transition pulse — cyan ripple rings around board edge */}
-      {turnPulse && (
-        <div className="absolute inset-0 pointer-events-none rounded-lg overflow-visible" style={{ zIndex: 60 }}>
-          {/* Expanding ring 1 */}
-          <div className="absolute inset-0 rounded-lg turn-pulse-ring" style={{ animationDelay: '0ms' }} />
-          {/* Expanding ring 2 */}
-          <div className="absolute inset-0 rounded-lg turn-pulse-ring" style={{ animationDelay: '150ms' }} />
-          {/* Solid glow base (stays for full duration) */}
-          <div className="absolute inset-0 rounded-lg turn-pulse-glow" />
-        </div>
-      )}
+          {/* v7.17: Controls section — max-w-md again for off-grid indicator / D-Pad / ControlButtons */}
+          <div className="w-full max-w-md">
 
-      {/* Full board outline when piece is active */}
-      {pendingMove && (
-        <div 
-          className={`absolute inset-0 pointer-events-none rounded-lg transition-all duration-500 ${
-            isPendingValid 
-              ? 'ring-2 ring-cyan-400/40 shadow-[0_0_20px_rgba(34,211,238,0.2)]'
-              : 'ring-2 ring-red-500/40 shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-          }`}
-          style={{ margin: '-2px' }}
+            {/* Off-grid indicator - shows when piece extends beyond board */}
+            {isPieceOffGrid && pendingMove && !isGeneratingPuzzle && !isDragging && (
+              <div className="flex justify-center mb-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/60 border border-amber-500/50 rounded-lg">
+                  <Move size={14} className="text-amber-400" />
+                  <span className="text-amber-300 text-xs font-bold">Use D-Pad to reposition</span>
+                </div>
+              </div>
+            )}
+
+            {/* D-Pad and Error Message Layout */}
+            {pendingMove && !isGeneratingPuzzle && !isDragging && (
+              <div className="flex items-start justify-center gap-3 mb-2">
+                {/* Error message box */}
+                <div className="flex-shrink-0 w-24">
+                  {errorMessage && (
+                    <div className="error-message-box bg-red-900/80 border border-red-500/60 rounded-lg p-2 text-center shadow-[0_0_15px_rgba(239,68,68,0.4)]">
+                      <span className="text-red-300 text-xs font-bold leading-tight block">
+                        {errorMessage}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                {/* D-Pad */}
+                <DPad onMove={onMovePiece} />
+                
+                {/* Spacer for symmetry */}
+                <div className="flex-shrink-0 w-24" />
+              </div>
+            )}
+
+            <ControlButtons
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              canConfirm={canConfirm}
+              gameOver={gameOver}
+              gameMode={gameMode}
+              currentPlayer={currentPlayer}
+              isGeneratingPuzzle={isGeneratingPuzzle}
+              moveCount={moveCount}
+              onRotate={onRotate}
+              onFlip={onFlip}
+              onConfirm={onConfirm}
+              onCancel={onCancel}
+              onReset={onReset}
+              onRetryPuzzle={onRetryPuzzle}
+              onMenu={onMenu}
+              onQuitGame={onQuitGame ? (isForfeit) => {
+                setQuitIsForfeit(isForfeit);
+                setShowQuitConfirmModal(true);
+              } : null}
+            />
+          </div>
+
+          {/* Piece Tray with drag handlers */}
+          <div>
+            <PieceTray
+              usedPieces={usedPieces}
+              selectedPiece={selectedPiece}
+              pendingMove={pendingMove}
+              gameOver={gameOver}
+              gameMode={gameMode}
+              currentPlayer={currentPlayer}
+              isMobile={isMobile}
+              isGeneratingPuzzle={isGeneratingPuzzle}
+              onSelectPiece={onSelectPiece}
+              createDragHandlers={createDragHandlers}
+              isDragging={isDragging}
+              draggedPiece={draggedPiece}
+            />
+          </div>
+          
+          <div className="h-8" />
+        </div>
+      </div>
+      </div>{/* end inner scroll child */}
+
+      {/* Drag Overlay - floating piece following cursor/finger */}
+      <DragOverlay
+        isDragging={isDragging}
+        piece={draggedPiece}
+        position={dragPosition}
+        offset={dragOffset}
+        rotation={rotation}
+        flipped={flipped}
+        isValid={isValidDrop}
+      />
+
+      {/* Game Over Modal */}
+      {showGameOverModal && (
+        <GameOverModal
+          isWin={playerWon}
+          isPuzzle={isPuzzle}
+          gameMode={gameMode}
+          winner={winner}
+          onClose={handleCloseModal}
+          onRetry={isPuzzle ? onRetryPuzzle : onReset}
+          onNewGame={onReset}
+          onMenu={onMenu}
+          onDifficultySelect={onDifficultySelect}
         />
       )}
 
-      {/* Animation styles - SLOWER and more elegant */}
+      {/* Quit/Forfeit Confirmation Modal */}
+      {showQuitConfirmModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-b from-slate-800 to-slate-900 rounded-2xl p-6 max-w-sm w-full border border-slate-600/50 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+            {/* Icon */}
+            <div className="flex justify-center mb-4">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+                quitIsForfeit 
+                  ? 'bg-red-500/20 border-2 border-red-500/50' 
+                  : 'bg-amber-500/20 border-2 border-amber-500/50'
+              }`}>
+                {quitIsForfeit ? (
+                  <Flag size={32} className="text-red-400" />
+                ) : (
+                  <XCircle size={32} className="text-amber-400" />
+                )}
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className={`text-xl font-bold text-center mb-2 ${
+              quitIsForfeit ? 'text-red-400' : 'text-amber-400'
+            }`}>
+              {quitIsForfeit ? 'Forfeit Game?' : 'Cancel Game?'}
+            </h2>
+
+            {/* Description */}
+            <p className="text-slate-300 text-center text-sm mb-6">
+              {quitIsForfeit 
+                ? 'This will count as a loss. Are you sure you want to forfeit?'
+                : 'No moves have been made yet. This game will not affect your stats.'
+              }
+            </p>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowQuitConfirmModal(false)}
+                className="flex-1 py-3 px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-xl font-bold transition-all border border-slate-500/50"
+              >
+                Keep Playing
+              </button>
+              <button
+                onClick={() => {
+                  setShowQuitConfirmModal(false);
+                  if (onQuitGame) onQuitGame(quitIsForfeit);
+                }}
+                className={`flex-1 py-3 px-4 rounded-xl font-bold transition-all border ${
+                  quitIsForfeit
+                    ? 'bg-red-600 hover:bg-red-500 text-white border-red-400/50'
+                    : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-400/50'
+                }`}
+              >
+                {quitIsForfeit ? 'Forfeit' : 'Quit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Error message animation styles */}
       <style>{`
-        /* ============================================
-           PENDING PIECE - SUBTLE GLOW & SHINE
-           Slower, more elegant animations
-           ============================================ */
-        
-        .pending-glow {
-          animation: pending-glow-pulse 3s ease-in-out infinite;
+        .error-message-box {
+          animation: error-shake 0.5s ease-in-out, error-pulse 1.5s ease-in-out infinite;
         }
-        
-        .pending-glow.valid {
-          background: radial-gradient(circle at center, rgba(34, 211, 238, 0.15) 0%, transparent 70%);
+        @keyframes error-shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+          20%, 40%, 60%, 80% { transform: translateX(2px); }
         }
-        
-        .pending-glow.invalid {
-          background: radial-gradient(circle at center, rgba(239, 68, 68, 0.15) 0%, transparent 70%);
-        }
-        
-        @keyframes pending-glow-pulse {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
-        }
-        
-        .pending-shine {
-          /* v7.9: Subtle edge glow sweep instead of white flash */
-          background: linear-gradient(
-            120deg,
-            transparent 0%,
-            transparent 40%,
-            rgba(34, 211, 238, 0.2) 50%,
-            transparent 60%,
-            transparent 100%
-          );
-          background-size: 200% 100%;
-          animation: pending-shine-roll 5s ease-in-out infinite;
-        }
-        
-        @keyframes pending-shine-roll {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-        
-        /* ============================================
-           OVERLAPPING CELLS - CLEAR WARNING
-           ============================================ */
-        .overlap-cell {
-          box-shadow: 
-            0 0 15px rgba(239, 68, 68, 0.8),
-            0 0 30px rgba(239, 68, 68, 0.4),
-            inset 0 0 15px rgba(239, 68, 68, 0.6) !important;
-          border: 3px solid rgba(255, 100, 100, 1) !important;
-        }
-        
-        .overlap-warning {
-          background: repeating-linear-gradient(
-            45deg,
-            rgba(239, 68, 68, 0.6),
-            rgba(239, 68, 68, 0.6) 4px,
-            rgba(255, 150, 150, 0.6) 4px,
-            rgba(255, 150, 150, 0.6) 8px
-          );
-          animation: overlap-pulse 1.5s ease-in-out infinite;
-        }
-        
-        @keyframes overlap-pulse {
-          0%, 100% { opacity: 0.7; }
-          50% { opacity: 1; }
-        }
-        
-        /* ============================================
-           GHOST CELLS (OUT OF BOUNDS)
-           ============================================ */
-        .ghost-cell-warning {
-          background: rgba(239, 68, 68, 0.25);
-          border: 2px dashed rgba(239, 68, 68, 0.8);
-          animation: ghost-pulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes ghost-pulse {
-          0%, 100% { 
-            border-color: rgba(239, 68, 68, 0.8);
-            background: rgba(239, 68, 68, 0.25);
-          }
-          50% { 
-            border-color: rgba(255, 100, 100, 1);
-            background: rgba(239, 68, 68, 0.4);
-          }
-        }
-        
-        /* ============================================
-           AI PLACING ANIMATION
-           ============================================ */
-        .ai-placing-cell {
-          box-shadow: 
-            0 0 20px rgba(168, 85, 247, 0.8),
-            0 0 40px rgba(168, 85, 247, 0.4) !important;
-          border: 2px solid rgba(168, 85, 247, 0.8) !important;
-        }
-        
-        /* v7.8: AI WINNING MOVE ANIMATION - Golden pulsing glow */
-        .ai-winning-cell {
-          animation: winning-pulse 2s ease-in-out infinite alternate;
-          border: 3px solid rgba(251, 191, 36, 1) !important;
-        }
-        
-        .ai-drop-effect {
-          /* v7.9: Edge glow animation instead of radial flash */
-          animation: ai-drop-glow 0.6s ease-out;
-        }
-        
-        @keyframes ai-drop-glow {
-          0% { 
-            opacity: 0;
-            box-shadow: 
-              0 0 20px rgba(168, 85, 247, 0.9),
-              0 0 40px rgba(168, 85, 247, 0.6),
-              0 0 60px rgba(168, 85, 247, 0.3);
-          }
-          50% {
-            opacity: 1;
-            box-shadow: 
-              0 0 25px rgba(168, 85, 247, 0.8),
-              0 0 50px rgba(168, 85, 247, 0.5),
-              0 0 75px rgba(168, 85, 247, 0.25);
-          }
-          100% { 
-            opacity: 1;
-            box-shadow: 
-              0 0 6px rgba(168, 85, 247, 0.3),
-              0 0 12px rgba(168, 85, 247, 0.15);
-          }
-        }
-        
-        /* ============================================
-           PLAYER PLACING ANIMATION
-           ============================================ */
-        .player-placing-cell {
-          box-shadow: 
-            0 0 20px rgba(34, 211, 238, 0.8),
-            0 0 40px rgba(34, 211, 238, 0.4) !important;
-          border: 2px solid rgba(34, 211, 238, 0.8) !important;
-        }
-        
-        /* v7.8: PLAYER WINNING MOVE ANIMATION - Golden pulsing glow */
-        .player-winning-cell {
-          animation: winning-pulse 2s ease-in-out infinite alternate;
-          border: 3px solid rgba(251, 191, 36, 1) !important;
-        }
-        
-        /* v7.8: Winning move pulse animation - shared by both AI and player */
-        @keyframes winning-pulse {
-          0% { 
-            box-shadow: 
-              0 0 20px rgba(251, 191, 36, 0.9),
-              0 0 40px rgba(251, 191, 36, 0.6),
-              0 0 60px rgba(251, 191, 36, 0.3),
-              inset 0 0 15px rgba(251, 191, 36, 0.4);
-            transform: scale(1);
-          }
-          100% { 
-            box-shadow: 
-              0 0 30px rgba(251, 191, 36, 1),
-              0 0 60px rgba(251, 191, 36, 0.8),
-              0 0 90px rgba(251, 191, 36, 0.4),
-              inset 0 0 25px rgba(251, 191, 36, 0.6);
-            transform: scale(1.05);
-          }
-        }
-        
-        .player-drop-effect {
-          /* v7.9: Edge glow animation instead of radial flash */
-          animation: player-drop-glow 0.6s ease-out;
-        }
-        
-        @keyframes player-drop-glow {
-          0% { 
-            opacity: 0;
-            box-shadow: 
-              0 0 20px rgba(34, 211, 238, 0.9),
-              0 0 40px rgba(34, 211, 238, 0.6),
-              0 0 60px rgba(34, 211, 238, 0.3);
-          }
-          50% {
-            opacity: 1;
-            box-shadow: 
-              0 0 25px rgba(34, 211, 238, 0.8),
-              0 0 50px rgba(34, 211, 238, 0.5),
-              0 0 75px rgba(34, 211, 238, 0.25);
-          }
-          100% { 
-            opacity: 1;
-            box-shadow: 
-              0 0 6px rgba(34, 211, 238, 0.3),
-              0 0 12px rgba(34, 211, 238, 0.15);
-          }
-        }
-        
-        /* ============================================
-           v7.7: DRAG PREVIEW HIGHLIGHTING
-           Shows where piece will land during drag
-           ============================================ */
-        .drag-preview-pulse {
-          animation: drag-preview-glow 0.8s ease-in-out infinite;
-        }
-        
-        @keyframes drag-preview-glow {
-          0%, 100% { 
-            opacity: 0.7;
-            transform: scale(1);
-          }
-          50% { 
-            opacity: 1;
-            transform: scale(1.02);
-          }
-        }
-        
-        /* ============================================
-           v7.9: LAST MOVE HIGHLIGHTING
-           Shows opponent's most recent move with amber glow
-           ============================================ */
-        .last-move-cell {
-          position: relative;
-          z-index: 2;
-        }
-        
-        .last-move-indicator {
-          animation: last-move-pulse 2s ease-in-out infinite;
-        }
-        
-        @keyframes last-move-pulse {
-          0%, 100% { 
-            border-color: rgba(251, 191, 36, 0.6);
-            box-shadow: 0 0 8px rgba(251, 191, 36, 0.4), inset 0 0 4px rgba(251, 191, 36, 0.2);
-          }
-          50% { 
-            border-color: rgba(251, 191, 36, 1);
-            box-shadow: 0 0 15px rgba(251, 191, 36, 0.7), inset 0 0 8px rgba(251, 191, 36, 0.4);
-          }
-        }
-        
-        /* ============================================
-           PLACED PIECE AMBIENT EFFECTS
-           v7.9: Breathing edge glow - similar to NeonTitle effect
-           - Edge-only glow using box-shadow (no white flash inside)
-           - Uses piece's own color (cyan/orange/pink)
-           - Slow, random timing so pieces don't glow in sync
-           ============================================ */
-        
-        /* Cyan breathing glow (Player 1) */
-        .breathing-glow-cyan {
-          animation: breathing-cyan ease-in-out infinite alternate;
-        }
-        
-        @keyframes breathing-cyan {
-          0% { 
-            box-shadow: 
-              0 0 3px rgba(34, 211, 238, 0.2),
-              0 0 6px rgba(34, 211, 238, 0.1);
-          }
-          100% { 
-            box-shadow: 
-              0 0 8px rgba(34, 211, 238, 0.5),
-              0 0 16px rgba(34, 211, 238, 0.3),
-              0 0 24px rgba(34, 211, 238, 0.15);
-          }
-        }
-        
-        /* Orange breathing glow (AI / Player 2 in AI mode) */
-        .breathing-glow-orange {
-          animation: breathing-orange ease-in-out infinite alternate;
-        }
-        
-        @keyframes breathing-orange {
-          0% { 
-            box-shadow: 
-              0 0 3px rgba(251, 146, 60, 0.2),
-              0 0 6px rgba(251, 146, 60, 0.1);
-          }
-          100% { 
-            box-shadow: 
-              0 0 8px rgba(251, 146, 60, 0.5),
-              0 0 16px rgba(251, 146, 60, 0.3),
-              0 0 24px rgba(251, 146, 60, 0.15);
-          }
-        }
-        
-        /* Pink breathing glow (Player 2 in 2-player mode) */
-        .breathing-glow-pink {
-          animation: breathing-pink ease-in-out infinite alternate;
-        }
-        
-        @keyframes breathing-pink {
-          0% { 
-            box-shadow: 
-              0 0 3px rgba(236, 72, 153, 0.2),
-              0 0 6px rgba(236, 72, 153, 0.1);
-          }
-          100% { 
-            box-shadow: 
-              0 0 8px rgba(236, 72, 153, 0.5),
-              0 0 16px rgba(236, 72, 153, 0.3),
-              0 0 24px rgba(236, 72, 153, 0.15);
-          }
-        }
-        
-        /* ============================================
-           v7.10: TURN TRANSITION PULSE
-           Cyan glow ripple around board edge when it becomes your turn
-           ============================================ */
-        .turn-pulse-ring {
-          border: 2px solid rgba(34, 211, 238, 0.9);
-          box-shadow: 
-            0 0 20px rgba(34, 211, 238, 0.6),
-            inset 0 0 20px rgba(34, 211, 238, 0.1);
-          animation: turn-pulse-expand 0.6s ease-out forwards;
-        }
-        
-        @keyframes turn-pulse-expand {
-          0% {
-            opacity: 0.9;
-            transform: scale(1);
-            border-color: rgba(34, 211, 238, 0.9);
-            box-shadow: 
-              0 0 25px rgba(34, 211, 238, 0.8),
-              inset 0 0 15px rgba(34, 211, 238, 0.2);
-          }
-          60% {
-            opacity: 0.4;
-            transform: scale(1.04);
-            border-color: rgba(34, 211, 238, 0.5);
-          }
-          100% {
-            opacity: 0;
-            transform: scale(1.08);
-            border-color: rgba(34, 211, 238, 0);
-            box-shadow: 0 0 0 rgba(34, 211, 238, 0);
-          }
-        }
-        
-        .turn-pulse-glow {
-          border: 2px solid rgba(34, 211, 238, 0.6);
-          box-shadow: 
-            0 0 30px rgba(34, 211, 238, 0.5),
-            0 0 60px rgba(34, 211, 238, 0.2),
-            inset 0 0 25px rgba(34, 211, 238, 0.1);
-          animation: turn-pulse-fade 0.7s ease-out forwards;
-        }
-        
-        @keyframes turn-pulse-fade {
-          0%   { opacity: 1; }
-          70%  { opacity: 0.7; }
-          100% { opacity: 0; }
-        }
-        
-        /* ============================================
-           v7.10: CONFIRM FLASH
-           Bright burst on cells immediately when confirm tapped
-           ============================================ */
-        .confirm-flash-cell {
-          z-index: 10;
-          position: relative;
-        }
-        
-        .confirm-flash-overlay {
-          background: rgba(34, 211, 238, 0.6);
-          animation: confirm-flash-burst 0.4s ease-out forwards;
-        }
-        
-        @keyframes confirm-flash-burst {
-          0% {
-            opacity: 0;
-            background: rgba(34, 211, 238, 0.0);
-            box-shadow: none;
-          }
-          15% {
-            opacity: 1;
-            background: rgba(34, 211, 238, 0.75);
-            box-shadow: 
-              0 0 16px rgba(34, 211, 238, 0.9),
-              inset 0 0 12px rgba(255, 255, 255, 0.4);
-          }
-          100% {
-            opacity: 0;
-            background: rgba(34, 211, 238, 0.0);
-            box-shadow: 0 0 0 rgba(34, 211, 238, 0);
-          }
-        }
-        
-        /* v7.8: Allow scroll pass-through on board cells */
-        /* Cells without pending pieces allow scroll */
-        .game-cell {
-          touch-action: manipulation;
-        }
-        
-        /* Pending piece cells can be dragged */
-        .game-cell.pending {
-          touch-action: none;
-          cursor: grab;
-        }
-        
-        .game-cell.pending:active {
-          cursor: grabbing;
+        @keyframes error-pulse {
+          0%, 100% { box-shadow: 0 0 15px rgba(239,68,68,0.4); }
+          50% { box-shadow: 0 0 25px rgba(239,68,68,0.6); }
         }
       `}</style>
     </div>
   );
-});
+};
 
-GameBoard.displayName = 'GameBoard';
-
-export default GameBoard;
+export default GameScreen;
