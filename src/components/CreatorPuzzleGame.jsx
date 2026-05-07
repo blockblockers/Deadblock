@@ -1553,7 +1553,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',
                 textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 32px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 48px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}`
-              }}>CREATOR PUZZLE</div>
+              }}>#{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name.toUpperCase()}` : ''}</div>
               <WrongMoveFeedback visible={showWrongMove} />
               <GameBoard
                 ref={boardRef}
@@ -1582,7 +1582,7 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
                 fontFamily: 'system-ui, -apple-system, sans-serif',
                 color: '#fff',
                 textShadow: `0 0 4px #fff, 0 0 8px #fff, 0 0 16px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 32px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}, 0 0 48px ${puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'}`
-              }}>CREATOR PUZZLE</div>
+              }}>#{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name.toUpperCase()}` : ''}</div>
             </div>
 
             {/* Off-grid indicator */}
@@ -1662,14 +1662,8 @@ const CreatorPuzzleGame = ({ puzzle, onBack, onNextPuzzle }) => {
             />
           </div>
           
-          {/* Puzzle Info & Attempt Counter */}
-          <div className="flex items-center justify-center gap-2 mt-1 mb-1">
-            <span className="text-[10px] whitespace-nowrap truncate max-w-[50%]" style={{
-              color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'
-            }}>
-              #{puzzle.puzzle_number}{puzzle.name ? ` • ${puzzle.name}` : ''}
-            </span>
-            <span className="text-slate-600">•</span>
+          {/* Attempt Counter */}
+          <div className="flex items-center justify-center mt-1 mb-1">
             <span className="text-xs font-medium" style={{
               color: puzzle.difficulty === 'easy' ? '#4ade80' : puzzle.difficulty === 'hard' ? '#f87171' : puzzle.difficulty === 'expert' ? '#c084fc' : '#f59e0b'
             }}>
