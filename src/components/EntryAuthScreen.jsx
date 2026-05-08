@@ -1,4 +1,5 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.38: Hide Google sign-in on native (Capacitor) — OAuth Custom Tabs doesn't close reliably
 // v7.37: Added inline Privacy/Terms links (static footer hidden for users in index.html)
 // v7.36: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.35: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
@@ -24,6 +25,7 @@ import { soundManager } from '../utils/soundManager';
 import { useResponsiveLayout } from '../hooks/useResponsiveLayout';
 import AccountDeletionModal from './AccountDeletionModal';
 import { supabase } from '../utils/supabase';
+import { isNativePlatform } from '../utils/platformUtils';
 
 const EntryAuthScreen = ({ 
   onComplete, 
@@ -479,7 +481,9 @@ const EntryAuthScreen = ({
           border: 'border-amber-500/40',
         }
       },
-      {
+      // v7.38: Hide Google sign-in on native — Chrome Custom Tabs OAuth flow
+      // doesn't close reliably and can crash the Capacitor app on return.
+      ...(isNativePlatform() ? [] : [{
         id: 'google',
         name: 'GOOGLE',
         subtitle: 'Quick Sign-In',
@@ -493,7 +497,7 @@ const EntryAuthScreen = ({
           bg: 'bg-purple-900/30',
           border: 'border-purple-500/40',
         }
-      }
+      }])
     ];
 
     // Add offline option if not forced online and no invite

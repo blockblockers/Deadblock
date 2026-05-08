@@ -1,4 +1,9 @@
 // pushNotificationService.js - Client-side push notification management
+// v7.19: Native resubscribeIfNeeded is now a no-op. Auto-subscribing on native
+//        triggered PushNotifications.register() unprompted, which native-crashed
+//        the app on fresh installs when Firebase/Proguard wasn't perfectly
+//        configured (Java-side faults bypass JS try/catch). Users opt in
+//        explicitly via the NotificationPrompt banner or Settings.
 // v7.18: Added Capacitor native push support via @capacitor/push-notifications (FCM).
 //        Web Push path unchanged. Native FCM tokens saved with 'fcm:' prefix on endpoint.
 //        TODO: Supabase edge function needs FCM HTTP v1 API path for 'fcm:' endpoints.
@@ -511,16 +516,13 @@ class PushNotificationService {
   // v7.17: Silently re-subscribe if permission was previously granted but browser
   // subscription was lost (e.g., cache cleared without signing out). This prevents
   // the "zombie state" where DB has a stale endpoint and pushes silently fail.
+  // v7.19: Native is a no-op — see file header. Re-introduce a guarded native path
+  // only after Proguard keep rules are verified and FCM registration is proven safe.
   async resubscribeIfNeeded(userId) {
     if (!userId) return;
     
-    // Native: check if FCM token exists, re-register if not
-    if (this._isNative) {
-      if (!this._nativeFcmToken) {
-        try { await this.subscribe(userId); } catch {}
-      }
-      return;
-    }
+    // Native: never auto-subscribe (see v7.19 note in file header).
+    if (this._isNative) return;
     
     // Web: existing resubscribe logic
     if (!this.isSupported()) return;
