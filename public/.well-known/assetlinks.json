@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.deadblock.game",
+    "sha256_cert_fingerprints": ["F4:3F:20:B3:75:AC:DA:DB:2A:87:57:B4:B2:F5:C3:86:D3:6F:99:FF:90:A2:62:02:CC:F6:DC:C1:82:61:52:EA"]
+  }
+}]
