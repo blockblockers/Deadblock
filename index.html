@@ -909,8 +909,10 @@
       let appIsInstalled = false;
       const installPrompt = document.getElementById('install-prompt');
       
-      // Check if running as native app (Capacitor)
-      const isNativeApp = window.Capacitor?.isNativePlatform?.() || false;
+      // Check if running as native app (Capacitor) — bridge detection + user agent fallback
+      const isNativeApp = window.Capacitor?.isNativePlatform?.() || 
+                          navigator.userAgent.includes('DEADBLOCK-Android') || 
+                          navigator.userAgent.includes('DEADBLOCK-iOS') || false;
       
       // Check if already in standalone mode
       const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||

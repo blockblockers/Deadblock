@@ -251,22 +251,31 @@ export const AuthProvider = ({ children }) => {
     if (Capacitor.isNativePlatform()) {
       import('@capacitor/app').then(({ App }) => {
         appUrlListener = App.addListener('appUrlOpen', async ({ url }) => {
-          // OAuth callback deep link: https://deadblock.app/auth/callback#access_token=...
-          if (url?.includes('/auth/callback') && (url.includes('access_token=') || url.includes('code='))) {
-            setIsOAuthCallback(true);
-            try {
-              // Close the system browser
-              const { Browser } = await import('@capacitor/browser');
-              await Browser.close();
-            } catch {}
-            // Extract the hash/query and let Supabase handle it
-            const hashPart = url.split('#')[1];
-            if (hashPart) {
-              await supabase.auth.setSession({
-                access_token: new URLSearchParams(hashPart).get('access_token'),
-                refresh_token: new URLSearchParams(hashPart).get('refresh_token'),
-              });
+          try {
+            // OAuth callback deep link: https://deadblock.app/auth/callback#access_token=...
+            if (url?.includes('/auth/callback') && (url.includes('access_token=') || url.includes('code='))) {
+              setIsOAuthCallback(true);
+              try {
+                // Close the system browser
+                const { Browser } = await import('@capacitor/browser');
+                await Browser.close();
+              } catch {}
+              // Extract the hash/query and let Supabase handle it
+              const hashPart = url.split('#')[1];
+              if (hashPart) {
+                const params = new URLSearchParams(hashPart);
+                const accessToken = params.get('access_token');
+                const refreshToken = params.get('refresh_token');
+                if (accessToken && refreshToken) {
+                  await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                  });
+                }
+              }
             }
+          } catch (err) {
+            console.error('[AuthContext] Deep link handling error:', err);
           }
         });
       }).catch(() => {}); // @capacitor/app not installed — skip

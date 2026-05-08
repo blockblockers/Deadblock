@@ -21,7 +21,7 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
     captureInput: true,
     // TEMPORARY: Enable for debugging — set to false before Play Store release
-    webContentsDebuggingEnabled: true,
+    webContentsDebuggingEnabled: false,
     appendUserAgent: 'DEADBLOCK-Android',
     buildOptions: {
       keystorePath: undefined,

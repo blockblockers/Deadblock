@@ -1,7 +1,4 @@
 // App.jsx - Main application component
-// v7.27: Stale entry-auth flag cleared on cold-load when not authenticated and not offline —
-//        sends users back to EntryAuthScreen after external account deletion
-//        (delete-account.html, Supabase admin dashboard, or session invalidation)
 // v7.26: FIX - Push notification Accept button now actually accepts invite and navigates to game
 //   - NOTIFICATION_CLICK handler accepts invite via inviteService when inviteId present
 //   - URL param handler captures acceptInvite param for new-window opens
@@ -331,26 +328,18 @@ function AppContent({ onBgThemeChange }) {
   } = useGameState();
 
   // v7.19: Detect sign-out and reset entry auth state
-  // v7.27: Also catch cold-load with stale flag (account deleted via delete-account.html
-  //        or Supabase admin dashboard — wasAuthenticatedRef stays false across the deletion,
-  //        so the v7.19 condition alone never fires). Offline users are protected by !isOfflineMode.
   // NOTE: This must be AFTER useGameState() to avoid TDZ error with setGameMode
   useEffect(() => {
-    // Reset entry auth in two cases:
-    // 1. User WAS authenticated and now is NOT (actual sign-out / in-app deletion)
-    // 2. App loaded with stale flag but no session and not in offline mode
-    //    (account deleted externally while signed out)
-    const justSignedOut = wasAuthenticatedRef.current && !isAuthenticated && !authLoading;
-    const staleFlagOnLoad = hasPassedEntryAuth && !isAuthenticated && !authLoading && !isOfflineMode;
-
-    if (justSignedOut || staleFlagOnLoad) {
+    // Only reset entry auth if user WAS authenticated and now is NOT (actual sign-out)
+    // This prevents kicking offline users back to entry screen
+    if (wasAuthenticatedRef.current && !isAuthenticated && !authLoading) {
       setHasPassedEntryAuth(false);
       setIsOfflineMode(false);
       setGameMode(null);
       localStorage.removeItem('deadblock_entry_auth_passed');
     }
     wasAuthenticatedRef.current = isAuthenticated;
-  }, [isAuthenticated, authLoading, hasPassedEntryAuth, isOfflineMode, setGameMode]);
+  }, [isAuthenticated, authLoading, setGameMode]);
 
   // Update background theme based on current screen/gameMode
   useEffect(() => {
@@ -527,7 +516,7 @@ function AppContent({ onBgThemeChange }) {
   useEffect(() => {
     if (isAuthenticated && profile?.id && !authLoading) {
       const timer = setTimeout(() => {
-        pushNotificationService.resubscribeIfNeeded(profile.id);
+        pushNotificationService.resubscribeIfNeeded(profile.id).catch(() => {});
       }, 5000);
       return () => clearTimeout(timer);
     }
@@ -1258,7 +1247,7 @@ function AppContent({ onBgThemeChange }) {
 
   // Online Menu/Lobby — requires authentication and connectivity
   if (gameMode === 'online-menu') {
-    if (!isAuthenticated || isOfflineMode || !navigator.onLine) {
+    if (!isAuthenticated || isOfflineMode) {
       setGameMode(null);
       return null;
     }
@@ -1415,8 +1404,8 @@ function AppContent({ onBgThemeChange }) {
 
   // Render Creator Puzzle Selection Screen — requires authentication (puzzles stored in Supabase)
   if (gameMode === 'creator-puzzle-select') {
-    if (!isAuthenticated || isOfflineMode || !navigator.onLine) {
-      if (isOfflineMode && !isAuthenticated && navigator.onLine) {
+    if (!isAuthenticated || isOfflineMode) {
+      if (isOfflineMode && !isAuthenticated) {
         // User chose offline but has internet — show auth prompt, redirect to creator after login
         localStorage.setItem('deadblock_pending_online_intent', 'true');
         localStorage.setItem('deadblock_pending_auth_destination', 'creator-puzzle-select');
@@ -1488,11 +1477,10 @@ function AppContent({ onBgThemeChange }) {
 
   // Weekly Challenge Menu — requires authentication and connectivity
   if (gameMode === 'weekly-menu') {
-    if (!isAuthenticated || isOfflineMode || !navigator.onLine) {
+    if (!isAuthenticated || isOfflineMode) {
       setGameMode(null);
       return null;
     }
-    // console.log('Rendering: WeeklyChallengeMenu');
     return (
       <LazyWrapper message="Accessing weekly challenge…">
         <WeeklyChallengeMenu

@@ -702,8 +702,8 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-C_U6b-UZ.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-DS-0l544.css">
+  <script type="module" crossorigin src="/assets/index-CutATnB3.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-Cs2vUsBI.css">
 </head>
 <body>
   <!-- =====================================================
@@ -922,9 +922,16 @@
       // Check localStorage for previous installation
       const wasInstalled = localStorage.getItem('pwa-was-installed') === 'true';
       
-      if (isNativeApp || isStandalone || wasInstalled) {
+      if (isNativeApp || isStandalone) {
         pwaLog('Running as installed app or native - hiding prompt');
         appIsInstalled = true;
+      } else if (wasInstalled) {
+        // User previously installed but is now visiting in browser (uninstalled)
+        // Clear stale flags so install prompt can show again
+        pwaLog('Previously installed but not in standalone — app was uninstalled, clearing flags');
+        localStorage.removeItem('pwa-was-installed');
+        localStorage.removeItem('pwa-install-dismissed');
+        appIsInstalled = false;
       }
       
       // Check using getInstalledRelatedApps API
