@@ -1,4 +1,8 @@
 // EntryAuthScreen.jsx - Enhanced Entry Screen with Invite Support
+// v7.41: Version stamp bump (no functional change vs v7.40) — use this to verify
+//        which version is actually in src/ after your next build. Run:
+//        `head -3 src/components/EntryAuthScreen.jsx` and confirm "v7.41".
+// v7.40: Removed temporary v7.39 debug strip (native detection verified working).
 // v7.38: Hide Google sign-in on native (Capacitor) — OAuth Custom Tabs doesn't close reliably
 // v7.37: Added inline Privacy/Terms links (static footer hidden for users in index.html)
 // v7.36: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none

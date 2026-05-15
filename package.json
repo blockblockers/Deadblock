@@ -29,6 +29,7 @@
     "assets:generate": "npm run icons:generate && npm run splash:generate"
   },
   "dependencies": {
+    "@capacitor-firebase/messaging": "^6.3.1",
     "@capacitor/app": "^6.0.0",
     "@capacitor/browser": "^6.0.0",
     "@capacitor/core": "^6.2.1",
@@ -36,11 +37,11 @@
     "@capacitor/keyboard": "^6.0.0",
     "@capacitor/local-notifications": "^6.0.0",
     "@capacitor/preferences": "^6.0.0",
-    "@capacitor/push-notifications": "^6.0.0",
     "@capacitor/share": "^6.0.0",
     "@capacitor/splash-screen": "^6.0.0",
     "@capacitor/status-bar": "^6.0.0",
     "@supabase/supabase-js": "^2.87.0",
+    "firebase": "^10.9.0",
     "lucide-react": "^0.263.1",
     "overlayscrollbars": "^2.15.1",
     "overlayscrollbars-react": "^0.5.6",

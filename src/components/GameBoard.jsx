@@ -1,4 +1,13 @@
 // GameBoard.jsx - Main game board component
+// v7.13: iPhone grid compression / OOB ghost misalignment fix — added `flex-shrink-0` to
+//        outer wrapper so the board never gets squeezed when placed inside a flex row
+//        that exceeds available width. Previously on iPhone (393px viewport, ~377px
+//        available after px-2), the GameScreen flex-row (~400px content: side labels +
+//        board) would shrink only the GameBoard wrapper (only flex item without
+//        flex-shrink-0), forcing the inner `w-fit` grid to clamp below its natural
+//        content width. Fixed-pixel cells (w-9 = 36px) then overflowed their compressed
+//        grid columns, visually overlapping AND throwing off the OOB ghost-cell math
+//        (which assumes natural cell+gap spacing). One fix resolves both symptoms.
 // v7.12: Out-of-bounds ghost cell alignment fix — added 1px `border` offset to position math.
 //        Grid has `border` (1px) which with box-sizing: border-box lives INSIDE the grid's outer
 //        edge, so cells start at (border + padding) not just (padding). Missing this caused every
@@ -215,7 +224,7 @@ const GameBoard = forwardRef(({
   };
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative flex-shrink-0" ref={ref}>
       {/* Main board grid */}
       <div 
         className="grid grid-cols-8 gap-0.5 p-1.5 sm:p-2 rounded-lg bg-slate-800/80 border border-slate-700/50 w-fit mx-auto"

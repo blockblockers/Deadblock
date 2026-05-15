@@ -1,4 +1,13 @@
 // Online Menu - Hub for online features
+// v7.60: NotificationPrompt now correctly fires on native Capacitor. The previous
+//        SW-based subscription check (pushManager.getSubscription) is Web-Push-only
+//        — on native it returned null regardless of FCM state, but a stale Notification
+//        permission check above could short-circuit the whole flow. Replaced with
+//        pushNotificationService.hasActiveSubscription(userId) which handles both
+//        platforms: native checks in-memory FCM token + DB fallback; web keeps the
+//        existing pushManager + 3s timeout flow. Support gate also switched from
+//        notificationService.isPushSupported() (web-only API check) to
+//        pushNotificationService.isSupported() (returns true on native).
 // v7.59: Consolidated 4 Realtime channels into 1 (menu-updates) — reduces Supabase
 //        WebSocket connections from 4 to 1 per user on this screen.
 // v7.58: Replaced Profile button with Watch button (Eye icon, silver theme), reordered to
@@ -36,6 +45,7 @@ import { supabase } from '../utils/supabase';
 import { gameSyncService } from '../services/gameSync';
 import { inviteService } from '../services/inviteService';
 import { notificationService } from '../services/notificationService';
+import { pushNotificationService } from '../services/pushNotificationService';
 import { friendsService } from '../services/friendsService';
 import { ratingService } from '../services/ratingService';
 import { matchmakingService } from '../services/matchmaking';
@@ -516,6 +526,9 @@ const OnlineMenu = ({
   };
 
   // Initialize notifications
+  // v7.60: Use pushNotificationService for the support gate and subscription check
+  //   - isSupported() returns true on native (FCM) and feature-detects on web
+  //   - hasActiveSubscription(userId) handles native (FCM token / DB) AND web (SW)
   // v7.57: Fixed prompt not showing for new users:
   //   - localStorage keys are now user-specific (previous user's cooldown blocked new accounts)
   //   - Removed mobile-only restriction (desktop push works when browser is open)
@@ -532,8 +545,9 @@ const OnlineMenu = ({
         return;
       }
       
-      // Check if push is supported at all
-      if (!notificationService.isPushSupported() || !('serviceWorker' in navigator)) {
+      // v7.60: Cross-platform support gate. pushNotificationService.isSupported()
+      // returns true on native (always supports FCM) and feature-detects on web.
+      if (!pushNotificationService.isSupported()) {
         setShowNotificationPrompt(false);
         return;
       }
@@ -559,21 +573,9 @@ const OnlineMenu = ({
         }
       }
       
-      // Check actual push subscription status via service worker.
-      // v7.57: Added 3-second timeout — on first visit the SW may not be registered yet,
-      // causing navigator.serviceWorker.ready to hang indefinitely.
-      let isSubscribed = false;
-      try {
-        const swReady = await Promise.race([
-          navigator.serviceWorker.ready,
-          new Promise((_, reject) => setTimeout(() => reject(new Error('SW timeout')), 3000))
-        ]);
-        const subscription = await swReady.pushManager.getSubscription();
-        isSubscribed = subscription !== null;
-      } catch (err) {
-        // SW not ready or timed out — treat as not subscribed (show prompt)
-        isSubscribed = false;
-      }
+      // v7.60: Cross-platform subscription check — handles native FCM (memory + DB)
+      // and web Web Push (pushManager.getSubscription with 3s SW timeout) internally.
+      const isSubscribed = await pushNotificationService.hasActiveSubscription(profile.id);
       
       if (isSubscribed) {
         setShowNotificationPrompt(false);

@@ -68,7 +68,10 @@ const config: CapacitorConfig = {
 
     Haptics: {},
     
-    PushNotifications: {
+    // v7.20: Migrated from @capacitor/push-notifications to @capacitor-firebase/messaging
+    // because the official plugin's getPermissionStates() NPE'd on Android 16.
+    // presentationOptions is iOS-only — controls how foreground notifications display.
+    FirebaseMessaging: {
       presentationOptions: ['badge', 'sound', 'alert']
     }
   },

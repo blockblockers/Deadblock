@@ -1,4 +1,13 @@
 // Authentication Context with Local Profile Caching
+// v7.23: signOut and deleteAccount now unsubscribe the user from push notifications
+//        BEFORE clearing local state / signing out of Supabase. FCM tokens are
+//        device-scoped, not user-scoped — without this, the previous user's row
+//        stays in push_subscriptions with their endpoint, so (a) the next user
+//        gets a duplicate-key error when re-enabling push on the same device and
+//        (b) the previous user's notifications continue to be delivered to that
+//        device (now appearing for whoever is signed in). Combined with
+//        pushNotificationService v7.21's onConflict fix, this fully resolves
+//        multi-user-per-device push handoff.
 // v7.22: Enhanced native OAuth — uses @capacitor/browser for system browser OAuth flow,
 //        @capacitor/app deep link listener for callback, auto-closes browser on return
 // v7.21: Fix Google OAuth on Android — Capacitor WebView reports origin as https://localhost,
@@ -6,6 +15,7 @@
 import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../utils/supabase';
 import { Capacitor } from '@capacitor/core';
+import { pushNotificationService } from '../services/pushNotificationService';
 
 // Local storage keys for persistent auth
 const STORAGE_KEYS = {
@@ -921,6 +931,21 @@ export const AuthProvider = ({ children }) => {
     
     // console.log('[AuthContext] signOut: Starting sign out process');
     
+    // v7.23: Unsubscribe push notifications BEFORE clearing state. We must capture
+    // userId now because user is about to be set to null. unsubscribe() removes the
+    // FCM token from the device AND deletes the push_subscriptions row, so the next
+    // user signing in on this device can subscribe cleanly and the prior user's
+    // notifications stop being delivered here. Wrapped in try/catch so a push
+    // service failure never blocks the sign-out itself.
+    const userIdForUnsub = user?.id;
+    if (userIdForUnsub) {
+      try {
+        await pushNotificationService.unsubscribe(userIdForUnsub);
+      } catch (err) {
+        console.warn('[AuthContext] signOut: push unsubscribe failed (non-fatal):', err?.message);
+      }
+    }
+    
     // Clear state FIRST before calling Supabase (in case it times out)
     setUser(null);
     setProfile(null);
@@ -1004,6 +1029,19 @@ export const AuthProvider = ({ children }) => {
       // 2. Delete game history
       // 3. Delete friend relationships
       // 4. Delete the auth user
+      
+      // v7.23: Unsubscribe push BEFORE the RPC. The push_subscriptions table has
+      // an FK to auth.users via user_id; if the RPC doesn't clean it up first,
+      // user deletion fails with a foreign-key violation. Doing it here also
+      // pre-clears the FCM token so the device is in a clean state regardless of
+      // whether the RPC succeeds or falls back to signOut-only.
+      if (user?.id) {
+        try {
+          await pushNotificationService.unsubscribe(user.id);
+        } catch (err) {
+          console.warn('[AuthContext] deleteAccount: push unsubscribe failed (non-fatal):', err?.message);
+        }
+      }
       
       try {
         const { error: rpcError } = await supabase.rpc('delete_user_account');

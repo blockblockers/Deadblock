@@ -1,4 +1,28 @@
 // pushNotificationService.js - Client-side push notification management
+// v7.21: Two related fixes for multi-user-per-device push:
+//        1. saveSubscription / _saveNativeToken: onConflict changed from
+//           'user_id,endpoint' to 'endpoint' to match the actual DB constraint
+//           (push_subscriptions_endpoint_key — UNIQUE on endpoint column alone).
+//           Previously when user B tried to enable push on a device where user A
+//           had subscribed without unsubscribing, the upsert would fail with
+//           duplicate-key because PostgREST searched for (user_id=B, endpoint=X)
+//           and didn't find a match, then INSERTed and hit the single-column UNIQUE.
+//           Now the row's user_id is updated in place, transferring ownership.
+//        2. New hasActiveSubscription(userId) — cross-platform subscription check
+//           that returns true on native if either the in-memory FCM token exists
+//           OR a DB row with 'fcm:' endpoint exists for the user (handles app
+//           restart case where the in-memory token is null but DB row persists).
+//           On web, uses the existing pushManager.getSubscription() flow.
+//           Used by OnlineMenu to decide whether to show the NotificationPrompt
+//           banner on native (the previous Web-Push-only check always returned
+//           false on native, and on a fresh Capacitor WebView visit pushManager
+//           wasn't reliably populated).
+// v7.20: Migrated native path from @capacitor/push-notifications to
+//        @capacitor-firebase/messaging. The official plugin's getPermissionStates
+//        NPE'd on Android 16 (Samsung S24); the community Firebase plugin uses
+//        a different code path (Firebase APIs directly, no annotation reflection)
+//        and avoids the bug. Web Push path completely unchanged. FCM token
+//        storage format unchanged ('fcm:' prefix on endpoint).
 // v7.19: Native resubscribeIfNeeded is now a no-op. Auto-subscribing on native
 //        triggered PushNotifications.register() unprompted, which native-crashed
 //        the app on fresh installs when Firebase/Proguard wasn't perfectly
@@ -76,31 +100,27 @@ class PushNotificationService {
   async _doInit() {
     // console.log('[PushService] Initializing...');
     
-    // Native Capacitor: use @capacitor/push-notifications (FCM)
+    // Native Capacitor: use @capacitor-firebase/messaging (FCM)
     if (this._isNative) {
       try {
-        const { PushNotifications } = await import('@capacitor/push-notifications');
+        const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
         
         if (!this._nativeListenersAdded) {
-          // Listen for FCM token
-          PushNotifications.addListener('registration', (token) => {
-            this._nativeFcmToken = token.value;
-            // console.log('[PushService] FCM token received:', token.value.substring(0, 20) + '...');
+          // Listen for FCM token refresh — fires on initial token + every refresh
+          FirebaseMessaging.addListener('tokenReceived', (event) => {
+            this._nativeFcmToken = event.token;
+            // console.log('[PushService] FCM token received:', event.token.substring(0, 20) + '...');
           });
           
           // Listen for push received (foreground)
-          PushNotifications.addListener('pushNotificationReceived', (notification) => {
-            // console.log('[PushService] Native push received:', notification.title);
+          FirebaseMessaging.addListener('notificationReceived', (event) => {
+            // console.log('[PushService] Native push received:', event.notification?.title);
           });
           
           // Listen for push action (user tapped notification)
-          PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-            // console.log('[PushService] Native push action:', action.notification?.data);
-            // TODO: Navigate to the relevant game screen based on action.notification.data
-          });
-          
-          PushNotifications.addListener('registrationError', (error) => {
-            console.error('[PushService] FCM registration error:', error);
+          FirebaseMessaging.addListener('notificationActionPerformed', (event) => {
+            // console.log('[PushService] Native push action:', event.notification?.data);
+            // TODO: Navigate to the relevant game screen based on event.notification.data
           });
           
           this._nativeListenersAdded = true;
@@ -317,6 +337,54 @@ class PushNotificationService {
     }
   }
 
+  // v7.21: Cross-platform subscription check used by OnlineMenu to decide
+  // whether to show the NotificationPrompt banner. Returns true if the user
+  // has an active push subscription on EITHER platform path:
+  //   - Native: in-memory FCM token (current session) OR a 'fcm:%' DB row
+  //     for this user (handles app restart — in-memory token is null but
+  //     the row persists from the prior session).
+  //   - Web: existing pushManager.getSubscription() flow.
+  // Pre-v7.21 the OnlineMenu only checked pushManager, which is meaningless
+  // on native (no Web Push subscription is ever created there), so the banner
+  // would either always show or always hide depending on incidental WebView
+  // behavior. This method centralizes the platform decision.
+  async hasActiveSubscription(userId) {
+    if (!userId) return false;
+
+    // Native: in-memory token first, then DB lookup
+    if (this._isNative) {
+      if (this._nativeFcmToken) return true;
+      try {
+        const { data, error } = await supabase
+          .from('push_subscriptions')
+          .select('id')
+          .eq('user_id', userId)
+          .like('endpoint', 'fcm:%')
+          .limit(1);
+        if (error) return false;
+        return !!(data && data.length > 0);
+      } catch (e) {
+        console.warn('[PushService] hasActiveSubscription DB lookup failed:', e.message);
+        return false;
+      }
+    }
+
+    // Web: query SW pushManager (with timeout for fresh PWA visits where SW
+    // may not yet be activated)
+    try {
+      if (!('serviceWorker' in navigator)) return false;
+      const swReady = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SW timeout')), 3000))
+      ]);
+      if (!swReady?.pushManager) return false;
+      const subscription = await swReady.pushManager.getSubscription();
+      return subscription !== null;
+    } catch {
+      return false;
+    }
+  }
+
   async subscribe(userId) {
     // console.log('[PushService] Subscribe called for user:', userId);
     
@@ -324,28 +392,29 @@ class PushNotificationService {
       throw new Error('User ID required');
     }
 
-    // Native Capacitor: use FCM
+    // Native Capacitor: use FCM via @capacitor-firebase/messaging
     if (this._isNative) {
       try {
-        const { PushNotifications } = await import('@capacitor/push-notifications');
+        const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
         
-        // Request permission
-        const permResult = await PushNotifications.requestPermissions();
+        // Request permission (Android 13+ shows system dialog; iOS shows on first call)
+        const permResult = await FirebaseMessaging.requestPermissions();
         if (permResult.receive !== 'granted') {
           return { success: false, reason: 'permission_denied' };
         }
         
-        // Register for push — triggers 'registration' listener which sets _nativeFcmToken
-        await PushNotifications.register();
+        // Get FCM token directly — no more register+wait dance.
+        // The 'tokenReceived' listener also fires here on Android, but we don't
+        // need to depend on it because getToken() returns the token synchronously.
+        const tokenResult = await FirebaseMessaging.getToken();
         
-        // Wait briefly for the token callback
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        if (!this._nativeFcmToken) {
+        if (!tokenResult?.token) {
           throw new Error('FCM token not received');
         }
         
-        // Save FCM token to DB with 'fcm:' prefix so edge function knows it's FCM
+        this._nativeFcmToken = tokenResult.token;
+        
+        // Save FCM token to DB with 'fcm:' prefix so edge function routes via FCM
         await this._saveNativeToken(userId, this._nativeFcmToken);
         
         return { success: true, subscription: { type: 'fcm', token: this._nativeFcmToken } };
@@ -419,8 +488,10 @@ class PushNotificationService {
     // Native: remove FCM registration
     if (this._isNative) {
       try {
-        const { PushNotifications } = await import('@capacitor/push-notifications');
-        await PushNotifications.removeAllListeners();
+        const { FirebaseMessaging } = await import('@capacitor-firebase/messaging');
+        // deleteToken() explicitly invalidates the FCM registration on the Firebase side
+        try { await FirebaseMessaging.deleteToken(); } catch (_) { /* token may already be gone */ }
+        await FirebaseMessaging.removeAllListeners();
         this._nativeListenersAdded = false;
         this._nativeFcmToken = null;
         if (userId) await this.removeSubscription(userId);
@@ -462,6 +533,10 @@ class PushNotificationService {
     
     // console.log('[PushService] Saving subscription to database...');
     
+    // v7.21: onConflict is the actual DB constraint name target — must match
+    // the single-column UNIQUE(endpoint). Was 'user_id,endpoint' which caused
+    // duplicate-key errors when a different user re-subscribed with the same
+    // endpoint (same device, same FCM token, different account).
     const { error } = await supabase
       .from('push_subscriptions')
       .upsert({
@@ -471,7 +546,7 @@ class PushNotificationService {
         auth: subscriptionJson.keys.auth,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'user_id,endpoint'
+        onConflict: 'endpoint'
       });
 
     if (error) {
@@ -605,6 +680,7 @@ class PushNotificationService {
 
   // Save native FCM token to push_subscriptions table
   // Uses 'fcm:' prefix on endpoint so edge function can distinguish FCM from Web Push
+  // v7.21: onConflict changed from 'user_id,endpoint' to 'endpoint' — see header.
   async _saveNativeToken(userId, token) {
     const { error } = await supabase
       .from('push_subscriptions')
@@ -615,7 +691,7 @@ class PushNotificationService {
         auth: null,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: 'user_id,endpoint'
+        onConflict: 'endpoint'
       });
 
     if (error) {
