@@ -1,4 +1,13 @@
 // SettingsModal.jsx - Enhanced with TRUE Push Notifications support
+// v7.23: Push toggle now correctly reflects subscription state on native Capacitor.
+//        The initialization useEffect previously used navigator.serviceWorker.ready
+//        + pushManager.getSubscription() to determine the toggle state — Web-Push-only
+//        logic that returns null on native regardless of FCM state. Result: every
+//        modal open ran setPushSubscribed(false), making the toggle reset to OFF
+//        even when the user had an active FCM subscription. Replaced with
+//        pushNotificationService.hasActiveSubscription(userId), which on native
+//        checks _nativeFcmToken first then falls back to a DB lookup, and on web
+//        uses the existing pushManager flow internally. Mirrors OnlineMenu v7.60.
 // v7.22: Added "View Achievements" button in Account section with Achievements modal rendering
 // v7.21: Sign-out notification prompt — when push is subscribed, asks user to keep or
 //        turn off notifications before signing out. Preserves subscription by default.
@@ -154,13 +163,16 @@ const SettingsModal = ({ isOpen, onClose }) => {
         // Get permission status
         setPushPermission(pushNotificationService.getPermissionStatus());
         
-        // CRITICAL FIX: Check subscription directly from push manager
-        // This ensures we get the true state, not stale internal state
+        // v7.23: Cross-platform subscription check. Previously used
+        // navigator.serviceWorker.ready + pushManager.getSubscription() —
+        // Web-Push-only path that returns null on native Capacitor, causing
+        // the toggle to incorrectly show OFF every time the modal opens even
+        // when an FCM subscription is active. hasActiveSubscription handles
+        // both paths: native (in-memory FCM token then DB lookup) and web
+        // (pushManager.getSubscription with 3s SW timeout).
         try {
-          const registration = await navigator.serviceWorker.ready;
-          const currentSubscription = await registration.pushManager.getSubscription();
-          const isSubscribed = currentSubscription !== null;
-          console.log('[SettingsModal] Push subscription state:', isSubscribed, currentSubscription?.endpoint?.slice(-20));
+          const isSubscribed = await pushNotificationService.hasActiveSubscription(user?.id);
+          console.log('[SettingsModal] Push subscription state:', isSubscribed);
           setPushSubscribed(isSubscribed);
         } catch (err) {
           console.error('[SettingsModal] Error checking subscription:', err);

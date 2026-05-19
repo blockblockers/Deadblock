@@ -1,4 +1,15 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.27: Phone heat fix — timer setInterval reduced from 10ms (100 Hz) to 250ms (4 Hz).
+//        The visible timer only displays M:SS (lines 1407, 1425) and the unused
+//        TimerDisplay component (the only consumer of centisecond precision) is
+//        dead code, so 99% of the 100/sec state updates produced identical output
+//        and 99% of the renders were wasted CPU. Each tick re-rendered the full
+//        screen tree (GameBoard, PieceTray, timer panel) which kept the SoC at
+//        sustained high frequency and caused thermal buildup, especially with the
+//        AI worker also active. Timer accuracy is unaffected — final times come
+//        from Date.now() delta at stopTimer() moment, independent of interval.
+//        If a live centisecond display is ever wired up (e.g., wiring up TimerDisplay
+//        or showing hundredths during gameplay), bump back to ~33ms (30 Hz).
 // v7.26: Title/subtitle moved to vertical side labels flanking board to save vertical space
 // v7.25: Shrunk countdown timer (text-xl→text-sm, smaller padding/icons) for better title centering
 // v7.24: Removed panel box around game board for visual consistency; floating background shows through
@@ -1003,9 +1014,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Start the timer
   const startTimer = useCallback(() => {
     startTimeRef.current = Date.now();
+    // v7.27: 250ms (was 10ms). Display is M:SS only — 100Hz updates produced 99
+    // wasted re-renders per second, driving CPU heat. Timer accuracy unchanged
+    // (final time captured by Date.now() delta at stopTimer, not via interval).
     timerRef.current = setInterval(() => {
       setElapsedMs(accumulatedMsRef.current + (Date.now() - startTimeRef.current));
-    }, 10);
+    }, 250);
   }, []); // no dep — reads ref which is always current
   
   // Stop the timer

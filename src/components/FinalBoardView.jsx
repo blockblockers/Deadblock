@@ -1,4 +1,17 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.27: Mobile flicker fix — dropped redundant `100vh` term from board sizing min()
+//        formula and narrowed willChange from 'contents' to 'transform'.
+//        Symptom: grid + background flickering to black on Android with no user
+//        action. Root cause: `min(100vw, 100dvh, 100vh)` recalcs whenever 100dvh
+//        and 100vh diverge (system UI animations, edge-to-edge inset changes),
+//        causing the board to resize → aspect-square cells repaint → compositor
+//        occasionally drops a frame. The `100vh` term was mathematically redundant
+//        because `100dvh ≤ 100vh` always, so removing it preserves identical
+//        layout while eliminating one recalc trigger. `willChange: 'contents'`
+//        (overly broad layer-promotion hint) was contributing to GPU churn under
+//        heavy load (glow orbs + FloatingPieces + cyberpunk gradient); narrowing
+//        to 'transform' keeps the v7.25 layer-promotion benefit with less GPU
+//        management overhead.
 // v7.26: Player outlines — cyan inset border for P1, pink for P2 on all occupied cells
 // v7.25: Mobile flash fix — cell transition-all→transition-colors, board GPU layer promotion
 // v7.24 - Fixed spacing (justify-start instead of center), increased grid opacity (0.12), larger board (420px max)
@@ -451,14 +464,22 @@ const FinalBoardView = ({
               style={{
                 background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))',
                 boxShadow: '0 0 30px rgba(139, 92, 246, 0.15), inset 0 0 20px rgba(0,0,0,0.3)',
-                // v7.24: Increased board size for desktop, responsive sizing
-                width: 'min(calc(100vw - 32px), calc(100dvh - 280px), calc(100vh - 280px))',
-                height: 'min(calc(100vw - 32px), calc(100dvh - 280px), calc(100vh - 280px))',
+                // v7.27: Dropped redundant `calc(100vh - 280px)` term — 100dvh ≤ 100vh
+                // is always true, so the `100vh` term was dominated by `100dvh` whenever
+                // they differ and equal when they don't. Removing it eliminates one
+                // recalc trigger when the WebView's viewport units shift (Android system
+                // UI animations, edge-to-edge inset changes), which was causing board
+                // resize → cell repaint → compositor frame drops to black.
+                width: 'min(calc(100vw - 32px), calc(100dvh - 280px))',
+                height: 'min(calc(100vw - 32px), calc(100dvh - 280px))',
                 maxWidth: '420px',
                 maxHeight: '420px',
-                // v7.25: GPU layer promotion — prevents mobile flash during replay stepping
+                // v7.27: Narrowed willChange from 'contents' (too broad — hints any
+                // content change, leads to aggressive layer management on Android GPU)
+                // to 'transform'. Still promotes the board to its own composite layer
+                // for the v7.25 replay-stepping fix, with less compositor overhead.
                 contain: 'layout style',
-                willChange: 'contents',
+                willChange: 'transform',
               }}
             >
             {currentState.board.map((row, rowIdx) =>

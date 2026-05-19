@@ -702,8 +702,8 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-CLzw5-3S.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-Cs2vUsBI.css">
+  <script type="module" crossorigin src="/assets/index-BmcBoGLf.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-jafJ0b96.css">
 </head>
 <body>
   <!-- =====================================================
@@ -949,17 +949,30 @@
         return false;
       }
       
-      // Show manual install instructions for Safari/iOS
+      // Show manual install instructions for Safari/iOS/Android
+      // v7.39: Added Android branch — Chrome suppresses beforeinstallprompt after
+      //        prior install/uninstall of either the PWA or a related native app,
+      //        which is browser-level state we cannot reset from app code. Falling
+      //        back to manual instructions ensures Android users still see how to
+      //        install via the browser's overflow menu.
       function showManualInstructions() {
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/i.test(navigator.userAgent);
         const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
         
-        if (isIOS || isSafari) {
+        let instructionHtml = null;
+        if (isIOS) {
+          instructionHtml = 'Tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong>';
+        } else if (isAndroid) {
+          instructionHtml = 'Tap <strong>⋮</strong> menu in your browser, then <strong>"Install app"</strong> or <strong>"Add to Home Screen"</strong>';
+        } else if (isSafari) {
+          instructionHtml = 'Click the share button and select <strong>"Add to Dock"</strong>';
+        }
+        
+        if (instructionHtml) {
           const promptText = document.querySelector('.prompt-text');
           if (promptText) {
-            promptText.innerHTML = isIOS 
-              ? 'Tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong>'
-              : 'Click the share button and select <strong>"Add to Dock"</strong>';
+            promptText.innerHTML = instructionHtml;
           }
           const installBtn = document.getElementById('install-btn');
           if (installBtn) {
@@ -1004,6 +1017,35 @@
           }
         }, 3000);
       });
+      
+      // v7.39: Android fallback — if Chrome suppresses beforeinstallprompt because
+      // the PWA or related native app was previously installed (or any other
+      // engagement-heuristic reason), the event never fires and the user sees nothing.
+      // After 5s without an event, show manual install instructions on Android.
+      // Respects the existing 7-day dismiss cooldown so we don't nag.
+      if (!appIsInstalled && /Android/i.test(navigator.userAgent) && !isNativeApp) {
+        setTimeout(() => {
+          if (deferredPrompt) {
+            pwaLog('Android fallback: beforeinstallprompt did fire, no fallback needed');
+            return;
+          }
+          if (appIsInstalled) {
+            pwaLog('Android fallback: app marked installed, skipping');
+            return;
+          }
+          const dismissed = localStorage.getItem('pwa-install-dismissed');
+          if (dismissed) {
+            const dismissedTime = parseInt(dismissed, 10);
+            const sevenDays = 7 * 24 * 60 * 60 * 1000;
+            if (Date.now() - dismissedTime < sevenDays) {
+              pwaLog('Android fallback: dismissed recently, skipping');
+              return;
+            }
+          }
+          pwaLog('Android fallback: beforeinstallprompt did not fire — showing manual instructions');
+          showManualInstructions();
+        }, 5000);
+      }
       
       // Handle install button
       document.getElementById('install-btn')?.addEventListener('click', async () => {
