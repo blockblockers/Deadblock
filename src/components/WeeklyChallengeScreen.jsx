@@ -1,4 +1,19 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.29: Three changes:
+//   (a) Heat reduction (LiveTimerPanel): the panel still re-rendered 4× per
+//       second after v7.28's parent isolation, even though the M:SS display
+//       only changes once per second. setElapsedMs now returns the previous
+//       reference when the displayed second hasn't changed, so React skips
+//       ~75% of the panel's renders. Idle CPU drops correspondingly.
+//   (b) Heat reduction (LiveTimerPanel): dropped animate-pulse from the
+//       blur-md clock-icon backdrop. The pulse animated an opacity that drove
+//       continuous blur filter invalidation; static blur is much cheaper.
+//       The colored glow is still present, just no longer pulsing.
+//   (c) UX: AI blocking move is now shown on the board for 4 seconds before
+//       the LoseOverlay (Blocked modal) appears. Previously the modal covered
+//       the AI's move instantly. Timer stops immediately (no time charged for
+//       the visualization delay); blockedDelayTimeoutRef tracks the setTimeout
+//       so it can be canceled on unmount.
 // v7.28: Phone heat fix part 2 — the v7.27 fix reduced timer frequency from
 //        100Hz to 4Hz, but the elapsedMs state still lived at the TOP of this
 //        1500+ line component. Every state update (4×/sec) re-rendered the
@@ -165,7 +180,17 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       startTimeRef.current = Date.now();
       intervalRef.current = setInterval(() => {
-        setElapsedMs(accumulatedMsRef.current + (Date.now() - startTimeRef.current));
+        const elapsed = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
+        // v7.29: Skip re-render when the displayed second hasn't changed. The
+        // visible display is M:SS — updating elapsedMs more often than the
+        // second boundary produces identical output. Returning the previous
+        // reference makes React bail out of the re-render entirely.
+        setElapsedMs(prev => {
+          if (Math.floor(prev / 1000) === Math.floor(elapsed / 1000)) {
+            return prev;
+          }
+          return elapsed;
+        });
       }, 250);
     },
     stop: () => {
@@ -260,8 +285,11 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       <div className="relative flex items-center gap-1.5">
         {/* Animated clock icon with dynamic color */}
         <div className="relative">
+          {/* v7.29: Dropped animate-pulse — pulsing opacity on a blurred element
+              caused continuous blur filter invalidation. Static blur is much
+              cheaper on mobile GPU and the soft glow effect is preserved. */}
           <div 
-            className="absolute inset-0 rounded-full blur-md animate-pulse transition-colors duration-500" 
+            className="absolute inset-0 rounded-full blur-md transition-colors duration-500" 
             style={{ backgroundColor: timerGlow.replace('0.9', '0.3') }}
           />
           <Clock size={14} className={`relative ${iconColor} transition-colors duration-500`} />
@@ -524,6 +552,10 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // start/stop/pause/getElapsed/setElapsed. Replaces the previous timerRef +
   // startTimeRef + accumulatedMsRef trio that lived directly in the parent.
   const liveTimerRef = useRef(null);
+  // v7.29: Tracks the 4-second setTimeout that defers the LoseOverlay so the
+  // player can see the AI's blocking move before the modal covers it. Cleared
+  // on unmount to prevent setState-on-unmounted warnings.
+  const blockedDelayTimeoutRef = useRef(null);
   const gameOverHandledRef = useRef(false); // Prevents game-over effect re-firing when deps change (e.g. attemptCount increment)
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
@@ -1271,8 +1303,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         // elapsedMs state, which no longer exists since the timer state moved
         // into LiveTimerPanel).
         setFinalElapsedMs(pausedTime);
-        setGameLost(true);
-        soundManager.playGameOver();
+        // v7.29: Defer the LoseOverlay by 4 seconds so the AI's blocking move
+        // is visible on the board first. Timer is already stopped above (no
+        // time charged for the delay). Ref tracks the timeout so we can cancel
+        // on unmount.
+        if (blockedDelayTimeoutRef.current) clearTimeout(blockedDelayTimeoutRef.current);
+        blockedDelayTimeoutRef.current = setTimeout(() => {
+          setGameLost(true);
+          soundManager.playGameOver();
+          blockedDelayTimeoutRef.current = null;
+        }, 4000);
         // Use functional updater so saveTimerState receives the correct post-increment count
         setAttemptCount(prev => {
           const next = prev + 1;
@@ -1367,8 +1407,14 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Cleanup - v7.17: Save timer state on unmount
   // v7.28: LiveTimerPanel cleans up its own interval via its useEffect cleanup.
   // We only need to capture the elapsed for saveTimerState if mid-game.
+  // v7.29: Also cancel the pending Blocked-modal timeout if user navigates away
+  // during the 4-second AI-move visualization window.
   useEffect(() => {
     return () => {
+      if (blockedDelayTimeoutRef.current) {
+        clearTimeout(blockedDelayTimeoutRef.current);
+        blockedDelayTimeoutRef.current = null;
+      }
       if (challenge?.id && !gameComplete && liveTimerRef.current?.isRunning()) {
         const currentTime = liveTimerRef.current.getElapsed();
         saveTimerState(challenge.id, currentTime, attemptCount);
