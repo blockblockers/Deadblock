@@ -1,4 +1,16 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.30: Mobile flicker fix part 4 — diagnosis came from comparing against
+//        PuzzleSelect.jsx, which uses the exact same 3-orb pattern but doesn't
+//        flicker. The difference wasn't blur intensity, layer count, or
+//        willChange: it was the `animate-glow-pulse-N` continuous animations.
+//        A blurred element with a continuous transform/opacity animation
+//        forces sustained per-frame compositor work and aggressive layer
+//        eviction. A static blurred div renders once and is then cached.
+//        Reverted v7.29's radial-gradient-in-background approach (which
+//        helped but added 3 gradient layers to the static paint) and
+//        replaced it with 3 static blur-3xl orb divs that match PuzzleSelect's
+//        non-flickering pattern: no animation, no willChange, same blur-3xl
+//        and same color/position as the original orbs (pre-v7.28).
 // v7.29: Mobile flicker fix part 3 — replaced the 3 animated blurred glow orbs
 //        with 3 static radial gradients painted directly into the background CSS.
 //        Diagnosis: v7.28's blur-xl + willChange:transform actually made flicker
@@ -352,17 +364,11 @@ const FinalBoardView = ({
     <div 
       className="fixed inset-0 z-[60] flex flex-col overflow-hidden"
       style={{
-        // v7.29: 3 static radial gradients layered into the background replace the
-        // previous 3 animated blurred orb divs. Same colors (purple/cyan/pink) at
-        // the same approximate positions (top-right, bottom-left, top-third-left),
-        // but painted into the parent's single background layer instead of being
-        // separate animated DOM elements with blur filters. Eliminates the
-        // compositor layer count problem that was driving full-screen flicker on
-        // Android WebView.
+        // v7.30: Reverted to the v7.24 background. The v7.29 attempt to bake
+        // the orb glows into this `background` as 3 radial-gradients helped
+        // but wasn't the right fix; static orb divs (below) match the
+        // PuzzleSelect pattern that doesn't flicker.
         background: `
-          radial-gradient(circle at 85% 12%, rgba(168, 85, 247, 0.40) 0%, transparent 30%),
-          radial-gradient(circle at 12% 78%, rgba(34, 211, 238, 0.35) 0%, transparent 28%),
-          radial-gradient(circle at 30% 35%, rgba(236, 72, 153, 0.30) 0%, transparent 24%),
           linear-gradient(to bottom, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.95)),
           repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px),
           repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px)
@@ -373,9 +379,16 @@ const FinalBoardView = ({
       {/* v7.22: Floating pentomino pieces - immediate start, no delay for instant animation */}
       <FloatingPieces theme="purple" immediateStart={true} maxDelay={0} />
       
-      {/* v7.29: The 3 animated blurred glow orb divs that were here have been
-          replaced by the radial gradients in the parent's background CSS above.
-          See v7.29 changelog at top of file for the diagnosis. */}
+      {/* v7.30: Static blurred orbs — matches PuzzleSelect.jsx (which doesn't
+          flicker on the same WebView). NO `animate-glow-pulse-N` classes (the
+          continuous animation was the actual culprit, not blur intensity or
+          layer count), NO `willChange: transform` (let the browser decide
+          layer promotion; for truly static blurred divs the browser typically
+          paints once and caches). Colors, positions, blur radius, and sizes
+          match the original pre-v7.28 orbs. */}
+      <div className="fixed top-10 right-10 w-64 h-64 bg-purple-500/40 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-20 left-10 w-56 h-56 bg-cyan-500/35 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed top-1/3 left-1/4 w-48 h-48 bg-pink-500/30 rounded-full blur-3xl pointer-events-none" />
       
       {/* v7.18: Extra padding at top for iPhone notch/dynamic island */}
       <div 

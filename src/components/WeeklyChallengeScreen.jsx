@@ -1,4 +1,46 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.31: Root cause for both the "clock stays at 0:00 on first attempt" bug
+//        and the "modal appears immediately after AI blocks" bug — the
+//        check-puzzle-completion useEffect was firing during initial puzzle
+//        load with a transient `gameOver=true, winner=2` (likely from
+//        useGameState's reducer briefly producing that state during loadPuzzle
+//        before its internal allowed-pieces list is populated). That fired the
+//        loss branch immediately:
+//          - pauseTimer() cleared the interval that auto-start had just set up
+//            (→ clock stays at 0:00 for the whole "first attempt")
+//          - setTimeout(setGameLost, 4000) was scheduled
+//          - Four seconds later the LoseOverlay appeared even though the user
+//            hadn't actually played a move
+//        On retry, useGameState was already settled, so no spurious game-over,
+//        so the timer worked.
+//        Fix: added `haveSeenGameNotOverRef` that flips to true only once we've
+//        observed gameStarted=true AND gameOver=false in the same render. The
+//        check-completion effect now guards on this ref — it ignores the
+//        transient initial-load game-over and only processes legitimate
+//        post-play game-over transitions. Also added a safety guard inside
+//        LiveTimerPanel.start() that bails out if the interval is already
+//        running (prevents accidental restarts from resetting startTimeRef
+//        mid-tick).
+// v7.30: Two fixes:
+//   (a) Bug fix: v7.29's skip-render optimization caused the clock to appear
+//       frozen at "0:00" on attempts that ended within the first second. The
+//       comparison Math.floor(prev/1000) === Math.floor(elapsed/1000) caused
+//       every tick during the first second to bail (returning prev unchanged),
+//       so React never re-rendered and state stayed at 0. On retry the
+//       accumulated time was non-zero, so the first tick after retry crossed
+//       a second boundary and the display advanced, giving the impression
+//       that "the clock works on the second attempt but not the first."
+//       Fix: switched to a 1000ms (1 Hz) setInterval and dropped the skip
+//       logic entirely. Each tick advances elapsed by ~1000ms, guaranteeing a
+//       real state change and a render. Same effective render rate as v7.29
+//       (1 render/sec) but without the bail-out bug. Also added a defensive
+//       setElapsedMs(accumulatedMsRef.current) at start() time so the state
+//       is always in sync with the canonical accumulated value before ticking.
+//   (b) Heat reduction: memoized the timer panel's style objects (boxShadow,
+//       textShadow, scanline gradient, etc.) so they're only rebuilt when the
+//       color tier changes (every 30s/60s/120s/180s), not on every panel
+//       render. Cumulatively this is the cheap-but-real allocation overhead
+//       that was left over from v7.29.
 // v7.29: Three changes:
 //   (a) Heat reduction (LiveTimerPanel): the panel still re-rendered 4× per
 //       second after v7.28's parent isolation, even though the M:SS display
@@ -176,22 +218,26 @@ const LiveTimerPanel = forwardRef((_, ref) => {
 
   useImperativeHandle(ref, () => ({
     start: () => {
-      // Idempotent: clear any existing interval before starting
-      if (intervalRef.current) clearInterval(intervalRef.current);
+      // v7.31: Safety guard — if interval is already running, don't reset.
+      // Without this, a stray repeat call to start() (e.g. from a re-fired
+      // useEffect) would reset startTimeRef, dropping the partial time
+      // accumulated since the last tick.
+      if (intervalRef.current !== null) return;
       startTimeRef.current = Date.now();
+      // v7.30: Defensive sync — commit the canonical accumulated value into
+      // display state at start. If state already matches (the common case),
+      // React bails out cheaply; if it doesn't (e.g. after a restore from
+      // localStorage that ran via setTimeout after start), the display
+      // catches up immediately rather than waiting for the first tick.
+      const current = accumulatedMsRef.current;
+      setElapsedMs(prev => prev !== current ? current : prev);
+      // v7.30: 1 Hz interval, no skip-render logic. The displayed M:SS only
+      // changes once per second, so this matches the visible granularity.
+      // Each tick advances elapsed by ~1000ms, guaranteeing a real state
+      // change and a render — no risk of bailing out the way v7.29 did.
       intervalRef.current = setInterval(() => {
-        const elapsed = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
-        // v7.29: Skip re-render when the displayed second hasn't changed. The
-        // visible display is M:SS — updating elapsedMs more often than the
-        // second boundary produces identical output. Returning the previous
-        // reference makes React bail out of the re-render entirely.
-        setElapsedMs(prev => {
-          if (Math.floor(prev / 1000) === Math.floor(elapsed / 1000)) {
-            return prev;
-          }
-          return elapsed;
-        });
-      }, 250);
+        setElapsedMs(accumulatedMsRef.current + (Date.now() - startTimeRef.current));
+      }, 1000);
     },
     stop: () => {
       if (intervalRef.current) {
@@ -259,28 +305,46 @@ const LiveTimerPanel = forwardRef((_, ref) => {
 
   const { timerColor, timerGlow, borderColor, bgGradient, iconColor } = colors;
 
+  // v7.30: Memoized style objects so we don't allocate new ones on every panel
+  // render. These only depend on the color-tier outputs (timerColor, timerGlow)
+  // which are themselves memoized on elapsedMs and change only 4 times per game
+  // (at the 30s / 60s / 120s / 180s tier boundaries). Cumulatively reduces
+  // per-render allocation pressure during the once-per-second ticks.
+  const containerStyle = useMemo(() => ({
+    boxShadow: `0 0 25px ${timerGlow.replace('0.9', '0.35')}, inset 0 0 20px ${timerGlow.replace('0.9', '0.15')}, 0 4px 15px rgba(0,0,0,0.4)`
+  }), [timerGlow]);
+  const scanlineStyle = useMemo(() => ({
+    background: `linear-gradient(0deg, transparent 50%, ${timerGlow.replace('0.9', '0.1')} 50%)`,
+    backgroundSize: '100% 4px',
+    animation: 'scanline 8s linear infinite'
+  }), [timerGlow]);
+  const cornerStyle = useMemo(() => ({ borderColor: timerColor + '99' }), [timerColor]);
+  const clockGlowStyle = useMemo(() => ({ backgroundColor: timerGlow.replace('0.9', '0.3') }), [timerGlow]);
+  const digitStyle = useMemo(() => ({
+    color: timerColor,
+    textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}`
+  }), [timerColor, timerGlow]);
+  const colonStyle = useMemo(() => ({
+    color: timerColor,
+    textShadow: `0 0 8px ${timerGlow.replace('0.9', '0.8')}`
+  }), [timerColor, timerGlow]);
+
   return (
     <div 
       className={`relative px-2.5 py-1.5 bg-gradient-to-br ${bgGradient} rounded-xl border ${borderColor} overflow-hidden transition-all duration-500`}
-      style={{ 
-        boxShadow: `0 0 25px ${timerGlow.replace('0.9', '0.35')}, inset 0 0 20px ${timerGlow.replace('0.9', '0.15')}, 0 4px 15px rgba(0,0,0,0.4)` 
-      }}
+      style={containerStyle}
     >
       {/* Animated scan line effect */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-30"
-        style={{
-          background: `linear-gradient(0deg, transparent 50%, ${timerGlow.replace('0.9', '0.1')} 50%)`,
-          backgroundSize: '100% 4px',
-          animation: 'scanline 8s linear infinite'
-        }}
+        style={scanlineStyle}
       />
       
       {/* Corner accents with dynamic color */}
-      <div className="absolute top-0 left-0 w-1.5 h-1.5 border-l-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
-      <div className="absolute top-0 right-0 w-1.5 h-1.5 border-r-2 border-t-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
-      <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-l-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
-      <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-r-2 border-b-2 transition-colors duration-500" style={{ borderColor: timerColor + '99' }} />
+      <div className="absolute top-0 left-0 w-1.5 h-1.5 border-l-2 border-t-2 transition-colors duration-500" style={cornerStyle} />
+      <div className="absolute top-0 right-0 w-1.5 h-1.5 border-r-2 border-t-2 transition-colors duration-500" style={cornerStyle} />
+      <div className="absolute bottom-0 left-0 w-1.5 h-1.5 border-l-2 border-b-2 transition-colors duration-500" style={cornerStyle} />
+      <div className="absolute bottom-0 right-0 w-1.5 h-1.5 border-r-2 border-b-2 transition-colors duration-500" style={cornerStyle} />
       
       <div className="relative flex items-center gap-1.5">
         {/* Animated clock icon with dynamic color */}
@@ -290,7 +354,7 @@ const LiveTimerPanel = forwardRef((_, ref) => {
               cheaper on mobile GPU and the soft glow effect is preserved. */}
           <div 
             className="absolute inset-0 rounded-full blur-md transition-colors duration-500" 
-            style={{ backgroundColor: timerGlow.replace('0.9', '0.3') }}
+            style={clockGlowStyle}
           />
           <Clock size={14} className={`relative ${iconColor} transition-colors duration-500`} />
           {elapsedMs > 0 && (
@@ -302,28 +366,19 @@ const LiveTimerPanel = forwardRef((_, ref) => {
         <div className="flex items-baseline gap-0.5">
           <span 
             className="text-sm font-mono font-black tracking-tight tabular-nums transition-all duration-500"
-            style={{ 
-              color: timerColor,
-              textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}`
-            }}
+            style={digitStyle}
           >
             {Math.floor(elapsedMs / 60000)}
           </span>
           <span 
             className="text-sm font-mono font-black animate-pulse transition-colors duration-500"
-            style={{ 
-              color: timerColor,
-              textShadow: `0 0 8px ${timerGlow.replace('0.9', '0.8')}`
-            }}
+            style={colonStyle}
           >
             :
           </span>
           <span 
             className="text-sm font-mono font-black tracking-tight tabular-nums transition-all duration-500"
-            style={{ 
-              color: timerColor,
-              textShadow: `0 0 12px ${timerGlow}, 0 0 25px ${timerGlow.replace('0.9', '0.5')}`
-            }}
+            style={digitStyle}
           >
             {String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2, '0')}
           </span>
@@ -556,6 +611,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // player can see the AI's blocking move before the modal covers it. Cleared
   // on unmount to prevent setState-on-unmounted warnings.
   const blockedDelayTimeoutRef = useRef(null);
+  // v7.31: Filters out the transient gameOver=true that useGameState produces
+  // during initial loadPuzzle. Flips to true only after we've observed
+  // gameStarted=true AND gameOver=false together in a render — only then is
+  // any subsequent gameOver transition treated as a legitimate end-of-game.
+  const haveSeenGameNotOverRef = useRef(false);
   const gameOverHandledRef = useRef(false); // Prevents game-over effect re-firing when deps change (e.g. attemptCount increment)
   const boardRef = useRef(null);
   const boardBoundsRef = useRef(null);
@@ -1245,6 +1305,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Auto-start the game when puzzle is loaded
   useEffect(() => {
     if (puzzle && !loading && !loadError && !gameStarted && loadPuzzle) {
+      // v7.31: Reset the filter so a transient gameOver=true during loadPuzzle
+      // is ignored. It flips back to true only when gameOver=false is observed.
+      haveSeenGameNotOverRef.current = false;
       loadPuzzle(puzzle);
       setGameStarted(true);
       startTimer();
@@ -1257,9 +1320,21 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Reset guard when game is not over so next game-over is handled
     if (!gameOver) {
       gameOverHandledRef.current = false;
+      // v7.31: Mark that we've seen the post-load steady state. From now on,
+      // any gameOver=true transition is considered legitimate (user has had
+      // at least one render of actual gameplay).
+      if (gameStarted) {
+        haveSeenGameNotOverRef.current = true;
+      }
       return;
     }
     if (!gameStarted) return;
+    // v7.31: Filter out the spurious gameOver=true that useGameState produces
+    // during initial loadPuzzle. Without this, the loss branch fires before
+    // the player has done anything — pauseTimer kills the just-created
+    // interval (clock freezes at 0:00) and the 4-second setTimeout for
+    // setGameLost(true) makes the "Blocked" modal appear unbidden.
+    if (!haveSeenGameNotOverRef.current) return;
     // Guard: prevent re-firing when deps change mid-win/loss (stopTimer/pauseTimer recreation,
     // attemptCount increment, etc. would all cause this effect to re-run without this guard)
     if (gameOverHandledRef.current) return;
@@ -1352,6 +1427,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Retry after loss
   const handleRetryAfterLoss = useCallback(() => {
+    // v7.31: Reset the load-filter so any transient gameOver during the
+    // puzzle-reset sequence is ignored. Matches the auto-start handling.
+    haveSeenGameNotOverRef.current = false;
     gameOverHandledRef.current = false; // allow next game-over to be processed
     resetCurrentPuzzle();
     setGameLost(false);
@@ -1378,6 +1456,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // Re-seed the timer with the accumulated time so the next start() resumes from there
     liveTimerRef.current?.setElapsed(currentTime);
     gameOverHandledRef.current = false; // allow next game-over to be processed
+    // v7.31: Reset the load-filter so any transient gameOver during the
+    // puzzle-reset sequence is ignored on the next play.
+    haveSeenGameNotOverRef.current = false;
     
     setGameStarted(false);
   }, [resetCurrentPuzzle, attemptCount, challenge]);
