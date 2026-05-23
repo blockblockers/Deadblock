@@ -1,4 +1,18 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.34: Two changes:
+//   (a) Derive the AI's blocking-move cells from boardPieces + board when
+//       winner === 2 and pass them to GameBoard as the new v7.14
+//       `goldHighlightCells` prop. The board's most recently inserted AI
+//       piece (player 2) — its 5 cells — gets the FinalBoardView-style gold
+//       gradient + opacity-pulse + confetti treatment during the 4-second
+//       delay before the LoseOverlay appears, so the player can see WHICH
+//       move ended the game. Persists while the overlay is visible (gold
+//       remains visible behind the modal).
+//   (b) Stripped the [DB-Timer] diagnostic logs added in v7.32. Timer is
+//       now confirmed working (interval ticks visible in v7.33 logs); the
+//       logs were adding console noise. The watchdog, the split cleanup
+//       useEffect, and all corrective logic stay in place — just the
+//       console.log statements removed.
 // v7.33: Two bugs identified from the v7.32 diagnostic logs:
 //   (a) Modal-never-appears bug. The cleanup useEffect on lines tracking
 //       [challenge, attemptCount, gameComplete] was calling clearTimeout on
@@ -263,10 +277,8 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       // useEffect) would reset startTimeRef, dropping the partial time
       // accumulated since the last tick.
       if (intervalRef.current !== null) {
-        console.log('[DB-Timer] start() called BUT INTERVAL ALREADY RUNNING — skipped');
         return;
       }
-      console.log('[DB-Timer] start() called — creating interval. accumulatedMsRef=', accumulatedMsRef.current);
       startTimeRef.current = Date.now();
       // v7.30: Defensive sync — commit the canonical accumulated value into
       // display state at start. If state already matches (the common case),
@@ -281,12 +293,10 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       // change and a render — no risk of bailing out the way v7.29 did.
       intervalRef.current = setInterval(() => {
         const elapsed = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
-        console.log('[DB-Timer] interval tick — elapsed=', elapsed);
         setElapsedMs(elapsed);
       }, 1000);
     },
     stop: () => {
-      console.log('[DB-Timer] stop() called — intervalRef was', intervalRef.current !== null ? 'RUNNING' : 'null');
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -297,7 +307,6 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       return accumulatedMsRef.current + sessionTime;
     },
     pause: () => {
-      console.log('[DB-Timer] pause() called — intervalRef was', intervalRef.current !== null ? 'RUNNING' : 'null', 'startTimeRef=', startTimeRef.current);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -308,7 +317,6 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       const newAccumulated = accumulatedMsRef.current + sessionTime;
       accumulatedMsRef.current = newAccumulated;
       setElapsedMs(newAccumulated);
-      console.log('[DB-Timer] pause() result — accumulatedMsRef=', newAccumulated);
       return newAccumulated;
     },
     // Read current elapsed without affecting timer state
@@ -318,7 +326,6 @@ const LiveTimerPanel = forwardRef((_, ref) => {
     },
     // Restore elapsed (e.g., from localStorage on mount)
     setElapsed: (ms) => {
-      console.log('[DB-Timer] setElapsed() called with ms=', ms);
       accumulatedMsRef.current = ms;
       setElapsedMs(ms);
     },
@@ -721,6 +728,47 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setPendingMove,
     setFastAIMode,
   } = useGameState();
+  
+  // v7.34: Derive the AI's blocking-move cells when the puzzle is lost
+  // (winner === 2). Walks boardPieces in insertion order, groups by
+  // pieceType, filters to AI-owned cells via the board's player array,
+  // and returns the LAST AI piece group (5 cells). That's the AI's most
+  // recent placement — the blocking move that ended the game. Passed to
+  // GameBoard as `goldHighlightCells` for the FinalBoardView-style gold
+  // gradient + confetti treatment. Returns null if not lost or if no AI
+  // pieces are present (e.g. mid-game). Recomputes whenever boardPieces,
+  // board, or winner change — so a retry that clears the board (winner
+  // → null) drops the highlight without further intervention.
+  const aiBlockingCells = useMemo(() => {
+    if (winner !== 2 || !boardPieces || !board) return null;
+    const aiGroups = {}; // pieceType -> [{ row, col }]
+    if (Array.isArray(boardPieces)) {
+      for (let r = 0; r < boardPieces.length; r++) {
+        const row = boardPieces[r];
+        if (!Array.isArray(row)) continue;
+        for (let c = 0; c < row.length; c++) {
+          const pt = row[c];
+          if (!pt) continue;
+          if (!Array.isArray(board[r]) || board[r][c] !== 2) continue;
+          if (!aiGroups[pt]) aiGroups[pt] = [];
+          aiGroups[pt].push({ row: r, col: c });
+        }
+      }
+    } else {
+      Object.entries(boardPieces).forEach(([key, pt]) => {
+        if (!pt) return;
+        const [rStr, cStr] = key.split(',');
+        const r = Number(rStr), c = Number(cStr);
+        if (!Array.isArray(board[r]) || board[r][c] !== 2) return;
+        if (!aiGroups[pt]) aiGroups[pt] = [];
+        aiGroups[pt].push({ row: r, col: c });
+      });
+    }
+    const aiPieceTypes = Object.keys(aiGroups);
+    if (aiPieceTypes.length === 0) return null;
+    const lastAiType = aiPieceTypes[aiPieceTypes.length - 1];
+    return aiGroups[lastAiType];
+  }, [boardPieces, board, winner]);
   
   // Enable fast AI mode for weekly challenge (instant AI moves)
   useEffect(() => {
@@ -1354,9 +1402,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Auto-start the game when puzzle is loaded
   useEffect(() => {
-    console.log('[DB-Timer] auto-start useEffect — puzzle?', !!puzzle, 'loading:', loading, 'loadError:', loadError, 'gameStarted:', gameStarted, 'loadPuzzle?', !!loadPuzzle);
     if (puzzle && !loading && !loadError && !gameStarted && loadPuzzle) {
-      console.log('[DB-Timer] auto-start BODY firing — calling loadPuzzle + startTimer');
       // v7.31: Reset the filter so a transient gameOver=true during loadPuzzle
       // is ignored. It flips back to true only when gameOver=false is observed.
       haveSeenGameNotOverRef.current = false;
@@ -1369,7 +1415,6 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Check for puzzle completion
   useEffect(() => {
-    console.log('[DB-Timer] check-completion fired — gameOver:', gameOver, 'winner:', winner, 'gameStarted:', gameStarted, 'haveSeenNotOver:', haveSeenGameNotOverRef.current, 'gameOverHandled:', gameOverHandledRef.current);
     // Reset guard when game is not over so next game-over is handled
     if (!gameOver) {
       gameOverHandledRef.current = false;
@@ -1388,14 +1433,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // interval (clock freezes at 0:00) and the 4-second setTimeout for
     // setGameLost(true) makes the "Blocked" modal appear unbidden.
     if (!haveSeenGameNotOverRef.current) {
-      console.log('[DB-Timer] check-completion BLOCKED by haveSeenGameNotOverRef filter');
       return;
     }
     // Guard: prevent re-firing when deps change mid-win/loss (stopTimer/pauseTimer recreation,
     // attemptCount increment, etc. would all cause this effect to re-run without this guard)
     if (gameOverHandledRef.current) return;
     gameOverHandledRef.current = true;
-    console.log('[DB-Timer] check-completion PROCESSING game-over — winner:', winner);
 
     if (winner === 1) {
         const finalTime = stopTimer();
@@ -1586,11 +1629,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     const timeoutId = setTimeout(() => {
       const ref = liveTimerRef.current;
       if (!ref) {
-        console.log('[DB-Timer] watchdog — ref STILL null after macrotask defer');
         return;
       }
       if (!ref.isRunning()) {
-        console.log('[DB-Timer] watchdog — starting timer (interval was not running)');
         ref.start();
       }
     }, 0);
@@ -1743,6 +1784,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
                   2: 'bg-gradient-to-br from-rose-400 to-pink-500',
                 }}
                 confirmFlashCells={confirmFlashCells}
+                goldHighlightCells={aiBlockingCells}
               />
               <div className="text-xl font-black tracking-wider select-none flex-shrink-0" style={{
                 writingMode: 'vertical-rl',

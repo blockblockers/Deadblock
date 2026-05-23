@@ -1,4 +1,19 @@
 // GameBoard.jsx - Main game board component
+// v7.14: Added goldHighlightCells prop — array of {row, col} that paint with
+//        a FinalBoardView-style gold gradient + opacity-pulse + confetti
+//        treatment. Used by WeeklyChallengeScreen to highlight the AI's
+//        blocking move during the 4-second visualization window before the
+//        LoseOverlay appears, so the player can see WHICH move ended the
+//        game. Distinct from `lastMoveCells` which keeps its subtle amber
+//        border behaviour for online-play opponent-move highlighting.
+//        Uses gold-* keyframe and class names (gold-pulse-opacity,
+//        animate-gold-confetti-1..5) instead of FinalBoardView's
+//        last-move-pulse-opacity / animate-confetti-1..5 to prevent
+//        keyframe namespace collision if both components ever render
+//        within the same DOM cycle.
+//        Pattern (static box-shadow + opacity-animated overlay div) matches
+//        the FinalBoardView v7.31 fix that ended Capacitor Android WebView
+//        flicker — box-shadow is NEVER animated here, only opacity is.
 // v7.13: iPhone grid compression / OOB ghost misalignment fix — added `flex-shrink-0` to
 //        outer wrapper so the board never gets squeezed when placed inside a flex row
 //        that exceeds available width. Previously on iPhone (393px viewport, ~377px
@@ -58,6 +73,9 @@ const GameBoard = forwardRef(({
   dragFlipped = false,
   // v7.9: Last move highlighting for online play
   lastMoveCells = null, // Array of { row, col } for opponent's last placed piece
+  // v7.14: Gold-highlight cells (FinalBoardView-style treatment) for the
+  // AI's blocking move during the lose-modal delay window. See header note.
+  goldHighlightCells = null,
   // v7.10: Turn transition pulse — set true briefly when it becomes player's turn
   turnPulse = false,
   // v7.10: Confirm flash cells — array of { row, col } for immediate tap feedback
@@ -243,6 +261,9 @@ const GameBoard = forwardRef(({
             
             // v7.9: Check if this cell is part of opponent's last move
             const isLastMove = lastMoveCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
+            
+            // v7.14: Check if this cell is part of the AI-blocking gold-highlight set
+            const isGoldHighlight = goldHighlightCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
             
             // v7.10: Check if this cell is part of confirm flash
             const isConfirmFlash = confirmFlashCells?.some(p => p.row === rowIdx && p.col === colIdx) || false;
@@ -430,7 +451,8 @@ const GameBoard = forwardRef(({
                 )}
                 
                 {/* v7.9: Last move highlight - shows opponent's most recent move */}
-                {isLastMove && !isPending && !isAiAnimating && !isPlayerAnimating && (
+                {/* v7.14: Skip when isGoldHighlight so the gold treatment wins for AI blocking move */}
+                {isLastMove && !isGoldHighlight && !isPending && !isAiAnimating && !isPlayerAnimating && (
                   <div 
                     className="absolute inset-0 rounded-md pointer-events-none last-move-indicator"
                     style={{
@@ -438,6 +460,37 @@ const GameBoard = forwardRef(({
                       boxShadow: '0 0 12px rgba(251, 191, 36, 0.5), inset 0 0 6px rgba(251, 191, 36, 0.3)'
                     }}
                   />
+                )}
+                
+                {/* v7.14: Gold-highlight overlay — full FinalBoardView-style treatment for the
+                    AI's blocking move. Gradient bg + static box-shadow on the wrapper, then an
+                    opacity-animated child overlay carrying the pulse-peak shadow, plus 5 falling
+                    confetti particles. Static-shadow + animated-opacity (not animated-shadow)
+                    keeps this GPU-compositor-only and avoids the per-frame repaint cascade that
+                    caused the FinalBoardView flicker fixed in v7.31. */}
+                {isGoldHighlight && !isPending && !isAiAnimating && !isPlayerAnimating && (
+                  <div 
+                    className="absolute inset-0 rounded-md pointer-events-none overflow-hidden"
+                    style={{
+                      background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
+                      boxShadow: `0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3), inset 0 0 0 2.5px ${cellValue === 1 ? 'rgba(34,211,238,0.8)' : 'rgba(244,114,182,0.8)'}`,
+                    }}
+                  >
+                    {/* Opacity-animated overlay (peak-state shadow, faded in/out) */}
+                    <div
+                      className="absolute inset-0 rounded-md pointer-events-none"
+                      style={{
+                        boxShadow: '0 0 25px rgba(251, 191, 36, 0.9), inset 0 0 12px rgba(255, 255, 255, 0.5)',
+                        animation: 'gold-pulse-opacity 2s ease-in-out infinite',
+                      }}
+                    />
+                    {/* Gold confetti particles */}
+                    <div className="absolute w-1 h-1 bg-yellow-300 rounded-full animate-gold-confetti-1" style={{ left: '20%', top: '-10%' }} />
+                    <div className="absolute w-1.5 h-1 bg-amber-400 rounded-sm animate-gold-confetti-2" style={{ left: '60%', top: '-10%' }} />
+                    <div className="absolute w-1 h-1.5 bg-yellow-200 rounded-sm animate-gold-confetti-3" style={{ left: '40%', top: '-10%' }} />
+                    <div className="absolute w-1 h-1 bg-orange-400 rounded-full animate-gold-confetti-4" style={{ left: '80%', top: '-10%' }} />
+                    <div className="absolute w-1.5 h-1 bg-yellow-500 rounded-sm animate-gold-confetti-5" style={{ left: '10%', top: '-10%' }} />
+                  </div>
                 )}
                 
                 {/* v7.10: Confirm flash - bright burst on the placed cells immediately on confirm tap */}
@@ -912,6 +965,58 @@ const GameBoard = forwardRef(({
         .game-cell.pending:active {
           cursor: grabbing;
         }
+        
+        /* ============================================
+           v7.14: GOLD-HIGHLIGHT TREATMENT
+           Used to spotlight the AI's blocking move during the lose-modal
+           delay window. Matches FinalBoardView v7.31's last-move pattern:
+           static box-shadow + opacity-animated overlay (NOT animated
+           box-shadow), so the WebView compositor doesn't repaint the
+           layer every frame. Distinct gold-* class names so this can
+           coexist with FinalBoardView's last-move-pulse-opacity /
+           animate-confetti-1..5 without keyframe collision.
+           ============================================ */
+        @keyframes gold-pulse-opacity {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+        @keyframes gold-confetti-fall-1 {
+          0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+          20% { transform: translate(3px, 8px) rotate(90deg); opacity: 1; }
+          50% { transform: translate(-2px, 16px) rotate(180deg); opacity: 0.8; }
+          80% { transform: translate(2px, 24px) rotate(270deg); opacity: 0.4; }
+          100% { transform: translate(-1px, 32px) rotate(360deg); opacity: 0; }
+        }
+        @keyframes gold-confetti-fall-2 {
+          0% { transform: translate(0, 0) rotate(45deg); opacity: 1; }
+          25% { transform: translate(-4px, 10px) rotate(135deg); opacity: 1; }
+          50% { transform: translate(2px, 18px) rotate(225deg); opacity: 0.8; }
+          75% { transform: translate(-3px, 26px) rotate(315deg); opacity: 0.5; }
+          100% { transform: translate(0px, 34px) rotate(405deg); opacity: 0; }
+        }
+        @keyframes gold-confetti-fall-3 {
+          0% { transform: translate(0, 0) rotate(20deg); opacity: 1; }
+          30% { transform: translate(5px, 12px) rotate(120deg); opacity: 1; }
+          60% { transform: translate(-1px, 22px) rotate(240deg); opacity: 0.7; }
+          100% { transform: translate(3px, 36px) rotate(380deg); opacity: 0; }
+        }
+        @keyframes gold-confetti-fall-4 {
+          0% { transform: translate(0, 0) rotate(-10deg); opacity: 1; }
+          35% { transform: translate(-3px, 9px) rotate(80deg); opacity: 1; }
+          65% { transform: translate(4px, 20px) rotate(200deg); opacity: 0.6; }
+          100% { transform: translate(-2px, 30px) rotate(350deg); opacity: 0; }
+        }
+        @keyframes gold-confetti-fall-5 {
+          0% { transform: translate(0, 0) rotate(60deg); opacity: 1; }
+          20% { transform: translate(2px, 7px) rotate(140deg); opacity: 1; }
+          55% { transform: translate(-4px, 19px) rotate(260deg); opacity: 0.7; }
+          100% { transform: translate(1px, 33px) rotate(420deg); opacity: 0; }
+        }
+        .animate-gold-confetti-1 { animation: gold-confetti-fall-1 1.8s ease-out infinite; animation-delay: 0s; }
+        .animate-gold-confetti-2 { animation: gold-confetti-fall-2 2.1s ease-out infinite; animation-delay: 0.3s; }
+        .animate-gold-confetti-3 { animation: gold-confetti-fall-3 1.9s ease-out infinite; animation-delay: 0.1s; }
+        .animate-gold-confetti-4 { animation: gold-confetti-fall-4 2.3s ease-out infinite; animation-delay: 0.5s; }
+        .animate-gold-confetti-5 { animation: gold-confetti-fall-5 2.0s ease-out infinite; animation-delay: 0.2s; }
       `}</style>
     </div>
   );
