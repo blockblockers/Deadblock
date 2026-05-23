@@ -718,7 +718,7 @@ const FinalBoardView = ({
 
       {/* Animation styles */}
       <style>{`
-        /* v7.31: Old keyframe `last-move-pulse` animated box-shadow on each
+        /* v7.31: Old keyframe last-move-pulse animated box-shadow on each
            last-move cell (CPU-painted, per-frame repaint, layer thrash).
            Replaced with an opacity-only keyframe that drives a separate
            overlay div carrying a static peak-state box-shadow. Visual
