@@ -1,4 +1,29 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.33: Two bugs identified from the v7.32 diagnostic logs:
+//   (a) Modal-never-appears bug. The cleanup useEffect on lines tracking
+//       [challenge, attemptCount, gameComplete] was calling clearTimeout on
+//       blockedDelayTimeoutRef whenever ANY of those deps changed — not just
+//       on unmount. The loss branch increments attemptCount right after
+//       scheduling the 4-second setTimeout for setGameLost(true). That
+//       attemptCount change immediately fired the cleanup, which canceled
+//       the timeout. The modal never appeared.
+//       Fix: split into two effects. One handles the modal-delay timeout
+//       cleanup with `[]` deps (unmount only). The other handles the
+//       saveTimerState side effect with the existing deps.
+//   (b) Timer-never-starts bug. The v7.32 logs showed "auto-start BODY firing"
+//       but no subsequent "start() called" — meaning liveTimerRef.current
+//       was null at that exact moment. Later in the session pause() logs
+//       did fire (and showed intervalRef=null, confirming the interval was
+//       never created). React 18's documented effect order says
+//       useImperativeHandle on the child runs before useEffect on the parent,
+//       so the ref *should* be populated, but in this production build it
+//       wasn't at that exact tick.
+//       Fix: added a "watchdog" useEffect that re-evaluates whenever
+//       gameStarted/gameOver/gameComplete/gameLost change, with a
+//       setTimeout(0) trampoline to guarantee the LiveTimerPanel ref has
+//       finished its commit-phase attachment before we touch it. This
+//       effect calls start() when the game should be active and isn't.
+//       Idempotent thanks to the v7.31 already-running guard in start().
 // v7.32: Diagnostic build for the persistent "clock doesn't run on first
 //        attempt" bug. v7.31's haveSeenGameNotOverRef filter didn't fix it,
 //        which means the bug isn't an externally-observable transient
@@ -1520,20 +1545,57 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // Cleanup - v7.17: Save timer state on unmount
   // v7.28: LiveTimerPanel cleans up its own interval via its useEffect cleanup.
   // We only need to capture the elapsed for saveTimerState if mid-game.
-  // v7.29: Also cancel the pending Blocked-modal timeout if user navigates away
-  // during the 4-second AI-move visualization window.
+  // v7.33: Split the previous combined cleanup into two effects.
+  // Effect 1: cancel the blocked-modal setTimeout on UNMOUNT ONLY. Empty deps
+  // means the cleanup never re-fires during the component's lifetime. (The
+  // previous combined effect re-fired its cleanup whenever attemptCount
+  // changed — which is exactly what the loss branch does right after
+  // scheduling the modal timeout — silently canceling it.)
   useEffect(() => {
     return () => {
       if (blockedDelayTimeoutRef.current) {
         clearTimeout(blockedDelayTimeoutRef.current);
         blockedDelayTimeoutRef.current = null;
       }
+    };
+  }, []);
+
+  // Effect 2: save timer state when challenge/attemptCount/gameComplete deps
+  // shift OR on unmount. Same behavior as before for this branch.
+  useEffect(() => {
+    return () => {
       if (challenge?.id && !gameComplete && liveTimerRef.current?.isRunning()) {
         const currentTime = liveTimerRef.current.getElapsed();
         saveTimerState(challenge.id, currentTime, attemptCount);
       }
     };
   }, [challenge, attemptCount, gameComplete]);
+  
+  // v7.33: Timer-start watchdog. Diagnostic logs from v7.32 confirmed that
+  // calling startTimer() directly inside the auto-start useEffect resulted
+  // in liveTimerRef.current being null at that exact tick (despite React
+  // 18's documented effect ordering). This watchdog effect re-evaluates
+  // whenever the active-game state changes and starts the interval if it
+  // isn't already running. The setTimeout(0) trampoline pushes the start
+  // call to the next macrotask, guaranteeing all commit-phase ref
+  // attachments have completed. start() itself is idempotent (early-return
+  // if already running, from v7.31), so additional firings cause no harm.
+  useEffect(() => {
+    if (!gameStarted) return;
+    if (gameOver || gameComplete || gameLost) return;
+    const timeoutId = setTimeout(() => {
+      const ref = liveTimerRef.current;
+      if (!ref) {
+        console.log('[DB-Timer] watchdog — ref STILL null after macrotask defer');
+        return;
+      }
+      if (!ref.isRunning()) {
+        console.log('[DB-Timer] watchdog — starting timer (interval was not running)');
+        ref.start();
+      }
+    }, 0);
+    return () => clearTimeout(timeoutId);
+  }, [gameStarted, gameOver, gameComplete, gameLost]);
   
   // =========================================================================
   // RENDER
