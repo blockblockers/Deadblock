@@ -1,4 +1,19 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.32: Diagnostic build for the persistent "clock doesn't run on first
+//        attempt" bug. v7.31's haveSeenGameNotOverRef filter didn't fix it,
+//        which means the bug isn't an externally-observable transient
+//        gameOver=true during loadPuzzle. Something else is either preventing
+//        the interval from being created OR clearing it shortly after.
+//        Added console.log statements (prefix '[DB-Timer]') at every key
+//        event so the user can capture them via chrome://inspect with the
+//        device attached and share. The logs trace:
+//          - auto-start useEffect firing (with state values)
+//          - startTimer/stopTimer/pauseTimer being called
+//          - LiveTimerPanel start/pause/stop/setElapsed methods being invoked
+//          - each interval tick (with elapsed value)
+//          - check-completion effect entry (with gameOver/winner/refs)
+//        No behavior change vs v7.31 — only added logging. To remove the
+//        logs once we've diagnosed, search '[DB-Timer]' and delete those lines.
 // v7.31: Root cause for both the "clock stays at 0:00 on first attempt" bug
 //        and the "modal appears immediately after AI blocks" bug — the
 //        check-puzzle-completion useEffect was firing during initial puzzle
@@ -222,7 +237,11 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       // Without this, a stray repeat call to start() (e.g. from a re-fired
       // useEffect) would reset startTimeRef, dropping the partial time
       // accumulated since the last tick.
-      if (intervalRef.current !== null) return;
+      if (intervalRef.current !== null) {
+        console.log('[DB-Timer] start() called BUT INTERVAL ALREADY RUNNING — skipped');
+        return;
+      }
+      console.log('[DB-Timer] start() called — creating interval. accumulatedMsRef=', accumulatedMsRef.current);
       startTimeRef.current = Date.now();
       // v7.30: Defensive sync — commit the canonical accumulated value into
       // display state at start. If state already matches (the common case),
@@ -236,10 +255,13 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       // Each tick advances elapsed by ~1000ms, guaranteeing a real state
       // change and a render — no risk of bailing out the way v7.29 did.
       intervalRef.current = setInterval(() => {
-        setElapsedMs(accumulatedMsRef.current + (Date.now() - startTimeRef.current));
+        const elapsed = accumulatedMsRef.current + (Date.now() - startTimeRef.current);
+        console.log('[DB-Timer] interval tick — elapsed=', elapsed);
+        setElapsedMs(elapsed);
       }, 1000);
     },
     stop: () => {
+      console.log('[DB-Timer] stop() called — intervalRef was', intervalRef.current !== null ? 'RUNNING' : 'null');
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -250,6 +272,7 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       return accumulatedMsRef.current + sessionTime;
     },
     pause: () => {
+      console.log('[DB-Timer] pause() called — intervalRef was', intervalRef.current !== null ? 'RUNNING' : 'null', 'startTimeRef=', startTimeRef.current);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -260,6 +283,7 @@ const LiveTimerPanel = forwardRef((_, ref) => {
       const newAccumulated = accumulatedMsRef.current + sessionTime;
       accumulatedMsRef.current = newAccumulated;
       setElapsedMs(newAccumulated);
+      console.log('[DB-Timer] pause() result — accumulatedMsRef=', newAccumulated);
       return newAccumulated;
     },
     // Read current elapsed without affecting timer state
@@ -269,6 +293,7 @@ const LiveTimerPanel = forwardRef((_, ref) => {
     },
     // Restore elapsed (e.g., from localStorage on mount)
     setElapsed: (ms) => {
+      console.log('[DB-Timer] setElapsed() called with ms=', ms);
       accumulatedMsRef.current = ms;
       setElapsedMs(ms);
     },
@@ -1304,7 +1329,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Auto-start the game when puzzle is loaded
   useEffect(() => {
+    console.log('[DB-Timer] auto-start useEffect — puzzle?', !!puzzle, 'loading:', loading, 'loadError:', loadError, 'gameStarted:', gameStarted, 'loadPuzzle?', !!loadPuzzle);
     if (puzzle && !loading && !loadError && !gameStarted && loadPuzzle) {
+      console.log('[DB-Timer] auto-start BODY firing — calling loadPuzzle + startTimer');
       // v7.31: Reset the filter so a transient gameOver=true during loadPuzzle
       // is ignored. It flips back to true only when gameOver=false is observed.
       haveSeenGameNotOverRef.current = false;
@@ -1317,6 +1344,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   
   // Check for puzzle completion
   useEffect(() => {
+    console.log('[DB-Timer] check-completion fired — gameOver:', gameOver, 'winner:', winner, 'gameStarted:', gameStarted, 'haveSeenNotOver:', haveSeenGameNotOverRef.current, 'gameOverHandled:', gameOverHandledRef.current);
     // Reset guard when game is not over so next game-over is handled
     if (!gameOver) {
       gameOverHandledRef.current = false;
@@ -1334,11 +1362,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     // the player has done anything — pauseTimer kills the just-created
     // interval (clock freezes at 0:00) and the 4-second setTimeout for
     // setGameLost(true) makes the "Blocked" modal appear unbidden.
-    if (!haveSeenGameNotOverRef.current) return;
+    if (!haveSeenGameNotOverRef.current) {
+      console.log('[DB-Timer] check-completion BLOCKED by haveSeenGameNotOverRef filter');
+      return;
+    }
     // Guard: prevent re-firing when deps change mid-win/loss (stopTimer/pauseTimer recreation,
     // attemptCount increment, etc. would all cause this effect to re-run without this guard)
     if (gameOverHandledRef.current) return;
     gameOverHandledRef.current = true;
+    console.log('[DB-Timer] check-completion PROCESSING game-over — winner:', winner);
 
     if (winner === 1) {
         const finalTime = stopTimer();

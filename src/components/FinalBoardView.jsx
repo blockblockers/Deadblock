@@ -1,4 +1,21 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.31: Real flicker fix — the orb pattern was innocent all along (PuzzleSelect
+//        uses the same 3 blurred orbs without flickering). The actual cause was
+//        the `last-move-pulse` CSS keyframe animating `box-shadow` continuously
+//        on every cell of the last-placed pentomino. box-shadow is a CPU-painted
+//        property: animating it cannot be GPU-accelerated, forces a repaint
+//        every frame, and on a forced compositor layer (the board has
+//        willChange:transform from v7.27) causes layer-cache invalidation that
+//        manifests as full-screen gray/black flashes on Android WebView.
+//        Five simultaneous box-shadow animations on a layer-promoted surface
+//        is plenty to overrun the compositor every frame.
+//        Fix: split the pulse into two parts. The cell keeps a STATIC base
+//        box-shadow (matching the keyframe's 0%/100% state). A new overlay
+//        div is laid on top with a STATIC larger box-shadow (matching the
+//        keyframe's 50% peak state), and its OPACITY is animated 0→1→0 over
+//        2s. Opacity changes on a separate element are GPU-compositor-only:
+//        zero CPU paint cost, no layer invalidation. The visual result is
+//        identical — the glow still "pulses" in the same rhythm.
 // v7.30: Mobile flicker fix part 4 — diagnosis came from comparing against
 //        PuzzleSelect.jsx, which uses the exact same 3-orb pattern but doesn't
 //        flicker. The difference wasn't blur intensity, layer count, or
@@ -562,12 +579,31 @@ const FinalBoardView = ({
                     `}
                     style={isLastMove ? {
                       background: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d97706)',
-                      animation: 'last-move-pulse 2s ease-in-out infinite',
+                      // v7.31: Removed `animation: 'last-move-pulse 2s ...'` here.
+                      // The keyframe was animating box-shadow (CPU-painted), causing
+                      // per-frame repaints on each of the 5 last-move cells and
+                      // overrunning the compositor. The static box-shadow below
+                      // matches the keyframe's 0%/100% (resting) state; the pulse
+                      // peak is now overlaid as a separate div whose opacity is
+                      // animated instead.
                       boxShadow: `0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3), inset 0 0 0 2.5px ${cellValue === 1 ? 'rgba(34,211,238,0.8)' : 'rgba(244,114,182,0.8)'}`,
                     } : isOccupied ? {
                       boxShadow: `inset 0 0 0 2.5px ${cellValue === 1 ? 'rgba(34,211,238,0.6)' : 'rgba(244,114,182,0.6)'}`,
                     } : undefined}
                   >
+                    {/* v7.31: Opacity-animated overlay carries the pulse-peak box-shadow.
+                        Static shadow + animated opacity = GPU-compositor only, no CPU
+                        paint per frame. Pointer events off so it doesn't intercept clicks. */}
+                    {isLastMove && (
+                      <div
+                        className="absolute inset-0 rounded-md sm:rounded-lg pointer-events-none"
+                        style={{
+                          boxShadow: '0 0 25px rgba(251, 191, 36, 0.9), inset 0 0 12px rgba(255, 255, 255, 0.5)',
+                          animation: 'last-move-pulse-opacity 2s ease-in-out infinite',
+                        }}
+                      />
+                    )}
+                    
                     {/* Inner glow for occupied cells */}
                     {isOccupied && !isLastMove && (
                       <div className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/20 rounded-md sm:rounded-lg" />
@@ -682,9 +718,14 @@ const FinalBoardView = ({
 
       {/* Animation styles */}
       <style>{`
-        @keyframes last-move-pulse {
-          0%, 100% { box-shadow: 0 0 15px rgba(251, 191, 36, 0.6), inset 0 0 8px rgba(255, 255, 255, 0.3); }
-          50% { box-shadow: 0 0 25px rgba(251, 191, 36, 0.9), inset 0 0 12px rgba(255, 255, 255, 0.5); }
+        /* v7.31: Old keyframe `last-move-pulse` animated box-shadow on each
+           last-move cell (CPU-painted, per-frame repaint, layer thrash).
+           Replaced with an opacity-only keyframe that drives a separate
+           overlay div carrying a static peak-state box-shadow. Visual
+           result is identical; rendering cost drops to near-zero. */
+        @keyframes last-move-pulse-opacity {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
         }
         @keyframes glow-pulse-1 {
           0%, 100% { opacity: 0.4; transform: scale(1) translate(0, 0); }
