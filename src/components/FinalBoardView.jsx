@@ -1,4 +1,17 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.32: Capacitor flicker mitigation — `FloatingPieces count={0}` to remove
+//        the 8 background pentomino pieces and their ~16 continuous
+//        animations (one transform + one opacity-breathe per piece). The v7.31
+//        fix resolved the last-move-cell box-shadow keyframe issue on PWA,
+//        but the Capacitor Android WebView still flickers on the title and
+//        grid because total animation count remains high: 25 confetti +
+//        5 opacity-pulse overlays + 16 floating-piece animations + 3 large
+//        blur-3xl orb layers compete for GPU compositor cache. The cache
+//        evicts under pressure, the title's 5-layer text-shadow and grid
+//        cells' box-shadow get repainted from scratch, manifesting as
+//        random gray flashes. FloatingPieces is decorative-only on this
+//        screen (the board IS the focal content) — easiest GPU-load win.
+//        Reversible: change count to 4 or 8 if more ambient motion wanted.
 // v7.31: Real flicker fix — the orb pattern was innocent all along (PuzzleSelect
 //        uses the same 3 blurred orbs without flickering). The actual cause was
 //        the `last-move-pulse` CSS keyframe animating `box-shadow` continuously
@@ -393,8 +406,11 @@ const FinalBoardView = ({
         backgroundColor: '#0f172a',
       }}
     >
-      {/* v7.22: Floating pentomino pieces - immediate start, no delay for instant animation */}
-      <FloatingPieces theme="purple" immediateStart={true} maxDelay={0} />
+      {/* v7.32: Disabled FloatingPieces (count=0) to reduce Capacitor GPU
+          compositor pressure. Background motion was decorative-only here —
+          the focal content of FinalBoardView is the gold-highlighted final
+          board, not the floating pieces. Change count to 4–8 to restore. */}
+      <FloatingPieces theme="purple" count={0} immediateStart={true} maxDelay={0} />
       
       {/* v7.30: Static blurred orbs — matches PuzzleSelect.jsx (which doesn't
           flicker on the same WebView). NO `animate-glow-pulse-N` classes (the

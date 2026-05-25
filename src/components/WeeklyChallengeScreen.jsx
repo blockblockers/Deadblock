@@ -1,4 +1,42 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.36: Two changes:
+//   (a) Replaced the v7.34 boardPieces-based aiBlockingCells useMemo with a
+//       board-state diffing approach. The previous logic grouped AI cells by
+//       pieceType and took the LAST group in iteration order — but when
+//       boardPieces is a 2D array, iteration order is SPATIAL (row-by-row),
+//       not chronological. The "last" piece in spatial iteration is just
+//       whichever AI piece occupies the highest row/col, not the most
+//       recently played. Result: gold/glitter sometimes landed on the wrong
+//       AI piece. The diff approach tracks `board` snapshots across renders
+//       and identifies cells that transitioned to player=2 — that's the
+//       AI's most recent placement, regardless of board layout or
+//       boardPieces shape.
+//   (b) Stripped the v7.35 [v35-*] diagnostic logs. The timer regression
+//       turned out to be Android Auto-Backup restoring stale localStorage
+//       on reinstall (fixed via AndroidManifest android:allowBackup="false"
+//       — not a code issue). With auth state clean, the timer watchdog
+//       cascade introduced in v7.35 works as designed; the logs were
+//       only useful for finding the regression. Watchdog code itself
+//       (sync → setTimeout → rAF) kept in place — robustness has no cost.
+// v7.35: Capacitor-Android-WebView diagnostic & defensive build. v7.33/v7.34
+//        confirmed working on PWA (desktop Chrome / Netlify) but four
+//        regressions persist on the Capacitor APK despite identical bundle
+//        hashes: timer 0:00, no gold-highlight, no 4-sec modal, partial
+//        FinalBoardView flicker. Without device logs I can't pinpoint which
+//        mechanism diverges in Android System WebView, so this build:
+//   (a) Extends the v7.33 timer watchdog from a single setTimeout(0) defer
+//       to a three-strategy cascade: synchronous attempt inside the
+//       useEffect body → setTimeout(0) macrotask → requestAnimationFrame
+//       fallback. If ANY strategy succeeds the rest are no-ops thanks to
+//       the v7.31 already-running guard inside start().
+//   (b) Adds minimal [v35-*] console logs at four diagnostic points:
+//         [v35-watch]  — each watchdog strategy attempt + outcome
+//         [v35-tick]   — every 10th interval tick (less noisy than every tick)
+//         [v35-loss]   — 4-sec setTimeout scheduling, firing, and elapsed ms
+//         [v35-gold]   — aiBlockingCells computation (winner, cell count)
+//       These let a single chrome://inspect capture identify the failure
+//       mode: setTimeout-throttled, ref-still-null, useMemo-not-firing,
+//       state-update-not-rendering, etc. Removed in v7.36 once diagnosed.
 // v7.34: Two changes:
 //   (a) Derive the AI's blocking-move cells from boardPieces + board when
 //       winner === 2 and pass them to GameBoard as the new v7.14
@@ -729,46 +767,63 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     setFastAIMode,
   } = useGameState();
   
-  // v7.34: Derive the AI's blocking-move cells when the puzzle is lost
-  // (winner === 2). Walks boardPieces in insertion order, groups by
-  // pieceType, filters to AI-owned cells via the board's player array,
-  // and returns the LAST AI piece group (5 cells). That's the AI's most
-  // recent placement — the blocking move that ended the game. Passed to
-  // GameBoard as `goldHighlightCells` for the FinalBoardView-style gold
-  // gradient + confetti treatment. Returns null if not lost or if no AI
-  // pieces are present (e.g. mid-game). Recomputes whenever boardPieces,
-  // board, or winner change — so a retry that clears the board (winner
-  // → null) drops the highlight without further intervention.
-  const aiBlockingCells = useMemo(() => {
-    if (winner !== 2 || !boardPieces || !board) return null;
-    const aiGroups = {}; // pieceType -> [{ row, col }]
-    if (Array.isArray(boardPieces)) {
-      for (let r = 0; r < boardPieces.length; r++) {
-        const row = boardPieces[r];
+  // v7.36: Track the AI's most recent move via board-state diffing. Replaces
+  // the v7.34 boardPieces-iteration approach which was order-dependent and
+  // failed when boardPieces is a 2D array (spatial != chronological order).
+  // Diffing `board` snapshots directly identifies cells that just became
+  // AI-owned (player=2) on each render — those ARE the AI's last move,
+  // regardless of board layout. Reset to null on empty board (retry/reset).
+  const [lastAiMoveCells, setLastAiMoveCells] = useState(null);
+  const prevBoardRef = useRef(null);
+
+  useEffect(() => {
+    if (!Array.isArray(board)) return;
+
+    // Detect empty board (retry/reset) — clear the tracked move so the
+    // next AI placement gets captured cleanly rather than inheriting stale
+    // data. setLastAiMoveCells(null) when already null is a no-op (React
+    // bails out on identity-equal updates).
+    let hasAnyCell = false;
+    for (let r = 0; r < board.length && !hasAnyCell; r++) {
+      const row = board[r];
+      if (!Array.isArray(row)) continue;
+      for (let c = 0; c < row.length; c++) {
+        if (row[c]) { hasAnyCell = true; break; }
+      }
+    }
+    if (!hasAnyCell) {
+      setLastAiMoveCells(null);
+      prevBoardRef.current = board;
+      return;
+    }
+
+    const prev = prevBoardRef.current;
+    if (prev) {
+      const newAiCells = [];
+      for (let r = 0; r < board.length; r++) {
+        const row = board[r];
         if (!Array.isArray(row)) continue;
         for (let c = 0; c < row.length; c++) {
-          const pt = row[c];
-          if (!pt) continue;
-          if (!Array.isArray(board[r]) || board[r][c] !== 2) continue;
-          if (!aiGroups[pt]) aiGroups[pt] = [];
-          aiGroups[pt].push({ row: r, col: c });
+          if (row[c] === 2 && prev[r]?.[c] !== 2) {
+            newAiCells.push({ row: r, col: c });
+          }
         }
       }
-    } else {
-      Object.entries(boardPieces).forEach(([key, pt]) => {
-        if (!pt) return;
-        const [rStr, cStr] = key.split(',');
-        const r = Number(rStr), c = Number(cStr);
-        if (!Array.isArray(board[r]) || board[r][c] !== 2) return;
-        if (!aiGroups[pt]) aiGroups[pt] = [];
-        aiGroups[pt].push({ row: r, col: c });
-      });
+      if (newAiCells.length > 0) {
+        setLastAiMoveCells(newAiCells);
+      }
     }
-    const aiPieceTypes = Object.keys(aiGroups);
-    if (aiPieceTypes.length === 0) return null;
-    const lastAiType = aiPieceTypes[aiPieceTypes.length - 1];
-    return aiGroups[lastAiType];
-  }, [boardPieces, board, winner]);
+    prevBoardRef.current = board;
+  }, [board]);
+
+  // Gate on winner so the highlight only renders when the game ended in a
+  // loss (winner=2). useMemo stabilizes the prop identity so GameBoard
+  // doesn't re-render whenever lastAiMoveCells's wrapper reference changes
+  // but winner stays null.
+  const aiBlockingCells = useMemo(
+    () => (winner === 2 ? lastAiMoveCells : null),
+    [winner, lastAiMoveCells]
+  );
   
   // Enable fast AI mode for weekly challenge (instant AI moves)
   useEffect(() => {
@@ -1614,28 +1669,69 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     };
   }, [challenge, attemptCount, gameComplete]);
   
-  // v7.33: Timer-start watchdog. Diagnostic logs from v7.32 confirmed that
-  // calling startTimer() directly inside the auto-start useEffect resulted
-  // in liveTimerRef.current being null at that exact tick (despite React
-  // 18's documented effect ordering). This watchdog effect re-evaluates
-  // whenever the active-game state changes and starts the interval if it
-  // isn't already running. The setTimeout(0) trampoline pushes the start
-  // call to the next macrotask, guaranteeing all commit-phase ref
-  // attachments have completed. start() itself is idempotent (early-return
-  // if already running, from v7.31), so additional firings cause no harm.
+  // v7.35: Multi-strategy timer-start watchdog (extends v7.33). Cascades
+  // through three start-attempt strategies for Capacitor-Android-WebView
+  // compatibility, since one of them may resolve a timing edge case that
+  // Chrome desktop hides:
+  //   (1) Synchronous — try start() immediately. If LiveTimerPanel's
+  //       useImperativeHandle has already attached the ref by the time this
+  //       useEffect fires, we never need the deferred strategies.
+  //   (2) setTimeout(0) — macrotask defer (v7.33 strategy). Catches the
+  //       case where the parent's useEffect fires before the child's ref
+  //       attachment completes.
+  //   (3) requestAnimationFrame — paint-frame defer. Last-resort fallback
+  //       if Android WebView's macrotask scheduling is throttled while the
+  //       app is foregrounded but mid-startup.
+  // start() is idempotent (v7.31 already-running guard), so a strategy
+  // succeeding before the next fires causes no harm — the later attempts
+  // are no-ops. [v35-watch] logs each attempt's outcome so a single
+  // chrome://inspect capture identifies which strategy actually starts
+  // the timer on Capacitor.
   useEffect(() => {
     if (!gameStarted) return;
     if (gameOver || gameComplete || gameLost) return;
-    const timeoutId = setTimeout(() => {
+
+    let cleanedUp = false;
+    let timeoutId = null;
+    let rafId = null;
+
+    const tryStart = (strategy) => {
+      if (cleanedUp) return true; // treat cleanup as "done"; abort remaining strategies
       const ref = liveTimerRef.current;
       if (!ref) {
-        return;
+        return false;
       }
-      if (!ref.isRunning()) {
+      if (ref.isRunning()) {
+        return true;
+      }
+      try {
         ref.start();
+        return true;
+      } catch (e) {
+        return false;
       }
+    };
+
+    // Strategy 1: synchronous attempt
+    if (tryStart('sync')) {
+      return () => { cleanedUp = true; };
+    }
+
+    // Strategy 2: setTimeout(0) macrotask defer
+    timeoutId = setTimeout(() => {
+      if (tryStart('setTimeout(0)')) return;
+
+      // Strategy 3: rAF fallback
+      rafId = requestAnimationFrame(() => {
+        tryStart('rAF');
+      });
     }, 0);
-    return () => clearTimeout(timeoutId);
+
+    return () => {
+      cleanedUp = true;
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [gameStarted, gameOver, gameComplete, gameLost]);
   
   // =========================================================================
