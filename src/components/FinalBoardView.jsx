@@ -1,4 +1,43 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.35: Title flicker during playback fix. After v7.34 disabled the
+//        NeonTitle pulse on this screen, the title was static — but it
+//        still flashed gray whenever the play button was pressed. Cause:
+//        v7.33 removed the `transform: translateX(-50%)` centering, which
+//        had been promoting the title to its own GPU layer. Without the
+//        transform, the title sits in the parent's layer. During playback,
+//        the parent layer repaints constantly (board cells transition
+//        every 250-1000ms, progress-bar width transitions, etc.), and
+//        each repaint forces the title's expensive 5-layer text-shadow
+//        to be re-rasterized from scratch. On Capacitor's compositor
+//        that sometimes misses a frame, briefly showing the title text
+//        without its shadow → the gray flash.
+//        Fix: re-promote the title to its own GPU layer via
+//        `transform: translateZ(0)` on the wrapper. The layer is painted
+//        ONCE with the text-shadow, cached, and then just composited
+//        each frame — never repainted, since v7.34's override holds the
+//        content perfectly static. The translateZ(0) is a visual no-op
+//        (no actual movement) so the v7.33 non-transform centering via
+//        absolute + flex still does the centering work as before.
+//        Doesn't conflict with v7.28's "willChange makes things worse"
+//        lesson — that was about ANIMATED elements, where forced layers
+//        compound the per-frame work. For STATIC content the dedicated
+//        layer is the right answer.
+// v7.34: Title flicker root cause identified — NeonTitle's pulse animation
+//        animates text-shadow per-frame (same anti-pattern as the v7.31
+//        box-shadow flicker) AND uses `filter: brightness()` which forces
+//        a GPU compositor layer that's evicted first under FinalBoardView's
+//        remaining animation pressure (25 confetti + 5 opacity-pulse cells +
+//        board willChange:transform).
+//        NeonTitle is shared across many screens that DON'T flicker (lower
+//        GPU pressure on those screens lets the same animations survive),
+//        so editing NeonTitle directly would impact unaffected screens.
+//        Solution: scoped CSS override under a `neontitle-stable` wrapper
+//        on this screen only. The override disables animation + filter on
+//        NeonTitle's `-seg1/-seg2/-seg3` children, leaving the static
+//        resting-state text-shadow intact. Other screens that don't carry
+//        this wrapper class are untouched.
+//        Visual trade-off on FinalBoardView: title stops pulsing (2.5s
+//        subtle brightness shift) but keeps its full 5-layer neon glow.
 // v7.33: Title-only flicker fix. After v7.32 removed FloatingPieces, the rest
 //        of the screen stabilized but the DEADBLOCK title still flashes gray
 //        intermittently. Cause: the title's wrapper used
@@ -459,8 +498,20 @@ const FinalBoardView = ({
           <span className="text-xs">Back</span>
         </button>
         
-        {/* v7.33: Centered without transform — see header note. */}
-        <div className="absolute left-0 right-0 flex justify-center pointer-events-none">
+        {/* v7.33: Centered without transform — see header note.
+            v7.34: `neontitle-stable` triggers the local CSS override (see
+            bottom of <style> block) that disables NeonTitle's per-frame
+            text-shadow + filter animation on this screen ONLY.
+            v7.35: `transform: translateZ(0)` re-promotes the title to its
+            own static GPU layer. v7.33 had removed the centering transform
+            and inadvertently put the title back into the parent layer,
+            forcing its expensive text-shadow to repaint on every playback
+            render. translateZ(0) is a visual no-op — centering still
+            works via the absolute+flex pattern above. */}
+        <div
+          className="absolute left-0 right-0 flex justify-center pointer-events-none neontitle-stable"
+          style={{ transform: 'translateZ(0)' }}
+        >
           <NeonTitle text="DEADBLOCK" size="medium" />
         </div>
         
@@ -811,6 +862,23 @@ const FinalBoardView = ({
         .animate-confetti-3 { animation: confetti-fall-3 1.9s ease-out infinite; animation-delay: 0.1s; }
         .animate-confetti-4 { animation: confetti-fall-4 2.3s ease-out infinite; animation-delay: 0.5s; }
         .animate-confetti-5 { animation: confetti-fall-5 2.0s ease-out infinite; animation-delay: 0.2s; }
+        
+        /* ============================================
+           v7.34: NeonTitle stabilization on FinalBoardView ONLY.
+           Disables the per-frame text-shadow + filter animation that
+           causes the title to flicker under this screen's GPU pressure.
+           Selector targets NeonTitle's segment classes (nt-{color}-seg1/2/3)
+           via attribute-substring match so it covers all color variants
+           but only inside elements carrying .neontitle-stable. Other
+           screens that mount NeonTitle without this wrapper class get
+           the full animated behaviour unchanged.
+           ============================================ */
+        .neontitle-stable [class*="nt-"][class*="-seg1"],
+        .neontitle-stable [class*="nt-"][class*="-seg2"],
+        .neontitle-stable [class*="nt-"][class*="-seg3"] {
+          animation: none !important;
+          filter: none !important;
+        }
       `}</style>
     </div>
   );
