@@ -1,4 +1,20 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.33: Title-only flicker fix. After v7.32 removed FloatingPieces, the rest
+//        of the screen stabilized but the DEADBLOCK title still flashes gray
+//        intermittently. Cause: the title's wrapper used
+//        `absolute left-1/2 transform -translate-x-1/2` for centering — the
+//        `transform` property forces the title onto its own GPU compositor
+//        layer. That private layer gets evicted from cache under continuing
+//        GPU pressure (25 confetti particles + 5 opacity-pulse overlays on
+//        last-move cells, plus the board's willChange:transform from v7.27),
+//        and on re-paint the 5-layer text-shadow takes a frame or two to
+//        complete, briefly showing the title without its glow.
+//        Fix: center the title without transform. Wrap in
+//        `absolute left-0 right-0 flex justify-center pointer-events-none`
+//        so absolute positioning + flexbox centering does the same visual
+//        job without triggering GPU layer promotion. pointer-events-none
+//        keeps the title from intercepting clicks on the sibling Back
+//        button or speed-control buttons that visually flank it.
 // v7.32: Capacitor flicker mitigation — `FloatingPieces count={0}` to remove
 //        the 8 background pentomino pieces and their ~16 continuous
 //        animations (one transform + one opacity-breathe per piece). The v7.31
@@ -443,8 +459,8 @@ const FinalBoardView = ({
           <span className="text-xs">Back</span>
         </button>
         
-        {/* Centered Deadblock Title - v7.20: enlarged to medium */}
-        <div className="absolute left-1/2 transform -translate-x-1/2">
+        {/* v7.33: Centered without transform — see header note. */}
+        <div className="absolute left-0 right-0 flex justify-center pointer-events-none">
           <NeonTitle text="DEADBLOCK" size="medium" />
         </div>
         

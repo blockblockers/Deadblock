@@ -1,4 +1,18 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.37: Fixes the v7.36 board-diff approach that was supposed to capture the
+//        AI's last move but still landed gold on an earlier piece. Root cause:
+//        useGameState mutates row arrays in-place even when it provides a new
+//        outer-array reference to setState (a common React anti-pattern,
+//        `board[r][c] = p; setBoard([...board])`). Storing prevBoardRef = board
+//        kept a reference to the LIVE row arrays — so subsequent mutations
+//        changed prev's contents too, and the diff saw no new AI cells from
+//        the second AI placement onward. lastAiMoveCells stayed stuck on
+//        whichever piece happened to be captured first.
+//        Fix: deep-copy each row when snapshotting. board.map(r => r.slice())
+//        gives an independent row-array per snapshot; cell values are
+//        primitives so shallow row copy suffices. Now the diff genuinely
+//        compares "what was on the board last render" vs "what's there now"
+//        and identifies the actual AI placement that just happened.
 // v7.36: Two changes:
 //   (a) Replaced the v7.34 boardPieces-based aiBlockingCells useMemo with a
 //       board-state diffing approach. The previous logic grouped AI cells by
@@ -793,7 +807,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     }
     if (!hasAnyCell) {
       setLastAiMoveCells(null);
-      prevBoardRef.current = board;
+      // v7.37: see snapshotBoard helper note below
+      prevBoardRef.current = board.map(r => Array.isArray(r) ? r.slice() : r);
       return;
     }
 
@@ -813,7 +828,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         setLastAiMoveCells(newAiCells);
       }
     }
-    prevBoardRef.current = board;
+    // v7.37: Snapshot the board with deep-copied row arrays. The live
+    // `board` state's row arrays can be mutated in-place by useGameState
+    // between renders (a common React anti-pattern: mutate the cell, then
+    // setState with a new outer array). If we just stored `board` here,
+    // prev[r] would point to the SAME row reference the next render is
+    // about to mutate, and prev[r][c] would equal board[r][c] for every
+    // cell — the diff would always be empty. row.slice() gives prev a
+    // private copy; cell values are primitives so a shallow row copy
+    // suffices.
+    prevBoardRef.current = board.map(r => Array.isArray(r) ? r.slice() : r);
   }, [board]);
 
   // Gate on winner so the highlight only renders when the game ended in a

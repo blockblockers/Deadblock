@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Deadblock data extraction rules — Android 12+ (API 31+).
+
+  Cloud backup is already disabled via android:allowBackup="false" in the
+  manifest. The <cloud-backup> block below is included explicitly to make
+  the intent unambiguous on tooling that inspects rule files independently.
+
+  <device-transfer> covers the new Android 12+ D2D transfer flow (used when
+  a user switches phones via Quick Switch / Smart Switch). Without an
+  exclude rule here, allowBackup=false alone does NOT prevent D2D from
+  copying app data to a new device, which would re-introduce the same
+  stale-localStorage / auto-signin issue the manifest change is meant to
+  prevent.
+
+  domain="root" excludes the entire app private data directory, which
+  includes the WebView's localStorage / IndexedDB / Cookies — where the
+  Supabase auth token and Deadblock UI state flags live.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+    </device-transfer>
+</data-extraction-rules>
