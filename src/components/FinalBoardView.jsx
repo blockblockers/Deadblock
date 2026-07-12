@@ -1,4 +1,50 @@
 // FinalBoardView.jsx - Game replay with move order display
+// v7.36: Seven changes targeting Capacitor playback flicker on both title AND
+//        board (after v7.35 still showed both flickering when Play is pressed).
+//        Three layer/memo fixes + four zero-functionality-impact perf cleanups:
+//
+//   LAYER / MEMOIZATION FIXES (visible behaviour changes):
+//   (a) Removed `willChange: 'transform'` from the board container. The v7.27
+//       comment said it stayed for the v7.25 "replay-stepping fix" — but the
+//       v7.28 lesson learned later was: willChange on ANIMATED content forces
+//       a permanent layer that must be invalidated every frame the content
+//       changes, creating compositor pressure that evicts neighboring layers.
+//       The board is animated content during playback (cells transition every
+//       250-1000ms). Letting the browser auto-promote on demand is better
+//       than pinning a permanent layer that thrashes.
+//   (b) Added `will-change: transform` on the title wrapper, alongside the
+//       existing v7.35 `translateZ(0)`. v7.28's "willChange makes it worse"
+//       lesson was about ANIMATED content; the title here is provably static
+//       (v7.34's override holds all animation off). For static content,
+//       will-change is the right way to pin a layer — paint once, cache
+//       forever. translateZ(0) alone wasn't being honored consistently on
+//       Capacitor's Android WebView; will-change is a stronger hint.
+//   (c) Memoized the title JSX via useMemo([]). Without this, NeonTitle's
+//       function body re-evaluates every parent render (4 ×/sec during
+//       playback at 250ms speed). Memoization makes React reuse the same
+//       JSX object, allowing reconciliation to skip the entire title
+//       subtree — no per-render churn on its inline <style> element.
+//
+//   PER-RENDER WORK REDUCTIONS (zero visual / behavioural change):
+//   (d) Progress bar `transition-all duration-200` → `transition-[width]
+//       duration-200`. The progress bar's width changes via inline style on
+//       every playback step. `transition-all` makes the browser evaluate
+//       every animatable property each frame; narrowing to just `width`
+//       eliminates that overhead on the only continuously-animating element
+//       during playback.
+//   (e) Memoized the three static background orb divs via useMemo([]). Each
+//       is a fixed-position blur-3xl div whose content never changes; React
+//       was reconciling them on every parent render. Now mounted once.
+//   (f) Hoisted the outer root, top-pad spacer, and board container style
+//       objects (whose contents are 100% static CSS strings) via useMemo([]).
+//       Prevents allocating new object literals + per-prop diff on every
+//       render. The root in particular carries a non-trivial gradient stack
+//       and was being re-created 4 ×/sec during playback.
+//   (g) Hoisted the five confetti-particle position styles to module-level
+//       constants (CONFETTI_POS_1..5). Previously each render allocated 5
+//       new identical {left, top} objects per last-move cell × 5 cells = 25
+//       new objects/render. Module constants → reference equality → React
+//       skips on the first compare.
 // v7.35: Title flicker during playback fix. After v7.34 disabled the
 //        NeonTitle pulse on this screen, the title was static — but it
 //        still flashed gray whenever the play button was pressed. Cause:
@@ -166,6 +212,16 @@ import { ratingService } from '../services/ratingService';
 import TierIcon from './TierIcon';
 import NeonTitle from './NeonTitle';
 import FloatingPieces from './FloatingPieces';
+
+// v7.36(g): Confetti particle positions hoisted to module-level constants so
+// React sees identical references across renders instead of fresh-allocated
+// {left, top} objects each time. 5 particles × 5 last-move cells = 25 inline
+// styles otherwise. Module constants → reference equality → bail on diff.
+const CONFETTI_POS_1 = { left: '20%', top: '-10%' };
+const CONFETTI_POS_2 = { left: '60%', top: '-10%' };
+const CONFETTI_POS_3 = { left: '40%', top: '-10%' };
+const CONFETTI_POS_4 = { left: '80%', top: '-10%' };
+const CONFETTI_POS_5 = { left: '10%', top: '-10%' };
 
 const FinalBoardView = ({ 
   board, 
@@ -445,21 +501,65 @@ const FinalBoardView = ({
     return { board: safeBoard, pieces: safeBoardPieces };
   }, [showFinal, currentMoveIndex, boardStates, safeBoard, safeBoardPieces]);
 
+  // v7.36: Memoize the title JSX with empty deps so it's computed once and
+  // React reuses the same JSX object on every parent re-render. During
+  // playback the parent re-renders every playback-speed interval; this
+  // memoization lets reconciliation skip the title subtree entirely,
+  // eliminating per-step churn through NeonTitle's inline <style> block.
+  // The static, layer-promoted div containing NeonTitle paints once and is
+  // cached by the compositor for the rest of the component's lifetime.
+  const memoizedTitle = useMemo(() => (
+    <div
+      className="absolute left-0 right-0 flex justify-center pointer-events-none neontitle-stable"
+      style={{ transform: 'translateZ(0)', willChange: 'transform' }}
+    >
+      <NeonTitle text="DEADBLOCK" size="medium" />
+    </div>
+  ), []);
+
+  // v7.36(e): Memoize the three static background orbs. Identical reference
+  // across renders → React skips reconciliation for them entirely.
+  const memoizedOrbs = useMemo(() => (
+    <>
+      <div className="fixed top-10 right-10 w-64 h-64 bg-purple-500/40 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed bottom-20 left-10 w-56 h-56 bg-cyan-500/35 rounded-full blur-3xl pointer-events-none" />
+      <div className="fixed top-1/3 left-1/4 w-48 h-48 bg-pink-500/30 rounded-full blur-3xl pointer-events-none" />
+    </>
+  ), []);
+
+  // v7.36(f): Memoize the three large static style objects so the same
+  // object reference is passed to React each render. Without this React
+  // walks every key on every render even though all values are static
+  // CSS strings. The root style in particular carries a multi-layer
+  // gradient stack and was being re-allocated 4 ×/sec during playback.
+  const rootStyle = useMemo(() => ({
+    background: `
+      linear-gradient(to bottom, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.95)),
+      repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px),
+      repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px)
+    `,
+    backgroundColor: '#0f172a',
+  }), []);
+
+  const topPadStyle = useMemo(() => ({
+    height: 'max(16px, env(safe-area-inset-top))',
+    background: 'linear-gradient(to bottom, rgba(15, 23, 42, 1), transparent)',
+  }), []);
+
+  const boardGridStyle = useMemo(() => ({
+    background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))',
+    boxShadow: '0 0 30px rgba(139, 92, 246, 0.15), inset 0 0 20px rgba(0,0,0,0.3)',
+    width: 'min(calc(100vw - 32px), calc(100dvh - 280px))',
+    height: 'min(calc(100vw - 32px), calc(100dvh - 280px))',
+    maxWidth: '420px',
+    maxHeight: '420px',
+    contain: 'layout style',
+  }), []);
+
   return (
     <div 
       className="fixed inset-0 z-[60] flex flex-col overflow-hidden"
-      style={{
-        // v7.30: Reverted to the v7.24 background. The v7.29 attempt to bake
-        // the orb glows into this `background` as 3 radial-gradients helped
-        // but wasn't the right fix; static orb divs (below) match the
-        // PuzzleSelect pattern that doesn't flicker.
-        background: `
-          linear-gradient(to bottom, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.95)),
-          repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px),
-          repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(139, 92, 246, 0.12) 40px, rgba(139, 92, 246, 0.12) 41px)
-        `,
-        backgroundColor: '#0f172a',
-      }}
+      style={rootStyle}
     >
       {/* v7.32: Disabled FloatingPieces (count=0) to reduce Capacitor GPU
           compositor pressure. Background motion was decorative-only here —
@@ -473,18 +573,15 @@ const FinalBoardView = ({
           layer count), NO `willChange: transform` (let the browser decide
           layer promotion; for truly static blurred divs the browser typically
           paints once and caches). Colors, positions, blur radius, and sizes
-          match the original pre-v7.28 orbs. */}
-      <div className="fixed top-10 right-10 w-64 h-64 bg-purple-500/40 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed bottom-20 left-10 w-56 h-56 bg-cyan-500/35 rounded-full blur-3xl pointer-events-none" />
-      <div className="fixed top-1/3 left-1/4 w-48 h-48 bg-pink-500/30 rounded-full blur-3xl pointer-events-none" />
+          match the original pre-v7.28 orbs.
+          v7.36(e): rendered via memoizedOrbs so React skips reconciling
+          three never-changing divs on every parent re-render. */}
+      {memoizedOrbs}
       
       {/* v7.18: Extra padding at top for iPhone notch/dynamic island */}
       <div 
         className="flex-shrink-0"
-        style={{ 
-          height: 'max(16px, env(safe-area-inset-top))',
-          background: 'linear-gradient(to bottom, rgba(15, 23, 42, 1), transparent)'
-        }}
+        style={topPadStyle}
       />
       
       {/* HEADER - With Back Button and Deadblock Title */}
@@ -498,22 +595,11 @@ const FinalBoardView = ({
           <span className="text-xs">Back</span>
         </button>
         
-        {/* v7.33: Centered without transform — see header note.
-            v7.34: `neontitle-stable` triggers the local CSS override (see
-            bottom of <style> block) that disables NeonTitle's per-frame
-            text-shadow + filter animation on this screen ONLY.
-            v7.35: `transform: translateZ(0)` re-promotes the title to its
-            own static GPU layer. v7.33 had removed the centering transform
-            and inadvertently put the title back into the parent layer,
-            forcing its expensive text-shadow to repaint on every playback
-            render. translateZ(0) is a visual no-op — centering still
-            works via the absolute+flex pattern above. */}
-        <div
-          className="absolute left-0 right-0 flex justify-center pointer-events-none neontitle-stable"
-          style={{ transform: 'translateZ(0)' }}
-        >
-          <NeonTitle text="DEADBLOCK" size="medium" />
-        </div>
+        {/* v7.33-v7.36: Title centering, layer pinning, and memoization —
+            see header note + the memoizedTitle definition above the return.
+            Rendering as a memoized JSX ref so React skips reconciling its
+            subtree on every parent re-render during playback. */}
+        {memoizedTitle}
         
         {/* Speed control - compact */}
         <div className="flex gap-1">
@@ -605,29 +691,18 @@ const FinalBoardView = ({
           </div>
         ) : (
           <div className="flex flex-col items-center">
-            {/* Board Grid with cyberpunk styling */}
+            {/* Board Grid with cyberpunk styling
+                v7.36(f): style hoisted to memoized boardGridStyle (definition
+                near top of component). All values are static CSS strings —
+                memoization prevents per-render object allocation + prop diff.
+                Historical context: v7.27 dropped the redundant
+                calc(100vh - 280px) term in favor of 100dvh-only to avoid
+                viewport-unit recalcs on Android system UI animations. v7.36
+                removed willChange:transform per the v7.28 lesson — see
+                header note (a). */}
             <div 
               className="grid grid-cols-8 gap-0.5 sm:gap-1 p-1.5 sm:p-2 rounded-xl border border-purple-500/30"
-              style={{
-                background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95))',
-                boxShadow: '0 0 30px rgba(139, 92, 246, 0.15), inset 0 0 20px rgba(0,0,0,0.3)',
-                // v7.27: Dropped redundant `calc(100vh - 280px)` term — 100dvh ≤ 100vh
-                // is always true, so the `100vh` term was dominated by `100dvh` whenever
-                // they differ and equal when they don't. Removing it eliminates one
-                // recalc trigger when the WebView's viewport units shift (Android system
-                // UI animations, edge-to-edge inset changes), which was causing board
-                // resize → cell repaint → compositor frame drops to black.
-                width: 'min(calc(100vw - 32px), calc(100dvh - 280px))',
-                height: 'min(calc(100vw - 32px), calc(100dvh - 280px))',
-                maxWidth: '420px',
-                maxHeight: '420px',
-                // v7.27: Narrowed willChange from 'contents' (too broad — hints any
-                // content change, leads to aggressive layer management on Android GPU)
-                // to 'transform'. Still promotes the board to its own composite layer
-                // for the v7.25 replay-stepping fix, with less compositor overhead.
-                contain: 'layout style',
-                willChange: 'transform',
-              }}
+              style={boardGridStyle}
             >
             {currentState.board.map((row, rowIdx) =>
               row.map((cellValue, colIdx) => {
@@ -713,11 +788,11 @@ const FinalBoardView = ({
                     {/* Gold confetti particles on last move cells */}
                     {isLastMove && showFinal && (
                       <>
-                        <div className="absolute w-1 h-1 bg-yellow-300 rounded-full animate-confetti-1" style={{ left: '20%', top: '-10%' }} />
-                        <div className="absolute w-1.5 h-1 bg-amber-400 rounded-sm animate-confetti-2" style={{ left: '60%', top: '-10%' }} />
-                        <div className="absolute w-1 h-1.5 bg-yellow-200 rounded-sm animate-confetti-3" style={{ left: '40%', top: '-10%' }} />
-                        <div className="absolute w-1 h-1 bg-orange-400 rounded-full animate-confetti-4" style={{ left: '80%', top: '-10%' }} />
-                        <div className="absolute w-1.5 h-1 bg-yellow-500 rounded-sm animate-confetti-5" style={{ left: '10%', top: '-10%' }} />
+                        <div className="absolute w-1 h-1 bg-yellow-300 rounded-full animate-confetti-1" style={CONFETTI_POS_1} />
+                        <div className="absolute w-1.5 h-1 bg-amber-400 rounded-sm animate-confetti-2" style={CONFETTI_POS_2} />
+                        <div className="absolute w-1 h-1.5 bg-yellow-200 rounded-sm animate-confetti-3" style={CONFETTI_POS_3} />
+                        <div className="absolute w-1 h-1 bg-orange-400 rounded-full animate-confetti-4" style={CONFETTI_POS_4} />
+                        <div className="absolute w-1.5 h-1 bg-yellow-500 rounded-sm animate-confetti-5" style={CONFETTI_POS_5} />
                       </>
                     )}
                   </div>
@@ -733,7 +808,7 @@ const FinalBoardView = ({
                 <div className="mb-2 px-2">
                   <div className="h-1.5 bg-slate-700/80 rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
+                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-[width] duration-200"
                       style={{ 
                         width: showFinal 
                           ? '100%' 

@@ -1,8 +1,153 @@
 // DifficultySelector.jsx
+// v7.25: Continuous GPU draw reduction (the GPU pressure source the v7.24
+//        cardShadow change didn't reach). cardShadow fixed the click-time
+//        event but the WebView is still close to its compositor ceiling
+//        because of TWO continuous animation sources draining GPU at
+//        60fps even when nothing's happening:
+//          1. NeonTitle pulses via animated text-shadow + filter:brightness.
+//             `filter` creates a GPU layer that gets repainted every
+//             animation frame. Continuous drain.
+//          2. 6 FloatingPieces, each a separate animated layer with
+//             ongoing opacity/transform animations.
+//        Both fixes:
+//          (a) Wrapped the NeonTitle/NeonSubtitle pair with a div
+//              `className="neontitle-stable"`, and added a scoped CSS
+//              rule in a new <style> block:
+//                .neontitle-stable, .neontitle-stable * {
+//                  animation: none !important;
+//                  filter: none !important;
+//                }
+//              This kills the title pulse and filter ONLY on this screen,
+//              preserving the animation everywhere else NeonTitle is
+//              used. Same pattern we used on FinalBoardView v7.34.
+//          (b) FloatingPieces count 6 → 0. Removes all six continuous
+//              animated layers from this screen's background. (Other
+//              screens still render FloatingPieces normally.)
+//        These are continuous drains so eliminating them frees GPU
+//        bandwidth permanently, giving the compositor enough headroom
+//        that click-time events (gradient interpolation, layer
+//        re-rasterization) no longer push it over capacity.
+//        Same change mirrored to PuzzleSelect v7.23.
+// v7.24: Pivoting back to GPU pressure. The remaining "varies, mostly on
+//        the card, sometimes whole screen" flash is the signature of
+//        compositor cache eviction under GPU memory pressure on the
+//        Capacitor WebView — not a deterministic element snap. Earlier
+//        rounds (shine, gradient, position) addressed specific
+//        deterministic snaps but didn't touch the underlying GPU
+//        capacity issue.
+//        cardShadow is the single biggest GPU layer on screen that
+//        changes color on every click (multi-layer 60px outer + 30px
+//        inset blur on a ~350-500px card, themed by rgba color).
+//        Two changes folded together:
+//          1. Unified cardShadow across all themes — single neutral
+//             slate color (rgba(100,116,139,...)) regardless of
+//             difficulty. The shadow layer is now stable; clicking no
+//             longer triggers re-rasterization of the largest layer
+//             on screen.
+//          2. Outer blur 60px → 30px. Halves the linear dimension of
+//             the shadow layer's extended bounds — roughly 50% drop
+//             in shadow-layer GPU memory.
+//        Inset shadow kept at 30px (inset doesn't extend the layer,
+//        so it's free GPU-wise). Outer opacity nudged 0.4 → 0.3 so the
+//        neutral tone doesn't feel too gray. Theme color is still
+//        strongly indicated by card background gradient, border color,
+//        difficulty-button gradients, and start-button gradient — the
+//        cardShadow was the secondary visual cue.
+//        Same change mirrored to PuzzleSelect v7.22.
+// v7.23: Removed the animate-shine effect entirely (option C in our flicker
+//        triage). The v7.22 "infinite → 1" change stopped the recurring
+//        sweep but the single post-click sweep was still visible as a
+//        delayed flash. Removing the shine entirely eliminates the
+//        last functional source of post-click flash.
+//        The selected difficulty button still reads as clearly selected
+//        via: filled gradient background, white border, ring-4 outline,
+//        glow box-shadow, white text vs colored text, white selection
+//        indicator dot. Plenty of selection signal without the shine.
+//        Cleanup: also removed the @keyframes shine + .animate-shine CSS
+//        from the inline <style> tag, then removed the whole <style>
+//        block (it had nothing else). Same change mirrored to
+//        PuzzleSelect v7.21 (but its <style> tag stays because of
+//        speed-pulse + turn-order-pulse).
+// v7.22: Functional (not GPU) fix for the lingering delayed flash.
+//        Root cause: `animate-shine` on the selected difficulty button runs
+//        `shine 1.5s ease-in-out infinite`. With ease-in-out, the bright
+//        white/20 sweep enters the visible button area roughly 600ms after
+//        the animation starts and exits roughly 900ms — and the `infinite`
+//        keyword makes it repeat every 1.5s. This was always present, but
+//        once we smoothed the gradient/color/position flashes from earlier
+//        rounds, the shine became the most visible event on the screen
+//        after each click.
+//        Fix: changed `infinite` → `1` so the shine plays exactly once per
+//        selection (functions as a "selection confirmation" sweep) and then
+//        stops. Eliminates the repeating delayed flash. The single sweep
+//        after each click is still present by design; if that's still too
+//        noticeable, the next step is removing the shine entirely. Same
+//        change mirrored to PuzzleSelect v7.20.
+// v7.21: Switch-flash root cause: gradient changes weren't being transitioned.
+//        `transition-colors` covers background-color/border-color but NOT
+//        background-image — and CSS gradients are `background-image:
+//        linear-gradient(...)`. So when the user picked a new difficulty,
+//        the card gradient (theme.cardBg), the difficulty-button selected-
+//        state gradient, and the grid background's linear-gradient ALL
+//        snapped instantly while only the border/text colors faded. The
+//        mismatch read as a flash.
+//        Fix: replace `transition-colors duration-X` with
+//        `transition-[background-color,background-image,border-color]
+//        duration-X` (and on buttons, also `color`). The arbitrary-value
+//        syntax includes background-image so gradients fade smoothly, but
+//        EXCLUDES box-shadow — that exclusion is deliberate, because
+//        animating multi-layer box-shadows per frame is what the v7.14/v7.16
+//        "transition-all → transition-colors" change was originally moving
+//        AWAY from for mobile perf. Targeted middle-ground.
+//        Also added inline `transition: background-image 700ms ease` to the
+//        grid background div since its gradient comes from inline `style`
+//        (the className transition can't reach into inline styles).
+//        Same change mirrored to PuzzleSelect v7.19.
+// v7.20: Unified orb positions across all 3 themes so option-switching no
+//        longer causes a flash. Previously each theme had its own glow1/2/3
+//        positions, so clicking a different difficulty made the 3 large
+//        blur-2xl orbs each jump to entirely new screen locations in a
+//        single frame — the v7.17 transition narrowing (which fixed idle
+//        flicker) was only animating colors, so positions snapped. With
+//        unified positions, color still fades smoothly over 700ms but
+//        orbs never move. Visual cost: themes now differ only by palette,
+//        not orb layout, but the green/amber/purple color signals are
+//        already the primary theming cue. Adopted the beginner theme's
+//        position set (top-20 left-10, bottom-32 right-10, top-1/2 left-1/2)
+//        as the shared layout. Same change mirrored to PuzzleSelect v7.18.
+// v7.19: Reduced orb blur from `blur-3xl` (64px) to `blur-2xl` (40px) — about
+//        a 37.5% reduction in blur radius. Smaller blur means each orb's
+//        GPU layer texture is smaller (the layer extends to cover the orb
+//        + blur radius on all sides), which reduces compositor memory
+//        pressure and per-frame layer-cache work on Capacitor. Visual
+//        impact: orbs have a slightly tighter, less-diffuse glow falloff —
+//        more "soft blob" than "wide aura". Still very visibly glow-y.
+//        Same change mirrored to PuzzleSelect v7.17.
+// v7.18: Two more flicker-reduction changes on top of v7.17:
+//   (a) FloatingPieces count 12 → 6. Halves the background animated-piece
+//       count, reducing continuous compositor work. Still keeps ambient
+//       motion for visual identity, just less of it.
+//   (b) Memoized the grid background + 3 orbs as one JSX block via
+//       useMemo([theme]). aiGoesFirst toggle (and any other re-render
+//       trigger) was making React reconcile all 4 large blur layers on
+//       every render even though they only visually depend on the theme.
+//       With memoization, when theme is stable, the same JSX object is
+//       reused and React skips the subtree.
+// v7.17: Completed the orb transition narrowing that the v7.16 comment claimed
+//        was applied but wasn't — the orbs and themed grid still had
+//        `transition-colors duration-700` despite v7.16's note. `transition-all`
+//        forces the WebView to evaluate every animatable property each frame
+//        AND, when something does change (theme switch), animates LAYOUT
+//        properties (top/left/right/bottom from the position Tailwind classes)
+//        which trigger reflow + paint. Narrowed to `transition-colors
+//        duration-700` so only background-color transitions (kept smooth);
+//        positions snap on theme change instead of sliding. Eliminates one
+//        of the layer-pressure contributors causing Capacitor flicker on
+//        this screen even at idle. Same fix mirrored to PuzzleSelect v7.15.
 // v7.16: Mobile perf — transition-all→transition-colors on glow orbs/cards, removed backdrop-blur
 // v7.15: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import NeonTitle from './NeonTitle';
 import NeonSubtitle from './NeonSubtitle';
@@ -20,25 +165,25 @@ const themes = {
     glow3: { color: 'bg-lime-500/20', pos: 'top-1/2 left-1/2' },
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-green-950/50 to-slate-900/95',
     cardBorder: 'border-green-500/50',
-    cardShadow: 'shadow-[0_0_60px_rgba(34,197,94,0.4),inset_0_0_30px_rgba(34,197,94,0.1)]',
+    cardShadow: 'shadow-[0_0_30px_rgba(100,116,139,0.3),inset_0_0_30px_rgba(100,116,139,0.1)]',
   },
   intermediate: {
     gridColor: 'rgba(251,191,36,0.5)',
-    glow1: { color: 'bg-amber-500/40', pos: 'top-10 right-20' },
-    glow2: { color: 'bg-orange-500/35', pos: 'bottom-20 left-10' },
-    glow3: { color: 'bg-red-500/20', pos: 'top-1/3 left-1/3' },
+    glow1: { color: 'bg-amber-500/40', pos: 'top-20 left-10' },
+    glow2: { color: 'bg-orange-500/35', pos: 'bottom-32 right-10' },
+    glow3: { color: 'bg-red-500/20', pos: 'top-1/2 left-1/2' },
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-amber-950/50 to-slate-900/95',
     cardBorder: 'border-amber-500/50',
-    cardShadow: 'shadow-[0_0_60px_rgba(251,191,36,0.4),inset_0_0_30px_rgba(251,191,36,0.1)]',
+    cardShadow: 'shadow-[0_0_30px_rgba(100,116,139,0.3),inset_0_0_30px_rgba(100,116,139,0.1)]',
   },
   expert: {
     gridColor: 'rgba(168,85,247,0.5)',
-    glow1: { color: 'bg-purple-500/40', pos: 'top-16 left-20' },
-    glow2: { color: 'bg-pink-500/35', pos: 'bottom-24 right-16' },
-    glow3: { color: 'bg-violet-500/25', pos: 'top-2/3 right-1/3' },
+    glow1: { color: 'bg-purple-500/40', pos: 'top-20 left-10' },
+    glow2: { color: 'bg-pink-500/35', pos: 'bottom-32 right-10' },
+    glow3: { color: 'bg-violet-500/25', pos: 'top-1/2 left-1/2' },
     cardBg: 'bg-gradient-to-br from-slate-900/95 via-purple-950/50 to-slate-900/95',
     cardBorder: 'border-purple-500/50',
-    cardShadow: 'shadow-[0_0_60px_rgba(168,85,247,0.4),inset_0_0_30px_rgba(168,85,247,0.1)]',
+    cardShadow: 'shadow-[0_0_30px_rgba(100,116,139,0.3),inset_0_0_30px_rgba(100,116,139,0.1)]',
   },
 };
 
@@ -97,6 +242,36 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
   const selectedDiff = difficulties.find(d => d.id === selectedDifficulty) || difficulties[0];
   const theme = themes[selectedDiff.theme];
 
+  // v7.18(b): Memoize the themed grid background + 3 large blur-3xl orbs as
+  // one JSX block keyed on the theme reference. Without this, the aiGoesFirst
+  // toggle (and any other parent re-render) makes React walk all 4 large
+  // layer-promoted divs on every render even though they're visually a
+  // function of theme alone. `themes[selectedDiff.theme]` returns the same
+  // object reference whenever selectedDifficulty doesn't change, so
+  // `[theme]` is a stable dep — memo holds until the user picks a
+  // different difficulty.
+  const memoizedBackdrop = useMemo(() => (
+    <>
+      {/* v7.21: Grid background — `transition-[background-color,background-image]
+          duration-700` instead of `transition-colors` so the gridColor change
+          inside the inline-style linear-gradient transitions smoothly instead
+          of snapping. (transition-colors covers background-color but not
+          background-image; CSS gradients are background-image.) Also added
+          explicit `transition: background-image 700ms ease` in the style
+          object because className-based transitions can't reach inline-style
+          property changes — the inline style is what actually changes between
+          themes. */}
+      <div className="fixed inset-0 opacity-40 pointer-events-none transition-[background-color,background-image] duration-700" style={{
+        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
+        backgroundSize: '40px 40px',
+        transition: 'background-image 700ms ease'
+      }} />
+      <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-2xl pointer-events-none transition-colors duration-700`} />
+      <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-2xl pointer-events-none transition-colors duration-700`} />
+      <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-2xl pointer-events-none transition-colors duration-700`} />
+    </>
+  ), [theme]);
+
   const handleSelect = (diffId) => {
     soundManager.playClickSound('select');
     onSelectDifficulty(diffId);
@@ -119,15 +294,16 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
 
   return (
     <div className="fixed inset-0 bg-slate-950">
-      {/* Themed Grid background */}
-      <div className="fixed inset-0 opacity-40 pointer-events-none transition-all duration-700" style={{
-        backgroundImage: `linear-gradient(${theme.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${theme.gridColor} 1px, transparent 1px)`,
-        backgroundSize: '40px 40px'
-      }} />
-      <div className={`fixed ${theme.glow1.pos} w-80 h-80 ${theme.glow1.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      <div className={`fixed ${theme.glow2.pos} w-72 h-72 ${theme.glow2.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      <div className={`fixed ${theme.glow3.pos} w-64 h-64 ${theme.glow3.color} rounded-full blur-3xl pointer-events-none transition-all duration-700`} />
-      <FloatingPieces count={12} theme="ai" minOpacity={0.2} maxOpacity={0.4} />
+      {/* v7.18(b): Themed grid background + 3 orbs hoisted into memoizedBackdrop
+          (defined above) — see header note. Identical visual output, just
+          memoized to skip reconciliation on theme-irrelevant re-renders. */}
+      {memoizedBackdrop}
+      {/* v7.25(b): FloatingPieces count 6 → 0 to eliminate 6 continuous
+          animated GPU layers from this screen's background. The biggest
+          single source of continuous GPU draw besides NeonTitle. Background
+          loses ambient pentomino motion on this screen (preserved
+          everywhere else FloatingPieces is rendered). */}
+      <FloatingPieces count={0} theme="ai" minOpacity={0.2} maxOpacity={0.4} />
 
       {/* Inner scroll child — absolute inset-0 gives iOS explicit pixel bounds */}
       <div
@@ -137,14 +313,20 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
       {/* Content */}
       <div className="relative flex flex-col items-center justify-center px-4 py-6 min-h-full">
         <div className="w-full max-w-md">
-          {/* Title - Centered and Large */}
-          <div className="text-center mb-4">
+          {/* v7.25(a): Wrapped with `neontitle-stable` to disable NeonTitle's
+              continuous text-shadow + filter:brightness animation on this
+              screen (scoped CSS rule in <style> block at the end). */}
+          <div className="text-center mb-4 neontitle-stable">
             <NeonTitle size="large" />
             <NeonSubtitle text="VS A.I. MODE" size="small" className="mt-1" />
           </div>
 
           {/* Card with dramatic theme */}
-          <div className={`${theme.cardBg} rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow} transition-colors duration-500`}>
+          {/* v7.21: Card transition — narrowed transition-colors → explicit list
+              including background-image so the cardBg gradient (which changes
+              with theme) fades smoothly instead of snapping. Excludes
+              box-shadow per v7.14/v7.16 mobile-perf intent. */}
+          <div className={`${theme.cardBg} rounded-2xl p-4 border ${theme.cardBorder} ${theme.cardShadow} transition-[background-color,background-image,border-color] duration-500`}>
             
             {/* Difficulty Options */}
             <div className="space-y-2 mb-4">
@@ -154,20 +336,13 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
                   <button 
                     key={diff.id} 
                     onClick={() => handleSelect(diff.id)}
-                    className={`w-full p-3 rounded-xl border-2 transition-colors duration-300 text-left relative overflow-hidden ${
+                    className={`w-full p-3 rounded-xl border-2 transition-[background-color,background-image,border-color,color] duration-300 text-left relative overflow-hidden ${
                       isSelected 
                         ? `bg-gradient-to-r ${diff.colors.gradient} border-white/40 ring-4 ${diff.colors.ring}` 
                         : `${diff.colors.bg} ${diff.colors.border} hover:bg-opacity-50`
                     }`}
                     style={isSelected ? { boxShadow: `0 0 40px ${diff.colors.glow}` } : {}}
                   >
-                    {/* Animated shine on selected */}
-                    {isSelected && (
-                      <div className="absolute inset-0 overflow-hidden rounded-xl">
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full animate-shine" />
-                      </div>
-                    )}
-                    
                     <div className="relative flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
@@ -291,15 +466,16 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
         <div className="h-6 flex-shrink-0" />
       </div>
       </div>{/* end inner scroll child */}
-      
-      {/* Shine animation */}
+
+      {/* v7.25(a): Scoped override that disables NeonTitle's pulsing
+          animation + filter:brightness ONLY when nested inside a
+          .neontitle-stable wrapper. Eliminates the continuous filter-layer
+          repaint on this screen without affecting NeonTitle elsewhere. */}
       <style>{`
-        @keyframes shine {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(200%); }
-        }
-        .animate-shine {
-          animation: shine 1.5s ease-in-out infinite;
+        .neontitle-stable,
+        .neontitle-stable * {
+          animation: none !important;
+          filter: none !important;
         }
       `}</style>
     </div>
