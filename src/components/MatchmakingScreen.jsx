@@ -1,4 +1,7 @@
 // Matchmaking Screen - Find online opponents
+// v7.16: Edge-to-edge — centered content padding made safe-area-aware
+//        (max(2rem, env(safe-area-inset-*)) top & bottom, overrides py-8) so the
+//        matchmaking UI stays within the safe area on Android 15+.
 // v7.15: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.14: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v7.11: Fixed scroll — two-layer shell (fixed inset-0 overflow-hidden outer + flex-1 min-h-0 overflow-y-auto inner)
@@ -199,7 +202,7 @@ const MatchmakingScreen = ({ onMatchFound, onCancel }) => {
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
-      <div className="relative flex flex-col items-center justify-center px-4 py-8 min-h-full">
+      <div className="relative flex flex-col items-center justify-center px-4 py-8 min-h-full" style={{ paddingTop: 'max(2rem, env(safe-area-inset-top))', paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}>
         <div className="w-full max-w-md text-center">
           
           {/* Title - Large and centered */}

@@ -1,4 +1,7 @@
 // PuzzleTypeSelect.jsx - Choose between Creator Puzzles and Generated Puzzles
+// v2.6: Edge-to-edge — content container padding made safe-area-aware
+//        (max(1rem, env(safe-area-inset-*)) top & bottom, added inline; overrides py-4)
+//        so the centered cards clear the status/nav bars on Android 15+.
 // v2.5: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v2.4: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // v2.2: Fixed scroll — two-layer shell + WebkitOverflowScrolling + overscrollBehavior
@@ -282,7 +285,7 @@ const PuzzleTypeSelect = ({
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Main Content */}
-      <div className="relative flex flex-col items-center justify-center px-4 py-4 min-h-full">
+      <div className="relative flex flex-col items-center justify-center px-4 py-4 min-h-full" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
         <div className="w-full max-w-md">
           
           {/* Title */}

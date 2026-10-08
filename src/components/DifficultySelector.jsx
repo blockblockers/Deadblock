@@ -1,4 +1,8 @@
 // DifficultySelector.jsx
+// v7.33: Edge-to-edge — content container padding made safe-area-aware
+//        (max(1.5rem, env(safe-area-inset-*)) top & bottom, added inline so it
+//        overrides py-6) so the centered card clears the status/nav bars on
+//        Android 15+. Root and memoized backdrop stay full-bleed.
 // v7.25: Continuous GPU draw reduction (the GPU pressure source the v7.24
 //        cardShadow change didn't reach). cardShadow fixed the click-time
 //        event but the WebView is still close to its compositor ceiling
@@ -311,7 +315,7 @@ const DifficultySelector = ({ selectedDifficulty, onSelectDifficulty, onStartGam
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
-      <div className="relative flex flex-col items-center justify-center px-4 py-6 min-h-full">
+      <div className="relative flex flex-col items-center justify-center px-4 py-6 min-h-full" style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))', paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
         <div className="w-full max-w-md">
           {/* v7.25(a): Wrapped with `neontitle-stable` to disable NeonTitle's
               continuous text-shadow + filter:brightness animation on this

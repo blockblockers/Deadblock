@@ -1,4 +1,7 @@
 // GameReplay - Watch recorded games move by move
+// v7.2: Edge-to-edge — top app-bar and bottom controls bar padding made
+//        safe-area-aware (their backgrounds still extend under the system bars,
+//        content padded clear of them) for Android 15+.
 // v7.1: Capacitor-aware share — uses native share sheet when available
 import { useState, useEffect, useRef } from 'react';
 import { Play, Pause, SkipBack, SkipForward, FastForward, Rewind, Share2, X, Clock, Trophy, User } from 'lucide-react';
@@ -160,7 +163,7 @@ const GameReplay = ({ gameId, onClose }) => {
   return (
     <div className="fixed inset-0 bg-slate-950 flex flex-col z-50">
       {/* Header */}
-      <div className="bg-slate-900 border-b border-amber-500/30 p-3">
+      <div className="bg-slate-900 border-b border-amber-500/30 p-3" style={{ paddingTop: 'max(0.75rem, calc(env(safe-area-inset-top) + 0.75rem))' }}>
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <div className="flex items-center gap-4">
             <button onClick={onClose} className="text-slate-400 hover:text-white">
@@ -279,7 +282,7 @@ const GameReplay = ({ gameId, onClose }) => {
       </div>
 
       {/* Controls */}
-      <div className="bg-slate-900 border-t border-amber-500/30 p-4">
+      <div className="bg-slate-900 border-t border-amber-500/30 p-4" style={{ paddingBottom: 'max(1rem, calc(env(safe-area-inset-bottom) + 1rem))' }}>
         <div className="flex items-center justify-center gap-3 max-w-lg mx-auto">
           {/* Skip to start */}
           <button

@@ -1,4 +1,8 @@
 // MenuScreen.jsx — Main menu
+// v7.33: Edge-to-edge safe-area insets (Android 15+/Capacitor 8). Root now carries
+//        safe-area-screen (top + sides) + safe-area-bottom so the centered menu
+//        clears the status/nav bars; GlobalBackground and the fixed glow orbs stay
+//        full-bleed behind the bars.
 // v7.2: Restored inline Privacy/Terms footer (static footer hidden for users in index.html)
 // v7.1: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 import { lazy, Suspense } from 'react';
@@ -132,7 +136,9 @@ const MenuScreen = ({
   return (
     <div 
       // FIX: Changed from bg-slate-950 to bg-transparent to show GlobalBackground
-      className="fixed inset-0 bg-transparent"
+      // v7.33: safe-area-screen (top + sides) + safe-area-bottom inset the content away
+      //        from the system bars under edge-to-edge; GlobalBackground stays full-bleed.
+      className="fixed inset-0 bg-transparent safe-area-screen safe-area-bottom"
       style={scrollStyles}
     >
       {/* Animated glow orbs - these overlay on top of GlobalBackground */}

@@ -1,4 +1,8 @@
 // ViewPlayerProfile - View another player's profile
+// v7.37: Edge-to-edge — modal is centered on the SAFE-AREA center (top offset by
+//        half the top/bottom inset difference) so it no longer overlaps the status
+//        bar on devices where the bars are asymmetric. Height already capped by both
+//        insets. For Android 15+.
 // v7.36: Added "View Achievements" button above Recent Games and Achievements modal rendering
 // v7.35: Stats audit — moved Head to Head under Online Stats card; enhanced Play Streak
 //        with status messages and warnings; Creator Puzzles now shows per-difficulty progress
@@ -679,7 +683,7 @@ const ViewPlayerProfile = ({
         className="fixed bg-slate-900 rounded-xl border shadow-2xl"
         style={{ 
           zIndex: 51,
-          top: '50%',
+          top: 'calc(50% + (env(safe-area-inset-top) - env(safe-area-inset-bottom)) / 2)',
           left: '50%',
           transform: 'translate(-50%, -50%)',
           width: 'calc(100% - 32px)',

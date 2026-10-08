@@ -1,4 +1,8 @@
 // Leaderboard.jsx - Global leaderboard with scrollable list
+// v7.21: Online games/wins now come from the games table (source of truth) via the
+//        get_online_leaderboard RPC, not the drifted profiles counters. Fixes inflated
+//        totals and opponents whose stats didn't refresh. Requires the
+//        get_online_leaderboard() function — see leaderboard_fix.sql.
 // v7.20: Fixed stats to show online-only games/wins (subtracts AI + local from profile totals)
 // v7.19: Added Eye icon per player row to watch their active games. Accepts onSpectateGame prop.
 // v7.18: Added safe area top padding for iPhone notch clearance
@@ -14,14 +18,9 @@ import { getRankInfo } from '../utils/rankUtils';
 import { spectatorService } from '../services/spectatorService';
 import TierIcon from './TierIcon';
 
-// v7.20: Compute online-only stats — profiles.games_played/games_won include AI + local games
-const getOnlineStats = (p) => {
-  const aiWins = (p.ai_easy_wins || 0) + (p.ai_medium_wins || 0) + (p.ai_hard_wins || 0);
-  const aiLosses = (p.ai_easy_losses || 0) + (p.ai_medium_losses || 0) + (p.ai_hard_losses || 0);
-  const onlineGames = Math.max(0, (p.games_played || 0) - aiWins - aiLosses - (p.local_games_played || 0));
-  const onlineWins = Math.max(0, (p.games_won || 0) - aiWins);
-  return { onlineGames, onlineWins };
-};
+// v7.21: Online stats are computed server-side from the games table (source of truth)
+// and returned by the get_online_leaderboard RPC as online_games / online_wins — no more
+// drift from denormalized counters, and correct for BOTH players after every game.
 
 const Leaderboard = ({ onBack, onSpectateGame }) => {
   const { profile } = useAuth();
@@ -47,21 +46,18 @@ const Leaderboard = ({ onBack, onSpectateGame }) => {
     setLoading(true);
 
     try {
-      // v7.20: Fetch AI stats + local_games_played to compute online-only values
-      let query = supabase
-        .from('profiles')
-        .select('id, username, display_name, rating, games_played, games_won, avatar_url, ai_easy_wins, ai_easy_losses, ai_medium_wins, ai_medium_losses, ai_hard_wins, ai_hard_losses, local_games_played')
-        .gt('games_played', 0)
-        .order('rating', { ascending: false });
-
-      const { data, error } = await query.limit(200);
+      // v7.21: Pull online games/wins straight from the games table via RPC
+      // (source of truth, correct for BOTH players, no counter drift). Already sorted
+      // by rating and filtered to players with >0 completed online games.
+      const { data, error } = await supabase.rpc('get_online_leaderboard', { p_limit: 200 });
 
       if (!error && data) {
-        // Compute online-only stats for each player
-        const enriched = data.map(p => {
-          const { onlineGames, onlineWins } = getOnlineStats(p);
-          return { ...p, onlineGames, onlineWins };
-        }).filter(p => p.onlineGames > 0);
+        // Normalize RPC columns onto the shape the UI already uses
+        const enriched = data.map(p => ({
+          ...p,
+          onlineGames: p.online_games || 0,
+          onlineWins: p.online_wins || 0,
+        })).filter(p => p.onlineGames > 0);
 
         // Re-sort by corrected values for wins/games filters
         if (filter === 'wins') {
@@ -219,8 +215,8 @@ const Leaderboard = ({ onBack, onSpectateGame }) => {
                     <div className="text-white font-medium">Your Rank</div>
                     <div className="text-slate-400 text-sm">
                       {filter === 'rating' ? `${profile?.rating || 1000} rating` :
-                       filter === 'wins' ? `${profile ? getOnlineStats(profile).onlineWins : 0} wins` :
-                       `${profile ? getOnlineStats(profile).onlineGames : 0} games`}
+                       filter === 'wins' ? `${players.find(p => p.id === profile?.id)?.onlineWins ?? 0} wins` :
+                       `${players.find(p => p.id === profile?.id)?.onlineGames ?? 0} games`}
                     </div>
                   </div>
                 </div>

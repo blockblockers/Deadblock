@@ -1,4 +1,8 @@
 // soundManager.js - Complete audio management for Deadblock
+// v7.32 - Pause/resume audio on app background/foreground (suspend/resume the
+//         AudioContext) so background music no longer keeps playing while the
+//         app is minimized or not the active screen. See handleAppBackground()
+//         / handleAppForeground(), wired to lifecycle events in App.jsx.
 // v7.12 - Seamless music looping using Web Audio API (no gaps)
 
 class SoundManager {
@@ -20,6 +24,11 @@ class SoundManager {
     this.initialized = false;
     this.initPromise = null;
     this.musicLoaded = false;
+
+    // v7.32: Tracks whether WE suspended the context for app backgrounding, so
+    // handleAppForeground() only resumes a context we paused (and never fights the
+    // browser autoplay lock on a context that was never unlocked by a gesture).
+    this._suspendedForBackground = false;
   }
 
   loadSetting(key, defaultValue) {
@@ -191,6 +200,36 @@ class SoundManager {
       this.musicSource = null;
     }
     this.isMusicPlaying = false;
+  }
+
+  // v7.32: App-lifecycle audio control. Called from App.jsx on 'visibilitychange'
+  // (web/PWA) and Capacitor 'appStateChange' (native). suspend()/resume() freezes
+  // and restores the entire Web Audio pipeline (music + any in-flight effects) with
+  // no gap, without recreating the looping BufferSource, so music resumes exactly
+  // where it left off. Because the context is already unlocked while music is
+  // playing, resume() on return does not hit the autoplay gate.
+  handleAppBackground() {
+    if (!this.audioContext) return;
+    if (this.audioContext.state === 'running') {
+      try {
+        this.audioContext.suspend();
+        this._suspendedForBackground = true;
+      } catch (e) {
+        console.warn('[SoundManager] Failed to suspend audio on background:', e);
+      }
+    }
+  }
+
+  handleAppForeground() {
+    if (!this.audioContext) return;
+    if (this._suspendedForBackground && this.audioContext.state === 'suspended') {
+      try {
+        this.audioContext.resume();
+      } catch (e) {
+        console.warn('[SoundManager] Failed to resume audio on foreground:', e);
+      }
+    }
+    this._suspendedForBackground = false;
   }
 
   setMusicVolume(volume) {

@@ -1,4 +1,7 @@
 // Weekly Leaderboard - Shows rankings for weekly challenge
+// v7.15: Edge-to-edge — content top inset made safe-area-aware (header was under
+//        the status bar) and the trailing bottom spacer made env-aware, matching
+//        the sister Leaderboard.jsx formulas, for Android 15+.
 // v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
 // FIXED: Uses username priority (not display_name)
@@ -108,7 +111,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
         className="absolute inset-0 overflow-y-scroll overflow-x-hidden"
         style={{ overscrollBehavior: 'none' }}
       >
-      <div className="relative min-h-full px-4 py-6">
+      <div className="relative min-h-full px-4 py-6" style={{ paddingTop: 'max(24px, calc(env(safe-area-inset-top) + 16px))' }}>
         <div className="max-w-md mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
@@ -254,7 +257,7 @@ const WeeklyLeaderboard = ({ challenge, onBack }) => {
           </button>
         </div>
         
-        <div className="h-8" />
+        <div className="flex-shrink-0" style={{ height: 'max(2rem, env(safe-area-inset-bottom))' }} />
       </div>
       </div>{/* end inner scroll child */}
     </div>

@@ -1,4 +1,7 @@
 // GameScreen.jsx - Main game screen with drag-and-drop support
+// v7.33: Edge-to-edge — added a safe-area BOTTOM inset to the content container so
+//        in-game controls clear the navigation bar on Android 15+. The TOP inset was
+//        already handled via max(20px, env(safe-area-inset-top)); this mirrors it.
 // v7.17: Desktop board overlap fix — split single max-w-md wrapper into 3 sections
 //        (header / unconstrained board / controls). The 8-col grid + flanking labels
 //        exceeded 448px on desktop; max-w-md forced grid columns to shrink while button
@@ -759,7 +762,7 @@ const GameScreen = ({
       >
       {/* Main content */}
       <div className="relative min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
+        <div className="flex-1 flex flex-col items-center justify-start px-2 sm:px-4 pt-1 pb-2" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))', paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
           
           {/* Title */}
           <div className="text-center mb-1">

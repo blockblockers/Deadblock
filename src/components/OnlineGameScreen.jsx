@@ -1,4 +1,7 @@
 // Online Game Screen - Real-time multiplayer game with drag-and-drop support
+// v7.41: Edge-to-edge — added a safe-area BOTTOM inset to the content container
+//        (max(8px, env(safe-area-inset-bottom)), matching GameScreen) so gameplay
+//        controls clear the navigation bar on Android 15+. Top was already handled.
 // v7.40: Title/subtitle moved to vertical side labels flanking board to save vertical space
 // v7.39: Removed panel box around game board for visual consistency with GameScreen/CreatorPuzzle;
 //        floating background now shows through seamlessly
@@ -1801,7 +1804,7 @@ const OnlineGameScreen = ({ gameId, onLeave, onNavigateToGame }) => {
       >
       {/* Main content */}
       <div className="relative z-10 min-h-full flex flex-col">
-        <div className="flex-1 flex flex-col max-w-lg mx-auto p-2 sm:p-4 w-full" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
+        <div className="flex-1 flex flex-col max-w-lg mx-auto p-2 sm:p-4 w-full" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))', paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}>
           
           {/* Header with title and optional turn timer */}
           <div className="flex items-center justify-between mb-1">

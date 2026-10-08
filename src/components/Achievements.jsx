@@ -1,4 +1,8 @@
 // Achievements.jsx - Modal displaying all achievements with improved scroll and text
+// v7.21: Edge-to-edge — overlay now pads BOTH insets (bottom was missing) and the
+//        card uses maxHeight:100% of the padded overlay (matches SettingsModal),
+//        so it can't extend under the nav bar. AchievementPopup top made
+//        safe-area-aware too. For Android 15+.
 // v7.20: Added safe area top padding for iPhone notch/Dynamic Island clearance
 // v7.19: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.18: overflow-y-scroll (was auto) — scroll always active on iOS regardless of content height
@@ -118,12 +122,12 @@ const Achievements = ({ userId, onClose }) => {
   return (
     <div 
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"
-      style={{ paddingTop: 'max(16px, calc(env(safe-area-inset-top) + 12px))' }}
+      style={{ paddingTop: 'max(16px, calc(env(safe-area-inset-top) + 12px))', paddingBottom: 'max(16px, calc(env(safe-area-inset-bottom) + 12px))' }}
       onClick={handleClose}
     >
       <div 
         className="bg-slate-900 rounded-2xl w-full max-w-md overflow-hidden border border-amber-500/30 shadow-[0_0_50px_rgba(251,191,36,0.2)] flex flex-col"
-        style={{ maxHeight: 'min(calc(100dvh - 32px), calc(100vh - 32px - env(safe-area-inset-top)))' }}
+        style={{ maxHeight: '100%' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}
@@ -304,7 +308,7 @@ export const AchievementPopup = ({ achievement, onClose }) => {
   if (!achievement) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-achievement-popup">
+    <div className="fixed left-1/2 -translate-x-1/2 z-50 animate-achievement-popup" style={{ top: 'max(1rem, calc(env(safe-area-inset-top) + 8px))' }}>
       <div
         className={`${colors.bg} border ${colors.border} rounded-xl p-4 shadow-xl flex items-center gap-4 min-w-[280px] relative`}
         style={{ boxShadow: `0 0 30px ${colors.glow}` }}

@@ -1,4 +1,8 @@
 // SpeedPuzzleScreen - Timed puzzle mode with streak tracking
+// v7.17: Edge-to-edge — added a safe-area BOTTOM inset to the content container
+//        (max(4px, env(safe-area-inset-bottom)), preserving the existing py-1 4px)
+//        so gameplay clears the navigation bar on Android 15+. Top was already
+//        handled. (Note: the .pb-safe class in the <style> block is unused/dead.)
 // v7.16: Title/subtitle moved to vertical side labels flanking board to save vertical space
 // v7.15: Timer left / title center / streak right layout; shrunk timer+streak components
 // v7.14: Removed panel box around game board for visual consistency; floating background shows through
@@ -1743,7 +1747,7 @@ const SpeedPuzzleScreen = ({ onMenu, isOfflineMode = false }) => {
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
-      <div className="relative min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
+      <div className="relative min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))', paddingBottom: 'max(4px, env(safe-area-inset-bottom))' }}>
         {/* Header - Timer left, Title center, Streak right */}
         <div className="w-full max-w-md mb-1 flex-shrink-0">
           <div className="flex items-center justify-between">

@@ -1,4 +1,10 @@
 // App.jsx - Main application component
+// v7.33: Wire background-music pause/resume to the app lifecycle. soundManager has
+//        handleAppBackground/Foreground (v7.32) but nothing was calling them, so the
+//        music only stopped on native (the OS suspends the WebView) and kept playing
+//        on web. Now wired to document 'visibilitychange' (tab hidden/minimized),
+//        window blur/focus (desktop web, so it also stops when another window takes
+//        focus), and Capacitor 'appStateChange' (native backstop).
 // v7.26: FIX - Push notification Accept button now actually accepts invite and navigates to game
 //   - NOTIFICATION_CLICK handler accepts invite via inviteService when inviteId present
 //   - URL param handler captures acceptInvite param for new-window opens
@@ -18,6 +24,8 @@ import { isSupabaseConfigured } from './utils/supabase';
 import { useRealtimeConnection } from './hooks/useRealtimeConnection';
 import { streakTracker } from './utils/streakTracker';
 import { pushNotificationService } from './services/pushNotificationService';
+import { soundManager } from './utils/soundManager';
+import { isNativePlatform } from './utils/platformUtils';
 
 // Core screens (always loaded - used frequently)
 import MenuScreen from './components/MenuScreen';
@@ -281,7 +289,57 @@ function AppContent({ onBgThemeChange }) {
       window.history.replaceState({}, document.title, '/');
     }
   }, []); // Run once on mount
-  
+
+  // v7.33: Pause background music when the app isn't the active screen/window.
+  // soundManager.handleAppBackground()/Foreground() suspend/resume the AudioContext.
+  // - visibilitychange: fires on tab switch / minimize (web + PWA + native WebView)
+  // - window blur/focus: web only, so music also stops when another desktop window
+  //   takes focus (visibilitychange does NOT fire for that case). Remove the blur/focus
+  //   pair if you'd rather keep playing through a focus change.
+  // - Capacitor appStateChange: reliable native backstop (WebView can miss visibilitychange).
+  useEffect(() => {
+    let removeAppListener = null;
+    let cancelled = false;
+
+    const handleVisibility = () => {
+      if (document.hidden) soundManager.handleAppBackground();
+      else soundManager.handleAppForeground();
+    };
+    const handleBlur = () => soundManager.handleAppBackground();
+    const handleFocus = () => soundManager.handleAppForeground();
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    if (!isNativePlatform()) {
+      window.addEventListener('blur', handleBlur);
+      window.addEventListener('focus', handleFocus);
+    }
+
+    if (isNativePlatform()) {
+      import('@capacitor/app')
+        .then(({ App: CapApp }) => {
+          if (cancelled) return null;
+          return CapApp.addListener('appStateChange', ({ isActive }) => {
+            if (isActive) soundManager.handleAppForeground();
+            else soundManager.handleAppBackground();
+          });
+        })
+        .then((handle) => {
+          if (!handle) return;
+          if (cancelled) { handle.remove(); return; }
+          removeAppListener = () => handle.remove();
+        })
+        .catch((e) => console.warn('[App] Failed to register appStateChange listener:', e));
+    }
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+      if (removeAppListener) removeAppListener();
+    };
+  }, []); // Run once on mount
+
   // Get all game state and actions from custom hook
   const {
     // State

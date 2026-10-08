@@ -1,4 +1,8 @@
 // HowToPlayModal.jsx - Tutorial modal for new players
+// v7.14: Edge-to-edge — overlay padding made safe-area-aware (max(1rem,
+//        env(safe-area-inset-*)) top & bottom) so the centered tutorial card
+//        can't sit under the status/nav bars on small Android 15+ screens.
+//        Matches the SettingsModal overlay pattern.
 // v7.13: Added WASD/R/F keyboard controls to Rotating & Flipping step;
 //        updated creator puzzles to 101; fixed difficulty tier names
 // v7.12: Added Creator Puzzles step explaining 100 hand-crafted puzzles
@@ -223,7 +227,7 @@ const HowToPlayModal = ({ isOpen, onClose }) => {
   const colors = colorClasses[step.color] || colorClasses.cyan;
   
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"

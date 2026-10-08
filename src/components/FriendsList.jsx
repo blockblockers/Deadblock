@@ -1,4 +1,8 @@
 // FriendsList - View and manage friends
+// v7.15: Edge-to-edge — the main Friends modal overlay now pads both insets and its
+//        card uses maxHeight:100% of that padded area (matches SettingsModal), so the
+//        header/content clear the status/nav bars on Android 15+. (The Spectate
+//        sub-modal is capped at 60dvh and already clears the bars.)
 // v7.14: Add Friend search — auto-searches as user types (matches OnlineMenu challenge search
 //        pattern). Replaced Enter-key/button search with onChange handler, added search icon
 //        and inline spinner. Search results are annotated with friend/pending status.
@@ -339,7 +343,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
   const getTier = (rating) => ratingService.getRatingTier(rating || 1200);
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" style={{ paddingTop: 'max(1rem, calc(env(safe-area-inset-top) + 8px))', paddingBottom: 'max(1rem, calc(env(safe-area-inset-bottom) + 8px))' }}>
       {/* Spectate Games Selection Modal */}
       {spectateModalFriend && spectateModalGames.length > 0 && (
         <SpectateGamesModal
@@ -355,7 +359,7 @@ const FriendsList = ({ userId, onInviteFriend, onSpectate, onViewProfile, onClos
 
       <div 
         className="bg-slate-900 rounded-xl max-w-md w-full overflow-hidden border border-amber-500/30 shadow-xl flex flex-col"
-        style={{ maxHeight: 'calc(100dvh - 32px)' }}
+        style={{ maxHeight: '100%' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-amber-500/20 flex-shrink-0">

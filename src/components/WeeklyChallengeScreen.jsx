@@ -1,4 +1,8 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
+// v7.61: Edge-to-edge — added a safe-area BOTTOM inset to the content container
+//        (max(4px, env(safe-area-inset-bottom)), preserving the existing py-1 4px
+//        minimum) so gameplay controls clear the navigation bar on Android 15+.
+//        The TOP inset was already present via max(20px, env(safe-area-inset-top)).
 // v7.37: Fixes the v7.36 board-diff approach that was supposed to capture the
 //        AI's last move but still landed gold on an earlier piece. Root cause:
 //        useGameState mutates row arrays in-place even when it provides a new
@@ -1852,7 +1856,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
-      <div className="min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
+      <div className="min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))', paddingBottom: 'max(4px, env(safe-area-inset-bottom))' }}>
         <div className="w-full max-w-lg">
           
           {/* Title + Timer on same line */}

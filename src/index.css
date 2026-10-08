@@ -1,5 +1,10 @@
 /* =============================================================================
    DEADBLOCK - Global Styles
+   v7.16: Edge-to-edge support for Android 15+/Capacitor 8. The WebView now draws
+          behind the status and navigation bars, so content must be inset. Added
+          :root safe-area inset variables and a .safe-area-screen utility. Apply
+          .safe-area-screen to each screen's content wrapper (NOT the full-bleed
+          GlobalBackground). Requires viewport-fit=cover in index.html.
    v7.15: SCROLL FIX RESOLVED — root cause was global touchmove preventDefault handler
           in index.html (now removed). Cleaned up exploratory CSS changes but kept
           v7.13 foundation (body/html/root non-scrollable with overflow:hidden).
@@ -24,6 +29,16 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* v7.16: Safe-area inset tokens (edge-to-edge, Capacitor 8). Fallback 0px keeps
+   these as no-ops on displays without insets; they become non-zero only when
+   index.html sets viewport-fit=cover. */
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
 }
 
 html, body {
@@ -213,6 +228,18 @@ body.is-dragging * {
 
 .safe-area-all {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* v7.16: Edge-to-edge screen wrapper (Capacitor 8). Add to a screen's OUTER
+   content container so its UI clears the status bar and side cutouts. Insets top
+   and sides only; for bottom-anchored controls also add .safe-area-bottom (or rely
+   on the existing .menu-screen / .bottom-safe-area, which already pad the bottom).
+   Do NOT add this to GlobalBackground / FloatingPieces — those should stay
+   full-bleed behind the bars for the immersive look. */
+.safe-area-screen {
+  padding-top: var(--safe-area-top);
+  padding-left: var(--safe-area-left);
+  padding-right: var(--safe-area-right);
 }
 
 /* =============================================================================

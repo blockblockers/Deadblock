@@ -1,5 +1,8 @@
 // CreatorPuzzleSelect.jsx
 // CreatorPuzzleSelect.jsx - Selection grid for hand-crafted creator puzzles
+// v1.12: Edge-to-edge — added a safe-area BOTTOM inset to the content container
+//        (max(16px, calc(env(safe-area-inset-bottom) + 16px)), mirroring the existing
+//        top inset) so the puzzle grid clears the navigation bar on Android 15+.
 // v1.11: Extended expert range to [86, 101] for puzzle #101
 // v1.10: Added safe area top padding for iPhone notch clearance
 // v1.9: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
@@ -286,6 +289,7 @@ const CreatorPuzzleSelect = ({
           className="flex-1 flex flex-col items-center px-4 pb-4"
           style={{
             paddingTop: 'max(16px, calc(env(safe-area-inset-top) + 16px))',
+            paddingBottom: 'max(16px, calc(env(safe-area-inset-bottom) + 16px))',
           }}
         >
           <div className="w-full max-w-md">
