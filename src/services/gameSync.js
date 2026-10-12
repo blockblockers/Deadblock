@@ -1,4 +1,15 @@
 // Game Sync Service - Real-time game state management
+// v7.20: Removed client-side game-completion side effects. The trigger_notify_game_completion
+//        trigger on the games table already handles the victory/defeat push, ELO
+//        (update_ratings_after_game), achievements and stats server-side for BOTH players on
+//        every completion — so the client ELO call was double-applying rating changes.
+//        updatePlayerStats() is now a safe no-op.
+// v7.19: updatePlayerStats no longer writes win/loss COUNTS to profiles. The old
+//        increment_wins/increment_losses calls were fire-and-forget, ran only on the
+//        finishing client, and silently dropped writes — the root cause of leaderboard
+//        drift and opponents whose stats never updated. Online games/wins are now
+//        computed from the games table everywhere they're shown (get_online_leaderboard,
+//        get_my_stats, ViewPlayerProfile). ELO rating updates are unchanged.
 // v7.18: forfeitGame accepts optional reason param ('forfeit'|'timeout') stored as end_reason in DB
 // FIXED: 
 // - makeMove uses direct fetch to bypass Supabase client timeout issues
@@ -346,11 +357,9 @@ class GameSyncService {
       // });
       */
 
-      // Step 4: Update player stats if game is over
-      if (gameOver && winnerId) {
-        // console.log('gameSync.makeMove: Game over, updating stats...');
-        await this.updatePlayerStats(gameId, winnerId);
-      }
+      // Step 4: Game-over side effects (victory/defeat push, ELO, achievements, stats) are
+      // handled server-side by trigger_notify_game_completion when status flips to 'completed'
+      // above. No client call needed — doing ELO here would double-apply it (v7.20).
 
       return { data: updatedGame, error: null };
 
@@ -360,70 +369,14 @@ class GameSyncService {
     }
   }
 
-  // Update player statistics after game ends
+  // v7.20: No-op. All game-completion side effects — victory/defeat push, ELO
+  // (update_ratings_after_game), achievement checks and stat writes — are handled
+  // server-side by the trigger_notify_game_completion trigger on the games table, for
+  // both players, whenever a game's status flips to 'completed'. This used to re-apply
+  // ELO on the client (double-counting rating changes). Kept as a no-op so any external
+  // caller is harmless.
   async updatePlayerStats(gameId, winnerId) {
-    if (!supabase) return;
-
-    try {
-      const { data: game } = await this.getGame(gameId);
-      if (!game) return;
-
-      const player1Id = game.player1_id;
-      const player2Id = game.player2_id;
-      const loserId = winnerId === player1Id ? player2Id : player1Id;
-
-      // Get current stats
-      const headers = getAuthHeaders();
-      if (!headers) return;
-
-      // CRITICAL: Update ELO ratings first
-      // console.log('gameSync.updatePlayerStats: Updating ELO ratings...');
-      try {
-        const eloResponse = await fetch(
-          `${SUPABASE_URL}/rest/v1/rpc/update_ratings_after_game`,
-          {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ 
-              p_game_id: gameId, 
-              p_winner_id: winnerId 
-            })
-          }
-        );
-        
-        if (eloResponse.ok) {
-          // console.log('gameSync.updatePlayerStats: ELO ratings updated successfully');
-        } else {
-          const errorText = await eloResponse.text();
-          console.error('gameSync.updatePlayerStats: ELO update failed:', errorText);
-        }
-      } catch (eloError) {
-        console.error('gameSync.updatePlayerStats: ELO update exception:', eloError.message);
-      }
-
-      // Update winner stats (win count)
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/rpc/increment_wins`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ p_user_id: winnerId })
-        }
-      ).catch(() => {});
-
-      // Update loser stats (loss count)
-      await fetch(
-        `${SUPABASE_URL}/rest/v1/rpc/increment_losses`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ p_user_id: loserId })
-        }
-      ).catch(() => {});
-
-    } catch (e) {
-      console.error('gameSync.updatePlayerStats: Error:', e.message);
-    }
+    return;
   }
 
   // Get active games for a user
@@ -747,8 +700,8 @@ class GameSyncService {
         return { error: { message: 'Failed to forfeit game' } };
       }
 
-      // Update stats
-      await this.updatePlayerStats(gameId, winnerId);
+      // Stats/ELO/notifications are handled server-side by trigger_notify_game_completion
+      // when the status flips to 'completed' above (v7.20).
 
       return { data: await response.json(), error: null };
 

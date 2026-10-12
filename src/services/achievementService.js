@@ -1,4 +1,6 @@
 // achievementService.js - Achievement tracking and display
+// v7.14 - checkAchievements now derives online games/wins from the games table
+//         (source of truth) instead of the drifted profiles.games_won/games_played counters.
 // v7.13 - Added checkAchievements with correct online-only stat calculation
 //         (profiles.games_won/games_played include AI — must subtract for online achievements)
 // v7.12 - FIXED: Now queries 'achievements' table instead of 'achievement_definitions'
@@ -391,9 +393,9 @@ class AchievementService {
 
   /**
    * Check all achievement conditions for a user and award any newly earned.
-   * 
-   * CRITICAL: profiles.games_played and profiles.games_won include AI games.
-   * Online achievement checks must subtract AI totals to get true online counts.
+   *
+   * v7.14: Online games/wins are read from the games table (source of truth). AI, puzzle,
+   * speed and local stats still come from profiles (counter-only, no per-game table).
    */
   async checkAchievements(userId, gameId = null) {
     if (!isSupabaseConfigured()) return { data: [], error: 'Not configured' };
@@ -427,15 +429,34 @@ class AchievementService {
       const aiTotalLosses = (stats.ai_easy_losses || 0) + (stats.ai_medium_losses || 0) + (stats.ai_hard_losses || 0);
       const aiTotalGames = aiTotalWins + aiTotalLosses;
 
-      // Online-only: subtract AI and local from profile totals
-      const onlineGamesPlayed = Math.max(0, (stats.games_played || 0) - aiTotalGames - (stats.local_games_played || 0));
-      const onlineGamesWon = Math.max(0, (stats.games_won || 0) - aiTotalWins);
+      // v7.14: Online counts from the games table (source of truth), not the drifted
+      // profiles.games_played/games_won. Completed, two-player games only.
+      let onlineGamesPlayed = 0;
+      let onlineGamesWon = 0;
+      try {
+        const { count: playedCount } = await supabase
+          .from('games')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'completed')
+          .not('player1_id', 'is', null)
+          .not('player2_id', 'is', null)
+          .or(`player1_id.eq.${targetUserId},player2_id.eq.${targetUserId}`);
+        const { count: wonCount } = await supabase
+          .from('games')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'completed')
+          .eq('winner_id', targetUserId);
+        onlineGamesPlayed = playedCount || 0;
+        onlineGamesWon = wonCount || 0;
+      } catch (e) {
+        console.error('[achievementService] online count query failed:', e);
+      }
 
       // Puzzle totals
       const puzzleTotal = (stats.puzzles_easy_solved || 0) + (stats.puzzles_medium_solved || 0) + (stats.puzzles_hard_solved || 0);
 
-      // Total across ALL modes (for general achievements)
-      const totalAllGames = (stats.games_played || 0) + (stats.local_games_played || 0) + puzzleTotal;
+      // Total across ALL modes (for general achievements) — true counts, no drifted columns
+      const totalAllGames = onlineGamesPlayed + aiTotalGames + (stats.local_games_played || 0) + puzzleTotal;
 
       // --- Define conditions: [achievementId, condition] ---
       const checks = [
