@@ -1,4 +1,8 @@
 // User Profile Screen - Enhanced with ELO changes in match history and proper Final Board View
+// v7.16: Games / Victories / Win Rate and streak now come from get_my_stats (true online
+//        totals from the games table). The old code derived them from getPlayerGames(..,50),
+//        which is capped at 50 rows — so "Games" could never exceed 50 (the 50/27 bug).
+//        getPlayerGames is still used, but only to populate the recent-games list.
 // v7.15: Added "View Achievements" button above Match History with Achievements modal
 // v7.14: iOS scroll fix — removed WebkitOverflowScrolling, touchAction, changed overscrollBehavior to none
 // v7.13: overflow-y-scroll (was auto) + removed overflow-hidden from outer shell
@@ -14,6 +18,7 @@ import { ArrowLeft, Edit2, Save, X, Trophy, Target, Percent, Calendar, User, Tre
 import { useAuth } from '../contexts/AuthContext';
 import { gameSyncService } from '../services/gameSync';
 import { ratingService } from '../services/ratingService';
+import { supabase } from '../utils/supabase';
 import { getRankInfo } from '../utils/rankUtils';
 import NeonTitle from './NeonTitle';
 import TierIcon from './TierIcon';
@@ -120,40 +125,39 @@ const UserProfile = ({ onBack }) => {
     if (!profile?.id) return;
 
     try {
-      const { data: games } = await gameSyncService.getPlayerGames(profile.id, 50);
-      
-      if (games) {
-        const completed = games.filter(g => g.status === 'completed');
-        const wins = completed.filter(g => g.winner_id === profile.id).length;
-        const losses = completed.length - wins;
-        
-        // Calculate streak
-        let currentStreak = 0;
-        let bestStreak = 0;
-        let streak = 0;
-        
-        for (const game of completed) {
-          if (game.winner_id === profile.id) {
-            streak++;
-            bestStreak = Math.max(bestStreak, streak);
-          } else {
-            if (currentStreak === 0 && streak > 0) {
-              currentStreak = streak;
-            }
-            streak = 0;
+      // v7.16: True online totals + streak come from get_my_stats, which reads the games
+      // table (and profiles' live streak columns) — the same source the leaderboard uses.
+      // The old path counted wins/games over getPlayerGames(..,50), which is capped at 50
+      // rows, so "Games" froze at 50 and never matched the leaderboard. getPlayerGames is
+      // still used below, but only for the recent-games list.
+      let totalGames = 0, wins = 0, losses = 0, winRate = 0, currentStreak = 0, bestStreak = 0;
+
+      try {
+        const { data: my, error } = await supabase.rpc('get_my_stats', { p_user_id: profile.id });
+        if (error) {
+          console.error('get_my_stats error:', error);
+        } else if (my) {
+          if (my.profile) {
+            totalGames = my.profile.games_played || 0;
+            wins = my.profile.games_won || 0;
+            losses = Math.max(0, totalGames - wins);
+            winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
+          }
+          if (my.streak) {
+            currentStreak = my.streak.current_streak || 0;
+            bestStreak = my.streak.longest_streak || 0;
           }
         }
-        if (streak > 0) currentStreak = streak;
+      } catch (e) {
+        console.error('get_my_stats failed:', e);
+      }
 
-        setStats({
-          totalGames: completed.length,
-          wins,
-          losses,
-          winRate: completed.length > 0 ? Math.round((wins / completed.length) * 100) : 0,
-          currentStreak,
-          bestStreak
-        });
+      setStats({ totalGames, wins, losses, winRate, currentStreak, bestStreak });
 
+      // Recent-games list only — the 50-row cap is fine here.
+      const { data: games } = await gameSyncService.getPlayerGames(profile.id, 50);
+      if (games) {
+        const completed = games.filter(g => g.status === 'completed');
         setRecentGames(completed.slice(0, 10));
       }
     } catch (err) {
