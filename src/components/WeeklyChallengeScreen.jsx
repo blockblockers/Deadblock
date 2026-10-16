@@ -1,8 +1,25 @@
 // Weekly Challenge Screen - Timed puzzle gameplay for weekly challenges
-// v7.61: Edge-to-edge — added a safe-area BOTTOM inset to the content container
-//        (max(4px, env(safe-area-inset-bottom)), preserving the existing py-1 4px
-//        minimum) so gameplay controls clear the navigation bar on Android 15+.
-//        The TOP inset was already present via max(20px, env(safe-area-inset-top)).
+// v7.39: Practice mode. Once the challenge has been completed, every later play
+//        is a PRACTICE run: the timer always starts at 0, never accumulates and
+//        never persists — a practice fail -> retry restarts at 0, and leaving and
+//        re-entering also starts at 0. Only the first (scored) run keeps the
+//        accumulate/persist/restore behavior that feeds the leaderboard. A badge
+//        on the board shows the player their recorded completion time during a
+//        practice run, and the LoseOverlay retry button reads "RESTART (FROM 0:00)"
+//        instead of "TIMER CONTINUES" in practice. Gated throughout by
+//        isPracticeRef (mirrors !isFirstAttempt). No leaderboard/submit changes.
+// v7.38: Fixes "timer resets to 0 after GIVE UP then re-entering the challenge".
+//        GIVE UP unmounts the screen, so re-entry is the ONLY path that restores
+//        the timer from localStorage (RETRY never unmounts, which is why it kept
+//        working). The saved value was correct; the RESTORE was racy: it ran a
+//        single setTimeout(0) -> liveTimerRef.current?.setElapsed(saved). When the
+//        LiveTimerPanel ref wasn't attached yet (the same Android-WebView timing
+//        the start() watchdog already guards against), the optional-chain made it
+//        a silent no-op and the clock began at 0 — nothing retried it. Fix: stash
+//        the restored value in pendingRestoreRef and seed it via setElapsed
+//        immediately BEFORE start(), at the two points that run after the panel
+//        ref is attached (the auto-start effect and the start watchdog). No
+//        navigation or save-path changes.
 // v7.37: Fixes the v7.36 board-diff approach that was supposed to capture the
 //        AI's last move but still landed gold on an earlier piece. Root cause:
 //        useGameState mutates row arrays in-place even when it provides a new
@@ -636,7 +653,7 @@ const LoseOverlay = ({ elapsedMs, attemptCount, isFirstAttempt, onRetry, onMenu 
             className="w-full p-3 rounded-xl font-bold bg-gradient-to-r from-red-500 to-rose-600 text-white hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(239,68,68,0.4)]"
           >
             <RotateCcw size={18} />
-            RETRY (TIMER CONTINUES)
+            {isFirstAttempt ? 'RETRY (TIMER CONTINUES)' : 'RESTART (FROM 0:00)'}
           </button>
           
           <button
@@ -720,6 +737,16 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // start/stop/pause/getElapsed/setElapsed. Replaces the previous timerRef +
   // startTimeRef + accumulatedMsRef trio that lived directly in the parent.
   const liveTimerRef = useRef(null);
+  // v7.38: Holds an elapsed value restored from localStorage that must be seeded
+  // into LiveTimerPanel immediately before the timer starts. Seeded by the
+  // auto-start effect and, as a fallback, the start watchdog — both of which run
+  // after the panel ref is attached. Replaces the old racy setTimeout(0)
+  // setElapsed that silently no-op'd when the ref wasn't ready yet.
+  const pendingRestoreRef = useRef(null);
+  // v7.39: Mirrors !isFirstAttempt so timer callbacks can tell, without a stale
+  // closure, whether this is a practice run (challenge already completed). In
+  // practice the timer always starts at 0 and is never saved/restored.
+  const isPracticeRef = useRef(false);
   // v7.29: Tracks the 4-second setTimeout that defers the LoseOverlay so the
   // player can see the AI's blocking move before the modal covers it. Cleared
   // on unmount to prevent setState-on-unmounted warnings.
@@ -742,12 +769,20 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       document.body.style.touchAction = '';
     };
   }, []);
+
+  // v7.39: Keep the practice-mode ref in sync. Practice = the challenge has
+  // already been completed (isFirstAttempt is false), so this run doesn't count
+  // and the timer always starts at 0.
+  useEffect(() => {
+    isPracticeRef.current = !isFirstAttempt;
+  }, [isFirstAttempt]);
   
   // v7.17: Save timer state on browser/tab close
   // v7.28: Read current elapsed from LiveTimerPanel via ref instead of inlined refs.
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (challenge?.id && gameStarted && !gameComplete && liveTimerRef.current?.isRunning()) {
+      // v7.39: Practice runs are never persisted.
+      if (challenge?.id && gameStarted && !gameComplete && !isPracticeRef.current && liveTimerRef.current?.isRunning()) {
         const currentTime = liveTimerRef.current.getElapsed();
         saveTimerState(challenge.id, currentTime, attemptCount);
       }
@@ -1443,16 +1478,23 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         // v7.17: Restore saved timer state if user previously left mid-challenge
         // v7.28: Push restored value into LiveTimerPanel via ref instead of using
         // parent state (which no longer exists).
-        const savedTimer = loadTimerState(challenge.id);
-        if (savedTimer) {
-          // Defer setElapsed to next tick so LiveTimerPanel's ref is populated
-          // (ref is set during the panel's mount, which happens after this effect
-          // runs on first puzzle load).
-          setTimeout(() => {
-            liveTimerRef.current?.setElapsed(savedTimer.elapsedMs);
-          }, 0);
-          setAttemptCount(savedTimer.attemptCount || 0);
-          // console.log('[WeeklyChallenge] Restored timer:', savedTimer.elapsedMs, 'ms');
+        // v7.39: Only the FIRST (scored) run persists/restores its timer. Once the
+        // challenge has been completed, every later play is a practice run that
+        // always starts at 0 — so skip the restore and clear any leftover state.
+        if (existingResult) {
+          clearTimerState(challenge.id);
+        } else {
+          const savedTimer = loadTimerState(challenge.id);
+          if (savedTimer) {
+            // v7.38: Stash the restored elapsed; it is seeded into LiveTimerPanel
+            // right before start() (auto-start effect + watchdog), both of which run
+            // after the panel ref is attached. This replaces the old setTimeout(0)
+            // setElapsed, which raced the panel mount and silently dropped the
+            // restore on Android WebView — leaving the timer at 0 after a remount.
+            pendingRestoreRef.current = savedTimer.elapsedMs;
+            setAttemptCount(savedTimer.attemptCount || 0);
+            // console.log('[WeeklyChallenge] Restored timer:', savedTimer.elapsedMs, 'ms');
+          }
         }
       } catch (err) {
         console.error('Error loading weekly puzzle:', err);
@@ -1491,6 +1533,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
       haveSeenGameNotOverRef.current = false;
       loadPuzzle(puzzle);
       setGameStarted(true);
+      // v7.38: Seed any restored time BEFORE starting so the clock resumes from
+      // the saved value instead of 0. If the panel ref isn't attached yet this
+      // no-ops cleanly and leaves pendingRestoreRef set for the start watchdog.
+      if (pendingRestoreRef.current != null && liveTimerRef.current) {
+        liveTimerRef.current.setElapsed(pendingRestoreRef.current);
+        pendingRestoreRef.current = null;
+      }
       startTimer();
       soundManager.playClickSound('success');
     }
@@ -1574,7 +1623,9 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         // Use functional updater so saveTimerState receives the correct post-increment count
         setAttemptCount(prev => {
           const next = prev + 1;
-          if (challenge?.id) {
+          // v7.39: Practice runs never persist their timer (they always restart
+          // at 0). Only the scored first run saves accumulated time across retries.
+          if (challenge?.id && !isPracticeRef.current) {
             saveTimerState(challenge.id, pausedTime, next);
           }
           return next;
@@ -1616,6 +1667,11 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
     gameOverHandledRef.current = false; // allow next game-over to be processed
     resetCurrentPuzzle();
     setGameLost(false);
+    // v7.39: A practice retry always restarts the clock at 0. A scored-run retry
+    // continues the accumulated time (unchanged — "RETRY (TIMER CONTINUES)").
+    if (isPracticeRef.current) {
+      liveTimerRef.current?.setElapsed(0);
+    }
     startTimer();
     soundManager.playClickSound('success');
   }, [resetCurrentPuzzle, startTimer]);
@@ -1624,12 +1680,15 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // v7.28: All direct timer ref manipulation replaced with liveTimerRef calls.
   // pause() returns the captured elapsed; setElapsed() seeds it for the next session.
   const handleRestart = useCallback(() => {
-    const currentTime = liveTimerRef.current?.pause() ?? 0;
-    
-    if (challenge?.id) {
+    // v7.39: Practice replays always restart at 0 and never persist. The scored
+    // run keeps the accumulate-and-save behavior (unchanged).
+    const practice = isPracticeRef.current;
+    const currentTime = practice ? 0 : (liveTimerRef.current?.pause() ?? 0);
+
+    if (challenge?.id && !practice) {
       saveTimerState(challenge.id, currentTime, attemptCount);
     }
-    
+
     resetCurrentPuzzle();
     setGameComplete(false);
     setGameLost(false);
@@ -1657,11 +1716,12 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   const handleGoToMenu = useCallback(() => {
     soundManager.playButtonClick();
     
-    if (challenge?.id && !gameComplete) {
+    // v7.39: Don't persist a practice run — it always restarts at 0 next time.
+    if (challenge?.id && !gameComplete && !isPracticeRef.current) {
       const currentTime = liveTimerRef.current?.getElapsed() ?? 0;
       saveTimerState(challenge.id, currentTime, attemptCount);
     }
-    
+
     // Stop the interval cleanly before navigating away
     liveTimerRef.current?.stop();
     
@@ -1690,7 +1750,8 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
   // shift OR on unmount. Same behavior as before for this branch.
   useEffect(() => {
     return () => {
-      if (challenge?.id && !gameComplete && liveTimerRef.current?.isRunning()) {
+      // v7.39: Practice runs are never persisted.
+      if (challenge?.id && !gameComplete && !isPracticeRef.current && liveTimerRef.current?.isRunning()) {
         const currentTime = liveTimerRef.current.getElapsed();
         saveTimerState(challenge.id, currentTime, attemptCount);
       }
@@ -1733,6 +1794,13 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         return true;
       }
       try {
+        // v7.38: If the auto-start effect couldn't seed the restored time
+        // (panel ref wasn't attached yet), apply it now — immediately before
+        // start() — so a re-entry after GIVE UP resumes from the saved value.
+        if (pendingRestoreRef.current != null) {
+          ref.setElapsed(pendingRestoreRef.current);
+          pendingRestoreRef.current = null;
+        }
         ref.start();
         return true;
       } catch (e) {
@@ -1856,7 +1924,7 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
         style={{ overscrollBehavior: 'none' }}
       >
       {/* Content */}
-      <div className="min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))', paddingBottom: 'max(4px, env(safe-area-inset-bottom))' }}>
+      <div className="min-h-full flex flex-col items-center px-2 py-1" style={{ paddingTop: 'max(20px, env(safe-area-inset-top))' }}>
         <div className="w-full max-w-lg">
           
           {/* Title + Timer on same line */}
@@ -1873,7 +1941,21 @@ const WeeklyChallengeScreen = ({ challenge, onMenu, onMainMenu, onLeaderboard })
               <LiveTimerPanel ref={liveTimerRef} />
             </div>
           </div>
-          
+
+          {/* v7.39: Practice-run badge. Once the challenge is completed every play
+              is practice — the timer starts at 0 and doesn't count toward the
+              leaderboard — so show the player the time they completed it in. */}
+          {!isFirstAttempt && firstAttemptTime != null && (
+            <div className="flex justify-center mb-2 px-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-900/30 border border-amber-500/40 rounded-full">
+                <Trophy size={13} className="text-amber-400 flex-shrink-0" />
+                <span className="text-amber-300 text-xs font-bold tracking-wide">
+                  PRACTICE · Your completion: {weeklyChallengeService.formatTime(firstAttemptTime)}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Main Game Panel - RED THEME */}
           <div className="mb-1">
             
